@@ -146,22 +146,22 @@ defmodule DiversePollingEvents do
   
   defp create_date_poll(event) do
     Logger.debug("Creating date poll for event: #{event.title}")
-    
+
     organizer_id = get_event_organizer(event)
-    
+
     # Generate 3-4 future date options relative to the event date
     base_date = event.start_at
-    
+
     date_options = [
       DateTime.add(base_date, -2 * 24 * 60 * 60, :second), # 2 days earlier
       base_date, # Original date
-      DateTime.add(base_date, 1 * 24 * 60 * 60, :second), # 1 day later  
+      DateTime.add(base_date, 1 * 24 * 60 * 60, :second), # 1 day later
       DateTime.add(base_date, 3 * 24 * 60 * 60, :second)  # 3 days later
     ]
     |> Enum.map(fn date ->
       Calendar.strftime(date, "%A, %B %-d at %-I:%M %p")
     end)
-    
+
     poll_params = %{
       event_id: event.id,
       title: "What date works best for everyone?",
@@ -171,28 +171,37 @@ defmodule DiversePollingEvents do
       created_by_id: organizer_id,
       voting_deadline: event.polling_deadline
     }
-    
+
     case Events.create_poll(poll_params) do
       {:ok, poll} ->
         # Use proper phase transition
-        {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
-        
-        # Create date options
-        Enum.with_index(date_options, fn option, _index ->
-          {:ok, _option} = Events.create_poll_option(%{
-            poll_id: poll.id,
-            title: option,
-            description: "Proposed date option",
-            suggested_by_id: organizer_id,
-            metadata: %{
-              "date_type" => "single_date"
-            }
-          })
-        end)
-        
-        Logger.debug("Created date poll with #{length(date_options)} options")
-        {:ok, poll}
-        
+        case Events.transition_poll_phase(poll, "voting_only") do
+          {:ok, transitioned_poll} ->
+            # Create date options
+            Enum.each(date_options, fn option ->
+              case Events.create_poll_option(%{
+                poll_id: transitioned_poll.id,
+                title: option,
+                description: "Proposed date option",
+                suggested_by_id: organizer_id,
+                metadata: %{
+                  "date_type" => "single_date"
+                }
+              }) do
+                {:ok, _option} -> :ok
+                {:error, reason} ->
+                  Logger.warning("Failed to create poll option: #{inspect(reason)}")
+              end
+            end)
+
+            Logger.debug("Created date poll with #{length(date_options)} options")
+            {:ok, transitioned_poll}
+
+          {:error, transition_error} ->
+            Logger.error("Failed to transition poll phase: #{inspect(transition_error)}")
+            {:error, transition_error}
+        end
+
       {:error, changeset} ->
         Logger.error("Failed to create date poll: #{inspect(changeset.errors)}")
         {:error, changeset}
@@ -201,13 +210,13 @@ defmodule DiversePollingEvents do
   
   defp create_movie_star_rating_poll(event) do
     Logger.debug("Creating movie star rating poll for event: #{event.title}")
-    
+
     organizer_id = get_event_organizer(event)
-    
+
     # Get 4-5 popular movies from curated data
     movies = DevSeeds.CuratedData.movies()
       |> Enum.take_random(5)
-    
+
     poll_params = %{
       event_id: event.id,
       title: "Rate these movie options (5 stars = most excited to watch)",
@@ -217,31 +226,40 @@ defmodule DiversePollingEvents do
       created_by_id: organizer_id,
       voting_deadline: event.polling_deadline
     }
-    
+
     case Events.create_poll(poll_params) do
       {:ok, poll} ->
         # Use proper phase transition
-        {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
-        
-        # Create movie options with rich data
-        Enum.with_index(movies, fn movie, _index ->
-          {:ok, _option} = Events.create_poll_option(%{
-            poll_id: poll.id,
-            title: movie.title,
-            description: "#{movie.year} • #{movie.genre} • ★#{movie.rating}/10\n#{movie.description}",
-            suggested_by_id: organizer_id,
-            metadata: %{
-              "year" => movie.year,
-              "genre" => movie.genre,
-              "tmdb_rating" => movie.rating,
-              "tmdb_id" => movie.tmdb_id
-            }
-          })
-        end)
-        
-        Logger.debug("Created star rating poll with #{length(movies)} movie options")
-        {:ok, poll}
-        
+        case Events.transition_poll_phase(poll, "voting_only") do
+          {:ok, transitioned_poll} ->
+            # Create movie options with rich data
+            Enum.each(movies, fn movie ->
+              case Events.create_poll_option(%{
+                poll_id: transitioned_poll.id,
+                title: movie.title,
+                description: "#{movie.year} • #{movie.genre} • ★#{movie.rating}/10\n#{movie.description}",
+                suggested_by_id: organizer_id,
+                metadata: %{
+                  "year" => movie.year,
+                  "genre" => movie.genre,
+                  "tmdb_rating" => movie.rating,
+                  "tmdb_id" => movie.tmdb_id
+                }
+              }) do
+                {:ok, _option} -> :ok
+                {:error, reason} ->
+                  Logger.warning("Failed to create movie poll option: #{inspect(reason)}")
+              end
+            end)
+
+            Logger.debug("Created star rating poll with #{length(movies)} movie options")
+            {:ok, transitioned_poll}
+
+          {:error, transition_error} ->
+            Logger.error("Failed to transition poll phase: #{inspect(transition_error)}")
+            {:error, transition_error}
+        end
+
       {:error, changeset} ->
         Logger.error("Failed to create movie star rating poll: #{inspect(changeset.errors)}")
         {:error, changeset}

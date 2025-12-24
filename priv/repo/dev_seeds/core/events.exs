@@ -90,11 +90,13 @@ defmodule DevSeeds.Events do
   
   defp create_past_events(count, users, groups, venue_pool) do
     Helpers.log("Creating #{count} past events...")
-    
+
     Enum.map(1..count, fn _ ->
       # Past events (1-365 days ago)
+      # Use explicit date calculation instead of Faker to ensure accuracy
+      now = DateTime.utc_now() |> truncate_datetime()
       days_ago = Enum.random(1..365)
-      start_at = Faker.DateTime.backward(days_ago) |> truncate_datetime()
+      start_at = DateTime.add(now, -days_ago * 24 * 60 * 60, :second) |> truncate_datetime()
       duration_hours = Enum.random([2, 3, 4, 6, 8, 24, 48]) # Various durations
       ends_at = DateTime.add(start_at, duration_hours * 3600, :second) |> truncate_datetime()
       
@@ -132,8 +134,10 @@ defmodule DevSeeds.Events do
 
     Enum.map(1..count, fn _ ->
       # Upcoming events (today to 60 days)
+      # Use explicit date calculation instead of Faker to ensure accuracy
+      now = DateTime.utc_now() |> truncate_datetime()
       days_forward = Enum.random(0..60)
-      start_at = Faker.DateTime.forward(days_forward) |> truncate_datetime()
+      start_at = DateTime.add(now, days_forward * 24 * 60 * 60, :second) |> truncate_datetime()
       duration_hours = Enum.random([2, 3, 4, 6, 8])
       ends_at = DateTime.add(start_at, duration_hours * 3600, :second) |> truncate_datetime()
 
@@ -141,8 +145,7 @@ defmodule DevSeeds.Events do
       # 1. Before the event start date
       # 2. In the future (at least 1 day from now)
       # So only allow polling status if event is at least 8 days away
-      now = DateTime.utc_now()
-      days_until_event = DateTime.diff(start_at, now, :day)
+      days_until_event = days_forward  # We know exactly how many days forward
 
       status = if days_until_event >= 8 do
         Enum.random([
@@ -158,10 +161,10 @@ defmodule DevSeeds.Events do
       # Polling deadline must be BEFORE the event AND in the FUTURE
       polling_deadline = if status == :polling do
         # Set deadline between 1 day from now and 1 day before the event
-        min_days_before = 1
-        max_days_before = min(7, days_until_event - 1)
-        days_before = Enum.random(min_days_before..max_days_before)
-        DateTime.add(start_at, -days_before * 24 * 60 * 60, :second) |> truncate_datetime()
+        min_days_from_now = 1
+        max_days_from_now = days_until_event - 1  # At least 1 day before event
+        days_from_now = Enum.random(min_days_from_now..max_days_from_now)
+        DateTime.add(now, days_from_now * 24 * 60 * 60, :second) |> truncate_datetime()
       else
         nil
       end
@@ -190,18 +193,32 @@ defmodule DevSeeds.Events do
 
     Enum.map(1..count, fn _ ->
       # Far future events (61-365 days)
+      # Use explicit date calculation instead of Faker to ensure accuracy
+      now = DateTime.utc_now() |> truncate_datetime()
       days_forward = Enum.random(61..365)
-      start_at = Faker.DateTime.forward(days_forward) |> truncate_datetime()
+      start_at = DateTime.add(now, days_forward * 24 * 60 * 60, :second) |> truncate_datetime()
       duration_hours = Enum.random([2, 3, 4, 6, 8, 24, 48, 72]) # Can be longer
       ends_at = DateTime.add(start_at, duration_hours * 3600, :second) |> truncate_datetime()
 
       status = Enum.random([:draft, :draft, :polling]) # Mostly drafts
 
-      # Polling deadline must be BEFORE the event start date
+      # Polling deadline must be BEFORE the event AND in the FUTURE (at least 1 day from now)
       polling_deadline = if status == :polling do
-        # Set deadline 1-14 days before the event starts
-        days_before = Enum.random(1..14)
-        DateTime.add(start_at, -days_before * 24 * 60 * 60, :second) |> truncate_datetime()
+        # Calculate days until event from now
+        days_until_event = DateTime.diff(start_at, now, :day)
+        # Set deadline between 1 day from now and 7 days before the event
+        # Ensure we have at least 8 days until the event for a valid polling window
+        max_days_before = min(14, days_until_event - 1)
+        min_days_from_now = 1
+        max_days_from_now = days_until_event - max_days_before
+
+        if max_days_from_now >= min_days_from_now do
+          days_from_now = Enum.random(min_days_from_now..max_days_from_now)
+          DateTime.add(now, days_from_now * 24 * 60 * 60, :second) |> truncate_datetime()
+        else
+          # Fallback: set deadline 7 days from now (safe for future events)
+          DateTime.add(now, 7 * 24 * 60 * 60, :second) |> truncate_datetime()
+        end
       else
         nil
       end

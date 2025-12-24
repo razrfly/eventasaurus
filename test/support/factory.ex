@@ -14,6 +14,7 @@ defmodule EventasaurusApp.Factory do
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Follows.{UserPerformerFollow, UserVenueFollow}
+  alias EventasaurusApp.Relationships.UserRelationship
   alias EventasaurusDiscovery.Locations.{City, Country}
   alias EventasaurusDiscovery.Performers.Performer
   alias Nanoid
@@ -98,6 +99,24 @@ defmodule EventasaurusApp.Factory do
   end
 
   @doc """
+  Factory for UserRelationship schema.
+
+  Creates a relationship between two users with default active status
+  and shared_event origin.
+  """
+  def user_relationship_factory do
+    %UserRelationship{
+      user: build(:user),
+      related_user: build(:user),
+      status: :active,
+      origin: :shared_event,
+      context: "Met at an event",
+      shared_event_count: 1,
+      last_shared_event_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    }
+  end
+
+  @doc """
   Factory for Country schema
   """
   def country_factory do
@@ -139,7 +158,7 @@ defmodule EventasaurusApp.Factory do
       ends_at: DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(2, :hour),
       timezone: "America/Los_Angeles",
       visibility: :public,
-      # Remove explicit slug to allow automatic generation
+      slug: sequence(:event_slug, &"test-event-#{&1}"),
       status: :confirmed,
       theme: :minimal,
       theme_customizations: %{},
