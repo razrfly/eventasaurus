@@ -31,8 +31,9 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
   require Logger
 
-  # Compile-time check for dev mode that works in production
+  # Environment checks for dev/test mode that work in production
   defp dev_mode?, do: Application.get_env(:eventasaurus, :environment) == :dev
+  defp test_mode?, do: Application.get_env(:eventasaurus, :environment) == :test
 
   @doc """
   Handles different authentication mount hooks.
@@ -115,27 +116,31 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
   # Private function to assign auth_user from session
   defp assign_auth_user(socket, session) do
-    assign_new(socket, :auth_user, fn ->
-      # Check for dev mode login FIRST (dev only)
-      if dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] do
-        # Dev mode: directly load the user from database
+    result = cond do
+      # Test mode: directly load user from session (set by test helpers)
+      test_mode?() && session["current_user_id"] ->
+        user_id = session["current_user_id"]
+        EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id)
+
+      # Dev mode login: directly load the user from database
+      dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] ->
         user_id = session["current_user_id"]
 
         case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id) do
           nil ->
-            # User ID in session doesn't exist in DB - stale session data
-            # Return nil to trigger re-login (session will be cleared on redirect)
             Logger.warning("DEV MODE: User #{user_id} not found in database - stale session")
             nil
 
           user ->
             user
         end
-      else
-        # Get user from Clerk session
+
+      # Production: Get user from Clerk session
+      true ->
         get_clerk_auth_user(session)
-      end
-    end)
+    end
+
+    Phoenix.Component.assign(socket, :auth_user, result)
   end
 
   # Get auth user from Clerk session

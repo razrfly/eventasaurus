@@ -15,6 +15,7 @@ defmodule EventasaurusApp.Factory do
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Follows.{UserPerformerFollow, UserVenueFollow}
   alias EventasaurusApp.Relationships.UserRelationship
+  alias EventasaurusApp.Accounts.UserPreferences
   alias EventasaurusDiscovery.Locations.{City, Country}
   alias EventasaurusDiscovery.Performers.Performer
   alias Nanoid
@@ -114,6 +115,31 @@ defmodule EventasaurusApp.Factory do
       shared_event_count: 1,
       last_shared_event_at: DateTime.utc_now() |> DateTime.truncate(:second)
     }
+  end
+
+  @doc """
+  Factory for UserPreferences schema.
+
+  Creates privacy preferences for a user with default settings
+  (discoverable, visible on attendee lists).
+  """
+  def user_preferences_factory do
+    %UserPreferences{
+      user: build(:user),
+      connection_permission: :event_attendees,
+      show_on_attendee_lists: true,
+      discoverable_in_suggestions: true
+    }
+  end
+
+  @doc """
+  Creates user preferences with privacy disabled (hidden from discovery).
+  """
+  def private_user_preferences_factory do
+    build(:user_preferences, %{
+      discoverable_in_suggestions: false,
+      show_on_attendee_lists: false
+    })
   end
 
   @doc """
