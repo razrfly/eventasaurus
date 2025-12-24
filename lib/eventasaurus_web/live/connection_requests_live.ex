@@ -95,7 +95,7 @@ defmodule EventasaurusWeb.ConnectionRequestsLive do
   end
 
   defp load_requests(socket, user) do
-    received_requests = Relationships.list_pending_requests_for_user(user, preload: [:user])
+    received_requests = Relationships.list_pending_requests_for_user(user, preload: [:user, :originated_from_event])
     sent_requests = Relationships.list_sent_requests(user)
     received_count = length(received_requests)
     sent_count = length(sent_requests)
@@ -308,11 +308,23 @@ defmodule EventasaurusWeb.ConnectionRequestsLive do
     diff = DateTime.diff(now, datetime_utc, :second)
 
     cond do
-      diff < 60 -> "just now"
-      diff < 3600 -> "#{div(diff, 60)} minutes ago"
-      diff < 86400 -> "#{div(diff, 3600)} hours ago"
-      diff < 604800 -> "#{div(diff, 86400)} days ago"
-      true -> Calendar.strftime(datetime, "%b %d, %Y")
+      diff < 60 ->
+        "just now"
+
+      diff < 3600 ->
+        minutes = div(diff, 60)
+        if minutes == 1, do: "1 minute ago", else: "#{minutes} minutes ago"
+
+      diff < 86400 ->
+        hours = div(diff, 3600)
+        if hours == 1, do: "1 hour ago", else: "#{hours} hours ago"
+
+      diff < 604800 ->
+        days = div(diff, 86400)
+        if days == 1, do: "1 day ago", else: "#{days} days ago"
+
+      true ->
+        Calendar.strftime(datetime, "%b %d, %Y")
     end
   end
 end

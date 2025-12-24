@@ -1,0 +1,494 @@
+<div class="overflow-hidden">
+  <main>
+    <%!-- Hero Section --%>
+    <.hero_section class="pb-16 pt-8 sm:pb-24 sm:pt-16">
+      <div class="pt-8 pb-16 sm:pt-16 sm:pb-24 text-center">
+        <.heading as="h1" class="font-display text-5xl/[0.9] font-medium tracking-tight text-balance text-gray-950 sm:text-6xl/[0.8] lg:text-7xl/[0.8] mb-8">
+          Events are better with
+          <span class="bg-gradient-to-r from-blue-600 via-purple-600 to-green-600 bg-clip-text text-transparent">
+            people you know
+          </span>
+        </.heading>
+        <p class="text-xl sm:text-2xl text-gray-950/75 max-w-4xl mx-auto leading-relaxed mb-12">
+          Discover what's happening through the people you've met — not an algorithm.
+          See who's going before you decide. Stay in touch after you meet.
+        </p>
+
+        <%!-- Virtuous Cycle Visual --%>
+        <div class="max-w-2xl mx-auto">
+          <div class="relative bg-white/80 backdrop-blur-sm rounded-3xl border border-gray-200 p-8 shadow-lg">
+            <div class="flex items-center justify-center gap-4 flex-wrap">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-md">
+                  <span class="text-2xl">🎉</span>
+                </div>
+                <span class="font-semibold text-gray-900">More Events</span>
+              </div>
+              <svg class="w-6 h-6 text-gray-400 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+                  <span class="text-2xl">👥</span>
+                </div>
+                <span class="font-semibold text-gray-900">Meet People</span>
+              </div>
+              <svg class="w-6 h-6 text-gray-400 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-md">
+                  <span class="text-2xl">🔍</span>
+                </div>
+                <span class="font-semibold text-gray-900">Discover More</span>
+              </div>
+            </div>
+            <div class="mt-6 text-center">
+              <p class="text-sm text-gray-500 italic">The opposite of doom scrolling</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </.hero_section>
+
+    <%!-- The Discovery Flow Section --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-blue-600">How It Works</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          Event discovery through people
+        </.heading>
+        <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+          A simple journey that connects you to events through the people you know —
+          and helps you remember the people you meet.
+        </p>
+      </div>
+
+      <%!-- Flow Steps --%>
+      <div class="max-w-5xl mx-auto space-y-8">
+
+        <%!-- Step 1: Discover --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div>
+              <div class="flex items-center gap-4 mb-6">
+                <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-md">
+                  <span class="text-2xl font-bold text-white">1</span>
+                </div>
+                <div>
+                  <h3 class="text-2xl font-semibold text-gray-900">Discover</h3>
+                  <p class="text-gray-500">Browse events and see who's going</p>
+                </div>
+              </div>
+              <div class="space-y-4 text-gray-600">
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>See "3 people you know going" badges on events</p>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>Get notifications like "Jazz Night — Sarah is going"</p>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>"Popular with people like you" recommendations</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
+              <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-sm font-medium text-gray-900">Jazz Night at Blue Note</span>
+                  <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Tonight</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="flex -space-x-2">
+                    <div class="w-6 h-6 bg-purple-400 rounded-full border-2 border-white"></div>
+                    <div class="w-6 h-6 bg-green-400 rounded-full border-2 border-white"></div>
+                    <div class="w-6 h-6 bg-blue-400 rounded-full border-2 border-white"></div>
+                  </div>
+                  <span class="text-xs text-gray-600">3 people you know going</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <%!-- Step 2: Decide --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div class="lg:order-2">
+              <div class="flex items-center gap-4 mb-6">
+                <div class="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+                  <span class="text-2xl font-bold text-white">2</span>
+                </div>
+                <div>
+                  <h3 class="text-2xl font-semibold text-gray-900">Decide</h3>
+                  <p class="text-gray-500">Real context helps you choose</p>
+                </div>
+              </div>
+              <div class="space-y-4 text-gray-600">
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>Event page shows people you know who are attending</p>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>"Open to meeting" section for those wanting new connections</p>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>Privacy-first: opt-in to show yourself</p>
+                </div>
+              </div>
+            </div>
+            <div class="lg:order-1 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
+              <div class="space-y-3">
+                <p class="text-sm font-medium text-gray-700 mb-2">People you know going:</p>
+                <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-gray-100">
+                  <div class="w-8 h-8 bg-purple-400 rounded-full"></div>
+                  <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-900">Sarah Chen</p>
+                    <p class="text-xs text-gray-500">Met at Design Conf 2024</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-gray-100">
+                  <div class="w-8 h-8 bg-green-400 rounded-full"></div>
+                  <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-900">Marcus Johnson</p>
+                    <p class="text-xs text-gray-500">Friend of a friend</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <%!-- Step 3: Attend --%>
+        <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 shadow-lg text-white">
+          <div class="text-center max-w-2xl mx-auto">
+            <div class="flex items-center justify-center gap-4 mb-6">
+              <div class="w-14 h-14 bg-gradient-to-br from-orange-400 to-orange-500 rounded-full flex items-center justify-center shadow-md">
+                <span class="text-2xl font-bold text-white">3</span>
+              </div>
+              <div class="text-left">
+                <h3 class="text-2xl font-semibold">Attend</h3>
+                <p class="text-gray-400">The actual event — phones in pockets!</p>
+              </div>
+            </div>
+            <p class="text-lg text-gray-300 leading-relaxed">
+              We don't optimize for time-in-app at events.
+              <span class="text-white font-medium">The actual event is the product, not our app.</span>
+              Go enjoy yourself. Make real connections. We'll be here when you get back.
+            </p>
+          </div>
+        </div>
+
+        <%!-- Step 4: Remember --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div>
+              <div class="flex items-center gap-4 mb-6">
+                <div class="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-md">
+                  <span class="text-2xl font-bold text-white">4</span>
+                </div>
+                <div>
+                  <h3 class="text-2xl font-semibold text-gray-900">Remember</h3>
+                  <p class="text-gray-500">We help you remember who you met</p>
+                </div>
+              </div>
+              <div class="space-y-4 text-gray-600">
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>"You were both at Jazz Night" context prompt</p>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>"Stay in Touch" to remember the connection</p>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>Context auto-filled from shared event</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
+              <div class="bg-white rounded-lg shadow-sm p-4 border border-green-100">
+                <p class="text-sm text-gray-500 mb-3">After Jazz Night...</p>
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="w-10 h-10 bg-purple-400 rounded-full"></div>
+                  <div>
+                    <p class="text-sm font-medium text-gray-900">Alex Rivera</p>
+                    <p class="text-xs text-gray-500">You were both at Jazz Night</p>
+                  </div>
+                </div>
+                <button class="w-full bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-medium py-2 px-4 rounded-lg">
+                  Stay in Touch
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <%!-- Step 5: Repeat --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div class="lg:order-2">
+              <div class="flex items-center gap-4 mb-6">
+                <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+                  <span class="text-2xl font-bold text-white">5</span>
+                </div>
+                <div>
+                  <h3 class="text-2xl font-semibold text-gray-900">Repeat</h3>
+                  <p class="text-gray-500">Your network grows organically</p>
+                </div>
+              </div>
+              <div class="space-y-4 text-gray-600">
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>Your people page shows everyone you know</p>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>Future events show "People you know going"</p>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-green-500 mt-1">✓</span>
+                  <p>Discovery based on your people, not clicks</p>
+                </div>
+              </div>
+            </div>
+            <div class="lg:order-1 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200">
+              <div class="text-center">
+                <div class="flex justify-center -space-x-4 mb-4">
+                  <div class="w-12 h-12 bg-purple-400 rounded-full border-4 border-white shadow-md"></div>
+                  <div class="w-12 h-12 bg-green-400 rounded-full border-4 border-white shadow-md"></div>
+                  <div class="w-12 h-12 bg-blue-400 rounded-full border-4 border-white shadow-md"></div>
+                  <div class="w-12 h-12 bg-orange-400 rounded-full border-4 border-white shadow-md"></div>
+                  <div class="w-12 h-12 bg-pink-400 rounded-full border-4 border-white shadow-md"></div>
+                </div>
+                <p class="text-sm font-medium text-gray-900">12 people in your network</p>
+                <p class="text-xs text-gray-500">Connected through 8 events</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- What We're NOT Section --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-orange-600">The Anti-Engagement Platform</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          What we deliberately don't do
+        </.heading>
+        <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+          We're optimizing for events attended with people you enjoy —
+          not time spent in our app.
+        </p>
+      </div>
+
+      <div class="max-w-4xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <%!-- We Don't Column --%>
+          <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+            <h3 class="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+              <span class="text-red-500">✗</span> We Don't
+            </h3>
+            <ul class="space-y-4">
+              <li class="flex items-start gap-3">
+                <span class="text-red-400 mt-1">✗</span>
+                <div>
+                  <p class="font-medium text-gray-900">Infinite scroll</p>
+                  <p class="text-sm text-gray-500">No endless feeds to trap you</p>
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-red-400 mt-1">✗</span>
+                <div>
+                  <p class="font-medium text-gray-900">Notification spam</p>
+                  <p class="text-sm text-gray-500">Only relevant updates, never noise</p>
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-red-400 mt-1">✗</span>
+                <div>
+                  <p class="font-medium text-gray-900">Engagement tricks</p>
+                  <p class="text-sm text-gray-500">No dark patterns or manipulation</p>
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-red-400 mt-1">✗</span>
+                <div>
+                  <p class="font-medium text-gray-900">Sell your data</p>
+                  <p class="text-sm text-gray-500">Your data is yours, period</p>
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-red-400 mt-1">✗</span>
+                <div>
+                  <p class="font-medium text-gray-900">Count followers</p>
+                  <p class="text-sm text-gray-500">No vanity metrics</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <%!-- We Do Column --%>
+          <div class="bg-white rounded-2xl border border-green-200 p-8 shadow-sm">
+            <h3 class="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+              <span class="text-green-500">✓</span> We Do
+            </h3>
+            <ul class="space-y-4">
+              <li class="flex items-start gap-3">
+                <span class="text-green-500 mt-1">✓</span>
+                <div>
+                  <p class="font-medium text-gray-900">Finite, curated discovery</p>
+                  <p class="text-sm text-gray-500">Quality over quantity, always</p>
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-green-500 mt-1">✓</span>
+                <div>
+                  <p class="font-medium text-gray-900">Relevant updates only</p>
+                  <p class="text-sm text-gray-500">Events that matter to you</p>
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-green-500 mt-1">✓</span>
+                <div>
+                  <p class="font-medium text-gray-900">Optimize for events attended</p>
+                  <p class="text-sm text-gray-500">Success = real-world experiences</p>
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-green-500 mt-1">✓</span>
+                <div>
+                  <p class="font-medium text-gray-900">Your data stays yours</p>
+                  <p class="text-sm text-gray-500">Privacy by design</p>
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="text-green-500 mt-1">✓</span>
+                <div>
+                  <p class="font-medium text-gray-900">Count real connections</p>
+                  <p class="text-sm text-gray-500">People you've actually met</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Privacy Section --%>
+    <.section class="py-24">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <div>
+          <.subheading class="mb-6 text-purple-600">Privacy-First</.subheading>
+          <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+            Your attendance is yours to share
+          </.heading>
+          <div class="space-y-6 text-lg text-gray-600 leading-relaxed">
+            <p>
+              Unlike platforms that broadcast your activity by default, we believe
+              <span class="font-medium text-gray-900">you should control who sees what</span>.
+            </p>
+            <div class="space-y-4">
+              <div class="flex items-start gap-4">
+                <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span class="text-purple-600">🔒</span>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-900">Opt-in visibility</p>
+                  <p class="text-gray-600">You choose who sees you're going to an event</p>
+                </div>
+              </div>
+              <div class="flex items-start gap-4">
+                <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span class="text-purple-600">🤫</span>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-900">No surprise broadcasts</p>
+                  <p class="text-gray-600">We never share without your explicit permission</p>
+                </div>
+              </div>
+              <div class="flex items-start gap-4">
+                <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span class="text-purple-600">🎛️</span>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-900">Context you control</p>
+                  <p class="text-gray-600">"Open to meeting" is always optional</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl p-8 border border-purple-100">
+          <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+            <h4 class="font-medium text-gray-900 mb-4">Your visibility settings</h4>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between py-3 border-b border-gray-100">
+                <div>
+                  <p class="text-sm font-medium text-gray-900">Show I'm attending</p>
+                  <p class="text-xs text-gray-500">Visible to people you know</p>
+                </div>
+                <div class="w-12 h-6 bg-green-500 rounded-full relative">
+                  <div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between py-3 border-b border-gray-100">
+                <div>
+                  <p class="text-sm font-medium text-gray-900">Open to meeting new people</p>
+                  <p class="text-xs text-gray-500">Show in "Open to meeting" section</p>
+                </div>
+                <div class="w-12 h-6 bg-gray-200 rounded-full relative">
+                  <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between py-3">
+                <div>
+                  <p class="text-sm font-medium text-gray-900">Public profile</p>
+                  <p class="text-xs text-gray-500">Anyone can see your events</p>
+                </div>
+                <div class="w-12 h-6 bg-gray-200 rounded-full relative">
+                  <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Closing CTA Section --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center">
+        <div class="max-w-4xl mx-auto">
+          <.heading as="h2" class="mb-8 text-3xl sm:text-4xl lg:text-5xl">
+            <span class="bg-gradient-to-r from-blue-600 via-purple-600 to-green-600 bg-clip-text text-transparent">
+              Ready to discover events differently?
+            </span>
+          </.heading>
+          <p class="text-xl text-gray-600 mb-8 leading-relaxed max-w-3xl mx-auto">
+            Join a community that values real connections over engagement metrics.
+            Find events through people you know. Stay in touch with people you meet.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <.radiant_button href="/activities" class="text-lg px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              Explore Events Near You
+            </.radiant_button>
+            <.radiant_button href="/our-story" variant="secondary" class="text-lg px-8 py-4">
+              Read Our Story
+            </.radiant_button>
+          </div>
+          <p class="mt-6 text-sm text-gray-500">
+            The opposite of doom scrolling. The start of something real.
+          </p>
+        </div>
+      </div>
+    </.section>
+  </main>
+</div>

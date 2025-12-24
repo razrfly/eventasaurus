@@ -139,6 +139,21 @@ window.addEventListener("phx:download_csv", (e) => {
   URL.revokeObjectURL(url);
 });
 
+// Profile share handler - uses Web Share API with clipboard fallback
+window.addEventListener("eventasaurus:share-profile", (e) => {
+  const { title } = e.detail;
+  const url = window.location.href;
+
+  if (navigator.share) {
+    navigator.share({ title, url }).catch(() => {
+      // User cancelled or share failed, silently fall back to clipboard
+      navigator.clipboard.writeText(url);
+    });
+  } else {
+    navigator.clipboard.writeText(url);
+  }
+});
+
 // Connect if there are any LiveViews on the page
 liveSocket.connect();
 
