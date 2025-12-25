@@ -41,10 +41,19 @@ defmodule EventasaurusApp.Repo.Migrations.AddEventSourceConstraintTriggers do
 
     # Trigger 2: Prevent deleting the last source from an event
     # Runs BEFORE DELETE to block the operation if it would orphan the event
+    # IMPORTANT: Allows cascade deletes when the parent event is being deleted
     execute """
     CREATE OR REPLACE FUNCTION prevent_last_source_deletion()
     RETURNS TRIGGER AS $$
     BEGIN
+      -- Allow cascade deletes: if the parent event is being deleted, let it through
+      IF NOT EXISTS (
+        SELECT 1 FROM public_events WHERE id = OLD.event_id
+      ) THEN
+        RETURN OLD;
+      END IF;
+
+      -- Block deletion of the last source if the event still exists
       IF NOT EXISTS (
         SELECT 1 FROM public_event_sources
         WHERE event_id = OLD.event_id AND id != OLD.id
