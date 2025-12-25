@@ -16,6 +16,16 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
         }
 
   Sources without overrides use the default `freshness_threshold_hours`.
+
+  ## Recurring Events
+
+  Events with a `recurrence_rule` are ALWAYS processed (bypass freshness check).
+  This is because recurring events need their `starts_at` updated to the next
+  occurrence on each scraper run. The event record stays the same (same external_id),
+  but the date/time advances to show the upcoming occurrence.
+
+  See docs/EXTERNAL_ID_CONVENTIONS.md for the external_id patterns that distinguish
+  recurring events from single-occurrence events.
   """
 
   import Ecto.Query
@@ -45,15 +55,26 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
   def filter_events_needing_processing(events, source_id, threshold_hours \\ nil) do
     threshold = threshold_hours || get_threshold_for_source(source_id)
 
-    # Extract external_ids from events (works with any scraper format)
+    # CRITICAL: Recurring events bypass freshness check entirely
+    # They need their starts_at updated to the next occurrence on each run
+    # See docs/EXTERNAL_ID_CONVENTIONS.md - recurring events use venue-only external_ids
+    {recurring_events, single_events} = Enum.split_with(events, &has_recurrence_rule?/1)
+
+    if Enum.any?(recurring_events) do
+      Logger.debug(
+        "🔄 Recurring event bypass: #{length(recurring_events)} recurring events will always be processed"
+      )
+    end
+
+    # Extract external_ids from single events only (recurring events bypass this check)
     external_ids =
-      events
+      single_events
       |> Enum.map(&extract_external_id/1)
       |> Enum.reject(&is_nil/1)
 
     if Enum.empty?(external_ids) do
-      # If no valid external_ids, process all events (safe default)
-      events
+      # If no valid external_ids in single events, process all single events + all recurring
+      single_events ++ recurring_events
     else
       # Query for recently seen external_ids
       threshold_datetime = DateTime.add(DateTime.utc_now(), -threshold, :hour)
@@ -85,45 +106,49 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
       # For new events (external_id not yet in DB), predict which event they'll merge into
       # by looking at title + venue similarity
       predicted_event_ids =
-        predict_recurring_event_ids(events, external_id_to_event_id, source_id)
+        predict_recurring_event_ids(single_events, external_id_to_event_id, source_id)
 
-      # Return events NOT in fresh set
+      # Return single events NOT in fresh set
       # An event is fresh if EITHER:
       # 1. Its external_id was recently seen, OR
-      # 2. Its parent event_id was recently updated (for recurring events), OR
-      # 3. The event it WILL merge into was recently updated (predicted recurring events)
-      Enum.filter(events, fn event ->
-        external_id = extract_external_id(event)
+      # 2. Its parent event_id was recently updated (for multi-date events), OR
+      # 3. The event it WILL merge into was recently updated (predicted multi-date events)
+      filtered_single_events =
+        Enum.filter(single_events, fn event ->
+          external_id = extract_external_id(event)
 
-        cond do
-          is_nil(external_id) ->
-            # No external_id, process it
-            true
+          cond do
+            is_nil(external_id) ->
+              # No external_id, process it
+              true
 
-          MapSet.member?(fresh_external_ids, external_id) ->
-            # This exact external_id was recently seen, skip it
-            false
+            MapSet.member?(fresh_external_ids, external_id) ->
+              # This exact external_id was recently seen, skip it
+              false
 
-          true ->
-            # Check if this external_id maps to a recently updated event
-            existing_event_id = Map.get(external_id_to_event_id, external_id)
-            predicted_event_id = Map.get(predicted_event_ids, external_id)
+            true ->
+              # Check if this external_id maps to a recently updated event
+              existing_event_id = Map.get(external_id_to_event_id, external_id)
+              predicted_event_id = Map.get(predicted_event_ids, external_id)
 
-            cond do
-              existing_event_id && MapSet.member?(fresh_event_ids, existing_event_id) ->
-                # This external_id belongs to a recurring event that was recently updated
-                false
+              cond do
+                existing_event_id && MapSet.member?(fresh_event_ids, existing_event_id) ->
+                  # This external_id belongs to a multi-date event that was recently updated
+                  false
 
-              predicted_event_id && MapSet.member?(fresh_event_ids, predicted_event_id) ->
-                # This NEW external_id will merge into a recently updated recurring event
-                false
+                predicted_event_id && MapSet.member?(fresh_event_ids, predicted_event_id) ->
+                  # This NEW external_id will merge into a recently updated event
+                  false
 
-              true ->
-                # Process this event
-                true
-            end
-        end
-      end)
+                true ->
+                  # Process this event
+                  true
+              end
+          end
+        end)
+
+      # Combine filtered single events with ALL recurring events (recurring bypass freshness)
+      filtered_single_events ++ recurring_events
     end
   end
 
@@ -336,4 +361,11 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
     |> String.downcase()
     |> String.trim()
   end
+
+  # Check if an event has a recurrence_rule (recurring event)
+  # Recurring events bypass freshness checking because they need starts_at updated
+  # to the next occurrence on each scraper run
+  defp has_recurrence_rule?(%{"recurrence_rule" => rule}) when not is_nil(rule), do: true
+  defp has_recurrence_rule?(%{recurrence_rule: rule}) when not is_nil(rule), do: true
+  defp has_recurrence_rule?(_), do: false
 end

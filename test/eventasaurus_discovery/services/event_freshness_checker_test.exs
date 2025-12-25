@@ -345,4 +345,158 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
       assert length(result) == 0
     end
   end
+
+  describe "recurring event bypass" do
+    setup do
+      source = insert(:public_event_source_type, name: "Test Source")
+      {:ok, source: source}
+    end
+
+    test "always processes events with recurrence_rule (string keys)", %{source: source} do
+      # Create an event source seen 1 hour ago (normally would be filtered)
+      recent_datetime = DateTime.add(DateTime.utc_now(), -1, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "recurring_123",
+        last_seen_at: recent_datetime
+      )
+
+      # Event has recurrence_rule - should bypass freshness check
+      events = [
+        %{
+          "external_id" => "recurring_123",
+          "recurrence_rule" => %{
+            "frequency" => "weekly",
+            "days_of_week" => ["tuesday"],
+            "time" => "19:00",
+            "timezone" => "Europe/London"
+          }
+        }
+      ]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should be included despite being recently seen (recurring bypass)
+      assert length(result) == 1
+      assert hd(result)["external_id"] == "recurring_123"
+    end
+
+    test "always processes events with recurrence_rule (atom keys)", %{source: source} do
+      # Create an event source seen 1 hour ago (normally would be filtered)
+      recent_datetime = DateTime.add(DateTime.utc_now(), -1, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "recurring_456",
+        last_seen_at: recent_datetime
+      )
+
+      # Event has recurrence_rule with atom keys - should bypass freshness check
+      events = [
+        %{
+          external_id: "recurring_456",
+          recurrence_rule: %{
+            "frequency" => "weekly",
+            "days_of_week" => ["wednesday"],
+            "time" => "20:00",
+            "timezone" => "Europe/Warsaw"
+          }
+        }
+      ]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should be included despite being recently seen (recurring bypass)
+      assert length(result) == 1
+      assert hd(result).external_id == "recurring_456"
+    end
+
+    test "filters single events but includes recurring events in same batch", %{source: source} do
+      # Create event sources seen 1 hour ago
+      recent_datetime = DateTime.add(DateTime.utc_now(), -1, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "single_event_1",
+        last_seen_at: recent_datetime
+      )
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "recurring_event_1",
+        last_seen_at: recent_datetime
+      )
+
+      # Mix of single and recurring events
+      events = [
+        # Single event - should be filtered (no recurrence_rule)
+        %{"external_id" => "single_event_1", "title" => "Concert"},
+        # Recurring event - should bypass (has recurrence_rule)
+        %{
+          "external_id" => "recurring_event_1",
+          "title" => "Weekly Trivia",
+          "recurrence_rule" => %{
+            "frequency" => "weekly",
+            "days_of_week" => ["monday"],
+            "time" => "19:00"
+          }
+        },
+        # New event - should be included (never seen)
+        %{"external_id" => "new_event_1", "title" => "New Concert"}
+      ]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should have 2 events: the recurring one and the new one
+      assert length(result) == 2
+
+      external_ids = Enum.map(result, fn e -> e["external_id"] || e[:external_id] end)
+      assert "recurring_event_1" in external_ids
+      assert "new_event_1" in external_ids
+      refute "single_event_1" in external_ids
+    end
+
+    test "nil recurrence_rule does not trigger bypass", %{source: source} do
+      # Create an event source seen 1 hour ago
+      recent_datetime = DateTime.add(DateTime.utc_now(), -1, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "null_recurrence",
+        last_seen_at: recent_datetime
+      )
+
+      # Event has nil recurrence_rule - should NOT bypass
+      events = [
+        %{"external_id" => "null_recurrence", "recurrence_rule" => nil}
+      ]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should be filtered out (nil recurrence_rule doesn't bypass)
+      assert length(result) == 0
+    end
+
+    test "missing recurrence_rule key does not trigger bypass", %{source: source} do
+      # Create an event source seen 1 hour ago
+      recent_datetime = DateTime.add(DateTime.utc_now(), -1, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "no_recurrence_key",
+        last_seen_at: recent_datetime
+      )
+
+      # Event has no recurrence_rule key at all - should NOT bypass
+      events = [
+        %{"external_id" => "no_recurrence_key", "title" => "Regular Event"}
+      ]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should be filtered out (no recurrence_rule means single event)
+      assert length(result) == 0
+    end
+  end
 end

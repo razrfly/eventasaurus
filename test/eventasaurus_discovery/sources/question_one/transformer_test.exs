@@ -21,7 +21,9 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.TransformerTest do
       transformed = Transformer.transform_event(venue_data)
 
       # Check required fields
-      assert transformed.external_id =~ "question_one_"
+      # External ID is venue-based only (NO date suffix) - one record per venue pattern
+      # See docs/EXTERNAL_ID_CONVENTIONS.md - dates in recurring event IDs cause duplicates
+      assert transformed.external_id == "question_one_the_red_lion"
       assert transformed.title == "Quiz Night at The Red Lion"
       assert %DateTime{} = transformed.starts_at
       assert %DateTime{} = transformed.ends_at

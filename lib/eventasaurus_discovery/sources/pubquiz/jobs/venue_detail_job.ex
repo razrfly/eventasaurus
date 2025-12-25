@@ -134,24 +134,18 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
     }
 
     # Try to parse schedule and add recurrence_rule
-    # CRITICAL: Also update external_id to include the event date for recurring events
-    # This ensures each weekly occurrence is unique and passes EventFreshnessChecker
+    # NOTE: external_id stays venue-based (NO date) - one record per venue pattern
+    # See docs/EXTERNAL_ID_CONVENTIONS.md - dates in recurring event IDs cause duplicates
     event_map =
       case Transformer.parse_schedule_to_recurrence(venue_data[:schedule]) do
         {:ok, recurrence_rule} ->
           case Transformer.calculate_next_occurrence(recurrence_rule) do
             {:ok, next_occurrence} ->
-              # Add date to external_id for recurring events
-              # Format: pubquiz-pl_{city}_{venue_slug}_{YYYY-MM-DD}
-              date_str = next_occurrence |> DateTime.to_date() |> Date.to_iso8601()
-              dated_external_id = "#{external_id}_#{date_str}"
-
               %{
                 event_map
                 | recurrence_rule: recurrence_rule,
                   starts_at: next_occurrence,
-                  ends_at: DateTime.add(next_occurrence, 2 * 3600, :second),
-                  external_id: dated_external_id
+                  ends_at: DateTime.add(next_occurrence, 2 * 3600, :second)
               }
 
             {:error, reason} ->
