@@ -23,7 +23,9 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.TransformerTest do
       event = Transformer.transform_event(venue_data)
 
       # Check required fields
-      assert event.external_id == "inquizition_97520779"
+      # External ID now includes date for recurring events: inquizition_{venue_id}_{YYYY-MM-DD}
+      assert String.starts_with?(event.external_id, "inquizition_97520779_")
+      assert String.match?(event.external_id, ~r/^inquizition_97520779_\d{4}-\d{2}-\d{2}$/)
       assert event.title == "Inquizition Trivia at Andrea Ludgate Hill"
       assert %DateTime{} = event.starts_at
       assert event.category == "trivia"
@@ -72,7 +74,9 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.TransformerTest do
 
       event = Transformer.transform_event(venue_data)
 
-      assert event.external_id == "inquizition_123"
+      # External ID now includes date for recurring events: inquizition_{venue_id}_{YYYY-MM-DD}
+      assert String.starts_with?(event.external_id, "inquizition_123_")
+      assert String.match?(event.external_id, ~r/^inquizition_123_\d{4}-\d{2}-\d{2}$/)
       assert event.title == "Inquizition Trivia at Test Venue"
       assert event.venue_data.name == "Test Venue"
       assert event.min_price == 2.50

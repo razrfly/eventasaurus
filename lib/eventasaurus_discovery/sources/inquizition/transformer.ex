@@ -67,8 +67,19 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Transformer do
         _ -> false
       end
 
-    # Generate stable external_id from venue_id
-    external_id = "inquizition_#{venue_data.venue_id}"
+    # Generate external_id with date for recurring events
+    # Format: inquizition_{venue_id}_{YYYY-MM-DD}
+    # This ensures each weekly occurrence is unique and passes EventFreshnessChecker
+    external_id =
+      case starts_at do
+        %DateTime{} = dt ->
+          date_str = dt |> DateTime.to_date() |> Date.to_iso8601()
+          "inquizition_#{venue_data.venue_id}_#{date_str}"
+
+        _ ->
+          # Fallback if no date (shouldn't happen with valid schedule)
+          "inquizition_#{venue_data.venue_id}"
+      end
 
     # Resolve city and country using offline geocoding
     {city, country} = resolve_location(latitude, longitude, address)
