@@ -93,7 +93,8 @@ defmodule EventasaurusWeb.Router do
       live "/discovery/config/:slug", Admin.CityDiscoveryConfigLive, :show
 
       # Category Management (dev - no auth)
-      live "/categories", Admin.CategoryIndexLive, :index
+      live "/categories", Admin.CategoryDashboardLive, :index
+      live "/categories/list", Admin.CategoryIndexLive, :index
       live "/categories/new", Admin.CategoryFormLive, :new
       live "/categories/:id/edit", Admin.CategoryFormLive, :edit
 
@@ -223,7 +224,8 @@ defmodule EventasaurusWeb.Router do
       live "/discovery/config/:slug", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :show
 
       # Category Management
-      live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
+      live "/categories", EventasaurusWeb.Admin.CategoryDashboardLive, :index
+      live "/categories/list", EventasaurusWeb.Admin.CategoryIndexLive, :index
       live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
       live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
 
