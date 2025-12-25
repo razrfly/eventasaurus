@@ -25,7 +25,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   import Ecto.Query
   require Logger
 
-  @refresh_interval 30_000
+  # Refresh interval increased from 30s to 5 minutes to reduce query load
+  # Dashboard stats are already cached (1-10 min TTL), frequent UI refresh is unnecessary
+  @refresh_interval 300_000
   # City-specific sources: These sources ONLY work for a single hardcoded city
   # (they don't have multi-city support in their scraper implementation)
   #
