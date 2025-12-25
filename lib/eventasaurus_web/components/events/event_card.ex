@@ -11,8 +11,8 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   import EventasaurusWeb.Helpers.LanguageHelpers
 
   attr :event, :map, required: true
-  attr :context, :atom, required: true, values: [:user_dashboard, :group_events]
-  attr :layout, :atom, default: :desktop, values: [:desktop, :mobile]
+  attr :context, :atom, required: true, values: [:user_dashboard, :group_events, :profile]
+  attr :layout, :atom, default: :desktop, values: [:desktop, :mobile, :compact]
   attr :language, :string, default: "en"
 
   @impl true
@@ -45,7 +45,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
               <div class="flex flex-wrap gap-2 mb-2">
                 <.live_component
                   module={EventCardBadges}
-                  id={"badges-#{@layout}-#{@event.id}"}
+                  id={"badges-#{@unique_id}"}
                   event={@event}
                   context={@context}
                 />
@@ -80,7 +80,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
                 <!-- Participants with Avatars -->
                 <.live_component
                   module={ParticipantAvatars}
-                  id={"participants-#{@layout}-#{@event.id}"}
+                  id={"participants-#{@unique_id}"}
                   event={@event}
                 />
               </div>
@@ -140,20 +140,25 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
 
   defp card_padding(:desktop), do: "p-3"
   defp card_padding(:mobile), do: "p-4"
+  defp card_padding(:compact), do: "p-4"
 
   defp action_padding(:desktop), do: "pt-2 px-3 pb-3"
   defp action_padding(:mobile), do: "pt-2 px-4 pb-3"
+  defp action_padding(:compact), do: "hidden"
 
   defp card_layout(:desktop), do: "flex flex-col sm:flex-row gap-3"
   defp card_layout(:mobile), do: "flex justify-between items-start mb-3"
+  defp card_layout(:compact), do: "flex items-start gap-4"
 
   defp title_size(:desktop), do: "text-2xl font-semibold text-gray-900 mb-1"
   defp title_size(:mobile), do: "text-lg font-semibold text-gray-900 mb-2"
+  defp title_size(:compact), do: "text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors"
 
   defp image_container_class(:desktop),
     do: "w-full sm:w-64 h-44 sm:h-44 rounded-lg overflow-hidden flex-shrink-0"
 
   defp image_container_class(:mobile), do: "w-16 h-16 rounded-lg overflow-hidden flex-shrink-0"
+  defp image_container_class(:compact), do: "w-16 h-16 rounded-lg overflow-hidden flex-shrink-0"
 
   defp render_action_button(event) do
     can_manage = Map.get(event, :can_manage, false)

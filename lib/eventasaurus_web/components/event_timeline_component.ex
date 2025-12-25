@@ -10,9 +10,10 @@ defmodule EventasaurusWeb.EventTimelineComponent do
   @doc """
   Renders a reusable event timeline component that displays events in a rich timeline format.
 
-  Supports two contexts:
+  Supports three contexts:
   - `:user_dashboard` - Shows user's events with role badges, filters, and management actions
   - `:group_events` - Shows group events with simplified display and group-specific actions
+  - `:profile` - Shows profile events with past-tense badges (Hosted/Attended) and no filters
 
   ## Examples
 
@@ -46,7 +47,7 @@ defmodule EventasaurusWeb.EventTimelineComponent do
 
   attr :context, :atom,
     required: true,
-    values: [:user_dashboard, :group_events],
+    values: [:user_dashboard, :group_events, :profile],
     doc: "Usage context"
 
   attr :loading, :boolean, default: false, doc: "Loading state"

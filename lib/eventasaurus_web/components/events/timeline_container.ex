@@ -7,7 +7,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
   }
 
   attr :events, :list, required: true
-  attr :context, :atom, required: true, values: [:user_dashboard, :group_events]
+  attr :context, :atom, required: true, values: [:user_dashboard, :group_events, :profile]
 
   @impl true
   def render(assigns) do
@@ -22,7 +22,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
             <!-- Date Section -->
             <.live_component
               module={TimelineDateMarker}
-              id={"date-marker-#{date_to_string(date)}"}
+              id={"#{@id}-date-marker-#{date_to_string(date)}"}
               date={date}
               is_last={is_last_date?(date, @grouped_events)}
             />
@@ -43,7 +43,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
               <%= for event <- date_events do %>
                 <.live_component
                   module={EventCard}
-                  id={"desktop-event-card-#{event.id}"}
+                  id={"#{@id}-desktop-event-card-#{event.id}"}
                   event={event}
                   context={@context}
                   layout={:desktop}
@@ -77,7 +77,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
               <%= for event <- date_events do %>
                 <.live_component
                   module={EventCard}
-                  id={"mobile-event-card-#{event.id}"}
+                  id={"#{@id}-mobile-event-card-#{event.id}"}
                   event={event}
                   context={@context}
                   layout={:mobile}
