@@ -41,8 +41,9 @@ defmodule EventasaurusWeb.CityLive.Index do
 
       city ->
         if city.latitude && city.longitude do
-          # Get language from session or default to English
-          language = get_connect_params(socket)["locale"] || socket.assigns[:language] || "en"
+          # Get language from connect params (safe nil handling) or default to English
+          params = get_connect_params(socket) || %{}
+          language = params["locale"] || socket.assigns[:language] || "en"
 
           # Capture request URI for proper URL generation (ngrok support)
           raw_uri = get_connect_info(socket, :uri)
