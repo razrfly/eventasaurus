@@ -631,25 +631,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # Check if cover_image_url already exists using Map.get (safe for Ecto structs)
     existing_url = Map.get(event, :cover_image_url)
 
-    Logger.debug(
-      "enrich_with_own_city - Event #{event.id}, existing_url: #{inspect(existing_url)}, force: #{force}"
-    )
-
     if force || is_nil(existing_url) do
       # Get city struct from event's venue (preloaded by preload_for_image_enrichment)
       city = get_in(event, [Access.key(:venue), Access.key(:city_ref)])
 
-      Logger.debug(
-        "enrich_with_own_city - Event: #{event.id}, City: #{inspect(city && city.name)}"
-      )
-
       if city do
         # Pass nil as browsing_city so it uses the venue's city (from the event itself)
-        Logger.debug("Calling get_cover_image_url for event #{event.id}")
         cover_image_url = get_cover_image_url(event, nil)
-        Logger.debug("get_cover_image_url returned: #{inspect(cover_image_url)}")
-
-        Logger.info("🖼️  get_cover_image_url returned: #{inspect(cover_image_url)}")
 
         if is_nil(cover_image_url) do
           # Emit telemetry for missing gallery
@@ -661,15 +649,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         end
 
         # Map.put works on Ecto structs (they are maps)
-        enriched = Map.put(event, :cover_image_url, cover_image_url)
-
-        Logger.info(
-          "✨ Returning enriched event #{event.id} with cover_image_url: #{inspect(Map.get(enriched, :cover_image_url))}"
-        )
-
-        enriched
+        Map.put(event, :cover_image_url, cover_image_url)
       else
-        Logger.info("⚠️  No venue/city found for event #{event.id}")
         # No venue/city, can't enrich - emit telemetry
         :telemetry.execute(
           [:eventasaurus, :unsplash, :fallback_missing],
@@ -813,33 +794,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   #
   # Prioritizes browsing city gallery over venue city gallery for aggregate pages.
   # Falls back gracefully through category chain if primary category has no images.
+  # Uses CityFallbackImageCache for pre-computed CDN-transformed URLs.
   defp get_city_fallback_image(event, browsing_city) do
-    # Try browsing city first (for aggregate pages like /c/london/trivia/speed-quizzing)
-    # Then fall back to venue's actual city
-    city =
-      cond do
-        browsing_city && has_unsplash_gallery?(browsing_city) ->
-          browsing_city
-
-        true ->
-          venue_city = get_event_city(event)
-          has_gallery = has_unsplash_gallery?(venue_city)
-
-          if has_gallery do
-            venue_city
-          else
-            # Fallback: Find a major city with gallery in the same country
-            fallback_city = find_country_fallback_city(venue_city)
-
-            if fallback_city do
-              Logger.info(
-                "🌍 Using country fallback: #{fallback_city.name} (venue city: #{venue_city && venue_city.name})"
-              )
-            end
-
-            fallback_city
-          end
-      end
+    alias EventasaurusApp.Cache.CityFallbackImageCache
 
     # Extract venue_id for image variation (ensures different images per venue on same day)
     venue_id =
@@ -849,41 +806,67 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         _ -> 0
       end
 
-    Logger.info("🎯 City for fallback: #{inspect(city && city.name)}, venue_id: #{venue_id}")
+    # Determine category once
+    category = determine_event_category(event)
 
-    with city when not is_nil(city) <- city,
-         category <- determine_event_category(event) do
-      Logger.info("📂 Event category: #{inspect(category)}")
-      fallback_chain = [category, "general"] |> Enum.uniq()
-      Logger.info("🔗 Fallback chain: #{inspect(fallback_chain)}")
+    # Try browsing city first (for aggregate pages like /c/london/trivia/speed-quizzing)
+    # Then fall back to venue's actual city
+    city_id =
+      cond do
+        browsing_city && has_unsplash_gallery?(browsing_city) ->
+          browsing_city.id
 
-      result =
-        case try_category_chain(city, fallback_chain, venue_id) do
-          nil ->
-            Logger.info("❌ No fallback image found in chain")
-            nil
+        true ->
+          venue_city = get_event_city(event)
+          has_gallery = has_unsplash_gallery?(venue_city)
 
-          image_url ->
-            Logger.info("🎨 Found fallback image: #{String.slice(image_url, 0, 50)}...")
-            transformed = apply_cdn_transformations(image_url)
-            Logger.info("🔄 After CDN transformation: #{inspect(transformed)}")
-            transformed
-        end
+          if has_gallery do
+            venue_city && venue_city.id
+          else
+            # Fallback: Find a major city with gallery in the same country
+            fallback = find_country_fallback_city(venue_city)
+            fallback && fallback.id
+          end
+      end
 
-      Logger.info("📤 get_city_fallback_image returning: #{inspect(result)}")
-      result
+    # Try cache first (pre-computed CDN-transformed URLs)
+    if city_id do
+      # Try primary category, then "general" fallback
+      CityFallbackImageCache.get_fallback_image(city_id, category, venue_id) ||
+        CityFallbackImageCache.get_fallback_image(city_id, "general", venue_id) ||
+        # Cache miss - fall back to direct computation (shouldn't happen after cache warm-up)
+        get_city_fallback_image_uncached(city_id, category, venue_id)
     else
-      result ->
-        Logger.info("❌ No fallback image found, result: #{inspect(result)}")
-        nil
+      nil
+    end
+  end
+
+  # Fallback for cache misses (should be rare after cache warm-up)
+  defp get_city_fallback_image_uncached(city_id, category, venue_id) do
+    city = Repo.get(City, city_id)
+
+    if city do
+      fallback_chain = [category, "general"] |> Enum.uniq()
+
+      case try_category_chain(city, fallback_chain, venue_id) do
+        nil -> nil
+        url -> apply_cdn_transformations(url)
+      end
+    else
+      nil
     end
   end
 
   # Get city from event (handles various preload scenarios)
+  # City is already preloaded - return it directly
   defp get_event_city(%{venue: %{city_ref: %City{} = city}}), do: city
 
+  # City was preloaded but is nil (venue has no city) - return nil without re-querying
+  defp get_event_city(%{venue: %{city_ref: nil}}), do: nil
+
+  # Venue exists but city_ref association not loaded (Ecto.Association.NotLoaded)
+  # This shouldn't happen if preload_with_sources was called, but handle gracefully
   defp get_event_city(%{venue: %Venue{} = venue}) do
-    # Venue exists but city_ref not preloaded, load it
     case Repo.preload(venue, :city_ref) do
       %{city_ref: %City{} = city} -> city
       _ -> nil
@@ -1216,11 +1199,26 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   @doc """
   Get event counts for each quick date range filter.
   Supports all filters including geographic filtering (center_lat, center_lng, radius_km).
+
+  Optimized to use a single SQL query with FILTER clauses for non-aggregation mode.
+  For aggregation mode, falls back to sequential counting (cached via CityPageCache).
   """
   def get_quick_date_range_counts(filters \\ []) do
     filters_map = Enum.into(filters, %{})
     use_aggregation = Map.get(filters_map, :aggregate, false)
 
+    if use_aggregation do
+      # Aggregation requires fetching and aggregating events - use sequential counting
+      # This is cached via CityPageCache with 5 minute TTL
+      get_quick_date_range_counts_sequential(filters_map)
+    else
+      # Optimized: single query with FILTER clauses (7 queries → 1)
+      get_quick_date_range_counts_single_query(filters_map)
+    end
+  end
+
+  # Sequential counting for aggregation mode (cached externally)
+  defp get_quick_date_range_counts_sequential(filters_map) do
     [
       :today,
       :tomorrow,
@@ -1233,25 +1231,91 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     |> Enum.map(fn range_type ->
       {start_date, end_date} = calculate_date_range(range_type)
 
-      # Build count options with date range and all other filters (including geographic)
       count_opts =
         filters_map
         |> Map.put(:start_date, start_date)
         |> Map.put(:end_date, end_date)
-        # Always show all events in range for counts
         |> Map.put(:show_past, true)
 
-      # Use aggregation-aware counting when aggregation is enabled
-      count =
-        if use_aggregation do
-          count_events_with_aggregation(count_opts)
-        else
-          count_events(count_opts)
-        end
-
+      count = count_events_with_aggregation(count_opts)
       %{range: range_type, count: count}
     end)
     |> Enum.into(%{}, fn %{range: range, count: count} -> {range, count} end)
+  end
+
+  # Single query optimization for non-aggregation mode (7 queries → 1)
+  defp get_quick_date_range_counts_single_query(filters_map) do
+    # Calculate all date ranges upfront
+    ranges = %{
+      today: calculate_date_range(:today),
+      tomorrow: calculate_date_range(:tomorrow),
+      this_weekend: calculate_date_range(:this_weekend),
+      next_7_days: calculate_date_range(:next_7_days),
+      next_30_days: calculate_date_range(:next_30_days),
+      this_month: calculate_date_range(:this_month),
+      next_month: calculate_date_range(:next_month)
+    }
+
+    # Build base query with all filters except date range
+    base_query =
+      from(pe in PublicEvent,
+        select: %{
+          starts_at: pe.starts_at
+        }
+      )
+
+    # Apply all non-date filters
+    query =
+      base_query
+      |> filter_past_events_for_count(true)
+      |> filter_by_categories(filters_map[:categories])
+      |> filter_by_price_range(filters_map[:min_price], filters_map[:max_price])
+      |> filter_by_location(filters_map[:city_id], filters_map[:country_id], filters_map[:venue_ids])
+      |> apply_search(filters_map[:search])
+
+    # Apply geographic filter if provided
+    query =
+      if filters_map[:center_lat] && filters_map[:center_lng] && filters_map[:radius_km] do
+        filter_by_radius(query, filters_map[:center_lat], filters_map[:center_lng], filters_map[:radius_km])
+      else
+        query
+      end
+
+    # Get the outer date bounds (next_30_days covers most ranges)
+    {outer_start, _} = ranges.today
+    {_, outer_end} = ranges.next_30_days
+
+    # Also include next_month which may extend beyond next_30_days
+    {_, next_month_end} = ranges.next_month
+    actual_outer_end = if DateTime.compare(next_month_end, outer_end) == :gt, do: next_month_end, else: outer_end
+
+    # Filter to the outer date range to reduce scan
+    query =
+      from(pe in query,
+        where: pe.starts_at >= ^outer_start and pe.starts_at <= ^actual_outer_end,
+        select: pe.starts_at
+      )
+
+    # Execute single query to get all relevant event starts_at
+    event_times = Repo.all(query)
+
+    # Count events in each range in memory
+    %{
+      today: count_in_range(event_times, ranges.today),
+      tomorrow: count_in_range(event_times, ranges.tomorrow),
+      this_weekend: count_in_range(event_times, ranges.this_weekend),
+      next_7_days: count_in_range(event_times, ranges.next_7_days),
+      next_30_days: count_in_range(event_times, ranges.next_30_days),
+      this_month: count_in_range(event_times, ranges.this_month),
+      next_month: count_in_range(event_times, ranges.next_month)
+    }
+  end
+
+  # Count how many event times fall within a date range
+  defp count_in_range(event_times, {start_dt, end_dt}) do
+    Enum.count(event_times, fn dt ->
+      DateTime.compare(dt, start_dt) != :lt and DateTime.compare(dt, end_dt) != :gt
+    end)
   end
 
   @doc """
@@ -1365,9 +1429,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       page_size = min(opts[:page_size] || @default_limit, @max_limit)
 
       # Fetch window sized to requested page (cap at @max_limit)
-      # Use larger multiplier for first page to ensure all events are seen for aggregation
-      # Subsequent pages use smaller multiplier since aggregation is already established
-      multiplier = if page == 1, do: 20, else: 3
+      # Use multiplier to fetch enough events for aggregation while avoiding over-fetching
+      # Previous 20x multiplier caused performance issues (fetching 600 events for 30-item page)
+      # Reduced to 5x/2x for better balance - see issue #2911
+      multiplier = if page == 1, do: 5, else: 2
       fetch_size = min(@max_limit, page * page_size * multiplier)
 
       # Build fetch opts without DB pagination

@@ -54,14 +54,14 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   Gets date range counts for a city from cache or computes and caches them.
 
   Cache key includes city_slug and radius_km for accuracy.
-  TTL: 5 minutes
+  TTL: 15 minutes (date counts rarely change, longer TTL reduces DB load)
   """
   def get_date_range_counts(city_slug, radius_km, compute_fn) when is_function(compute_fn, 0) do
     cache_key = "date_counts:#{city_slug}:#{radius_km}"
 
     Cachex.fetch(@cache_name, cache_key, fn ->
       counts = compute_fn.()
-      {:commit, counts, ttl: :timer.minutes(5)}
+      {:commit, counts, ttl: :timer.minutes(15)}
     end)
     |> case do
       {:ok, counts} -> counts

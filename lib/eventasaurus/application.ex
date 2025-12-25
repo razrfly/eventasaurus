@@ -113,6 +113,8 @@ defmodule Eventasaurus.Application do
       {Cachex, name: :dashboard_stats},
       # Start City Gallery Cache for Unsplash fallback image lookups
       EventasaurusApp.Cache.CityGalleryCache,
+      # Start City Fallback Image Cache for pre-computed fallback images
+      EventasaurusApp.Cache.CityFallbackImageCache,
       # Start a worker by calling: Eventasaurus.Worker.start_link(arg)
       # {Eventasaurus.Worker, arg},
       # Start to serve requests, typically the last entry

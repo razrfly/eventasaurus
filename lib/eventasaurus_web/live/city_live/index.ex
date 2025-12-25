@@ -686,7 +686,7 @@ defmodule EventasaurusWeb.CityLive.Index do
         # This ensures date range counts are calculated from ALL events, not just the currently filtered ones
         date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
 
-        # Use cached date range counts (5 min TTL) - cache key includes city slug and radius
+        # Use cached date range counts (15 min TTL) - cache key includes city slug and radius
         date_counts =
           CityPageCache.get_date_range_counts(
             city.slug,
