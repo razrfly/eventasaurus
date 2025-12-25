@@ -4,18 +4,18 @@ defmodule EventasaurusWeb.Components.Events.EventCardBadges do
   alias EventasaurusWeb.Helpers.EventStatusHelpers
 
   attr :event, :map, required: true
-  attr :context, :atom, required: true, values: [:user_dashboard, :group_events]
+  attr :context, :atom, required: true, values: [:user_dashboard, :group_events, :profile]
 
   @impl true
   def render(assigns) do
     ~H"""
     <div class="contents">
-      <%= if @context == :user_dashboard && @event.user_role do %>
+      <%= if @context in [:user_dashboard, :profile] && Map.get(@event, :user_role) do %>
         <span class={[
           "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
-          role_badge_class(@event.user_role)
+          role_badge_class(Map.get(@event, :user_role), @context)
         ]}>
-          <%= role_badge_text(@event.user_role) %>
+          <%= role_badge_text(Map.get(@event, :user_role), @context) %>
         </span>
       <% end %>
 
@@ -26,7 +26,7 @@ defmodule EventasaurusWeb.Components.Events.EventCardBadges do
         <%= EventStatusHelpers.status_icon(@event) %> <%= EventStatusHelpers.friendly_status_message(@event, :badge) %>
       </span>
 
-      <%= if @event.taxation_type == "ticketed_event" do %>
+      <%= if Map.get(@event, :taxation_type) == "ticketed_event" do %>
         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
           🎫 Ticketed
         </span>
@@ -70,11 +70,23 @@ defmodule EventasaurusWeb.Components.Events.EventCardBadges do
     end
   end
 
-  defp role_badge_class("organizer"), do: "bg-green-100 text-green-800"
-  defp role_badge_class("participant"), do: "bg-blue-100 text-blue-800"
-  defp role_badge_class(_), do: "bg-gray-100 text-gray-800"
+  # Profile context uses blue for organizer (Hosted), green for participant (Attended)
+  defp role_badge_class("organizer", :profile), do: "bg-blue-100 text-blue-800"
+  defp role_badge_class("participant", :profile), do: "bg-green-100 text-green-800"
+  defp role_badge_class(_, :profile), do: "bg-gray-100 text-gray-800"
 
-  defp role_badge_text("organizer"), do: "Organizer"
-  defp role_badge_text("participant"), do: "Attending"
-  defp role_badge_text(role), do: String.capitalize(role)
+  # Dashboard context uses green for organizer, blue for participant
+  defp role_badge_class("organizer", _context), do: "bg-green-100 text-green-800"
+  defp role_badge_class("participant", _context), do: "bg-blue-100 text-blue-800"
+  defp role_badge_class(_, _context), do: "bg-gray-100 text-gray-800"
+
+  # Profile context uses past tense (Hosted/Attended)
+  defp role_badge_text("organizer", :profile), do: "Hosted"
+  defp role_badge_text("participant", :profile), do: "Attended"
+  defp role_badge_text(role, :profile), do: String.capitalize(role)
+
+  # Dashboard context uses present tense (Organizer/Attending)
+  defp role_badge_text("organizer", _context), do: "Organizer"
+  defp role_badge_text("participant", _context), do: "Attending"
+  defp role_badge_text(role, _context), do: String.capitalize(role)
 end

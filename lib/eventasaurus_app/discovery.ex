@@ -211,6 +211,34 @@ defmodule EventasaurusApp.Discovery do
   # Shared Events Discovery
   # =============================================================================
 
+  # Valid participation statuses and roles used across discovery functions
+  @valid_participant_statuses [:accepted, :confirmed_with_order]
+  @valid_event_user_roles ["organizer", "host", "cohost", "attendee"]
+
+  @doc false
+  # Returns a list of event IDs that a user has participated in (as participant or organizer).
+  # This is a helper function used by shared_events/3 and shared_event_count/2 to avoid duplication.
+  @spec user_event_ids(binary()) :: [binary()]
+  defp user_event_ids(user_id) do
+    participant_events =
+      from(ep in EventParticipant,
+        where: ep.user_id == ^user_id,
+        where: ep.status in ^@valid_participant_statuses,
+        where: is_nil(ep.deleted_at),
+        select: ep.event_id
+      )
+
+    organizer_events =
+      from(eu in EventUser,
+        where: eu.user_id == ^user_id,
+        where: eu.role in ^@valid_event_user_roles,
+        where: is_nil(eu.deleted_at),
+        select: eu.event_id
+      )
+
+    Repo.all(union_all(participant_events, ^organizer_events))
+  end
+
   @doc """
   Get the actual events that two users both attended.
 
@@ -241,47 +269,9 @@ defmodule EventasaurusApp.Discovery do
     order = Keyword.get(opts, :order, :recent)
     include_upcoming = Keyword.get(opts, :include_upcoming, false)
 
-    # Valid participation statuses
-    valid_participant_statuses = [:accepted, :confirmed_with_order]
-    valid_event_user_roles = ["organizer", "host", "cohost", "attendee"]
-
-    # Get event IDs where user1 participated
-    user1_participant_events =
-      from(ep in EventParticipant,
-        where: ep.user_id == ^user1_id,
-        where: ep.status in ^valid_participant_statuses,
-        where: is_nil(ep.deleted_at),
-        select: ep.event_id
-      )
-
-    user1_organizer_events =
-      from(eu in EventUser,
-        where: eu.user_id == ^user1_id,
-        where: eu.role in ^valid_event_user_roles,
-        where: is_nil(eu.deleted_at),
-        select: eu.event_id
-      )
-
-    user1_event_ids = Repo.all(union_all(user1_participant_events, ^user1_organizer_events))
-
-    # Get event IDs where user2 participated
-    user2_participant_events =
-      from(ep in EventParticipant,
-        where: ep.user_id == ^user2_id,
-        where: ep.status in ^valid_participant_statuses,
-        where: is_nil(ep.deleted_at),
-        select: ep.event_id
-      )
-
-    user2_organizer_events =
-      from(eu in EventUser,
-        where: eu.user_id == ^user2_id,
-        where: eu.role in ^valid_event_user_roles,
-        where: is_nil(eu.deleted_at),
-        select: eu.event_id
-      )
-
-    user2_event_ids = Repo.all(union_all(user2_participant_events, ^user2_organizer_events))
+    # Use helper function to get event IDs for both users
+    user1_event_ids = user_event_ids(user1_id)
+    user2_event_ids = user_event_ids(user2_id)
 
     # Find intersection
     shared_event_ids = MapSet.intersection(MapSet.new(user1_event_ids), MapSet.new(user2_event_ids))
@@ -331,47 +321,9 @@ defmodule EventasaurusApp.Discovery do
   """
   @spec shared_event_count(User.t(), User.t()) :: integer()
   def shared_event_count(%User{id: user1_id}, %User{id: user2_id}) do
-    # Valid participation statuses
-    valid_participant_statuses = [:accepted, :confirmed_with_order]
-    valid_event_user_roles = ["organizer", "host", "cohost", "attendee"]
-
-    # Get event IDs where user1 participated
-    user1_participant_events =
-      from(ep in EventParticipant,
-        where: ep.user_id == ^user1_id,
-        where: ep.status in ^valid_participant_statuses,
-        where: is_nil(ep.deleted_at),
-        select: ep.event_id
-      )
-
-    user1_organizer_events =
-      from(eu in EventUser,
-        where: eu.user_id == ^user1_id,
-        where: eu.role in ^valid_event_user_roles,
-        where: is_nil(eu.deleted_at),
-        select: eu.event_id
-      )
-
-    user1_event_ids = Repo.all(union_all(user1_participant_events, ^user1_organizer_events))
-
-    # Get event IDs where user2 participated
-    user2_participant_events =
-      from(ep in EventParticipant,
-        where: ep.user_id == ^user2_id,
-        where: ep.status in ^valid_participant_statuses,
-        where: is_nil(ep.deleted_at),
-        select: ep.event_id
-      )
-
-    user2_organizer_events =
-      from(eu in EventUser,
-        where: eu.user_id == ^user2_id,
-        where: eu.role in ^valid_event_user_roles,
-        where: is_nil(eu.deleted_at),
-        select: eu.event_id
-      )
-
-    user2_event_ids = Repo.all(union_all(user2_participant_events, ^user2_organizer_events))
+    # Use helper function to get event IDs for both users
+    user1_event_ids = user_event_ids(user1_id)
+    user2_event_ids = user_event_ids(user2_id)
 
     # Count intersection
     MapSet.intersection(MapSet.new(user1_event_ids), MapSet.new(user2_event_ids))
@@ -499,42 +451,43 @@ defmodule EventasaurusApp.Discovery do
     if Enum.empty?(user_event_ids) do
       []
     else
-      # Find other users at these events (as participants)
+      # Find other users at these events (as participants) - collect event IDs
       co_attendee_participants =
         from(ep in EventParticipant,
           where: ep.event_id in ^user_event_ids,
           where: ep.user_id != ^user_id,
           where: ep.status in ^valid_participant_statuses,
           where: is_nil(ep.deleted_at),
-          group_by: ep.user_id,
-          having: count(ep.event_id) >= ^min_shared_events,
-          select: %{user_id: ep.user_id, event_count: count(ep.event_id)}
+          select: %{user_id: ep.user_id, event_id: ep.event_id}
         )
 
-      # Find other users at these events (as organizers)
+      # Find other users at these events (as organizers) - collect event IDs
       co_attendee_organizers =
         from(eu in EventUser,
           where: eu.event_id in ^user_event_ids,
           where: eu.user_id != ^user_id,
           where: eu.role in ^valid_event_user_roles,
           where: is_nil(eu.deleted_at),
-          group_by: eu.user_id,
-          having: count(eu.event_id) >= ^min_shared_events,
-          select: %{user_id: eu.user_id, event_count: count(eu.event_id)}
+          select: %{user_id: eu.user_id, event_id: eu.event_id}
         )
 
       participant_results = Repo.all(co_attendee_participants)
       organizer_results = Repo.all(co_attendee_organizers)
 
-      # Merge counts for users who appear in both - sum the counts
-      # A user could attend some events as participant and others as organizer
+      # Merge and count DISTINCT events per user
+      # A user could be both participant and organizer at the same event - count it once
       user_event_counts =
         (participant_results ++ organizer_results)
         |> Enum.group_by(& &1.user_id)
         |> Enum.map(fn {uid, entries} ->
-          # Sum counts from both participant and organizer roles
-          total_count = Enum.reduce(entries, 0, fn entry, acc -> acc + entry.event_count end)
-          %{user_id: uid, event_count: total_count}
+          # Collect distinct event IDs to avoid double-counting
+          distinct_event_count =
+            entries
+            |> Enum.map(& &1.event_id)
+            |> Enum.uniq()
+            |> length()
+
+          %{user_id: uid, event_count: distinct_event_count}
         end)
         |> Enum.filter(fn %{event_count: count} -> count >= min_shared_events end)
 

@@ -1,7 +1,7 @@
 defmodule EventasaurusWeb.Components.Events.TimelineEmptyState do
   use EventasaurusWeb, :live_component
 
-  attr :context, :atom, required: true, values: [:user_dashboard, :group_events]
+  attr :context, :atom, required: true, values: [:user_dashboard, :group_events, :profile]
   attr :config, :map, default: %{}
   attr :filters, :map, default: %{}
 
@@ -52,6 +52,10 @@ defmodule EventasaurusWeb.Components.Events.TimelineEmptyState do
     "No events yet"
   end
 
+  defp empty_state_title(:profile, _filters) do
+    "No events to display"
+  end
+
   defp empty_state_description(:user_dashboard, filters, config) do
     ownership_filter = Map.get(filters || %{}, :ownership_filter, :all)
 
@@ -71,8 +75,13 @@ defmodule EventasaurusWeb.Components.Events.TimelineEmptyState do
     Map.get(config, :description, "Get started by creating a new event for this group.")
   end
 
+  defp empty_state_description(:profile, _filters, config) do
+    Map.get(config, :description, "This user hasn't participated in any public events yet.")
+  end
+
   defp show_create_button?(:user_dashboard, _config), do: true
   defp show_create_button?(:group_events, config), do: Map.get(config, :show_create_button, false)
+  defp show_create_button?(:profile, config), do: Map.get(config, :show_create_button, false)
 
   defp default_create_url(:user_dashboard), do: "/events/new"
   defp default_create_url(:group_events), do: "/events/new"

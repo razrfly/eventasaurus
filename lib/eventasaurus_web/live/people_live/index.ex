@@ -354,15 +354,19 @@ defmodule EventasaurusWeb.PeopleLive.Index do
     ~H"""
     <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
       <div class="flex items-start gap-4">
-        <img
-          src={generate_avatar_url(@user)}
-          alt={@user.name || "User"}
-          class="w-12 h-12 rounded-full flex-shrink-0"
-        />
+        <.link navigate={~p"/users/#{@user.username}"} class="flex-shrink-0">
+          <img
+            src={generate_avatar_url(@user)}
+            alt={@user.name || "User"}
+            class="w-12 h-12 rounded-full hover:ring-2 hover:ring-indigo-300 transition-all"
+          />
+        </.link>
         <div class="flex-1 min-w-0">
-          <h3 class="font-medium text-gray-900 truncate">
-            <%= @user.name || "Anonymous" %>
-          </h3>
+          <.link navigate={~p"/users/#{@user.username}"} class="hover:text-indigo-600 transition-colors">
+            <h3 class="font-medium text-gray-900 truncate">
+              <%= @user.name || "Anonymous" %>
+            </h3>
+          </.link>
           <p class="text-sm text-gray-500 mt-1">
             <%= @context %>
           </p>

@@ -1,0 +1,335 @@
+<div class="max-w-6xl mx-auto px-4 py-3 sm:px-6 lg:px-8">
+  <!-- Profile Header -->
+  <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div class="px-6 py-8">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-6 sm:space-y-0 sm:space-x-8">
+          <!-- Avatar -->
+          <div class="flex-shrink-0">
+            <div class="relative">
+              <%= avatar_img_size(@profile_user, :xl, class: "rounded-full object-cover border-4 border-white shadow-lg") %>
+              <!-- Status indicator -->
+              <div class="absolute bottom-2 right-2 h-6 w-6 rounded-full bg-green-400 border-2 border-white"></div>
+            </div>
+          </div>
+
+          <!-- User Info -->
+          <div class="flex-1 min-w-0">
+            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between">
+              <div class="flex-1">
+                <h1 class="text-3xl font-bold text-gray-900 mb-1">
+                  <%= display_name(@profile_user) %>
+                </h1>
+                <p class="text-lg text-gray-600 mb-3">@<%= User.username_slug(@profile_user) %></p>
+
+                <!-- Join Date -->
+                <div class="flex items-center text-sm text-gray-500 mb-4">
+                  <Heroicons.calendar class="w-4 h-4 mr-2" />
+                  <%= format_join_date(@profile_user.inserted_at) %>
+                </div>
+
+                <!-- Stats Row -->
+                <div class="flex flex-wrap gap-6 mb-4">
+                  <div class="flex flex-col">
+                    <span class="text-2xl font-bold text-gray-900"><%= @stats.hosted %></span>
+                    <span class="text-sm text-gray-600">Hosted</span>
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-2xl font-bold text-gray-900"><%= @stats.attended %></span>
+                    <span class="text-sm text-gray-600">Attended</span>
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-2xl font-bold text-gray-900"><%= @stats.together %></span>
+                    <span class="text-sm text-gray-600">Together</span>
+                  </div>
+                </div>
+
+                <!-- Bio -->
+                <%= if @profile_user.bio && @profile_user.bio != "" do %>
+                  <p class="text-gray-700 leading-relaxed mb-4">
+                    <%= @profile_user.bio %>
+                  </p>
+                <% end %>
+              </div>
+
+              <!-- Profile Actions -->
+              <div class="mt-6 lg:mt-0 lg:ml-6 flex flex-col gap-3">
+                <%= if @is_own_profile do %>
+                  <.link
+                    href={~p"/settings"}
+                    class="inline-flex items-center px-6 py-2 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  >
+                    <Heroicons.pencil_square class="w-4 h-4 mr-2" />
+                    Edit Profile
+                  </.link>
+                <% else %>
+                  <!-- Share Button -->
+                  <button
+                    phx-click={
+                      JS.dispatch("eventasaurus:share-profile",
+                        detail: %{title: display_name(@profile_user)}
+                      )
+                    }
+                    class="inline-flex items-center px-6 py-2 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  >
+                    <Heroicons.share class="w-4 h-4 mr-2" />
+                    Share Profile
+                  </button>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Main Content -->
+      <div class="lg:col-span-2 space-y-8">
+        <!-- Mutual Events Section -->
+        <%= if match?([_|_], @mutual_events) do %>
+          <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200">
+              <h2 class="text-lg font-semibold text-gray-900">Mutual Events</h2>
+            </div>
+            <div class="p-4">
+              <.live_component
+                module={EventasaurusWeb.Components.Events.TimelineContainer}
+                id="mutual-events-timeline"
+                events={@mutual_events}
+                context={:profile}
+              />
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Recent Events Section -->
+        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-gray-900">
+              <%= if @is_own_profile, do: "Your Events", else: "Recent Events" %>
+            </h2>
+            <%= if Enum.count(@recent_events || []) > 6 do %>
+              <button class="text-sm text-blue-600 hover:text-blue-800 font-medium">View All</button>
+            <% end %>
+          </div>
+
+          <%= if match?([_|_], @recent_events) do %>
+            <div class="p-4">
+              <.live_component
+                module={EventasaurusWeb.Components.Events.TimelineContainer}
+                id="recent-events-timeline"
+                events={Enum.take(@recent_events || [], 6)}
+                context={:profile}
+              />
+            </div>
+          <% else %>
+            <div class="text-center py-12">
+              <Heroicons.calendar class="w-12 h-12 mx-auto mb-4 text-gray-400" />
+              <p class="text-gray-500">
+                <%= if @is_own_profile, do: "You haven't participated in any events yet.", else: "No events to display yet." %>
+              </p>
+              <%= if @is_own_profile do %>
+                <.link href={~p"/events/new"} class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
+                  Create your first event
+                </.link>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="space-y-6">
+        <!-- Events Together Panel - Only shown to logged-in users viewing others -->
+        <%= if @connection_context do %>
+          <div class="bg-white border border-gray-200 rounded-lg p-6">
+            <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Events Together</h3>
+
+            <!-- Connection Degree Display -->
+            <div class="mb-4">
+              <%= case @connection_context.connection_degree do %>
+                <% :connected -> %>
+                  <div class="flex items-center text-green-700 bg-green-50 rounded-lg px-4 py-3">
+                    <Heroicons.check_circle class="w-5 h-5 mr-3" />
+                    <div>
+                      <p class="font-medium">Keeping Up</p>
+                      <p class="text-sm text-green-600">You'll see when they're going to events</p>
+                    </div>
+                  </div>
+
+                <% :pending -> %>
+                  <div class="flex items-center text-amber-700 bg-amber-50 rounded-lg px-4 py-3">
+                    <Heroicons.clock class="w-5 h-5 mr-3" />
+                    <div>
+                      <p class="font-medium">Request Pending</p>
+                      <p class="text-sm text-amber-600">Waiting for response</p>
+                    </div>
+                  </div>
+
+                <% :shared_events -> %>
+                  <div class="flex items-center text-blue-700 bg-blue-50 rounded-lg px-4 py-3">
+                    <Heroicons.calendar class="w-5 h-5 mr-3" />
+                    <div>
+                      <p class="font-medium">Shared Events</p>
+                      <p class="text-sm text-blue-600">
+                        You've attended <%= @connection_context.mutual_event_count %> event<%= if @connection_context.mutual_event_count != 1, do: "s" %> together
+                      </p>
+                    </div>
+                  </div>
+
+                <% :extended_network -> %>
+                  <div class="flex items-center text-purple-700 bg-purple-50 rounded-lg px-4 py-3">
+                    <Heroicons.user_group class="w-5 h-5 mr-3" />
+                    <div>
+                      <p class="font-medium">Extended Network</p>
+                      <p class="text-sm text-purple-600">Connected through mutual friends</p>
+                    </div>
+                  </div>
+
+                <% :no_connection -> %>
+                  <div class="flex items-center text-gray-500 bg-gray-50 rounded-lg px-4 py-3">
+                    <Heroicons.user class="w-5 h-5 mr-3" />
+                    <div>
+                      <p class="font-medium">No Connection</p>
+                      <p class="text-sm text-gray-400">No shared events or mutual friends</p>
+                    </div>
+                  </div>
+              <% end %>
+            </div>
+
+            <!-- Keep Up Button - Only shown when there's a valid basis -->
+            <%= if @connection_context.can_show_button do %>
+              <div class="space-y-3">
+                <.live_component
+                  module={EventasaurusWeb.RelationshipButtonComponent}
+                  id={"relationship-button-#{@profile_user.id}"}
+                  current_user={@user}
+                  other_user={@profile_user}
+                  event={List.first(@mutual_events)}
+                  size={:large}
+                  variant={:primary}
+                />
+                <!-- Helper text explaining what Keep Up does -->
+                <%= if !@connection_context.is_connected do %>
+                  <p class="text-xs text-gray-500 text-center">
+                    See when they're going to events you might like
+                  </p>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+
+        <!-- People You Might Want to Keep Up With - Only on own profile -->
+        <%= if @is_own_profile && match?([_|_], @suggested_people) do %>
+          <div class="bg-white border border-gray-200 rounded-lg p-6">
+            <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">People You Might Know</h3>
+            <div class="space-y-4">
+              <%= for suggestion <- Enum.take(@suggested_people, 4) do %>
+                <.link href={~p"/users/#{User.username_slug(suggestion.user)}"} class="flex items-start space-x-3 group">
+                  <div class="flex-shrink-0">
+                    <%= avatar_img_size(suggestion.user, :sm, class: "rounded-full object-cover") %>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors truncate">
+                      <%= User.display_name(suggestion.user) %>
+                    </p>
+                    <p class="text-xs text-gray-500 truncate">
+                      <%= suggestion.context %>
+                    </p>
+                  </div>
+                </.link>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Social Links -->
+        <%= if @profile_user.website_url || Enum.any?(social_links(@profile_user)) do %>
+          <div class="bg-white border border-gray-200 rounded-lg p-6">
+            <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Connect</h3>
+            <div class="space-y-3">
+              <%= if @profile_user.website_url && @profile_user.website_url != "" do %>
+                <a
+                  href={format_website_url(@profile_user.website_url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex items-center text-gray-700 hover:text-blue-600 transition-colors"
+                >
+                  <Heroicons.arrow_top_right_on_square class="w-5 h-5 mr-3 text-gray-400" />
+                  <span class="font-medium">Website</span>
+                </a>
+              <% end %>
+
+              <%= for {platform, handle} <- social_links(@profile_user) do %>
+                <a
+                  href={social_url(handle, platform)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex items-center text-gray-700 hover:text-blue-600 transition-colors"
+                >
+                  <%= social_icon(platform) %>
+                  <span class="font-medium"><%= platform_name(platform) %></span>
+                </a>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Quick Stats Card -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Activity</h3>
+          <div class="space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Events hosted</span>
+              <span class="font-semibold text-gray-900"><%= @stats.hosted %></span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Events attended</span>
+              <span class="font-semibold text-gray-900"><%= @stats.attended %></span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">People met</span>
+              <span class="font-semibold text-gray-900"><%= @stats.together %></span>
+            </div>
+            <%= if @stats.hosted > 0 || @stats.attended > 0 do %>
+              <div class="pt-3 border-t border-gray-200">
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Total events</span>
+                  <span class="font-bold text-blue-600"><%= @stats.hosted + @stats.attended %></span>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+
+        <!-- Member Since -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Member Since</h3>
+          <div class="flex items-center">
+            <Heroicons.calendar class="w-5 h-5 mr-3 text-gray-400" />
+            <span class="text-gray-900"><%= format_join_date(@profile_user.inserted_at) %></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Note for Private Profiles -->
+    <%= if @is_own_profile && !@profile_user.profile_public do %>
+      <div class="mt-8 bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div class="flex items-start">
+          <Heroicons.exclamation_triangle class="w-5 h-5 text-amber-600 mr-3 mt-0.5" />
+          <div>
+            <p class="text-sm text-amber-800">
+              <strong>Private Profile:</strong> Only you can see this profile page.
+              <.link href={~p"/settings"} class="underline hover:no-underline font-medium">
+                Make it public
+              </.link>
+              so others can discover your events and connect with you.
+            </p>
+          </div>
+        </div>
+      </div>
+    <% end %>
+</div>
