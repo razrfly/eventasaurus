@@ -56,7 +56,7 @@ defmodule EventasaurusWeb.Admin.CategoryHierarchyLive do
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
-    category = Categories.get_category!(id)
+    category = Categories.get_category!(String.to_integer(id))
 
     case Categories.delete_category(category) do
       {:ok, _} ->

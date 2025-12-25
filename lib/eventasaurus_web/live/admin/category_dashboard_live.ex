@@ -7,8 +7,10 @@ defmodule EventasaurusWeb.Admin.CategoryDashboardLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusDiscovery.CategoryAnalytics
+  alias Phoenix.LiveView.Socket
 
   @impl true
+  @spec mount(map(), map(), Socket.t()) :: {:ok, Socket.t()}
   def mount(_params, _session, socket) do
     socket =
       socket
@@ -20,10 +22,12 @@ defmodule EventasaurusWeb.Admin.CategoryDashboardLive do
   end
 
   @impl true
+  @spec handle_params(map(), String.t(), Socket.t()) :: {:noreply, Socket.t()}
   def handle_params(_params, _uri, socket) do
     {:noreply, socket}
   end
 
+  @spec load_stats(Socket.t()) :: Socket.t()
   defp load_stats(socket) do
     stats = CategoryAnalytics.summary_stats()
     distribution = CategoryAnalytics.category_distribution(limit: 12)
@@ -41,6 +45,7 @@ defmodule EventasaurusWeb.Admin.CategoryDashboardLive do
   end
 
   # Helper functions for formatting
+  @spec format_number(integer() | float() | nil) :: String.t()
   def format_number(n) when is_integer(n) and n >= 1_000_000 do
     "#{Float.round(n / 1_000_000, 1)}M"
   end
@@ -53,14 +58,17 @@ defmodule EventasaurusWeb.Admin.CategoryDashboardLive do
   def format_number(n) when is_float(n), do: Float.round(n, 1) |> to_string()
   def format_number(nil), do: "0"
 
+  @spec format_percentage(float() | integer() | nil) :: String.t()
   def format_percentage(n) when is_float(n), do: "#{Float.round(n, 1)}%"
   def format_percentage(n) when is_integer(n), do: "#{n}%"
   def format_percentage(nil), do: "0%"
 
+  @spec category_color(String.t() | nil) :: String.t()
   def category_color(nil), do: "#6B7280"
   def category_color(""), do: "#6B7280"
   def category_color(color), do: color
 
+  @spec source_label(String.t() | nil) :: String.t()
   def source_label("scraper"), do: "Scraper"
   def source_label("manual"), do: "Manual"
   def source_label("ml"), do: "ML Model"
@@ -68,12 +76,14 @@ defmodule EventasaurusWeb.Admin.CategoryDashboardLive do
   def source_label(nil), do: "Unknown"
   def source_label(other), do: String.capitalize(to_string(other))
 
+  @spec source_color(String.t() | nil) :: String.t()
   def source_color("scraper"), do: "bg-blue-500"
   def source_color("manual"), do: "bg-green-500"
   def source_color("ml"), do: "bg-purple-500"
   def source_color("inference"), do: "bg-indigo-500"
   def source_color(_), do: "bg-gray-400"
 
+  @spec format_relative_time(DateTime.t() | NaiveDateTime.t() | nil) :: String.t()
   def format_relative_time(nil), do: "Unknown"
 
   def format_relative_time(%NaiveDateTime{} = naive_datetime) do
@@ -95,10 +105,12 @@ defmodule EventasaurusWeb.Admin.CategoryDashboardLive do
     end
   end
 
+  @spec confidence_badge_class(float() | nil) :: String.t()
   def confidence_badge_class(confidence) when confidence >= 0.8, do: "bg-green-100 text-green-800"
   def confidence_badge_class(confidence) when confidence >= 0.5, do: "bg-yellow-100 text-yellow-800"
   def confidence_badge_class(_), do: "bg-gray-100 text-gray-600"
 
+  @spec confidence_label(float() | nil) :: String.t()
   def confidence_label(confidence) when is_float(confidence) do
     "#{round(confidence * 100)}%"
   end
