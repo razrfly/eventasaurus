@@ -322,7 +322,7 @@ defmodule EventasaurusApp.Discovery do
   @doc """
   Counts the number of shared events between two users.
 
-  More efficient than `shared_events/3` when you only need the count.
+  Uses a direct count query for efficiency.
 
   ## Examples
 
@@ -330,8 +330,52 @@ defmodule EventasaurusApp.Discovery do
       5
   """
   @spec shared_event_count(User.t(), User.t()) :: integer()
-  def shared_event_count(%User{} = user1, %User{} = user2) do
-    length(shared_events(user1, user2, limit: 1000))
+  def shared_event_count(%User{id: user1_id}, %User{id: user2_id}) do
+    # Valid participation statuses
+    valid_participant_statuses = [:accepted, :confirmed_with_order]
+    valid_event_user_roles = ["organizer", "host", "cohost", "attendee"]
+
+    # Get event IDs where user1 participated
+    user1_participant_events =
+      from(ep in EventParticipant,
+        where: ep.user_id == ^user1_id,
+        where: ep.status in ^valid_participant_statuses,
+        where: is_nil(ep.deleted_at),
+        select: ep.event_id
+      )
+
+    user1_organizer_events =
+      from(eu in EventUser,
+        where: eu.user_id == ^user1_id,
+        where: eu.role in ^valid_event_user_roles,
+        where: is_nil(eu.deleted_at),
+        select: eu.event_id
+      )
+
+    user1_event_ids = Repo.all(union_all(user1_participant_events, ^user1_organizer_events))
+
+    # Get event IDs where user2 participated
+    user2_participant_events =
+      from(ep in EventParticipant,
+        where: ep.user_id == ^user2_id,
+        where: ep.status in ^valid_participant_statuses,
+        where: is_nil(ep.deleted_at),
+        select: ep.event_id
+      )
+
+    user2_organizer_events =
+      from(eu in EventUser,
+        where: eu.user_id == ^user2_id,
+        where: eu.role in ^valid_event_user_roles,
+        where: is_nil(eu.deleted_at),
+        select: eu.event_id
+      )
+
+    user2_event_ids = Repo.all(union_all(user2_participant_events, ^user2_organizer_events))
+
+    # Count intersection
+    MapSet.intersection(MapSet.new(user1_event_ids), MapSet.new(user2_event_ids))
+    |> MapSet.size()
   end
 
   # =============================================================================
@@ -482,13 +526,15 @@ defmodule EventasaurusApp.Discovery do
       participant_results = Repo.all(co_attendee_participants)
       organizer_results = Repo.all(co_attendee_organizers)
 
-      # Merge counts for users who appear in both
+      # Merge counts for users who appear in both - sum the counts
+      # A user could attend some events as participant and others as organizer
       user_event_counts =
         (participant_results ++ organizer_results)
         |> Enum.group_by(& &1.user_id)
         |> Enum.map(fn {uid, entries} ->
-          # Take max count (they might be counted in both)
-          %{user_id: uid, event_count: Enum.max_by(entries, & &1.event_count).event_count}
+          # Sum counts from both participant and organizer roles
+          total_count = Enum.reduce(entries, 0, fn entry, acc -> acc + entry.event_count end)
+          %{user_id: uid, event_count: total_count}
         end)
         |> Enum.filter(fn %{event_count: count} -> count >= min_shared_events end)
 
@@ -524,7 +570,13 @@ defmodule EventasaurusApp.Discovery do
       |> Enum.sort_by(fn %{event_count: count} -> count end, :desc)
       |> Enum.take(limit)
       |> Enum.map(fn %{user_id: uid, event_count: count} ->
-        other_user = Repo.get!(User, uid)
+        # Use Repo.get instead of Repo.get! to handle race condition
+        # where a user might be deleted between query and lookup
+        other_user = Repo.get(User, uid)
+        {other_user, count}
+      end)
+      |> Enum.reject(fn {user, _count} -> is_nil(user) end)
+      |> Enum.map(fn {other_user, count} ->
         # Include upcoming events if timeframe allows
         include_upcoming = timeframe in [:upcoming, :all]
         events = shared_events(user, other_user, limit: 5, include_upcoming: include_upcoming)

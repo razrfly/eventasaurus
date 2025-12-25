@@ -530,8 +530,8 @@ defmodule EventasaurusWeb.PeopleLive.Index do
   end
 
   defp load_you_know(user) do
-    # Get existing connections
-    Relationships.list_relationships(user, status: :active, limit: 50)
+    # Get existing connections (list_relationships already filters to active only)
+    Relationships.list_relationships(user, limit: 50)
     |> Enum.map(fn rel ->
       %{
         user: rel.related_user,
