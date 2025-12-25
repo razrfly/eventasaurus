@@ -5,6 +5,8 @@ defmodule EventasaurusWeb.CityLive.Venues do
   """
   use EventasaurusWeb, :live_view
 
+  on_mount {EventasaurusWeb.Live.LanguageHooks, :attach_language_handler}
+
   alias EventasaurusApp.Venues
   alias EventasaurusDiscovery.Locations
   alias EventasaurusWeb.Helpers.SEOHelpers
@@ -118,11 +120,6 @@ defmodule EventasaurusWeb.CityLive.Venues do
   @impl true
   def handle_event("toggle_filters", _params, socket) do
     {:noreply, update(socket, :show_filters, &(!&1))}
-  end
-
-  @impl true
-  def handle_event("change_language", %{"language" => language}, socket) do
-    {:noreply, assign(socket, :language, language)}
   end
 
   @impl true

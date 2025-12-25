@@ -2,6 +2,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   use EventasaurusWeb, :live_view
   require Logger
 
+  on_mount {EventasaurusWeb.Live.LanguageHooks, :attach_language_handler}
+
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.EventPlans
 
@@ -28,7 +30,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Helpers.LanguageDiscovery
-  alias EventasaurusWeb.Helpers.LanguageHelpers
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.PublicEventSchema
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
@@ -172,6 +173,17 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       end
 
     {:noreply, assign(socket, :nearby_events, nearby_events)}
+  end
+
+  @impl true
+  def handle_info({:language_changed, _language}, socket) do
+    # Re-fetch event with new language for localized content
+    socket =
+      socket
+      |> fetch_event(socket.assigns.event.slug)
+      |> clear_flash()
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -461,20 +473,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       _ ->
         nil
     end
-  end
-
-  @impl true
-  def handle_event("change_language", %{"language" => language}, socket) do
-    # Set cookie to persist language preference
-    socket =
-      socket
-      |> assign(:language, language)
-      |> fetch_event(socket.assigns.event.slug)
-      # Clear any existing flash
-      |> clear_flash()
-      |> Phoenix.LiveView.push_event("set_language_cookie", %{language: language})
-
-    {:noreply, socket}
   end
 
   @impl true
@@ -1126,19 +1124,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             <!-- Breadcrumb + Language Switcher Row -->
             <div class="flex items-center justify-between mb-6">
               <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
-              <!-- Language Switcher - Dynamic based on city -->
-              <div class="flex bg-gray-100 rounded-lg p-1 flex-shrink-0 ml-4">
-                <%= for lang <- @available_languages do %>
-                  <button
-                    phx-click="change_language"
-                    phx-value-language={lang}
-                    class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                    title={LanguageHelpers.language_name(lang)}
-                  >
-                    <%= LanguageHelpers.language_flag(lang) %> <%= String.upcase(lang) %>
-                  </button>
-                <% end %>
-              </div>
+              <!-- Language Switcher -->
+              <.language_switcher
+                available_languages={@available_languages}
+                current_language={@language}
+                class="flex-shrink-0 ml-4"
+              />
             </div>
 
             <!-- Past Event Banner -->

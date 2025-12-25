@@ -1209,7 +1209,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
     if use_aggregation do
       # Aggregation requires fetching and aggregating events - use sequential counting
-      # This is cached via CityPageCache with 5 minute TTL
+      # This is cached via CityPageCache with 15 minute TTL
       get_quick_date_range_counts_sequential(filters_map)
     else
       # Optimized: single query with FILTER clauses (7 queries → 1)

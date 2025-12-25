@@ -1,6 +1,8 @@
 defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   use EventasaurusWeb, :live_view
 
+  on_mount {EventasaurusWeb.Live.LanguageHooks, :attach_language_handler}
+
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Movies.Movie
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
@@ -9,7 +11,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusWeb.Live.Components.MovieHeroComponent
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.Live.Components.CityScreeningsSection
-  alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, LanguageDiscovery, LanguageHelpers}
+  alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, LanguageDiscovery}
   alias EventasaurusWeb.Services.TmdbService
   alias EventasaurusWeb.JsonLd.MovieSchema
   alias Eventasaurus.SocialCards.HashGenerator
@@ -211,18 +213,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Language Switcher - Dynamic based on city -->
         <div class="flex justify-end mb-4">
-          <div class="flex bg-gray-100 rounded-lg p-1">
-            <%= for lang <- @available_languages do %>
-              <button
-                phx-click="change_language"
-                phx-value-language={lang}
-                class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                title={LanguageHelpers.language_name(lang)}
-              >
-                <%= LanguageHelpers.language_flag(lang) %> <%= String.upcase(lang) %>
-              </button>
-            <% end %>
-          </div>
+          <.language_switcher
+            available_languages={@available_languages}
+            current_language={@language}
+          />
         </div>
 
         <!-- Breadcrumbs -->
@@ -330,17 +324,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       </div>
     </div>
     """
-  end
-
-  @impl true
-  def handle_event("change_language", %{"language" => language}, socket) do
-    # Set cookie to persist language preference
-    socket =
-      socket
-      |> assign(:language, language)
-      |> Phoenix.LiveView.push_event("set_language_cookie", %{language: language})
-
-    {:noreply, socket}
   end
 
   @impl true

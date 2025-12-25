@@ -1061,4 +1061,48 @@ defmodule EventasaurusWeb.CoreComponents do
   def event_timeline(assigns) do
     EventasaurusWeb.EventTimelineComponent.event_timeline(assigns)
   end
+
+  @doc """
+  Renders a language switcher for multi-language pages.
+
+  Only displays when multiple languages are available. Emits "change_language"
+  event with the selected language code.
+
+  ## Examples
+
+      <.language_switcher
+        available_languages={@available_languages}
+        current_language={@language}
+      />
+
+      <.language_switcher
+        available_languages={["en", "pl", "de"]}
+        current_language="en"
+        class="ml-4"
+      />
+  """
+  attr :available_languages, :list, required: true
+  attr :current_language, :string, required: true
+  attr :class, :string, default: ""
+
+  def language_switcher(assigns) do
+    alias EventasaurusWeb.Helpers.LanguageHelpers
+
+    ~H"""
+    <%= if length(@available_languages) > 1 do %>
+      <div class={["flex bg-gray-100 rounded-lg p-1", @class]}>
+        <%= for lang <- @available_languages do %>
+          <button
+            phx-click="change_language"
+            phx-value-language={lang}
+            class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @current_language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
+            title={LanguageHelpers.language_name(lang)}
+          >
+            <%= LanguageHelpers.language_flag(lang) %> <%= String.upcase(lang) %>
+          </button>
+        <% end %>
+      </div>
+    <% end %>
+    """
+  end
 end
