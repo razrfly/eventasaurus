@@ -472,6 +472,35 @@ bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates()
 bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates(true)"
 ```
 
+### Fix Orphaned Events
+
+Fixes orphaned events - events in `public_events` with no corresponding `public_event_sources` record. These orphans are created when the Ecto.Multi transaction partially fails. See GitHub issue #2897 for root cause analysis.
+
+```bash
+# Dry run - show orphans that would be deleted
+mix fix_orphan_events
+
+# Show detailed info about each orphan
+mix fix_orphan_events --verbose
+
+# Actually delete the orphans
+mix fix_orphan_events --apply
+```
+
+**What it does:**
+1. Identifies all events with no corresponding `public_event_sources` record
+2. Shows breakdown by likely source (Cinema City, Repertuary, PubQuiz, etc.)
+3. Deletes these orphan events (they have no value without source attribution)
+
+**Production usage** (via release task):
+```bash
+# Dry run
+bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.fix_orphan_events()"
+
+# Apply fixes
+bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.fix_orphan_events(true)"
+```
+
 ## Implementing Scraper Monitoring
 
 When adding monitoring to scrapers, follow the patterns in `docs/scraper-monitoring-guide.md`:
