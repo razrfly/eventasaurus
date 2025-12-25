@@ -1,12 +1,35 @@
 <div class="container mx-auto px-4 py-8">
   <div class="flex justify-between items-center mb-6">
-    <h1 class="text-3xl font-bold">Category Management</h1>
+    <div>
+      <h1 class="text-3xl font-bold">Category Management</h1>
+      <p class="mt-1 text-sm text-gray-500">
+        Manage event categories and their assignments
+      </p>
+    </div>
     <.link
       navigate={~p"/admin/categories/new"}
       class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
     >
       New Category
     </.link>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="mb-6 border-b border-gray-200">
+    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+      <.link
+        navigate={~p"/admin/categories"}
+        class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        Dashboard
+      </.link>
+      <.link
+        navigate={~p"/admin/categories/list"}
+        class="border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        All Categories
+      </.link>
+    </nav>
   </div>
 
   <!-- Search and Filters -->
