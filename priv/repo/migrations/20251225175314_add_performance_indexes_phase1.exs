@@ -26,14 +26,14 @@ defmodule EventasaurusApp.Repo.Migrations.AddPerformanceIndexesPhase1 do
     WHERE source_id IS NOT NULL
     """
 
-    # 2. GIN index on job_execution_summaries.results for JSONB queries
-    # Dashboard queries like:
-    #   WHERE results -> 'collision_detected' IS NOT NULL
-    #   AVG((results -> 'timing' ->> 'duration')::float)
-    # Currently doing full table scans on 240K+ rows
+    # 2. GIN index on job_execution_summaries.results for JSONB containment queries
+    # NOTE: GIN with default jsonb_ops only accelerates containment (@>), key-exists (?, ?|, ?&),
+    # and jsonpath operations - NOT arrow operators (-> or ->>).
+    # This index helps queries like: WHERE results @> '{"collision_detected": true}'
+    # For arrow operator queries, use expression indexes (see below and Phase 2)
     execute """
     CREATE INDEX CONCURRENTLY IF NOT EXISTS job_execution_summaries_results_gin_idx
-    ON job_execution_summaries USING gin (results)
+    ON job_execution_summaries USING gin (results jsonb_path_ops)
     """
 
     # 3. Expression index for common JSONB key lookup pattern

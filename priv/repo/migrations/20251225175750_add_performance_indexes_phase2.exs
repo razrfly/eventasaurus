@@ -20,11 +20,10 @@ defmodule EventasaurusApp.Repo.Migrations.AddPerformanceIndexesPhase2 do
   @disable_migration_lock true
 
   def up do
-    # 1. Enable pg_trgm extension for text pattern matching
-    # This is required for gin_trgm_ops indexes
-    execute "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+    # Note: pg_trgm extension is enabled in a separate migration (enable_pg_trgm_extension)
+    # because CREATE EXTENSION requires transaction context but concurrent indexes don't
 
-    # 2. GIN trigram index on job_execution_summaries.args for LIKE search
+    # 1. GIN trigram index on job_execution_summaries.args for LIKE search
     # The critical 32-second P99 query casts args to text and uses LIKE
     # pg_trgm allows efficient pattern matching on text
     execute """
@@ -32,7 +31,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddPerformanceIndexesPhase2 do
     ON job_execution_summaries USING gin ((args::text) gin_trgm_ops)
     """
 
-    # 3. Expression index for collision detection queries
+    # 2. Expression index for collision detection queries
     # Dashboard queries filter on: results -> 'collision_detected' IS NOT NULL
     # This index allows efficient filtering for collision-related aggregations
     execute """
@@ -41,7 +40,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddPerformanceIndexesPhase2 do
     WHERE results -> 'collision_detected' IS NOT NULL
     """
 
-    # 4. Covering index for venues.city_id queries
+    # 3. Covering index for venues.city_id queries
     # Most venue queries select id, name, slug, latitude, longitude
     # INCLUDE clause creates a covering index avoiding heap lookups
     execute """
@@ -49,7 +48,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddPerformanceIndexesPhase2 do
     ON venues (city_id) INCLUDE (id, name, slug, latitude, longitude, is_public)
     """
 
-    # 5. Composite index for job_execution_summaries time-range queries
+    # 4. Composite index for job_execution_summaries time-range queries
     # Dashboard queries filter on inserted_at with JSONB conditions
     # Putting inserted_at first allows range scans then JSONB filtering
     execute """
