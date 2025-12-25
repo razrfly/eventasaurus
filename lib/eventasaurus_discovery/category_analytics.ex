@@ -9,6 +9,51 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusApp.Repo
 
+  # Type definitions for return values
+  @type summary_stats_result :: %{
+          total_categories: non_neg_integer(),
+          active_categories: non_neg_integer(),
+          total_events: non_neg_integer(),
+          categorized_events: non_neg_integer(),
+          uncategorized_count: non_neg_integer(),
+          uncategorized_percentage: float(),
+          other_category_percentage: float(),
+          avg_categories_per_event: float()
+        }
+
+  @type category_distribution_result :: %{
+          id: pos_integer(),
+          name: String.t(),
+          slug: String.t(),
+          color: String.t() | nil,
+          event_count: non_neg_integer()
+        }
+
+  @type top_category_result :: %{
+          id: pos_integer(),
+          name: String.t(),
+          slug: String.t(),
+          color: String.t() | nil,
+          icon: String.t() | nil,
+          event_count: non_neg_integer(),
+          primary_count: non_neg_integer(),
+          percentage: float()
+        }
+
+  @type assignment_result :: %{
+          category_name: String.t(),
+          category_slug: String.t(),
+          category_color: String.t() | nil,
+          event_title: String.t(),
+          event_id: pos_integer(),
+          source: String.t() | nil,
+          confidence: float() | nil,
+          is_primary: boolean(),
+          assigned_at: DateTime.t()
+        }
+
+  @type source_breakdown_result :: %{source: String.t() | nil, count: non_neg_integer()}
+
   @doc """
   Returns summary statistics for the category system.
 
@@ -21,6 +66,7 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
   - other_category_percentage: Percentage of events in "Other" category
   - uncategorized_count: Events with no category assigned
   """
+  @spec summary_stats() :: summary_stats_result()
   def summary_stats do
     total_categories = count_categories()
     active_categories = count_active_categories()
@@ -46,6 +92,7 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
   Returns category distribution data for charts.
   Returns a list of maps with category name, slug, color, and event count.
   """
+  @spec category_distribution(keyword()) :: [category_distribution_result()]
   def category_distribution(opts \\ []) do
     limit = Keyword.get(opts, :limit, 15)
     include_inactive = Keyword.get(opts, :include_inactive, false)
@@ -80,6 +127,7 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
   @doc """
   Returns top categories by event count with detailed metrics.
   """
+  @spec top_categories(keyword()) :: [top_category_result()]
   def top_categories(opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
 
@@ -106,7 +154,9 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
     )
     |> Repo.all()
     |> Enum.map(fn cat ->
-      Map.put(cat, :percentage, safe_percentage(cat.event_count, total_events))
+      cat
+      |> Map.put(:primary_count, cat.primary_count || 0)
+      |> Map.put(:percentage, safe_percentage(cat.event_count, total_events))
     end)
   end
 
@@ -114,6 +164,7 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
   Returns categories with hierarchy information for tree display.
   Includes icon, color, and builds a proper tree structure with aggregate counts.
   """
+  @spec categories_with_hierarchy() :: [map()]
   def categories_with_hierarchy do
     # Fetch all categories with their direct event counts
     categories =
@@ -144,6 +195,7 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
   Builds a hierarchical tree from flat category list.
   Calculates total_event_count (direct + all children) for each category.
   """
+  @spec build_category_tree([map()]) :: [map()]
   def build_category_tree(categories) do
     # Create a map for quick lookup
     category_map = Map.new(categories, fn c -> {c.id, c} end)
@@ -195,6 +247,7 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
   @doc """
   Returns recent category assignments for activity feed.
   """
+  @spec recent_assignments(keyword()) :: [assignment_result()]
   def recent_assignments(opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
 
@@ -224,6 +277,7 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
   Returns source breakdown for category assignments.
   Shows how categories are being assigned (manual, scraper, ml, etc.)
   """
+  @spec source_breakdown() :: [source_breakdown_result()]
   def source_breakdown do
     from(pec in PublicEventCategory,
       group_by: pec.source,
@@ -303,4 +357,231 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
 
   defp safe_percentage(_count, 0), do: 0.0
   defp safe_percentage(count, total), do: Float.round(count / total * 100, 1)
+
+  # ============================================================================
+  # Category Insights Functions
+  # ============================================================================
+
+  @doc """
+  Returns category trends over time - events per category by month.
+  Default: Last 6 months of data.
+
+  Returns a list of maps:
+  %{month: "2024-12", category_id: 1, category_name: "Concerts", event_count: 150}
+  """
+  @spec category_trends(keyword()) :: [map()]
+  def category_trends(opts \\ []) do
+    months = Keyword.get(opts, :months, 6)
+    limit_categories = Keyword.get(opts, :limit_categories, 10)
+
+    # Get top categories first
+    top_category_ids =
+      top_categories(limit: limit_categories)
+      |> Enum.map(& &1.id)
+
+    # Calculate the start date
+    start_date =
+      Date.utc_today()
+      |> Date.beginning_of_month()
+      |> Date.add(-30 * (months - 1))
+
+    from(pec in PublicEventCategory,
+      join: c in Category,
+      on: c.id == pec.category_id,
+      join: pe in PublicEvent,
+      on: pe.id == pec.event_id,
+      where: c.id in ^top_category_ids,
+      where: pe.starts_at >= ^DateTime.new!(start_date, ~T[00:00:00], "Etc/UTC"),
+      group_by: [
+        fragment("to_char(?, 'YYYY-MM')", pe.starts_at),
+        c.id,
+        c.name,
+        c.color
+      ],
+      select: %{
+        month: fragment("to_char(?, 'YYYY-MM')", pe.starts_at),
+        category_id: c.id,
+        category_name: c.name,
+        category_color: c.color,
+        event_count: count(pe.id)
+      },
+      order_by: [asc: fragment("to_char(?, 'YYYY-MM')", pe.starts_at), desc: count(pe.id)]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns all months in the trend range for chart axis.
+  """
+  @spec trend_months(pos_integer()) :: [String.t()]
+  def trend_months(months \\ 6) do
+    today = Date.utc_today()
+
+    0..(months - 1)
+    |> Enum.map(fn offset ->
+      today
+      |> Date.beginning_of_month()
+      |> Date.add(-30 * offset)
+      |> Calendar.strftime("%Y-%m")
+    end)
+    |> Enum.reverse()
+  end
+
+  @doc """
+  Returns source breakdown for a specific category.
+  Shows which scrapers/sources contribute events to this category.
+  """
+  @spec source_breakdown_by_category(pos_integer()) :: [source_breakdown_result()]
+  def source_breakdown_by_category(category_id) do
+    from(pec in PublicEventCategory,
+      where: pec.category_id == ^category_id,
+      group_by: pec.source,
+      select: %{
+        source: pec.source,
+        count: count(pec.id)
+      },
+      order_by: [desc: count(pec.id)]
+    )
+    |> Repo.all()
+    |> Enum.map(fn item ->
+      Map.put(item, :source, item.source || "unknown")
+    end)
+  end
+
+  @doc """
+  Returns source breakdown for all categories.
+  Shows which scrapers contribute to each category.
+
+  Returns: %{category_name => [%{source: "karnet", count: 50}, ...], ...}
+  """
+  @spec all_categories_source_breakdown(keyword()) :: %{String.t() => [map()]}
+  def all_categories_source_breakdown(opts \\ []) do
+    limit_categories = Keyword.get(opts, :limit_categories, 10)
+
+    top_category_ids =
+      top_categories(limit: limit_categories)
+      |> Enum.map(& &1.id)
+
+    from(pec in PublicEventCategory,
+      join: c in Category,
+      on: c.id == pec.category_id,
+      where: c.id in ^top_category_ids,
+      group_by: [c.id, c.name, c.color, pec.source],
+      select: %{
+        category_id: c.id,
+        category_name: c.name,
+        category_color: c.color,
+        source: pec.source,
+        count: count(pec.id)
+      },
+      order_by: [asc: c.name, desc: count(pec.id)]
+    )
+    |> Repo.all()
+    |> Enum.map(fn item ->
+      Map.put(item, :source, item.source || "unknown")
+    end)
+    |> Enum.group_by(& &1.category_name)
+  end
+
+  @doc """
+  Returns category overlap analysis - events that have multiple categories.
+  Shows which category pairs frequently appear together.
+
+  Returns list of: %{category_1: "Concerts", category_2: "Nightlife", overlap_count: 150}
+  """
+  @spec category_overlap_matrix(keyword()) :: [map()]
+  def category_overlap_matrix(opts \\ []) do
+    limit = Keyword.get(opts, :limit, 15)
+
+    # Self-join to find pairs of categories on the same event
+    from(pec1 in PublicEventCategory,
+      join: pec2 in PublicEventCategory,
+      on: pec1.event_id == pec2.event_id and pec1.category_id < pec2.category_id,
+      join: c1 in Category,
+      on: c1.id == pec1.category_id,
+      join: c2 in Category,
+      on: c2.id == pec2.category_id,
+      group_by: [c1.id, c1.name, c1.color, c2.id, c2.name, c2.color],
+      select: %{
+        category_1_id: c1.id,
+        category_1_name: c1.name,
+        category_1_color: c1.color,
+        category_2_id: c2.id,
+        category_2_name: c2.name,
+        category_2_color: c2.color,
+        overlap_count: count(pec1.event_id)
+      },
+      order_by: [desc: count(pec1.event_id)],
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns count of multi-category events (events with 2+ categories).
+  """
+  @spec multi_category_events_count() :: non_neg_integer()
+  def multi_category_events_count do
+    # Use subquery to count grouped results
+    subquery =
+      from(pec in PublicEventCategory,
+        group_by: pec.event_id,
+        having: count(pec.category_id) > 1,
+        select: pec.event_id
+      )
+
+    from(s in subquery(subquery), select: count())
+    |> Repo.one()
+  end
+
+  @doc """
+  Returns distribution of category counts per event.
+  E.g., how many events have 1 category, 2 categories, 3+ categories.
+  """
+  @spec category_count_distribution() :: [%{label: String.t(), count: non_neg_integer()}]
+  def category_count_distribution do
+    from(pec in PublicEventCategory,
+      group_by: pec.event_id,
+      select: %{
+        event_id: pec.event_id,
+        category_count: count(pec.category_id)
+      }
+    )
+    |> Repo.all()
+    |> Enum.group_by(fn %{category_count: count} ->
+      cond do
+        count == 1 -> "1 category"
+        count == 2 -> "2 categories"
+        count >= 3 -> "3+ categories"
+      end
+    end)
+    |> Enum.map(fn {label, events} ->
+      %{label: label, count: length(events)}
+    end)
+    |> Enum.sort_by(& &1.label)
+  end
+
+  @doc """
+  Returns confidence score distribution for ML/automated categorizations.
+  """
+  @spec confidence_distribution() :: %{high: non_neg_integer(), medium: non_neg_integer(), low: non_neg_integer()}
+  def confidence_distribution do
+    from(pec in PublicEventCategory,
+      where: not is_nil(pec.confidence),
+      select: %{
+        confidence: pec.confidence,
+        count: count(pec.id)
+      },
+      group_by: pec.confidence,
+      order_by: [desc: pec.confidence]
+    )
+    |> Repo.all()
+    |> Enum.reduce(%{high: 0, medium: 0, low: 0}, fn %{confidence: conf, count: count}, acc ->
+      cond do
+        conf >= 0.8 -> Map.update!(acc, :high, &(&1 + count))
+        conf >= 0.5 -> Map.update!(acc, :medium, &(&1 + count))
+        true -> Map.update!(acc, :low, &(&1 + count))
+      end
+    end)
+  end
 end
