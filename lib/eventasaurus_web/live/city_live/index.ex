@@ -18,7 +18,6 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.Components.OpenGraphComponent
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Helpers.LanguageDiscovery
-  alias EventasaurusWeb.Helpers.LanguageHelpers
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.CitySchema
   alias Eventasaurus.SocialCards.UrlBuilder
@@ -26,6 +25,8 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.Components.EventListing
+
+  on_mount {EventasaurusWeb.Live.LanguageHooks, :attach_language_handler}
 
   @default_radius_km 50
 
@@ -228,6 +229,16 @@ defmodule EventasaurusWeb.CityLive.Index do
     {:noreply, socket}
   end
 
+  # Language change is handled by LanguageHooks via on_mount
+  # This callback handles the reload after language changes
+  @impl true
+  def handle_info({:language_changed, _language}, socket) do
+    # ASYNC: Show skeleton immediately, load events in background
+    socket = assign(socket, :events_loading, true)
+    send(self(), :load_filtered_events)
+    {:noreply, socket}
+  end
+
   @impl true
   def handle_params(params, _url, socket) do
     # Skip in two cases:
@@ -355,18 +366,6 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   @impl true
-  def handle_event("change_language", %{"language" => language}, socket) do
-    # ASYNC: Show skeleton immediately, load events in background
-    socket =
-      socket
-      |> assign(:language, language)
-      |> assign(:events_loading, true)
-
-    send(self(), :load_filtered_events)
-    {:noreply, socket}
-  end
-
-  @impl true
   def handle_event("paginate", %{"page" => page}, socket) do
     page = String.to_integer(page)
     updated_filters = Map.put(socket.assigns.filters, :page, page)
@@ -482,19 +481,11 @@ defmodule EventasaurusWeb.CityLive.Index do
             <%= gettext("Events in %{city}", city: @city.name) %>
           </h1>
           <div class="flex items-center gap-4">
-            <!-- Language Switcher - Dynamic based on city -->
-            <div class="flex bg-gray-100 rounded-lg p-1">
-              <%= for lang <- @available_languages do %>
-                <button
-                  phx-click="change_language"
-                  phx-value-language={lang}
-                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                  title={LanguageHelpers.language_name(lang)}
-                >
-                  <%= LanguageHelpers.language_flag(lang) %> <%= String.upcase(lang) %>
-                </button>
-              <% end %>
-            </div>
+            <!-- Language Switcher -->
+            <.language_switcher
+              available_languages={@available_languages}
+              current_language={@language}
+            />
 
             <!-- Sort Controls -->
             <.sort_controls sort_by={@filters.sort_by} show_popularity={true} />
