@@ -53,11 +53,20 @@ For pattern-based recurring events, the **venue IS the unique identifier**.
 
 ### Implementation
 
-**Generation:** Transformer (line 71)
+**Generation:** Transformer (line 70-82)
 ```elixir
 def transform_event(venue_data, _options \\ %{}) do
-  # Generate stable external_id from venue_id
-  external_id = "inquizition_#{venue_data.venue_id}"
+  # Generate external_id with date for recurring events
+  # Format: inquizition_{venue_id}_{YYYY-MM-DD}
+  # This ensures each weekly occurrence is unique and passes EventFreshnessChecker
+  external_id =
+    case starts_at do
+      %DateTime{} = dt ->
+        date_str = dt |> DateTime.to_date() |> Date.to_iso8601()
+        "inquizition_#{venue_data.venue_id}_#{date_str}"
+      _ ->
+        "inquizition_#{venue_data.venue_id}"
+    end
 
   %{
     external_id: external_id,

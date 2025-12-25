@@ -58,11 +58,21 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     # Calculate next occurrence in UTC (Question One events are in Europe/London timezone)
     starts_at = RecurringEventParser.next_occurrence(day_of_week, start_time, "Europe/London")
 
-    # Generate stable external_id
-    # For pattern-based scrapers, venue is the unique identifier
-    # Day of week is metadata, not part of identity
+    # Generate external_id with date for recurring events
+    # Format: question_one_{venue_slug}_{YYYY-MM-DD}
+    # This ensures each weekly occurrence is unique and passes EventFreshnessChecker
     venue_slug = TextHelper.slugify(title)
-    external_id = "question_one_#{venue_slug}"
+
+    external_id =
+      case starts_at do
+        %DateTime{} = dt ->
+          date_str = dt |> DateTime.to_date() |> Date.to_iso8601()
+          "question_one_#{venue_slug}_#{date_str}"
+
+        _ ->
+          # Fallback if no date (shouldn't happen with valid schedule)
+          "question_one_#{venue_slug}"
+      end
 
     # Use geocoded city and country (enriched by venue_detail_job)
     # Default to United Kingdom since Question One is UK-specific

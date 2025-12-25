@@ -87,10 +87,15 @@ defmodule EventasaurusWeb.Admin.CategoryInsightsLive do
 
   def format_month(month_str) do
     # Convert "2024-12" to "Dec 24"
-    [year, month] = String.split(month_str, "-")
-    month_name = month_abbrev(String.to_integer(month))
-    year_short = String.slice(year, 2, 2)
-    "#{month_name} '#{year_short}"
+    case String.split(month_str, "-") do
+      [year, month] ->
+        month_name = month_abbrev(String.to_integer(month))
+        year_short = String.slice(year, 2, 2)
+        "#{month_name} '#{year_short}"
+
+      _ ->
+        month_str
+    end
   end
 
   defp month_abbrev(1), do: "Jan"

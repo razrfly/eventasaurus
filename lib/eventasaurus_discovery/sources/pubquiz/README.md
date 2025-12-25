@@ -49,21 +49,21 @@ Supports Polish day names:
 
 ## External ID Pattern
 
-**Format:** `pubquiz-pl_{city}_{venue_slug}`
+**Format:** `pubquiz-pl_{city}_{venue_slug}_{YYYY-MM-DD}`
 
-**Example:** `pubquiz-pl_warszawa_centrum`
+**Example:** `pubquiz-pl_warszawa_centrum_2025-01-07`
 
-### Why Venue-Based?
+### Why Date-Based?
 
-For pattern-based recurring events, the **venue IS the unique identifier**.
+For recurring events, each weekly occurrence needs a unique identifier to pass EventFreshnessChecker:
 
-- Day of week, time, and scheduling are **metadata** (describe WHEN event happens)
-- Venue location is **identity** (describes WHICH event it is)
-- City + venue slug creates globally unique identifier
+- Base venue slug: `pubquiz-pl_{city}_{venue_slug}` - identifies the venue
+- Date suffix: `_{YYYY-MM-DD}` - identifies the specific occurrence
+- This ensures each weekly trivia night is treated as a unique event
 
 ### Implementation
 
-**Generation:** CityJob (line 131-141)
+**Base ID Generation:** CityJob (line 148-158)
 ```elixir
 defp generate_external_id(url) do
   url
@@ -76,12 +76,19 @@ defp generate_external_id(url) do
 end
 ```
 
+**Date Suffix Added:** VenueDetailJob (line 144-154)
+```elixir
+# After parsing schedule and calculating next_occurrence
+date_str = next_occurrence |> DateTime.to_date() |> Date.to_iso8601()
+dated_external_id = "#{external_id}_#{date_str}"
+```
+
 **Flow:**
-1. CityJob generates external_id from venue URL
-2. Passes external_id to VenueDetailJob in job args
-3. VenueDetailJob reuses external_id (no regeneration)
-4. EventProcessor.mark_event_as_seen() called immediately
-5. EventFreshnessChecker uses external_id to skip fresh venues
+1. CityJob generates base external_id from venue URL
+2. Passes base external_id to VenueDetailJob in job args
+3. VenueDetailJob parses schedule and calculates next_occurrence
+4. Date is appended to external_id for the specific occurrence
+5. EventFreshnessChecker allows new weekly occurrences through
 
 ### How It Works with EventFreshnessChecker
 
