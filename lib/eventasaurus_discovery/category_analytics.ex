@@ -112,26 +112,84 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
 
   @doc """
   Returns categories with hierarchy information for tree display.
+  Includes icon, color, and builds a proper tree structure with aggregate counts.
   """
   def categories_with_hierarchy do
-    from(c in Category,
-      left_join: parent in assoc(c, :parent),
-      left_join: pec in PublicEventCategory,
-      on: pec.category_id == c.id,
-      group_by: [c.id, c.name, c.slug, c.parent_id, c.is_active, c.display_order, parent.name],
-      select: %{
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        parent_id: c.parent_id,
-        parent_name: parent.name,
-        is_active: c.is_active,
-        display_order: c.display_order,
-        event_count: count(pec.id)
-      },
-      order_by: [asc: c.display_order, asc: c.name]
-    )
-    |> Repo.all()
+    # Fetch all categories with their direct event counts
+    categories =
+      from(c in Category,
+        left_join: pec in PublicEventCategory,
+        on: pec.category_id == c.id,
+        group_by: [c.id, c.name, c.slug, c.parent_id, c.is_active, c.display_order, c.icon, c.color],
+        select: %{
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          icon: c.icon,
+          color: c.color,
+          parent_id: c.parent_id,
+          is_active: c.is_active,
+          display_order: c.display_order,
+          direct_event_count: count(pec.id)
+        },
+        order_by: [asc: c.display_order, asc: c.name]
+      )
+      |> Repo.all()
+
+    # Build tree structure with aggregate counts
+    build_category_tree(categories)
+  end
+
+  @doc """
+  Builds a hierarchical tree from flat category list.
+  Calculates total_event_count (direct + all children) for each category.
+  """
+  def build_category_tree(categories) do
+    # Create a map for quick lookup
+    category_map = Map.new(categories, fn c -> {c.id, c} end)
+
+    # Find root categories (no parent)
+    roots = Enum.filter(categories, fn c -> is_nil(c.parent_id) end)
+
+    # Find children for each category
+    children_map =
+      categories
+      |> Enum.filter(fn c -> not is_nil(c.parent_id) end)
+      |> Enum.group_by(fn c -> c.parent_id end)
+
+    # Build tree recursively with aggregate counts
+    Enum.map(roots, fn root ->
+      build_tree_node(root, children_map, category_map)
+    end)
+    |> sort_categories()
+  end
+
+  defp build_tree_node(category, children_map, _category_map) do
+    children = Map.get(children_map, category.id, [])
+
+    built_children =
+      Enum.map(children, fn child ->
+        build_tree_node(child, children_map, %{})
+      end)
+      |> sort_categories()
+
+    children_event_count =
+      Enum.reduce(built_children, 0, fn child, acc ->
+        acc + child.total_event_count
+      end)
+
+    category
+    |> Map.put(:children, built_children)
+    |> Map.put(:children_event_count, children_event_count)
+    |> Map.put(:total_event_count, category.direct_event_count + children_event_count)
+  end
+
+  defp sort_categories(categories) do
+    # Sort by display_order first, then by name, with "other" always at the end
+    Enum.sort_by(categories, fn c ->
+      is_other = String.downcase(c.slug || "") == "other"
+      {is_other, c.display_order || 0, c.name || ""}
+    end)
   end
 
   @doc """
