@@ -95,6 +95,7 @@ defmodule EventasaurusWeb.Router do
       # Category Management (dev - no auth)
       live "/categories", Admin.CategoryDashboardLive, :index
       live "/categories/list", Admin.CategoryIndexLive, :index
+      live "/categories/hierarchy", Admin.CategoryHierarchyLive, :index
       live "/categories/new", Admin.CategoryFormLive, :new
       live "/categories/:id/edit", Admin.CategoryFormLive, :edit
 

@@ -29,6 +29,12 @@
       >
         All Categories
       </.link>
+      <.link
+        navigate={~p"/admin/categories/hierarchy"}
+        class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        Hierarchy
+      </.link>
     </nav>
   </div>
 
@@ -294,6 +300,74 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- Recent Activity Feed -->
+    <div class="bg-white shadow rounded-lg mt-8">
+      <div class="px-4 py-5 sm:p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium text-gray-900">Recent Activity</h3>
+          <span class="text-sm text-gray-500">Last 15 assignments</span>
+        </div>
+
+        <%= if Enum.empty?(@recent_assignments) do %>
+          <p class="text-gray-400 text-sm text-center py-8">No recent category assignments</p>
+        <% else %>
+          <div class="flow-root">
+            <ul role="list" class="-mb-8">
+              <%= for {assignment, idx} <- Enum.with_index(@recent_assignments) do %>
+                <li>
+                  <div class="relative pb-8">
+                    <%= if idx < length(@recent_assignments) - 1 do %>
+                      <span class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                    <% end %>
+                    <div class="relative flex space-x-3">
+                      <div>
+                        <span
+                          class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white"
+                          style={"background-color: #{category_color(assignment.category_color)}"}
+                        >
+                          <.icon name="hero-tag" class="h-4 w-4 text-white" />
+                        </span>
+                      </div>
+                      <div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                        <div class="min-w-0 flex-1">
+                          <p class="text-sm text-gray-900">
+                            <span class="font-medium"><%= assignment.category_name %></span>
+                            <%= if assignment.is_primary do %>
+                              <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                                Primary
+                              </span>
+                            <% end %>
+                          </p>
+                          <p class="mt-0.5 text-sm text-gray-500 truncate max-w-md" title={assignment.event_title}>
+                            <%= assignment.event_title %>
+                          </p>
+                          <div class="mt-1 flex items-center gap-2">
+                            <span class={"inline-flex items-center px-2 py-0.5 rounded text-xs font-medium #{source_color(assignment.source)} text-white"}>
+                              <%= source_label(assignment.source) %>
+                            </span>
+                            <%= if assignment.confidence do %>
+                              <span class={"inline-flex items-center px-2 py-0.5 rounded text-xs font-medium #{confidence_badge_class(assignment.confidence)}"}>
+                                <%= confidence_label(assignment.confidence) %> confidence
+                              </span>
+                            <% end %>
+                          </div>
+                        </div>
+                        <div class="whitespace-nowrap text-right text-sm text-gray-500">
+                          <time datetime={assignment.assigned_at}>
+                            <%= format_relative_time(assignment.assigned_at) %>
+                          </time>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
       </div>
     </div>
 
