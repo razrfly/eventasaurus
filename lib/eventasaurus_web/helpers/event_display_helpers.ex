@@ -23,6 +23,7 @@ defmodule EventasaurusWeb.Helpers.EventDisplayHelpers do
       iex> event_cover_image_url(%{cover_image_url: nil, external_image_data: nil, title: "My Event"})
       "https://api.dicebear.com/9.x/shapes/svg?seed=123456&backgroundColor=gradient"
   """
+  @spec event_cover_image_url(map()) :: String.t()
   def event_cover_image_url(event) do
     cond do
       event.cover_image_url && event.cover_image_url != "" ->
@@ -54,6 +55,7 @@ defmodule EventasaurusWeb.Helpers.EventDisplayHelpers do
       iex> format_event_date(nil, "America/New_York")
       "Date TBD"
   """
+  @spec format_event_date(DateTime.t() | nil, String.t() | nil) :: String.t()
   def format_event_date(%DateTime{} = datetime, timezone) do
     case timezone do
       tz when is_binary(tz) ->
@@ -62,7 +64,7 @@ defmodule EventasaurusWeb.Helpers.EventDisplayHelpers do
           |> DateTimeHelper.utc_to_timezone(tz)
           |> Calendar.strftime("%a, %b %d, %I:%M %p")
         rescue
-          _ -> Calendar.strftime(datetime, "%a, %b %d, %I:%M %p UTC")
+          ArgumentError -> Calendar.strftime(datetime, "%a, %b %d, %I:%M %p UTC")
         end
 
       _ ->
@@ -86,6 +88,7 @@ defmodule EventasaurusWeb.Helpers.EventDisplayHelpers do
       iex> format_event_location(%{venue: nil})
       "Location TBD"
   """
+  @spec format_event_location(map()) :: String.t()
   def format_event_location(event) do
     cond do
       event.venue && event.venue.name ->

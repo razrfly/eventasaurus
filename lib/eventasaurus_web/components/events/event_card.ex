@@ -103,8 +103,8 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
         </div>
       </a>
 
-      <!-- Actions -->
-      <div class={action_padding(@layout) <> " flex flex-col sm:flex-row sm:items-center sm:justify-between border-t border-gray-100 gap-2 sm:gap-0"}>
+      <!-- Actions (hidden for compact layout) -->
+      <div class={[action_padding(@layout), "flex flex-col sm:flex-row sm:items-center sm:justify-between border-t border-gray-100 gap-2 sm:gap-0", @layout == :compact && "hidden"]}>
           <div class="flex items-center flex-wrap gap-2">
             <%= render_action_button(@event) %>
           </div>
@@ -144,7 +144,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
 
   defp action_padding(:desktop), do: "pt-2 px-3 pb-3"
   defp action_padding(:mobile), do: "pt-2 px-4 pb-3"
-  defp action_padding(:compact), do: "hidden"
+  defp action_padding(:compact), do: "pt-2 px-4 pb-3"
 
   defp card_layout(:desktop), do: "flex flex-col sm:flex-row gap-3"
   defp card_layout(:mobile), do: "flex justify-between items-start mb-3"
