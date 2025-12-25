@@ -274,8 +274,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> push_navigate(to: ~p"/activities")
 
       enriched_event ->
-        # Subscribe to PubSub for real-time availability updates
-        Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "event:#{enriched_event.id}")
+        # Subscribe to PubSub for real-time availability updates (only once per LiveView)
+        # Guard against duplicate subscriptions when language changes trigger re-fetch
+        unless socket.assigns[:pubsub_subscribed] do
+          Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "event:#{enriched_event.id}")
+        end
 
         # Check if user has existing plan (not cached as it's user-specific)
         existing_plan =
@@ -384,6 +387,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> assign(:breadcrumb_items, breadcrumb_items)
         |> assign(:available_languages, available_languages)
         |> assign(:open_graph, og_tags)
+        # Track that we've subscribed to PubSub to avoid duplicate subscriptions
+        |> assign(:pubsub_subscribed, true)
         |> SEOHelpers.assign_meta_tags(
           title: enriched_event.display_title,
           description: description,

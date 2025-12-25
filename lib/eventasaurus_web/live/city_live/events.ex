@@ -22,8 +22,9 @@ defmodule EventasaurusWeb.CityLive.Events do
          |> push_navigate(to: ~p"/activities")}
 
       city ->
-        # Get language from session or default to English
-        language = get_connect_params(socket)["locale"] || "en"
+        # Get language from connect params (safe nil handling) or default to English
+        params = get_connect_params(socket) || %{}
+        language = params["locale"] || "en"
 
         {:ok,
          socket

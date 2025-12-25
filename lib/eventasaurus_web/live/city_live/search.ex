@@ -13,8 +13,9 @@ defmodule EventasaurusWeb.CityLive.Search do
   def mount(%{"city_slug" => city_slug}, _session, socket) do
     city = Locations.get_city_by_slug!(city_slug)
 
-    # Get language from session or default to English
-    language = get_connect_params(socket)["locale"] || "en"
+    # Get language from connect params (safe nil handling) or default to English
+    params = get_connect_params(socket) || %{}
+    language = params["locale"] || "en"
 
     socket =
       socket

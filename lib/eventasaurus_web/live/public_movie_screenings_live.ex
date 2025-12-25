@@ -211,16 +211,14 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     ~H"""
     <div class="min-h-screen">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Language Switcher - Dynamic based on city -->
-        <div class="flex justify-end mb-4">
+        <!-- Breadcrumbs and Language Switcher (same line) -->
+        <div class="flex items-center justify-between mb-6">
+          <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
           <.language_switcher
             available_languages={@available_languages}
             current_language={@language}
           />
         </div>
-
-        <!-- Breadcrumbs -->
-        <Breadcrumbs.breadcrumb items={@breadcrumb_items} class="mb-6" />
 
         <!-- Category Display -->
         <%= if @primary_category do %>
@@ -490,6 +488,13 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
      socket
      |> assign(:filter_criteria, filter_criteria)
      |> assign(:filter_preview_count, count)}
+  end
+
+  @impl true
+  def handle_info({:language_changed, _language}, socket) do
+    # Language is already updated by the hook, no need to reload data
+    # since movie screenings data doesn't change by language
+    {:noreply, socket}
   end
 
   @impl true

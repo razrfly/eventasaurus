@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.Live.LanguageHooks do
   1. Attaches a handler for the "change_language" event
   2. Updates the @language assign
   3. Pushes the "set_language_cookie" event to persist the preference
+  4. Sends a `{:language_changed, language}` message to the LiveView
 
   ## Usage
 
@@ -22,82 +23,77 @@ defmodule EventasaurusWeb.Live.LanguageHooks do
         current_language={@language}
       />
 
-  ## Custom Behavior
+  ## Handling Language Changes
 
-  If your LiveView needs to perform additional actions after language changes
-  (e.g., reload data), implement a callback in your LiveView:
+  The hook sends a `{:language_changed, language}` message after updating
+  the language. Your LiveView can optionally implement a handler to perform
+  additional actions (e.g., reload data):
 
-      def handle_info({:language_changed, language}, socket) do
+      def handle_info({:language_changed, _language}, socket) do
         # Reload data with new language
         {:noreply, reload_events(socket)}
       end
 
-  The hook will send this message after updating the language.
+  If you don't need to reload data, you can implement a no-op handler:
+
+      def handle_info({:language_changed, _language}, socket) do
+        {:noreply, socket}
+      end
+
+  Note: If your LiveView doesn't implement a handler, the message will be
+  ignored by the default Phoenix LiveView behavior, but you may see warnings
+  in development. It's recommended to always implement the handler.
   """
 
   import Phoenix.Component, only: [assign: 3]
   import Phoenix.LiveView, only: [attach_hook: 4, push_event: 3, connected?: 1]
 
+  @type mount_result :: {:cont | :halt, Phoenix.LiveView.Socket.t()}
+
   @doc """
   Attaches the language change event handler to the socket.
 
-  This is the default hook that handles language switching for most pages.
-  It updates the language assign and persists the cookie.
+  This hook handles language switching by:
+  - Updating the `:language` assign when a "change_language" event is received
+  - Persisting the preference via the "set_language_cookie" JavaScript event
+  - Notifying the LiveView via `{:language_changed, language}` message
+
+  ## Example
+
+      defmodule MyAppWeb.MyLive do
+        use MyAppWeb, :live_view
+
+        on_mount {MyAppWeb.Live.LanguageHooks, :attach_language_handler}
+
+        def handle_info({:language_changed, _language}, socket) do
+          # Optional: reload data for new language
+          {:noreply, socket}
+        end
+      end
   """
+  @spec on_mount(atom(), map(), map(), Phoenix.LiveView.Socket.t()) :: mount_result()
   def on_mount(:attach_language_handler, _params, _session, socket) do
-    socket =
-      attach_hook(socket, :language_handler, :handle_event, fn
-        "change_language", %{"language" => language}, socket ->
-          socket =
-            socket
-            |> assign(:language, language)
-            |> push_event("set_language_cookie", %{language: language})
-
-          # Notify the LiveView if it wants to handle the change
-          if connected?(socket) do
-            send(self(), {:language_changed, language})
-          end
-
-          {:halt, socket}
-
-        _event, _params, socket ->
-          {:cont, socket}
-      end)
-
-    {:cont, socket}
+    {:cont, attach_language_event_handler(socket)}
   end
 
-  # Attaches the language handler with data reload capability.
-  # Use this variant when the LiveView needs to reload data after language changes.
-  # It sets a loading flag and sends a message to trigger the reload.
-  #
-  # Example:
-  #     on_mount {EventasaurusWeb.Live.LanguageHooks, :attach_language_handler_with_reload}
-  #
-  #     def handle_info({:language_changed, _language}, socket) do
-  #       send(self(), :load_filtered_events)
-  #       {:noreply, assign(socket, :events_loading, true)}
-  #     end
-  def on_mount(:attach_language_handler_with_reload, _params, _session, socket) do
-    socket =
-      attach_hook(socket, :language_handler, :handle_event, fn
-        "change_language", %{"language" => language}, socket ->
-          socket =
-            socket
-            |> assign(:language, language)
-            |> push_event("set_language_cookie", %{language: language})
+  # Private helper that attaches the language change event handler
+  defp attach_language_event_handler(socket) do
+    attach_hook(socket, :language_handler, :handle_event, fn
+      "change_language", %{"language" => language}, socket ->
+        socket =
+          socket
+          |> assign(:language, language)
+          |> push_event("set_language_cookie", %{language: language})
 
-          # Notify the LiveView to reload data
-          if connected?(socket) do
-            send(self(), {:language_changed, language})
-          end
+        # Notify the LiveView if it wants to handle the change
+        if connected?(socket) do
+          send(self(), {:language_changed, language})
+        end
 
-          {:halt, socket}
+        {:halt, socket}
 
-        _event, _params, socket ->
-          {:cont, socket}
-      end)
-
-    {:cont, socket}
+      _event, _params, socket ->
+        {:cont, socket}
+    end)
   end
 end
