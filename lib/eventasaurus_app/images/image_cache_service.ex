@@ -266,6 +266,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
   - `{:ok, count}` - Number of images cleaned up
   """
+  @spec cleanup_expired(keyword()) :: {:ok, non_neg_integer()}
   def cleanup_expired(opts \\ []) do
     limit = Keyword.get(opts, :limit, 100)
     delete_r2 = Keyword.get(opts, :delete_r2, true)
@@ -279,12 +280,29 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
     Enum.each(images, fn image ->
       # Delete from R2 if requested and we have a key
-      if delete_r2 && image.r2_key do
-        R2Client.delete(image.r2_key)
-      end
+      # Only delete the database record if R2 deletion succeeds (or we're not deleting from R2)
+      r2_deleted =
+        if delete_r2 && image.r2_key do
+          case R2Client.delete(image.r2_key) do
+            :ok ->
+              true
 
-      # Delete the record
-      Repo.delete(image)
+            {:error, reason} ->
+              Logger.warning(
+                "Failed to delete R2 object #{image.r2_key}: #{inspect(reason)} - keeping database record"
+              )
+
+              false
+          end
+        else
+          true
+        end
+
+      # Only delete the database record if R2 deletion was successful
+      # This prevents orphaned R2 objects
+      if r2_deleted do
+        Repo.delete(image)
+      end
     end)
 
     {:ok, length(images)}
