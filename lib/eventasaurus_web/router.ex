@@ -650,11 +650,7 @@ defmodule EventasaurusWeb.Router do
       # /register without event_id goes to invite-only page (registration is invite-only)
       get "/register", PageController, :redirect_to_invite_only
 
-      # Performer profile pages
-      live "/performers/:slug", PerformerLive.Show, :show
-
-      # Direct venue pages (for trivia_advisor compatibility)
-      live "/venues/:slug", VenueLive.Show, :show
+      # Note: /performers/:slug and /venues/:slug moved to cacheable_public live_session (Phase 2)
     end
   end
 
@@ -783,18 +779,45 @@ defmodule EventasaurusWeb.Router do
         as: :poll_social_card_cached
   end
 
-  # Cacheable public activities routes (CDN-cacheable for anonymous users)
-  # Phase 1: Only /activities/:slug show pages - see issue #2940
+  # Cacheable public pages (CDN-cacheable for anonymous users)
+  # See issue #2940 for implementation details
   # These routes use the cacheable_browser pipeline which skips session for anonymous users,
   # preventing Set-Cookie headers and allowing Cloudflare to cache responses.
-  live_session :cacheable_activities,
+  #
+  # Cache TTLs:
+  # - Show pages (Phase 1+2): 48h TTL (s-maxage=172800)
+  # - Index pages (Phase 3): 1h TTL (s-maxage=3600)
+  # - Aggregated content (Phase 4): 1h TTL (s-maxage=3600)
+  live_session :cacheable_public,
     on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
     scope "/", EventasaurusWeb do
       pipe_through :cacheable_browser
 
-      # Activity show pages (CDN-cacheable, 12h TTL)
+      # Phase 3: Index pages (1h cache)
+      live "/activities", PublicEventsHomeLive, :index
+      live "/movies", MoviesIndexLive, :index
+
+      # Phase 1: Activity show pages (48h cache)
       live "/activities/:slug", PublicEventShowLive, :show
       live "/activities/:slug/:date_slug", PublicEventShowLive, :show
+
+      # Phase 2: Venues, Performers, Movies show pages (48h cache)
+      live "/venues/:slug", VenueLive.Show, :show
+      live "/performers/:slug", PerformerLive.Show, :show
+      live "/movies/:identifier", GenericMovieLive, :show
+
+      # Phase 4: Multi-city aggregated content pages (1h cache)
+      # These aggregate events across all cities by content type/source
+      live "/social/:identifier", AggregatedContentLive, :multi_city
+      live "/food/:identifier", AggregatedContentLive, :multi_city
+      live "/music/:identifier", AggregatedContentLive, :multi_city
+      live "/happenings/:identifier", AggregatedContentLive, :multi_city
+      live "/comedy/:identifier", AggregatedContentLive, :multi_city
+      live "/dance/:identifier", AggregatedContentLive, :multi_city
+      live "/classes/:identifier", AggregatedContentLive, :multi_city
+      live "/festivals/:identifier", AggregatedContentLive, :multi_city
+      live "/sports/:identifier", AggregatedContentLive, :multi_city
+      live "/theater/:identifier", AggregatedContentLive, :multi_city
     end
   end
 
@@ -805,31 +828,8 @@ defmodule EventasaurusWeb.Router do
       pipe_through :browser
 
       # ===== SCRAPED/DISCOVERY EVENTS (from external APIs) =====
-      # PublicEventsHomeLive - Discovery homepage with curated content
-      # Note: Index page stays in regular browser pipeline for now (Phase 3)
-      live "/activities", PublicEventsHomeLive, :index
-
-      # Multi-city aggregated content (trivia, movies, classes, etc. across all cities)
-      # Uses explicit routes for each content type to prevent greedy matching
-      # Pattern: /trivia/pubquiz-pl?scope=all&city=krakow
-      # See AggregationTypeSlug for the complete list of valid content types
-      live "/social/:identifier", AggregatedContentLive, :multi_city
-      live "/food/:identifier", AggregatedContentLive, :multi_city
-
-      # Movies index page - shows all movies currently in cinemas
-      live "/movies", MoviesIndexLive, :index
-
-      # Generic movie page - cross-site linking from Cinegraph
-      # Identifier can be TMDB ID (e.g., /movies/157336) or slug-tmdb_id (e.g., /movies/interstellar-157336)
-      live "/movies/:identifier", GenericMovieLive, :show
-      live "/music/:identifier", AggregatedContentLive, :multi_city
-      live "/happenings/:identifier", AggregatedContentLive, :multi_city
-      live "/comedy/:identifier", AggregatedContentLive, :multi_city
-      live "/dance/:identifier", AggregatedContentLive, :multi_city
-      live "/classes/:identifier", AggregatedContentLive, :multi_city
-      live "/festivals/:identifier", AggregatedContentLive, :multi_city
-      live "/sports/:identifier", AggregatedContentLive, :multi_city
-      live "/theater/:identifier", AggregatedContentLive, :multi_city
+      # Note: /activities and /movies index pages moved to cacheable_public live_session (Phase 3)
+      # Note: Aggregated content routes (/social, /food, etc.) moved to cacheable_public (Phase 4)
 
       # Guest-accessible checkout
       live "/events/:slug/checkout", CheckoutLive
