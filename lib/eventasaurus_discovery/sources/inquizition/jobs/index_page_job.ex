@@ -110,12 +110,18 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexPageJob do
   # CRITICAL: EventFreshnessChecker integration
   defp filter_fresh_venues(venues, source_id, limit) do
     # Generate external_ids for each venue using safe access
+    # IMPORTANT: Mark as recurring so EventFreshnessChecker bypasses freshness check
+    # All Inquizition venues are weekly recurring trivia events
     venues_with_external_ids =
       Enum.map(venues, fn venue ->
         venue_id = Map.get(venue, :venue_id) || Map.get(venue, "venue_id")
         # Skip setting external_id if venue_id is nil
         if venue_id do
-          Map.put(venue, :external_id, "inquizition_#{to_string(venue_id)}")
+          venue
+          |> Map.put(:external_id, "inquizition_#{to_string(venue_id)}")
+          # Mark as recurring - triggers bypass in EventFreshnessChecker
+          # The actual recurrence_rule is added later by Transformer
+          |> Map.put(:recurrence_rule, %{"frequency" => "weekly"})
         else
           venue
         end

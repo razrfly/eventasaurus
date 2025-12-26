@@ -1429,11 +1429,14 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       page_size = min(opts[:page_size] || @default_limit, @max_limit)
 
       # Fetch window sized to requested page (cap at @max_limit)
-      # Use multiplier to fetch enough events for aggregation while avoiding over-fetching
-      # Previous 20x multiplier caused performance issues (fetching 600 events for 30-item page)
-      # Reduced to 5x/2x for better balance - see issue #2911
-      multiplier = if page == 1, do: 5, else: 2
-      fetch_size = min(@max_limit, page * page_size * multiplier)
+      # IMPORTANT: For accurate aggregation, we need to fetch enough events to ensure
+      # all aggregatable sources are represented. The previous 5x/2x multiplier was too
+      # aggressive and caused aggregation counts to be wrong (e.g., showing "1 event"
+      # when a source has 100+ events). See issue #2929.
+      #
+      # For page 1, always use @max_limit to ensure all aggregatable sources appear.
+      # For subsequent pages, use smaller multiplier since aggregation cards are stable.
+      fetch_size = if page == 1, do: @max_limit, else: min(@max_limit, page * page_size * 3)
 
       # Build fetch opts without DB pagination
       # Handle both Keyword lists and Maps by converting to Map
