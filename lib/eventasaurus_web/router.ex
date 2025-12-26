@@ -293,6 +293,65 @@ defmodule EventasaurusWeb.Router do
     plug EventasaurusWeb.Plugs.AggregationTypeRedirect
   end
 
+  # Cacheable browser pipeline for public pages that can be CDN-cached
+  # Uses ConditionalSessionPlug to skip session for anonymous users on cacheable routes
+  # This prevents Set-Cookie headers which would cause Cloudflare to bypass cache
+  # See: https://github.com/razrfly/eventasaurus/issues/2940
+  pipeline :cacheable_browser do
+    plug :accepts, ["html"]
+    # Check if this is a cacheable route with no auth cookie FIRST
+    plug EventasaurusWeb.Plugs.ConditionalSessionPlug
+    # Conditionally fetch session (skipped if :skip_session is set)
+    plug :maybe_fetch_session
+    # Conditionally fetch flash (requires session)
+    plug :maybe_fetch_live_flash
+    plug :fetch_query_params
+    plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
+    # Conditionally protect from forgery (skipped if :skip_session is set)
+    plug :maybe_protect_from_forgery
+    plug :put_secure_browser_headers
+    # Set cache headers based on auth state and cacheability
+    plug EventasaurusWeb.Plugs.CacheControlPlug
+
+    if Mix.env() == :dev do
+      plug EventasaurusWeb.Dev.DevAuthPlug
+    end
+
+    # These plugs handle missing session gracefully
+    plug :fetch_auth_user
+    plug :assign_user_struct
+    plug EventasaurusWeb.Plugs.LanguagePlug
+    plug EventasaurusWeb.Plugs.AggregationTypeRedirect
+  end
+
+  # Helper function to conditionally fetch session
+  defp maybe_fetch_session(conn, _opts) do
+    if conn.assigns[:skip_session] do
+      conn
+    else
+      fetch_session(conn)
+    end
+  end
+
+  # Helper function to conditionally protect from forgery
+  defp maybe_protect_from_forgery(conn, _opts) do
+    if conn.assigns[:skip_session] do
+      conn
+    else
+      protect_from_forgery(conn)
+    end
+  end
+
+  # Helper function to conditionally fetch live flash (requires session)
+  defp maybe_fetch_live_flash(conn, _opts) do
+    if conn.assigns[:skip_session] do
+      # Assign empty flash for LiveView compatibility
+      assign(conn, :flash, %{})
+    else
+      fetch_live_flash(conn, [])
+    end
+  end
+
   # City browser pipeline with city validation
   pipeline :city_browser do
     plug :accepts, ["html"]
@@ -724,6 +783,21 @@ defmodule EventasaurusWeb.Router do
         as: :poll_social_card_cached
   end
 
+  # Cacheable public activities routes (CDN-cacheable for anonymous users)
+  # Phase 1: Only /activities/:slug show pages - see issue #2940
+  # These routes use the cacheable_browser pipeline which skips session for anonymous users,
+  # preventing Set-Cookie headers and allowing Cloudflare to cache responses.
+  live_session :cacheable_activities,
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
+    scope "/", EventasaurusWeb do
+      pipe_through :cacheable_browser
+
+      # Activity show pages (CDN-cacheable, 12h TTL)
+      live "/activities/:slug", PublicEventShowLive, :show
+      live "/activities/:slug/:date_slug", PublicEventShowLive, :show
+    end
+  end
+
   # Public event routes (with theme support)
   live_session :public,
     on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
@@ -732,9 +806,8 @@ defmodule EventasaurusWeb.Router do
 
       # ===== SCRAPED/DISCOVERY EVENTS (from external APIs) =====
       # PublicEventsHomeLive - Discovery homepage with curated content
+      # Note: Index page stays in regular browser pipeline for now (Phase 3)
       live "/activities", PublicEventsHomeLive, :index
-      live "/activities/:slug", PublicEventShowLive, :show
-      live "/activities/:slug/:date_slug", PublicEventShowLive, :show
 
       # Multi-city aggregated content (trivia, movies, classes, etc. across all cities)
       # Uses explicit routes for each content type to prevent greedy matching
