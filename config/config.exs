@@ -11,8 +11,9 @@ import Config
 import_config "clerk.exs"
 
 # Configure Eventasaurus main app
+# Only Repo needs migrations - SessionRepo and ReplicaRepo share the same database schema
 config :eventasaurus,
-  ecto_repos: [EventasaurusApp.Repo, EventasaurusApp.SessionRepo, EventasaurusApp.ReplicaRepo]
+  ecto_repos: [EventasaurusApp.Repo]
 
 # Configure EventasaurusApp Repo with PostGIS types
 config :eventasaurus, EventasaurusApp.Repo, types: EventasaurusApp.PostgresTypes

@@ -68,8 +68,6 @@ defmodule EventasaurusApp.Images.CachedImage do
     # File metadata
     field(:content_type, :string)
     field(:file_size, :integer)
-    field(:width, :integer)
-    field(:height, :integer)
 
     # Raw source data - DO NOT PARSE, just preserve
     # See moduledoc for details
@@ -96,8 +94,6 @@ defmodule EventasaurusApp.Images.CachedImage do
       :last_error,
       :content_type,
       :file_size,
-      :width,
-      :height,
       :metadata
     ])
     |> validate_required([:entity_type, :entity_id, :position, :original_url])
@@ -119,9 +115,7 @@ defmodule EventasaurusApp.Images.CachedImage do
       :retry_count,
       :last_error,
       :content_type,
-      :file_size,
-      :width,
-      :height
+      :file_size
     ])
     |> validate_inclusion(:status, @valid_statuses)
   end
