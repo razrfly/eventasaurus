@@ -250,9 +250,19 @@ defmodule EventasaurusApp.Services.R2Client do
 
   ## Returns
 
-  - `{:ok, %{cdn_url: url, content_type: type, file_size: size}}` - Success
+  - `{:ok, %{cdn_url: url, content_type: type, file_size: size, r2_key: path}}` - Success
   - `{:error, reason}` - Download or upload failed
+
+  ## Error Reasons
+
+  - `{:http_error, status_code}` - HTTP request returned non-2xx status
+  - `{:download_failed, reason}` - HTTP request failed (timeout, network error)
+  - `:file_too_large` - File exceeds max_size limit
+  - `{:not_configured, message}` - R2 credentials not configured
   """
+  @spec download_and_upload(String.t(), String.t(), keyword()) ::
+          {:ok, %{cdn_url: String.t(), content_type: String.t(), file_size: non_neg_integer(), r2_key: String.t()}}
+          | {:error, term()}
   def download_and_upload(source_url, r2_path, opts \\ []) do
     timeout = Keyword.get(opts, :timeout, 30_000)
     max_size = Keyword.get(opts, :max_size, 10 * 1024 * 1024)

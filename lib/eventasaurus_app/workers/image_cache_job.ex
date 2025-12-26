@@ -61,19 +61,31 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
   end
 
   defp process_image(%CachedImage{} = cached_image) do
-    # Mark as downloading
-    cached_image
-    |> CachedImage.cache_result_changeset(%{status: "downloading"})
-    |> Repo.update()
+    # Mark as downloading - if this fails, still continue with the download
+    # The final success/failure update is what matters
+    updated_image =
+      case cached_image
+           |> CachedImage.cache_result_changeset(%{status: "downloading"})
+           |> Repo.update() do
+        {:ok, updated} ->
+          updated
 
-    r2_path = build_r2_path(cached_image)
+        {:error, reason} ->
+          Logger.warning(
+            "ImageCacheJob: Failed to mark as downloading: #{inspect(reason)} - continuing anyway"
+          )
 
-    case R2Client.download_and_upload(cached_image.original_url, r2_path) do
+          cached_image
+      end
+
+    r2_path = build_r2_path(updated_image)
+
+    case R2Client.download_and_upload(updated_image.original_url, r2_path) do
       {:ok, result} ->
-        handle_success(cached_image, result)
+        handle_success(updated_image, result)
 
       {:error, reason} ->
-        handle_failure(cached_image, reason)
+        handle_failure(updated_image, reason)
     end
   end
 
@@ -130,7 +142,25 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
   defp build_r2_path(%CachedImage{} = cached_image) do
     extension = get_extension(cached_image.original_url)
 
-    "images/#{cached_image.entity_type}/#{cached_image.entity_id}/#{cached_image.image_role}#{extension}"
+    # For venues, use slug from metadata if available (more readable R2 paths)
+    # Falls back to entity_id for other entity types or if slug not available
+    entity_identifier = get_entity_identifier(cached_image)
+
+    "images/#{cached_image.entity_type}/#{entity_identifier}/#{cached_image.image_role}#{extension}"
+  end
+
+  defp get_entity_identifier(%CachedImage{entity_type: "venue", metadata: metadata} = cached_image)
+       when is_map(metadata) do
+    # For venues, prefer slug for readable R2 paths
+    case Map.get(metadata, "venue_slug") do
+      nil -> Integer.to_string(cached_image.entity_id)
+      "" -> Integer.to_string(cached_image.entity_id)
+      slug -> slug
+    end
+  end
+
+  defp get_entity_identifier(%CachedImage{} = cached_image) do
+    Integer.to_string(cached_image.entity_id)
   end
 
   defp get_extension(url) do
