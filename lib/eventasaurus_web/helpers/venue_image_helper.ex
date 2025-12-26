@@ -3,12 +3,13 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   Helper for getting venue images with intelligent fallback strategy.
 
   Fallback order:
-  1. Venue's own images (if available)
+  1. Venue's cached images from R2 (via cached_images table)
   2. Random image from city's Unsplash gallery (consistent per venue)
   3. Placeholder image
   """
 
   alias Eventasaurus.CDN
+  alias EventasaurusApp.Images.ImageCacheService
 
   @doc """
   Get the best available image for a venue with CDN optimization.
@@ -42,12 +43,9 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
     placeholder = "/images/venue-placeholder.jpg"
 
     cond do
-      # 1. Use venue's own images if available
-      has_venue_images?(venue) ->
-        venue.venue_images
-        |> List.first()
-        |> get_venue_image_url()
-        |> cdn_url_or_fallback(cdn_opts, placeholder)
+      # 1. Use venue's cached images from R2 (position 0 = primary image)
+      url = get_cached_venue_image_url(venue) ->
+        cdn_url_or_fallback(url, cdn_opts, placeholder)
 
       # 2. Use random image from city's Unsplash gallery
       has_city_gallery?(city) ->
@@ -86,17 +84,13 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
 
   # Private helpers
 
-  defp has_venue_images?(%{venue_images: images}) when is_list(images) do
-    length(images) > 0
+  # Get the primary cached image URL for a venue (position 0)
+  # Returns cdn_url if cached, original_url as fallback, nil if no image
+  defp get_cached_venue_image_url(%{id: venue_id}) when is_integer(venue_id) do
+    ImageCacheService.get_url!("venue", venue_id, 0)
   end
 
-  defp has_venue_images?(_), do: false
-
-  defp get_venue_image_url(image) when is_map(image) do
-    image["url"] || image[:url]
-  end
-
-  defp get_venue_image_url(_), do: nil
+  defp get_cached_venue_image_url(_), do: nil
 
   defp has_city_gallery?(%{unsplash_gallery: gallery}) when is_map(gallery) do
     images = gallery["images"] || []

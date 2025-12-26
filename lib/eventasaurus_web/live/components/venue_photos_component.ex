@@ -2,11 +2,16 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
   @moduledoc """
   Photos section component for venue/restaurant/activity display.
 
-  Shows photo gallery from Google Places API with responsive grid layout,
-  optimized for large photo galleries with lazy loading and virtual scrolling.
+  Shows photo gallery with responsive grid layout, optimized for large photo
+  galleries with lazy loading and virtual scrolling.
+
+  Uses cached_images table (R2 storage) as the source for venue photos.
   """
 
   use EventasaurusWeb, :live_component
+
+  alias EventasaurusApp.Images.ImageCacheService
+  alias EventasaurusApp.Images.CachedImage
 
   # Performance constants
   @photos_per_page 12
@@ -538,30 +543,25 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
   end
 
   defp assign_computed_data(socket) do
-    # Priority order for photo sources:
-    # 1. venue_images (new provider-agnostic aggregation)
-    # 2. rich_data.sections.photos (standardized format)
-    # 3. rich_data.images (legacy format)
+    # Photo source: cached_images table (R2 storage)
+    # Falls back to rich_data for legacy compatibility
     venue = Map.get(socket.assigns, :venue)
     rich_data = socket.assigns.rich_data
 
     all_photos =
       cond do
-        # New venue_images JSONB field from provider aggregation
-        venue && is_map(venue) && Map.has_key?(venue, :venue_images) ->
-          normalize_venue_images(venue.venue_images)
+        # Primary: Get photos from cached_images table
+        venue && is_map(venue) && Map.has_key?(venue, :id) ->
+          get_cached_images_for_venue(venue.id)
 
-        venue && is_map(venue) && Map.has_key?(venue, "venue_images") ->
-          normalize_venue_images(venue["venue_images"])
-
-        # Legacy rich_data.images format (check before catch-all)
+        # Legacy fallback: rich_data.images format
         is_map(rich_data) && Map.has_key?(rich_data, :images) && is_list(rich_data.images) ->
           normalize_photos(rich_data.images)
 
         is_map(rich_data) && Map.has_key?(rich_data, "images") && is_list(rich_data["images"]) ->
           normalize_photos(rich_data["images"])
 
-        # Standardized format from rich_data (check after specific images field)
+        # Standardized format from rich_data
         is_map(rich_data) ->
           case get_in(rich_data, [:sections, :photos, :photos]) do
             photos when is_list(photos) -> normalize_standardized_photos(photos)
@@ -665,35 +665,33 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
     }
   end
 
-  # Normalize venue_images from provider aggregation
-  defp normalize_venue_images(venue_images) when is_list(venue_images) do
-    venue_images
-    |> Enum.filter(&is_valid_venue_image?/1)
-    |> Enum.map(&normalize_venue_image/1)
+  # Get cached images from the cached_images table for a venue
+  defp get_cached_images_for_venue(venue_id) when is_integer(venue_id) do
+    ImageCacheService.get_entity_images("venue", venue_id)
+    |> Enum.map(&normalize_cached_image/1)
   end
 
-  defp normalize_venue_images(_), do: []
+  defp get_cached_images_for_venue(_), do: []
 
-  defp is_valid_venue_image?(image) when is_map(image) do
-    # Support both atom and string keys
-    url = Map.get(image, :url) || Map.get(image, "url")
-    is_binary(url) && String.length(url) > 0
-  end
-
-  defp is_valid_venue_image?(_), do: false
-
-  defp normalize_venue_image(image) when is_map(image) do
-    # Support both atom and string keys from JSONB
+  # Convert CachedImage struct to the format expected by the component
+  defp normalize_cached_image(%CachedImage{} = cached_image) do
     %{
-      url: Map.get(image, :url) || Map.get(image, "url"),
-      alt: Map.get(image, :alt) || Map.get(image, "alt") || "Photo",
-      thumbnail_url: Map.get(image, :thumbnail_url) || Map.get(image, "thumbnail_url"),
-      width: Map.get(image, :width) || Map.get(image, "width"),
-      height: Map.get(image, :height) || Map.get(image, "height"),
-      provider: Map.get(image, :provider) || Map.get(image, "provider"),
-      attribution: Map.get(image, :attribution) || Map.get(image, "attribution"),
-      attribution_url: Map.get(image, :attribution_url) || Map.get(image, "attribution_url"),
-      position: Map.get(image, :position) || Map.get(image, "position") || 0
+      url: CachedImage.effective_url(cached_image),
+      alt: "Photo",
+      thumbnail_url: nil,
+      width: nil,
+      height: nil,
+      provider: cached_image.original_source,
+      attribution: get_attribution(cached_image),
+      attribution_url: nil,
+      position: cached_image.position
     }
   end
+
+  # Extract attribution from metadata if available
+  defp get_attribution(%CachedImage{metadata: metadata}) when is_map(metadata) do
+    metadata["attribution"] || metadata[:attribution]
+  end
+
+  defp get_attribution(_), do: nil
 end
