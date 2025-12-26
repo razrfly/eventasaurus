@@ -233,6 +233,97 @@ defmodule EventasaurusApp.Services.R2Client do
     end
   end
 
+  @doc """
+  Download an image from a URL and upload it to R2.
+
+  Handles the full process of fetching an external image and storing it
+  in R2, including content-type detection and error handling.
+
+  ## Parameters
+
+  - `source_url` - URL to download from
+  - `r2_path` - Destination path in R2 bucket
+  - `opts` - Options:
+    - `:timeout` - HTTP timeout in ms (default: 30_000)
+    - `:max_size` - Maximum file size in bytes (default: 10MB)
+    - `:user_agent` - Custom User-Agent header
+
+  ## Returns
+
+  - `{:ok, %{cdn_url: url, content_type: type, file_size: size}}` - Success
+  - `{:error, reason}` - Download or upload failed
+  """
+  def download_and_upload(source_url, r2_path, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 30_000)
+    max_size = Keyword.get(opts, :max_size, 10 * 1024 * 1024)
+
+    user_agent =
+      Keyword.get(
+        opts,
+        :user_agent,
+        "Mozilla/5.0 (compatible; Eventasaurus/1.0; +https://wombie.com)"
+      )
+
+    headers = [
+      {"User-Agent", user_agent},
+      {"Accept", "image/*"}
+    ]
+
+    http_opts = [
+      timeout: timeout,
+      recv_timeout: timeout,
+      follow_redirect: true,
+      max_redirect: 5
+    ]
+
+    with {:ok, %{status_code: status, body: body, headers: resp_headers}}
+         when status in 200..299 <- HTTPoison.get(source_url, headers, http_opts),
+         :ok <- validate_size(body, max_size),
+         content_type <- extract_content_type(resp_headers, r2_path),
+         {:ok, cdn_url} <- upload(r2_path, body, content_type: content_type) do
+      {:ok,
+       %{
+         cdn_url: cdn_url,
+         content_type: content_type,
+         file_size: byte_size(body),
+         r2_key: r2_path
+       }}
+    else
+      {:ok, %{status_code: status}} ->
+        {:error, {:http_error, status}}
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        {:error, {:download_failed, reason}}
+
+      {:error, :file_too_large} ->
+        {:error, :file_too_large}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp validate_size(body, max_size) do
+    if byte_size(body) <= max_size do
+      :ok
+    else
+      {:error, :file_too_large}
+    end
+  end
+
+  defp extract_content_type(headers, fallback_path) do
+    # Try to get content-type from headers first
+    case List.keyfind(headers, "content-type", 0) || List.keyfind(headers, "Content-Type", 0) do
+      {_, content_type} ->
+        # Extract just the mime type (remove charset etc)
+        content_type |> String.split(";") |> List.first() |> String.trim()
+
+      nil ->
+        # Fallback to guessing from path
+        guess_content_type(fallback_path)
+    end
+  end
+
   # Private functions
 
   @doc """

@@ -126,7 +126,10 @@ defmodule EventasaurusApp.Relationships.UserRelationship do
     |> foreign_key_constraint(:reviewed_by_id)
     |> foreign_key_constraint(:originated_from_event_id)
     |> unique_constraint([:user_id, :related_user_id])
-    |> check_constraint(:user_id, name: :no_self_relationship, message: "cannot create relationship with yourself")
+    |> check_constraint(:user_id,
+      name: :no_self_relationship,
+      message: "cannot create relationship with yourself"
+    )
   end
 
   @doc """
@@ -158,7 +161,10 @@ defmodule EventasaurusApp.Relationships.UserRelationship do
     |> foreign_key_constraint(:related_user_id)
     |> foreign_key_constraint(:originated_from_event_id)
     |> unique_constraint([:user_id, :related_user_id])
-    |> check_constraint(:user_id, name: :no_self_relationship, message: "cannot create relationship with yourself")
+    |> check_constraint(:user_id,
+      name: :no_self_relationship,
+      message: "cannot create relationship with yourself"
+    )
   end
 
   @doc """

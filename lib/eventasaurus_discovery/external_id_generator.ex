@@ -116,7 +116,8 @@ defmodule EventasaurusDiscovery.ExternalIdGenerator do
   end
 
   def generate(:single, _source, params) do
-    {:error, "Single event requires :type and :source_id params, got: #{inspect(Map.keys(params))}"}
+    {:error,
+     "Single event requires :type and :source_id params, got: #{inspect(Map.keys(params))}"}
   end
 
   def generate(:multi_date, source, %{type: type, source_id: source_id, date: date})
@@ -175,7 +176,8 @@ defmodule EventasaurusDiscovery.ExternalIdGenerator do
   end
 
   def generate(event_type, _source, _params) do
-    {:error, "Unknown event type: #{inspect(event_type)}. Valid types: :single, :multi_date, :showtime, :recurring"}
+    {:error,
+     "Unknown event type: #{inspect(event_type)}. Valid types: :single, :multi_date, :showtime, :recurring"}
   end
 
   @doc """
@@ -230,7 +232,8 @@ defmodule EventasaurusDiscovery.ExternalIdGenerator do
     if Regex.match?(@single_pattern, external_id) do
       # Also ensure it doesn't have a date (would make it multi_date)
       if Regex.match?(@date_suffix_pattern, external_id) do
-        {:error, "Single event external_id must NOT contain date suffix. Use :multi_date type for dated events."}
+        {:error,
+         "Single event external_id must NOT contain date suffix. Use :multi_date type for dated events."}
       else
         :ok
       end
@@ -243,7 +246,8 @@ defmodule EventasaurusDiscovery.ExternalIdGenerator do
     if Regex.match?(@multi_date_pattern, external_id) do
       :ok
     else
-      {:error, "Multi-date event external_id must match pattern: {source}_{type}_{source_id}_{YYYY-MM-DD}"}
+      {:error,
+       "Multi-date event external_id must match pattern: {source}_{type}_{source_id}_{YYYY-MM-DD}"}
     end
   end
 

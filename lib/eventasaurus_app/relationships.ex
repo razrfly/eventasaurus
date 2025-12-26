@@ -442,7 +442,12 @@ defmodule EventasaurusApp.Relationships do
   """
   @spec create_from_shared_event(User.t(), User.t(), Event.t(), String.t()) ::
           {:ok, {UserRelationship.t(), UserRelationship.t()}} | {:error, Ecto.Changeset.t()}
-  def create_from_shared_event(%User{id: user_id}, %User{id: other_user_id}, %Event{id: event_id}, context)
+  def create_from_shared_event(
+        %User{id: user_id},
+        %User{id: other_user_id},
+        %Event{id: event_id},
+        context
+      )
       when user_id != other_user_id do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
@@ -572,7 +577,10 @@ defmodule EventasaurusApp.Relationships do
 
   # Helper to create or update a relationship
   defp create_or_update_relationship(attrs) do
-    case Repo.get_by(UserRelationship, user_id: attrs.user_id, related_user_id: attrs.related_user_id) do
+    case Repo.get_by(UserRelationship,
+           user_id: attrs.user_id,
+           related_user_id: attrs.related_user_id
+         ) do
       nil ->
         %UserRelationship{}
         |> UserRelationship.changeset(attrs)
@@ -621,7 +629,11 @@ defmodule EventasaurusApp.Relationships do
   """
   @spec relationship_strength(User.t(), User.t()) :: float() | nil
   def relationship_strength(%User{id: user_id}, %User{id: related_user_id}) do
-    case Repo.get_by(UserRelationship, user_id: user_id, related_user_id: related_user_id, status: :active) do
+    case Repo.get_by(UserRelationship,
+           user_id: user_id,
+           related_user_id: related_user_id,
+           status: :active
+         ) do
       nil ->
         nil
 
@@ -784,7 +796,8 @@ defmodule EventasaurusApp.Relationships do
   - `{:ok, relationship}` - The updated relationship
   - `{:error, :no_relationship}` - If no relationship exists (creates a blocked one)
   """
-  @spec block_user(User.t(), User.t()) :: {:ok, UserRelationship.t()} | {:error, Ecto.Changeset.t()}
+  @spec block_user(User.t(), User.t()) ::
+          {:ok, UserRelationship.t()} | {:error, Ecto.Changeset.t()}
   def block_user(%User{id: blocker_id}, %User{id: blocked_id}) when blocker_id != blocked_id do
     case Repo.get_by(UserRelationship, user_id: blocker_id, related_user_id: blocked_id) do
       nil ->
@@ -824,7 +837,11 @@ defmodule EventasaurusApp.Relationships do
   """
   @spec unblock_user(User.t(), User.t()) :: {:ok, UserRelationship.t()} | {:error, :not_found}
   def unblock_user(%User{id: unblocker_id}, %User{id: unblocked_id}) do
-    case Repo.get_by(UserRelationship, user_id: unblocker_id, related_user_id: unblocked_id, status: :blocked) do
+    case Repo.get_by(UserRelationship,
+           user_id: unblocker_id,
+           related_user_id: unblocked_id,
+           status: :blocked
+         ) do
       nil ->
         {:error, :not_found}
 
@@ -1230,8 +1247,11 @@ defmodule EventasaurusApp.Relationships do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     # Only update if relationships already exist
-    rel1 = Repo.get_by(UserRelationship, user_id: user1_id, related_user_id: user2_id, status: :active)
-    rel2 = Repo.get_by(UserRelationship, user_id: user2_id, related_user_id: user1_id, status: :active)
+    rel1 =
+      Repo.get_by(UserRelationship, user_id: user1_id, related_user_id: user2_id, status: :active)
+
+    rel2 =
+      Repo.get_by(UserRelationship, user_id: user2_id, related_user_id: user1_id, status: :active)
 
     case {rel1, rel2} do
       {nil, nil} ->

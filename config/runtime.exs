@@ -106,7 +106,10 @@ config :eventasaurus, Oban,
     geocoding: 1,
     # Analytics queue for PostHog popularity sync
     # Kept at 1 - single daily job that batches updates
-    analytics: 1
+    analytics: 1,
+    # Image cache queue for downloading external images to R2
+    # Moderate concurrency to avoid hammering external servers
+    image_cache: 3
   ],
   plugins: [
     # Keep completed jobs for 12 hours for debugging

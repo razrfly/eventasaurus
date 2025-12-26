@@ -107,7 +107,10 @@ defmodule EventasaurusWeb.Admin.CategoryDashboardLive do
 
   @spec confidence_badge_class(float() | nil) :: String.t()
   def confidence_badge_class(confidence) when confidence >= 0.8, do: "bg-green-100 text-green-800"
-  def confidence_badge_class(confidence) when confidence >= 0.5, do: "bg-yellow-100 text-yellow-800"
+
+  def confidence_badge_class(confidence) when confidence >= 0.5,
+    do: "bg-yellow-100 text-yellow-800"
+
   def confidence_badge_class(_), do: "bg-gray-100 text-gray-600"
 
   @spec confidence_label(float() | nil) :: String.t()

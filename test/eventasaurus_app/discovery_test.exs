@@ -367,6 +367,7 @@ defmodule EventasaurusApp.DiscoveryTest do
       event = insert(:event, start_at: DateTime.add(DateTime.utc_now(), -7, :day))
 
       insert(:event_participant, user: user1, event: event, status: :accepted)
+
       insert(:event_participant,
         user: user2,
         event: event,

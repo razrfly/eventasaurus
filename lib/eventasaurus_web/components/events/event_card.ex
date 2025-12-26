@@ -152,7 +152,9 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
 
   defp title_size(:desktop), do: "text-2xl font-semibold text-gray-900 mb-1"
   defp title_size(:mobile), do: "text-lg font-semibold text-gray-900 mb-2"
-  defp title_size(:compact), do: "text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors"
+
+  defp title_size(:compact),
+    do: "text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors"
 
   defp image_container_class(:desktop),
     do: "w-full sm:w-64 h-44 sm:h-44 rounded-lg overflow-hidden flex-shrink-0"

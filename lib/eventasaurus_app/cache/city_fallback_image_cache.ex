@@ -42,7 +42,19 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
   @refresh_interval :timer.hours(1)
 
   # Standard categories that get pre-computed
-  @categories ["general", "music", "film", "nightlife", "theater", "art", "sports", "food", "festival", "comedy", "trivia"]
+  @categories [
+    "general",
+    "music",
+    "film",
+    "nightlife",
+    "theater",
+    "art",
+    "sports",
+    "food",
+    "festival",
+    "comedy",
+    "trivia"
+  ]
 
   # Client API
 
@@ -214,7 +226,9 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
     |> Enum.sum()
   end
 
-  defp get_gallery_categories(%{"categories" => categories}) when is_map(categories), do: categories
+  defp get_gallery_categories(%{"categories" => categories}) when is_map(categories),
+    do: categories
+
   defp get_gallery_categories(_), do: %{}
 
   defp get_category_images(categories, category) do

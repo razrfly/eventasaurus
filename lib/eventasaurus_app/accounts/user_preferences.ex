@@ -72,7 +72,12 @@ defmodule EventasaurusApp.Accounts.UserPreferences do
       :discoverable_in_suggestions
     ])
     |> validate_required([:user_id])
-    |> validate_inclusion(:connection_permission, [:closed, :event_attendees, :extended_network, :open])
+    |> validate_inclusion(:connection_permission, [
+      :closed,
+      :event_attendees,
+      :extended_network,
+      :open
+    ])
     |> unique_constraint(:user_id)
     |> foreign_key_constraint(:user_id)
   end
@@ -93,7 +98,12 @@ defmodule EventasaurusApp.Accounts.UserPreferences do
       :show_on_attendee_lists,
       :discoverable_in_suggestions
     ])
-    |> validate_inclusion(:connection_permission, [:closed, :event_attendees, :extended_network, :open])
+    |> validate_inclusion(:connection_permission, [
+      :closed,
+      :event_attendees,
+      :extended_network,
+      :open
+    ])
   end
 
   @doc """
