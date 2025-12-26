@@ -94,37 +94,39 @@ defmodule EventasaurusDiscovery.VenueImages.OrchestratorTest do
       assert Orchestrator.needs_enrichment?(venue) == true
     end
 
-    test "returns true when venue has no images" do
+    test "returns true when venue has no images and last check is stale (>7 days)" do
+      stale_date = DateTime.utc_now() |> DateTime.add(-8, :day) |> DateTime.to_iso8601()
+
       venue = %Venue{
         id: 1,
         venue_images: [],
         image_enrichment_metadata: %{
-          "last_enriched_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+          "last_checked_at" => stale_date
         }
       }
 
       assert Orchestrator.needs_enrichment?(venue) == true
     end
 
-    test "returns true when images are stale (>30 days)" do
-      stale_date = DateTime.utc_now() |> DateTime.add(-31, :day) |> DateTime.to_iso8601()
+    test "returns true when images are stale (>90 days for venues with images)" do
+      stale_date = DateTime.utc_now() |> DateTime.add(-91, :day) |> DateTime.to_iso8601()
 
       venue = %Venue{
         id: 1,
         venue_images: [%{"url" => "http://example.com/photo.jpg"}],
-        image_enrichment_metadata: %{"last_enriched_at" => stale_date}
+        image_enrichment_metadata: %{"last_checked_at" => stale_date}
       }
 
       assert Orchestrator.needs_enrichment?(venue) == true
     end
 
-    test "returns false when images are fresh (<30 days)" do
+    test "returns false when images are fresh (<90 days for venues with images)" do
       fresh_date = DateTime.utc_now() |> DateTime.add(-15, :day) |> DateTime.to_iso8601()
 
       venue = %Venue{
         id: 1,
         venue_images: [%{"url" => "http://example.com/photo.jpg"}],
-        image_enrichment_metadata: %{"last_enriched_at" => fresh_date}
+        image_enrichment_metadata: %{"last_checked_at" => fresh_date}
       }
 
       assert Orchestrator.needs_enrichment?(venue) == false
@@ -136,7 +138,7 @@ defmodule EventasaurusDiscovery.VenueImages.OrchestratorTest do
       venue = %Venue{
         id: 1,
         venue_images: [%{"url" => "http://example.com/photo.jpg"}],
-        image_enrichment_metadata: %{"last_enriched_at" => fresh_date}
+        image_enrichment_metadata: %{"last_checked_at" => fresh_date}
       }
 
       assert Orchestrator.needs_enrichment?(venue, true) == true
@@ -147,7 +149,7 @@ defmodule EventasaurusDiscovery.VenueImages.OrchestratorTest do
       venue_atom = %Venue{
         id: 1,
         venue_images: [],
-        image_enrichment_metadata: %{last_enriched_at: nil}
+        image_enrichment_metadata: %{last_checked_at: nil}
       }
 
       assert Orchestrator.needs_enrichment?(venue_atom) == true
@@ -156,7 +158,7 @@ defmodule EventasaurusDiscovery.VenueImages.OrchestratorTest do
       venue_string = %Venue{
         id: 1,
         venue_images: [],
-        image_enrichment_metadata: %{"last_enriched_at" => nil}
+        image_enrichment_metadata: %{"last_checked_at" => nil}
       }
 
       assert Orchestrator.needs_enrichment?(venue_string) == true
