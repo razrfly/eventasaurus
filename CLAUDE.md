@@ -89,6 +89,7 @@ mix ecto.setup              # Create and migrate database
 mix ecto.reset              # Drop, create, and migrate database
 mix ecto.migrate            # Run migrations
 mix ecto.rollback           # Rollback last migration
+mix ecto.gen.migration name # Generate a new migration
 
 # Code quality
 mix format                  # Format all Elixir files
