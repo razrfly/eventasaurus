@@ -89,11 +89,19 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
   defp schedule_venue_jobs(venues, source_id, city_name, force) do
     # Add external_ids to venues for freshness checking
     # Must match the external_id generation in VenueDetailJob
+    #
+    # IMPORTANT: Mark as recurring so EventFreshnessChecker bypasses freshness check
+    # All PubQuiz venues are weekly recurring trivia events
     venues_with_ids =
       Enum.map(venues, fn venue ->
         # Generate external_id matching VenueDetailJob pattern
         external_id = generate_external_id(venue.url)
-        Map.put(venue, :external_id, external_id)
+
+        venue
+        |> Map.put(:external_id, external_id)
+        # Mark as recurring - triggers bypass in EventFreshnessChecker
+        # The actual recurrence_rule is added later by Transformer
+        |> Map.put(:recurrence_rule, %{"frequency" => "weekly"})
       end)
 
     # Filter out fresh venues (seen within threshold)

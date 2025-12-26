@@ -135,11 +135,19 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
     # IMPORTANT: Must match Transformer's external_id generation:
     # 1. Clean RSS title using VenueExtractor.clean_title/1
     # 2. Slugify cleaned title using TextHelper.slugify/1
+    #
+    # IMPORTANT: Mark as recurring so EventFreshnessChecker bypasses freshness check
+    # All Question One venues are weekly recurring trivia events
     venues_with_ids =
       Enum.map(venues, fn venue ->
         cleaned_title = VenueExtractor.clean_title(venue.title)
         venue_slug = TextHelper.slugify(cleaned_title)
-        Map.put(venue, :external_id, "question_one_#{venue_slug}")
+
+        venue
+        |> Map.put(:external_id, "question_one_#{venue_slug}")
+        # Mark as recurring - triggers bypass in EventFreshnessChecker
+        # The actual recurrence_rule is added later by Transformer
+        |> Map.put(:recurrence_rule, %{"frequency" => "weekly"})
       end)
 
     # Filter out venues that were recently updated (default: 7 days)
