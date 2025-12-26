@@ -8,15 +8,15 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   ## Usage
 
       # Queue an image for caching
-      ImageCacheService.cache_image("venue", 123, "primary", "https://example.com/image.jpg")
+      ImageCacheService.cache_image("venue", 123, 0, "https://example.com/image.jpg")
 
       # Get the effective URL (cached if available, original as fallback)
-      ImageCacheService.get_url("venue", 123, "primary")
+      ImageCacheService.get_url("venue", 123, 0)
 
       # Bulk cache images for an entity
       ImageCacheService.cache_entity_images("venue", 123, [
-        %{role: "primary", url: "https://example.com/main.jpg"},
-        %{role: "gallery_0", url: "https://example.com/gallery1.jpg"}
+        %{position: 0, url: "https://example.com/main.jpg"},
+        %{position: 1, url: "https://example.com/gallery1.jpg"}
       ])
 
   ## Entity Types
@@ -47,32 +47,32 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
   - `entity_type` - Type of entity (e.g., "venue", "performer")
   - `entity_id` - ID of the entity
-  - `image_role` - Role of the image (e.g., "primary", "poster")
+  - `position` - Position/order of the image (0-based index)
   - `original_url` - URL of the original image to cache
   - `opts` - Options:
-    - `:source` - Original source identifier (e.g., "imagekit", "questionone")
-    - `:metadata` - Additional metadata map
+    - `:source` - Original source identifier (e.g., "imagekit", "google_places")
+    - `:metadata` - Raw source data map (preserved as-is, not for parsing)
     - `:priority` - Oban job priority (default: 2)
 
   ## Returns
 
   - `{:ok, cached_image}` - Record created and job queued
-  - `{:exists, cached_image}` - Image already exists for this entity/role
+  - `{:exists, cached_image}` - Image already exists for this entity/position
   - `{:error, changeset}` - Failed to create record
   """
-  def cache_image(entity_type, entity_id, image_role, original_url, opts \\ []) do
+  def cache_image(entity_type, entity_id, position, original_url, opts \\ []) do
     source = Keyword.get(opts, :source)
     metadata = Keyword.get(opts, :metadata, %{})
     priority = Keyword.get(opts, :priority, 2)
 
-    # Check if we already have a record for this entity/role
-    case get_cached_image(entity_type, entity_id, image_role) do
+    # Check if we already have a record for this entity/position
+    case get_cached_image(entity_type, entity_id, position) do
       nil ->
         # Create new record
         attrs = %{
           entity_type: to_string(entity_type),
           entity_id: entity_id,
-          image_role: to_string(image_role),
+          position: position,
           original_url: original_url,
           original_source: source,
           metadata: metadata,
@@ -133,7 +133,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
   - `entity_type` - Type of entity
   - `entity_id` - ID of the entity
-  - `image_role` - Role of the image
+  - `position` - Position of the image (0-based)
 
   ## Returns
 
@@ -141,8 +141,8 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   - `{:fallback, original_url}` - Not cached, returns original URL
   - `{:not_found, nil}` - No record exists
   """
-  def get_url(entity_type, entity_id, image_role) do
-    case get_cached_image(entity_type, entity_id, image_role) do
+  def get_url(entity_type, entity_id, position) do
+    case get_cached_image(entity_type, entity_id, position) do
       %CachedImage{status: "cached", cdn_url: cdn_url} when is_binary(cdn_url) ->
         {:cached, cdn_url}
 
@@ -159,8 +159,8 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
   Returns CDN URL if cached, original URL if not, nil if not found.
   """
-  def get_url!(entity_type, entity_id, image_role) do
-    case get_url(entity_type, entity_id, image_role) do
+  def get_url!(entity_type, entity_id, position) do
+    case get_url(entity_type, entity_id, position) do
       {:cached, url} -> url
       {:fallback, url} -> url
       {:not_found, _} -> nil
@@ -174,7 +174,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
   - `entity_type` - Type of entity
   - `entity_id` - ID of the entity
-  - `images` - List of maps with `:role` and `:url` keys
+  - `images` - List of maps with `:position` and `:url` keys
   - `opts` - Options passed to cache_image/5
 
   ## Returns
@@ -184,11 +184,11 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   def cache_entity_images(entity_type, entity_id, images, opts \\ []) when is_list(images) do
     results =
       Enum.map(images, fn image ->
-        role = image[:role] || image["role"]
+        position = image[:position] || image["position"]
         url = image[:url] || image["url"]
 
-        if role && url do
-          cache_image(entity_type, entity_id, role, url, opts)
+        if is_integer(position) && url do
+          cache_image(entity_type, entity_id, position, url, opts)
         else
           {:error, :invalid_image_spec}
         end
@@ -206,10 +206,10 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   end
 
   @doc """
-  Get a specific cached image record.
+  Get a specific cached image record by position.
   """
-  def get_cached_image(entity_type, entity_id, image_role) do
-    CachedImage.for_entity(to_string(entity_type), entity_id, to_string(image_role))
+  def get_cached_image(entity_type, entity_id, position) when is_integer(position) do
+    CachedImage.for_entity(to_string(entity_type), entity_id, position)
     |> Repo.one()
   end
 
@@ -246,63 +246,6 @@ defmodule EventasaurusApp.Images.ImageCacheService do
       %{cached_image_id: image.id}
       |> ImageCacheJob.new(priority: 3)
       |> Oban.insert()
-    end)
-
-    {:ok, length(images)}
-  end
-
-  @doc """
-  Clean up expired cached images.
-
-  Deletes expired records and optionally removes R2 objects.
-
-  ## Parameters
-
-  - `opts` - Options:
-    - `:limit` - Maximum number to process (default: 100)
-    - `:delete_r2` - Whether to delete R2 objects (default: true)
-
-  ## Returns
-
-  - `{:ok, count}` - Number of images cleaned up
-  """
-  @spec cleanup_expired(keyword()) :: {:ok, non_neg_integer()}
-  def cleanup_expired(opts \\ []) do
-    limit = Keyword.get(opts, :limit, 100)
-    delete_r2 = Keyword.get(opts, :delete_r2, true)
-
-    alias EventasaurusApp.Services.R2Client
-
-    images =
-      CachedImage.expired()
-      |> limit(^limit)
-      |> Repo.all()
-
-    Enum.each(images, fn image ->
-      # Delete from R2 if requested and we have a key
-      # Only delete the database record if R2 deletion succeeds (or we're not deleting from R2)
-      r2_deleted =
-        if delete_r2 && image.r2_key do
-          case R2Client.delete(image.r2_key) do
-            :ok ->
-              true
-
-            {:error, reason} ->
-              Logger.warning(
-                "Failed to delete R2 object #{image.r2_key}: #{inspect(reason)} - keeping database record"
-              )
-
-              false
-          end
-        else
-          true
-        end
-
-      # Only delete the database record if R2 deletion was successful
-      # This prevents orphaned R2 objects
-      if r2_deleted do
-        Repo.delete(image)
-      end
     end)
 
     {:ok, length(images)}

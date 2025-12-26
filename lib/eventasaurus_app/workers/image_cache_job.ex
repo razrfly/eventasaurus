@@ -12,7 +12,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
   1. Receives `cached_image_id` as job argument
   2. Loads the CachedImage record
   3. Downloads from `original_url`
-  4. Uploads to R2 with path: `images/{entity_type}/{entity_id}/{role}.{ext}`
+  4. Uploads to R2 with path: `images/{entity_type}/{entity_identifier}/{position}.{ext}`
   5. Updates record with `cdn_url`, `status`, metadata
 
   ## Error Handling
@@ -91,7 +91,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
 
   defp handle_success(cached_image, result) do
     Logger.info(
-      "✅ ImageCacheJob: Successfully cached #{cached_image.entity_type}/#{cached_image.entity_id}/#{cached_image.image_role}"
+      "✅ ImageCacheJob: Successfully cached #{cached_image.entity_type}/#{cached_image.entity_id}/#{cached_image.position}"
     )
 
     attrs = %{
@@ -100,7 +100,6 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
       cdn_url: result.cdn_url,
       content_type: result.content_type,
       file_size: result.file_size,
-      cached_at: DateTime.utc_now(),
       last_error: nil
     }
 
@@ -115,7 +114,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
     error_message = format_error(reason)
 
     Logger.warning(
-      "❌ ImageCacheJob: Failed to cache #{cached_image.entity_type}/#{cached_image.entity_id}/#{cached_image.image_role}: #{error_message}"
+      "❌ ImageCacheJob: Failed to cache #{cached_image.entity_type}/#{cached_image.entity_id}/#{cached_image.position}: #{error_message}"
     )
 
     attrs = %{
@@ -146,7 +145,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
     # Falls back to entity_id for other entity types or if slug not available
     entity_identifier = get_entity_identifier(cached_image)
 
-    "images/#{cached_image.entity_type}/#{entity_identifier}/#{cached_image.image_role}#{extension}"
+    "images/#{cached_image.entity_type}/#{entity_identifier}/#{cached_image.position}#{extension}"
   end
 
   defp get_entity_identifier(%CachedImage{entity_type: "venue", metadata: metadata} = cached_image)

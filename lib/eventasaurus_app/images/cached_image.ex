@@ -15,22 +15,28 @@ defmodule EventasaurusApp.Images.CachedImage do
   ## Entity Types
 
   Supported entity types:
-  - `venue` - Venue images (primary, gallery)
+  - `venue` - Venue images
   - `public_event_source` - Event source images
   - `performer` - Performer/artist images
   - `event` - Event cover images
   - `movie` - Movie posters and backdrops
   - `group` - Group avatars and covers
 
-  ## Image Roles
+  ## Ordering
 
-  Common roles:
-  - `primary` - Main/hero image
-  - `poster` - Movie poster
-  - `backdrop` - Movie backdrop
-  - `avatar` - Profile image
-  - `cover` - Cover/banner image
-  - `gallery_0`, `gallery_1`, etc. - Gallery images
+  Images are ordered by `position` (0-based index). Position 0 is typically
+  used as the primary/hero image, but this is a display concern, not a
+  schema concern.
+
+  ## Metadata Field
+
+  **IMPORTANT**: The `metadata` field is a raw dump of whatever the original
+  source provided. This is NOT for application logic or parsing. It exists
+  solely to preserve original source data (Google Places attribution, quality
+  scores, provider URLs, etc.) so we don't lose information during migration.
+
+  If something from metadata becomes important for queries or display, promote
+  it to a proper column. Don't parse metadata in application code.
   """
 
   use Ecto.Schema
@@ -39,13 +45,12 @@ defmodule EventasaurusApp.Images.CachedImage do
 
   @valid_statuses ~w(pending downloading cached failed)
   @valid_entity_types ~w(venue public_event_source performer event movie group)
-  @valid_image_roles ~w(primary poster backdrop avatar cover hero gallery)
 
   schema "cached_images" do
     # Polymorphic association
     field(:entity_type, :string)
     field(:entity_id, :integer)
-    field(:image_role, :string)
+    field(:position, :integer, default: 0)
 
     # Source tracking
     field(:original_url, :string)
@@ -60,16 +65,15 @@ defmodule EventasaurusApp.Images.CachedImage do
     field(:retry_count, :integer, default: 0)
     field(:last_error, :string)
 
-    # Metadata
+    # File metadata
     field(:content_type, :string)
     field(:file_size, :integer)
     field(:width, :integer)
     field(:height, :integer)
-    field(:metadata, :map, default: %{})
 
-    # Cache timing
-    field(:cached_at, :utc_datetime_usec)
-    field(:expires_at, :utc_datetime_usec)
+    # Raw source data - DO NOT PARSE, just preserve
+    # See moduledoc for details
+    field(:metadata, :map, default: %{})
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -82,7 +86,7 @@ defmodule EventasaurusApp.Images.CachedImage do
     |> cast(attrs, [
       :entity_type,
       :entity_id,
-      :image_role,
+      :position,
       :original_url,
       :original_source,
       :r2_key,
@@ -94,15 +98,13 @@ defmodule EventasaurusApp.Images.CachedImage do
       :file_size,
       :width,
       :height,
-      :metadata,
-      :cached_at,
-      :expires_at
+      :metadata
     ])
-    |> validate_required([:entity_type, :entity_id, :image_role, :original_url])
+    |> validate_required([:entity_type, :entity_id, :position, :original_url])
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_entity_type()
-    |> validate_image_role()
-    |> unique_constraint([:entity_type, :entity_id, :image_role])
+    |> validate_number(:position, greater_than_or_equal_to: 0)
+    |> unique_constraint([:entity_type, :entity_id, :position])
   end
 
   @doc """
@@ -119,8 +121,7 @@ defmodule EventasaurusApp.Images.CachedImage do
       :content_type,
       :file_size,
       :width,
-      :height,
-      :cached_at
+      :height
     ])
     |> validate_inclusion(:status, @valid_statuses)
   end
@@ -136,40 +137,27 @@ defmodule EventasaurusApp.Images.CachedImage do
     end)
   end
 
-  defp validate_image_role(changeset) do
-    validate_change(changeset, :image_role, fn :image_role, role ->
-      # Allow known roles or gallery_N pattern
-      base_role = role |> String.split("_") |> List.first()
-
-      if base_role in @valid_image_roles do
-        []
-      else
-        [image_role: "must be a valid image role"]
-      end
-    end)
-  end
-
   # Query helpers
 
   @doc """
-  Query for finding a cached image by entity and role.
+  Query for finding a cached image by entity and position.
   """
-  def for_entity(entity_type, entity_id, image_role) do
+  def for_entity(entity_type, entity_id, position) do
     from(c in __MODULE__,
       where:
         c.entity_type == ^entity_type and
           c.entity_id == ^entity_id and
-          c.image_role == ^image_role
+          c.position == ^position
     )
   end
 
   @doc """
-  Query for finding all cached images for an entity.
+  Query for finding all cached images for an entity, ordered by position.
   """
   def for_entity(entity_type, entity_id) do
     from(c in __MODULE__,
       where: c.entity_type == ^entity_type and c.entity_id == ^entity_id,
-      order_by: [asc: c.image_role]
+      order_by: [asc: c.position]
     )
   end
 
@@ -205,17 +193,6 @@ defmodule EventasaurusApp.Images.CachedImage do
   """
   def cached do
     from(c in __MODULE__, where: c.status == "cached")
-  end
-
-  @doc """
-  Query for expired cached images.
-  """
-  def expired do
-    now = DateTime.utc_now()
-
-    from(c in __MODULE__,
-      where: c.status == "cached" and not is_nil(c.expires_at) and c.expires_at < ^now
-    )
   end
 
   # Status helpers
