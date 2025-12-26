@@ -69,7 +69,8 @@ defmodule Mix.Tasks.MigrateImagekit do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _remaining, _invalid} = OptionParser.parse(args, switches: @switches, aliases: @aliases)
+    {opts, _remaining, _invalid} =
+      OptionParser.parse(args, switches: @switches, aliases: @aliases)
 
     # Start the application
     Mix.Task.run("app.start")
@@ -171,7 +172,8 @@ defmodule Mix.Tasks.MigrateImagekit do
         IO.puts("Slug: #{venue.slug}")
         IO.puts("Images in JSONB: #{length(venue.venue_images || [])}")
 
-        {:ok, stats} = VenueImageMigrator.migrate_venue(venue, dry_run: dry_run, priority: priority)
+        {:ok, stats} =
+          VenueImageMigrator.migrate_venue(venue, dry_run: dry_run, priority: priority)
 
         IO.puts("\n✅ Migration #{if dry_run, do: "would queue", else: "queued"}:")
         IO.puts("   Queued: #{stats.queued}")
@@ -190,9 +192,7 @@ defmodule Mix.Tasks.MigrateImagekit do
     batch_size = opts[:batch_size] || 10
     priority = opts[:priority] || 2
 
-    IO.puts(
-      "\n🚀 Queueing venue migration#{if dry_run, do: " (DRY RUN)", else: ""}"
-    )
+    IO.puts("\n🚀 Queueing venue migration#{if dry_run, do: " (DRY RUN)", else: ""}")
     IO.puts("=" |> String.duplicate(50))
     IO.puts("\nOptions:")
     IO.puts("   Limit: #{limit} venues")
@@ -214,9 +214,7 @@ defmodule Mix.Tasks.MigrateImagekit do
     if dry_run do
       IO.puts("\n💡 This was a dry run. Run without --dry-run to actually queue jobs.")
     else
-      IO.puts(
-        "\n💡 Jobs are now queued. Monitor progress with: mix migrate_imagekit --status"
-      )
+      IO.puts("\n💡 Jobs are now queued. Monitor progress with: mix migrate_imagekit --status")
     end
 
     IO.puts("")

@@ -47,12 +47,26 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
   @permanent_failures [:file_too_large, {:http_error, 404}, {:http_error, 401}]
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"cached_image_id" => cached_image_id}}) do
-    Logger.info("📸 ImageCacheJob: Starting cache for cached_image_id=#{cached_image_id}")
+  def perform(%Oban.Job{args: args}) do
+    # Extract required field
+    cached_image_id = args["cached_image_id"]
+
+    # Extract observable context (provided for dashboard visibility)
+    entity_type = args["entity_type"]
+    entity_id = args["entity_id"]
+    position = args["position"]
+
+    # Log with context for observability
+    Logger.info(
+      "📸 ImageCacheJob: Starting cache for #{entity_type}/#{entity_id} position=#{position} (cached_image_id=#{cached_image_id})"
+    )
 
     case Repo.get(CachedImage, cached_image_id) do
       nil ->
-        Logger.error("CachedImage not found: #{cached_image_id}")
+        Logger.error(
+          "CachedImage not found: #{cached_image_id} (#{entity_type}/#{entity_id}/#{position})"
+        )
+
         {:error, :not_found}
 
       cached_image ->
@@ -148,7 +162,9 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
     "images/#{cached_image.entity_type}/#{entity_identifier}/#{cached_image.position}#{extension}"
   end
 
-  defp get_entity_identifier(%CachedImage{entity_type: "venue", metadata: metadata} = cached_image)
+  defp get_entity_identifier(
+         %CachedImage{entity_type: "venue", metadata: metadata} = cached_image
+       )
        when is_map(metadata) do
     # For venues, prefer slug for readable R2 paths
     case Map.get(metadata, "venue_slug") do

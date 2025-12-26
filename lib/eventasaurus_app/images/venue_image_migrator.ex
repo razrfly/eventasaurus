@@ -180,7 +180,10 @@ defmodule EventasaurusApp.Images.VenueImageMigrator do
     total_images_in_jsonb =
       from(v in Venue,
         select:
-          fragment("COALESCE(SUM(jsonb_array_length(COALESCE(?, '[]'::jsonb))), 0)", v.venue_images)
+          fragment(
+            "COALESCE(SUM(jsonb_array_length(COALESCE(?, '[]'::jsonb))), 0)",
+            v.venue_images
+          )
       )
       |> Repo.one()
       |> then(fn
@@ -226,8 +229,7 @@ defmodule EventasaurusApp.Images.VenueImageMigrator do
         downloading: Map.get(cached_image_stats, "downloading", 0),
         cached: Map.get(cached_image_stats, "cached", 0),
         failed: Map.get(cached_image_stats, "failed", 0),
-        total:
-          Enum.reduce(cached_image_stats, 0, fn {_status, count}, acc -> acc + count end)
+        total: Enum.reduce(cached_image_stats, 0, fn {_status, count}, acc -> acc + count end)
       },
       venues_with_cached_images: venues_with_cached_images,
       venues_fully_migrated: venues_fully_migrated,
