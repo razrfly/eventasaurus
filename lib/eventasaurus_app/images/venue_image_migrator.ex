@@ -35,12 +35,12 @@ defmodule EventasaurusApp.Images.VenueImageMigrator do
 
   Images are stored in R2 with the following path format:
 
-      images/venues/{venue-slug}/{role}.{ext}
+      images/venue/{venue-slug}/{position}.{ext}
 
   For example:
-  - `images/venues/cinema-city-krakow/primary.jpg`
-  - `images/venues/cinema-city-krakow/gallery_0.jpg`
-  - `images/venues/cinema-city-krakow/gallery_1.jpg`
+  - `images/venue/cinema-city-krakow/0.jpg`
+  - `images/venue/cinema-city-krakow/1.jpg`
+  - `images/venue/cinema-city-krakow/2.jpg`
   """
 
   require Logger
@@ -296,7 +296,7 @@ defmodule EventasaurusApp.Images.VenueImageMigrator do
 
   # Private functions
 
-  defp migrate_single_image(venue, image, index, opts) do
+  defp migrate_single_image(venue, image, position, opts) do
     dry_run = Keyword.get(opts, :dry_run, false)
     priority = Keyword.get(opts, :priority, 2)
 
@@ -307,36 +307,26 @@ defmodule EventasaurusApp.Images.VenueImageMigrator do
     if is_nil(url) or url == "" do
       {:error, :no_url}
     else
-      # Determine the image role based on index
-      role = determine_role(index)
-
       # Extract source/provider info
       source = Map.get(image, "provider", "imagekit")
 
       if dry_run do
-        {:dry_run, %{role: role, url: url, source: source}}
+        {:dry_run, %{position: position, url: url, source: source}}
       else
         # Use ImageCacheService to queue the image
-        case ImageCacheService.cache_image("venue", venue.id, role, url,
+        # Store the ENTIRE original image map as metadata - preserves all source data
+        case ImageCacheService.cache_image("venue", venue.id, position, url,
                source: source,
                priority: priority,
-               metadata: %{
-                 venue_slug: venue.slug,
-                 original_provider: Map.get(image, "provider"),
-                 imagekit_path: Map.get(image, "imagekit_path"),
-                 quality_score: Map.get(image, "quality_score")
-               }
+               metadata: image
              ) do
-          {:ok, _cached_image} -> {:queued, role}
-          {:exists, _cached_image} -> {:skipped, role}
+          {:ok, _cached_image} -> {:queued, position}
+          {:exists, _cached_image} -> {:skipped, position}
           {:error, reason} -> {:error, reason}
         end
       end
     end
   end
-
-  defp determine_role(0), do: "primary"
-  defp determine_role(index), do: "gallery_#{index - 1}"
 
   defp aggregate_results(results, venue_id, dry_run) do
     Enum.reduce(results, %{queued: 0, skipped: 0, errors: 0}, fn result, acc ->
