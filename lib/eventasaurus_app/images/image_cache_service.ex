@@ -81,8 +81,9 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
         case %CachedImage{} |> CachedImage.changeset(attrs) |> Repo.insert() do
           {:ok, cached_image} ->
-            # Enqueue the download job
-            %{cached_image_id: cached_image.id}
+            # Enqueue the download job with observable context
+            # Args include entity info for Oban dashboard visibility
+            build_job_args(cached_image, original_url, source)
             |> ImageCacheJob.new(priority: priority)
             |> Oban.insert()
 
@@ -110,7 +111,8 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
           case existing |> CachedImage.changeset(attrs) |> Repo.update() do
             {:ok, updated} ->
-              %{cached_image_id: updated.id}
+              # Enqueue with observable context
+              build_job_args(updated, original_url, source)
               |> ImageCacheJob.new(priority: priority)
               |> Oban.insert()
 
@@ -243,7 +245,8 @@ defmodule EventasaurusApp.Images.ImageCacheService do
       |> Repo.all()
 
     Enum.each(images, fn image ->
-      %{cached_image_id: image.id}
+      # Enqueue with observable context for retry visibility
+      build_job_args(image, image.original_url, image.original_source)
       |> ImageCacheJob.new(priority: 3)
       |> Oban.insert()
     end)
@@ -305,6 +308,37 @@ defmodule EventasaurusApp.Images.ImageCacheService do
          |> Repo.one() do
       nil -> {:not_found, nil}
       cached -> {:ok, cached}
+    end
+  end
+
+  # Private helpers
+
+  # Build job args with observable context for Oban dashboard visibility.
+  # Follows source-implementation-guide.md Section 13: Job Args Standards
+  # All important identifiers at top level, flat structure.
+  defp build_job_args(%CachedImage{} = cached_image, original_url, source) do
+    %{
+      # Primary identifier
+      cached_image_id: cached_image.id,
+      # Entity context (visible in Oban dashboard)
+      entity_type: cached_image.entity_type,
+      entity_id: cached_image.entity_id,
+      position: cached_image.position,
+      # Source info for debugging
+      original_url: truncate_url(original_url),
+      provider: source
+    }
+  end
+
+  # Truncate long URLs to avoid bloating job args
+  # Keep domain + first part of path for identifiability
+  defp truncate_url(nil), do: nil
+
+  defp truncate_url(url) when is_binary(url) do
+    if String.length(url) > 100 do
+      String.slice(url, 0, 97) <> "..."
+    else
+      url
     end
   end
 end

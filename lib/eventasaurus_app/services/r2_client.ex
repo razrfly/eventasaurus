@@ -261,7 +261,13 @@ defmodule EventasaurusApp.Services.R2Client do
   - `{:not_configured, message}` - R2 credentials not configured
   """
   @spec download_and_upload(String.t(), String.t(), keyword()) ::
-          {:ok, %{cdn_url: String.t(), content_type: String.t(), file_size: non_neg_integer(), r2_key: String.t()}}
+          {:ok,
+           %{
+             cdn_url: String.t(),
+             content_type: String.t(),
+             file_size: non_neg_integer(),
+             r2_key: String.t()
+           }}
           | {:error, term()}
   def download_and_upload(source_url, r2_path, opts \\ []) do
     timeout = Keyword.get(opts, :timeout, 30_000)

@@ -579,23 +579,24 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
         # Build complete metadata to preserve ALL source data
         # This is stored in cached_images.metadata without transformation
-        image_metadata = %{
-          # Original image data from provider
-          "provider" => provider,
-          "provider_url" => provider_url,
-          "width" => img[:width] || img["width"],
-          "height" => img[:height] || img["height"],
-          "quality_score" => img[:quality_score] || img["quality_score"],
-          "attribution" => img[:attribution] || img["attribution"],
-          "html_attributions" => img[:html_attributions] || img["html_attributions"],
-          "photo_reference" => img[:photo_reference] || img["photo_reference"],
-          # Enrichment context
-          "fetched_at" => img[:fetched_at] || img["fetched_at"] || DateTime.to_iso8601(now),
-          "venue_id" => venue.id,
-          "venue_slug" => venue.slug
-        }
-        |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-        |> Map.new()
+        image_metadata =
+          %{
+            # Original image data from provider
+            "provider" => provider,
+            "provider_url" => provider_url,
+            "width" => img[:width] || img["width"],
+            "height" => img[:height] || img["height"],
+            "quality_score" => img[:quality_score] || img["quality_score"],
+            "attribution" => img[:attribution] || img["attribution"],
+            "html_attributions" => img[:html_attributions] || img["html_attributions"],
+            "photo_reference" => img[:photo_reference] || img["photo_reference"],
+            # Enrichment context
+            "fetched_at" => img[:fetched_at] || img["fetched_at"] || DateTime.to_iso8601(now),
+            "venue_id" => venue.id,
+            "venue_slug" => venue.slug
+          }
+          |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+          |> Map.new()
 
         # Queue the image for R2 caching
         # ImageCacheService handles deduplication and creates Oban job
@@ -672,13 +673,18 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     # Success if we cached any images (queued or existing)
     last_attempt_result =
       cond do
-        images_cached > 0 -> "success"
-        errors > 0 -> "error"
-        true -> determine_attempt_result(
-          limited_images,
-          metadata.providers_failed || metadata[:providers_failed] || [],
-          metadata.error_details || metadata[:error_details] || %{}
-        )
+        images_cached > 0 ->
+          "success"
+
+        errors > 0 ->
+          "error"
+
+        true ->
+          determine_attempt_result(
+            limited_images,
+            metadata.providers_failed || metadata[:providers_failed] || [],
+            metadata.error_details || metadata[:error_details] || %{}
+          )
       end
 
     # Store detailed information about this attempt for cooldown logic
@@ -850,7 +856,6 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   end
 
   defp is_zero_results?(_), do: false
-
 
   defp parse_datetime(nil), do: {:error, nil}
 
