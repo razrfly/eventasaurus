@@ -30,8 +30,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   import Ecto.Query
   require Logger
 
-  # 30 seconds
-  @refresh_interval 30_000
+  # 5 minutes (reduced from 30s to lower query load on job_execution_summaries)
+  @refresh_interval 300_000
 
   @impl true
   def mount(%{"source_slug" => source_slug}, _session, socket) do
