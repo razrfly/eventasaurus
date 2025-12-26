@@ -832,9 +832,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # Try cache first (pre-computed CDN-transformed URLs)
     if city_id do
       # Try primary category, then "general" fallback
+      # Cache miss - fall back to direct computation (shouldn't happen after cache warm-up)
       CityFallbackImageCache.get_fallback_image(city_id, category, venue_id) ||
         CityFallbackImageCache.get_fallback_image(city_id, "general", venue_id) ||
-        # Cache miss - fall back to direct computation (shouldn't happen after cache warm-up)
         get_city_fallback_image_uncached(city_id, category, venue_id)
     else
       nil
@@ -1270,13 +1270,22 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       |> filter_past_events_for_count(true)
       |> filter_by_categories(filters_map[:categories])
       |> filter_by_price_range(filters_map[:min_price], filters_map[:max_price])
-      |> filter_by_location(filters_map[:city_id], filters_map[:country_id], filters_map[:venue_ids])
+      |> filter_by_location(
+        filters_map[:city_id],
+        filters_map[:country_id],
+        filters_map[:venue_ids]
+      )
       |> apply_search(filters_map[:search])
 
     # Apply geographic filter if provided
     query =
       if filters_map[:center_lat] && filters_map[:center_lng] && filters_map[:radius_km] do
-        filter_by_radius(query, filters_map[:center_lat], filters_map[:center_lng], filters_map[:radius_km])
+        filter_by_radius(
+          query,
+          filters_map[:center_lat],
+          filters_map[:center_lng],
+          filters_map[:radius_km]
+        )
       else
         query
       end
@@ -1287,7 +1296,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
     # Also include next_month which may extend beyond next_30_days
     {_, next_month_end} = ranges.next_month
-    actual_outer_end = if DateTime.compare(next_month_end, outer_end) == :gt, do: next_month_end, else: outer_end
+
+    actual_outer_end =
+      if DateTime.compare(next_month_end, outer_end) == :gt, do: next_month_end, else: outer_end
 
     # Filter to the outer date range to reduce scan
     query =

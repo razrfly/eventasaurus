@@ -237,7 +237,8 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     end
   end
 
-  @spec connect_with_context(Phoenix.LiveView.Socket.t(), String.t()) :: Phoenix.LiveView.Socket.t()
+  @spec connect_with_context(Phoenix.LiveView.Socket.t(), String.t()) ::
+          Phoenix.LiveView.Socket.t()
   defp connect_with_context(socket, context) do
     socket = assign(socket, loading: true, error: nil)
 
@@ -434,7 +435,13 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     "Waiting for response"
   end
 
-  defp connection_tooltip(true, _can_connect, %{context: context, shared_event_count: count}, true, _error)
+  defp connection_tooltip(
+         true,
+         _can_connect,
+         %{context: context, shared_event_count: count},
+         true,
+         _error
+       )
        when not is_nil(context) do
     if count > 1 do
       "#{context} (#{count} events together)"
@@ -443,8 +450,11 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     end
   end
 
-  defp connection_tooltip(true, _can_connect, _relationship, _show_context, _error), do: "You're keeping up with them"
-  defp connection_tooltip(false, _can_connect, _relationship, _show_context, _error), do: "Keep up with their events"
+  defp connection_tooltip(true, _can_connect, _relationship, _show_context, _error),
+    do: "You're keeping up with them"
+
+  defp connection_tooltip(false, _can_connect, _relationship, _show_context, _error),
+    do: "Keep up with their events"
 
   @spec button_classes(boolean(), atom() | nil, String.t(), String.t(), String.t()) :: String.t()
   defp button_classes(is_connected, can_connect, size, variant, custom_class) do

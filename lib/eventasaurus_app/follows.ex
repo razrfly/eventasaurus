@@ -532,7 +532,12 @@ defmodule EventasaurusApp.Follows do
   # =============================================================================
 
   @doc false
-  @spec emit_telemetry(:follow | :unfollow, :performer | :venue, User.t(), Performer.t() | Venue.t()) :: :ok
+  @spec emit_telemetry(
+          :follow | :unfollow,
+          :performer | :venue,
+          User.t(),
+          Performer.t() | Venue.t()
+        ) :: :ok
   defp emit_telemetry(action, entity_type, %User{id: user_id}, entity) do
     entity_id =
       case entity do

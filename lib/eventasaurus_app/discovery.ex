@@ -173,7 +173,8 @@ defmodule EventasaurusApp.Discovery do
     skip_privacy = Keyword.get(opts, :skip_privacy_filter, false)
 
     # Get base suggestions from Relationships
-    suggestions = Relationships.suggested_connections(user, limit: limit * 2, min_mutual: min_mutual)
+    suggestions =
+      Relationships.suggested_connections(user, limit: limit * 2, min_mutual: min_mutual)
 
     # Apply privacy filter
     filtered =
@@ -274,7 +275,8 @@ defmodule EventasaurusApp.Discovery do
     user2_event_ids = user_event_ids(user2_id)
 
     # Find intersection
-    shared_event_ids = MapSet.intersection(MapSet.new(user1_event_ids), MapSet.new(user2_event_ids))
+    shared_event_ids =
+      MapSet.intersection(MapSet.new(user1_event_ids), MapSet.new(user2_event_ids))
 
     if MapSet.size(shared_event_ids) == 0 do
       []

@@ -98,7 +98,7 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
     include_inactive = Keyword.get(opts, :include_inactive, false)
 
     query =
-      from c in Category,
+      from(c in Category,
         left_join: pec in PublicEventCategory,
         on: pec.category_id == c.id,
         left_join: pe in PublicEvent,
@@ -113,12 +113,13 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
         },
         order_by: [desc: count(pe.id)],
         limit: ^limit
+      )
 
     query =
       if include_inactive do
         query
       else
-        from [c, ...] in query, where: c.is_active == true
+        from([c, ...] in query, where: c.is_active == true)
       end
 
     Repo.all(query)
@@ -171,7 +172,16 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
       from(c in Category,
         left_join: pec in PublicEventCategory,
         on: pec.category_id == c.id,
-        group_by: [c.id, c.name, c.slug, c.parent_id, c.is_active, c.display_order, c.icon, c.color],
+        group_by: [
+          c.id,
+          c.name,
+          c.slug,
+          c.parent_id,
+          c.is_active,
+          c.display_order,
+          c.icon,
+          c.color
+        ],
         select: %{
           id: c.id,
           name: c.name,
@@ -564,7 +574,11 @@ defmodule EventasaurusDiscovery.CategoryAnalytics do
   @doc """
   Returns confidence score distribution for ML/automated categorizations.
   """
-  @spec confidence_distribution() :: %{high: non_neg_integer(), medium: non_neg_integer(), low: non_neg_integer()}
+  @spec confidence_distribution() :: %{
+          high: non_neg_integer(),
+          medium: non_neg_integer(),
+          low: non_neg_integer()
+        }
   def confidence_distribution do
     from(pec in PublicEventCategory,
       where: not is_nil(pec.confidence),

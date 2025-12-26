@@ -349,7 +349,14 @@ defmodule EventasaurusWeb.PeopleLive.Index do
     shared_event = get_first_shared_event(assigns.person)
     # For :you_know tab, don't show the button (already connected)
     show_button = assigns.tab != :you_know
-    assigns = assign(assigns, user: user, context: context, shared_event: shared_event, show_button: show_button)
+
+    assigns =
+      assign(assigns,
+        user: user,
+        context: context,
+        shared_event: shared_event,
+        show_button: show_button
+      )
 
     ~H"""
     <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">

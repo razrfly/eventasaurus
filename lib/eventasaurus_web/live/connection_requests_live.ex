@@ -26,10 +26,11 @@ defmodule EventasaurusWeb.ConnectionRequestsLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
-    tab = case params["tab"] do
-      "sent" -> :sent
-      _ -> :received
-    end
+    tab =
+      case params["tab"] do
+        "sent" -> :sent
+        _ -> :received
+      end
 
     {:noreply,
      socket
@@ -95,7 +96,9 @@ defmodule EventasaurusWeb.ConnectionRequestsLive do
   end
 
   defp load_requests(socket, user) do
-    received_requests = Relationships.list_pending_requests_for_user(user, preload: [:user, :originated_from_event])
+    received_requests =
+      Relationships.list_pending_requests_for_user(user, preload: [:user, :originated_from_event])
+
     sent_requests = Relationships.list_sent_requests(user)
     received_count = length(received_requests)
     sent_count = length(sent_requests)
@@ -110,11 +113,13 @@ defmodule EventasaurusWeb.ConnectionRequestsLive do
   defp generate_approval_context(request) do
     if request.originated_from_event do
       event = request.originated_from_event
-      date = case event.start_at do
-        %DateTime{} = dt -> Calendar.strftime(dt, "%B %Y")
-        %NaiveDateTime{} = ndt -> Calendar.strftime(ndt, "%B %Y")
-        _ -> ""
-      end
+
+      date =
+        case event.start_at do
+          %DateTime{} = dt -> Calendar.strftime(dt, "%B %Y")
+          %NaiveDateTime{} = ndt -> Calendar.strftime(ndt, "%B %Y")
+          _ -> ""
+        end
 
       if date != "" do
         "Met at #{event.title} - #{date}"
@@ -348,7 +353,7 @@ defmodule EventasaurusWeb.ConnectionRequestsLive do
         hours = div(diff, 3600)
         if hours == 1, do: "1 hour ago", else: "#{hours} hours ago"
 
-      diff < 604800 ->
+      diff < 604_800 ->
         days = div(diff, 86400)
         if days == 1, do: "1 day ago", else: "#{days} days ago"
 

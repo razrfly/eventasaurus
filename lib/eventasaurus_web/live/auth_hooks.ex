@@ -116,29 +116,30 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
   # Private function to assign auth_user from session
   defp assign_auth_user(socket, session) do
-    result = cond do
-      # Test mode: directly load user from session (set by test helpers)
-      test_mode?() && session["current_user_id"] ->
-        user_id = session["current_user_id"]
-        EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id)
+    result =
+      cond do
+        # Test mode: directly load user from session (set by test helpers)
+        test_mode?() && session["current_user_id"] ->
+          user_id = session["current_user_id"]
+          EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id)
 
-      # Dev mode login: directly load the user from database
-      dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] ->
-        user_id = session["current_user_id"]
+        # Dev mode login: directly load the user from database
+        dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] ->
+          user_id = session["current_user_id"]
 
-        case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id) do
-          nil ->
-            Logger.warning("DEV MODE: User #{user_id} not found in database - stale session")
-            nil
+          case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id) do
+            nil ->
+              Logger.warning("DEV MODE: User #{user_id} not found in database - stale session")
+              nil
 
-          user ->
-            user
-        end
+            user ->
+              user
+          end
 
-      # Production: Get user from Clerk session
-      true ->
-        get_clerk_auth_user(session)
-    end
+        # Production: Get user from Clerk session
+        true ->
+          get_clerk_auth_user(session)
+      end
 
     Phoenix.Component.assign(socket, :auth_user, result)
   end

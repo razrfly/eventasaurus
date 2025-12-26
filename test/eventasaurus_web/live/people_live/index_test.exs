@@ -100,7 +100,8 @@ defmodule EventasaurusWeb.PeopleLive.IndexTest do
       insert(:event_user, event: event, user: user, role: "organizer")
 
       # Create the relationship
-      {:ok, _} = Relationships.create_from_shared_event(user, other_user, event, "Met at Jazz Night")
+      {:ok, _} =
+        Relationships.create_from_shared_event(user, other_user, event, "Met at Jazz Night")
 
       {:ok, _view, html} = live(conn, "/people/discover")
 
@@ -151,7 +152,8 @@ defmodule EventasaurusWeb.PeopleLive.IndexTest do
       {:ok, _} = Relationships.create_from_shared_event(user, mutual_friend, event1, "context")
 
       # Mutual friend is connected to friend_of_friend
-      {:ok, _} = Relationships.create_from_shared_event(mutual_friend, friend_of_friend, event2, "context")
+      {:ok, _} =
+        Relationships.create_from_shared_event(mutual_friend, friend_of_friend, event2, "context")
 
       {:ok, view, _html} = live(conn, "/people/discover")
 

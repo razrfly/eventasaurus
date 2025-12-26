@@ -14,7 +14,8 @@ defmodule Eventasaurus.SitemapTest do
       city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
 
       # Create venue in the city (is_public: true for sitemap visibility)
-      venue = insert(:venue, slug: "cinema-city", city_id: city.id, city_ref: city, is_public: true)
+      venue =
+        insert(:venue, slug: "cinema-city", city_id: city.id, city_ref: city, is_public: true)
 
       # Create movie
       movie = insert(:movie, slug: "dune-part-two", updated_at: ~N[2024-12-15 10:00:00])
@@ -60,7 +61,12 @@ defmodule Eventasaurus.SitemapTest do
 
       # Create venue in disabled city (is_public: true for consistency)
       venue =
-        insert(:venue, slug: "inactive-venue", city_id: disabled_city.id, city_ref: disabled_city, is_public: true)
+        insert(:venue,
+          slug: "inactive-venue",
+          city_id: disabled_city.id,
+          city_ref: disabled_city,
+          is_public: true
+        )
 
       # Create movie and screening
       movie = insert(:movie, slug: "test-movie")
@@ -91,7 +97,8 @@ defmodule Eventasaurus.SitemapTest do
       city2 = insert(:city, slug: "warsaw", discovery_enabled: true, country: country)
 
       # Create venue in second city (is_public: true for sitemap visibility)
-      venue2 = insert(:venue, slug: "cinema-warsaw", city_id: city2.id, city_ref: city2, is_public: true)
+      venue2 =
+        insert(:venue, slug: "cinema-warsaw", city_id: city2.id, city_ref: city2, is_public: true)
 
       # Create movie
       movie = insert(:movie, slug: "multi-city-movie")
@@ -198,7 +205,9 @@ defmodule Eventasaurus.SitemapTest do
     test "includes all URL types in stream" do
       country = insert(:country, code: "PL", slug: "poland")
       city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
-      venue = insert(:venue, slug: "test-venue", city_id: city.id, city_ref: city, is_public: true)
+
+      venue =
+        insert(:venue, slug: "test-venue", city_id: city.id, city_ref: city, is_public: true)
 
       # Create an activity
       activity =

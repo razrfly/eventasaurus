@@ -79,9 +79,11 @@ defmodule EventasaurusWeb.Admin.CategoryInsightsLive do
   # Helper functions for template
 
   def format_number(nil), do: "0"
+
   def format_number(num) when is_integer(num) and num >= 1000 do
     "#{Float.round(num / 1000, 1)}K"
   end
+
   def format_number(num) when is_integer(num), do: Integer.to_string(num)
   def format_number(num) when is_float(num), do: Float.round(num, 1) |> to_string()
 
@@ -142,5 +144,6 @@ defmodule EventasaurusWeb.Admin.CategoryInsightsLive do
     height = count / max_val * 100
     "#{max(height, 2)}%"
   end
+
   def bar_height(_, _), do: "2%"
 end

@@ -36,7 +36,12 @@ defmodule EventasaurusWeb.SettingsLive do
   defp build_preferences_form(user, preferences) do
     # Get or create actual preferences struct for changeset
     # Convert preferences struct to map for cast/3 compatibility
-    attrs = Map.take(preferences, [:connection_permission, :show_on_attendee_lists, :discoverable_in_suggestions])
+    attrs =
+      Map.take(preferences, [
+        :connection_permission,
+        :show_on_attendee_lists,
+        :discoverable_in_suggestions
+      ])
 
     case Accounts.get_preferences(user) do
       nil ->
@@ -114,7 +119,10 @@ defmodule EventasaurusWeb.SettingsLive do
         {:noreply,
          socket
          |> assign(:preferences, Map.from_struct(updated_prefs))
-         |> assign(:preferences_form, build_preferences_form(user, Map.from_struct(updated_prefs)))
+         |> assign(
+           :preferences_form,
+           build_preferences_form(user, Map.from_struct(updated_prefs))
+         )
          |> put_flash(:info, "Privacy settings updated successfully.")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
