@@ -1,12 +1,17 @@
 defmodule EventasaurusWeb.Plugs.CacheControlPlug do
   @moduledoc """
-  Sets cache control headers based on authentication state.
+  Sets cache control headers based on authentication state and route cacheability.
 
   ## Caching Strategy
 
-  - **Anonymous users** (no `__session` cookie): CDN caches for 12 hours
+  - **Cacheable routes with anonymous users** (`:cacheable_request` assign set):
+    - Session is skipped, no Set-Cookie header sent
     - `Cache-Control: public, s-maxage=43200, max-age=0, must-revalidate`
-    - CDN serves cached content, browser always revalidates with CDN
+    - CDN can cache the response (no Set-Cookie to trigger bypass)
+
+  - **Other anonymous users** (no `__session` cookie): CDN caching headers set
+    - `Cache-Control: public, s-maxage=43200, max-age=0, must-revalidate`
+    - Note: May still have Set-Cookie which causes Cloudflare to bypass
 
   - **Authenticated users** (has `__session` cookie): No caching
     - `Cache-Control: private, no-store, no-cache, must-revalidate`
@@ -38,6 +43,7 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   ## References
 
+  - GitHub Issue: https://github.com/razrfly/eventasaurus/issues/2940
   - GitHub Issue: https://github.com/razrfly/eventasaurus/issues/2652
   - GitHub Issue: https://github.com/razrfly/eventasaurus/issues/2651
   - HTTP Caching: https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching
@@ -55,10 +61,19 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   @impl Plug
   def call(conn, _opts) do
-    if has_session_cookie?(conn) do
-      set_no_cache_headers(conn)
-    else
-      set_cacheable_headers(conn)
+    cond do
+      # Authenticated user - no caching
+      has_session_cookie?(conn) ->
+        set_no_cache_headers(conn)
+
+      # Cacheable route with anonymous user - aggressive caching
+      # This is set by ConditionalSessionPlug for allowlisted routes
+      conn.assigns[:cacheable_request] ->
+        set_cacheable_headers(conn)
+
+      # Default anonymous - still set cache headers (may be bypassed by Set-Cookie)
+      true ->
+        set_cacheable_headers(conn)
     end
   end
 

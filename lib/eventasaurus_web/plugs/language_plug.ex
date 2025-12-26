@@ -24,8 +24,27 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
     language = determine_language(conn)
 
     conn
-    |> put_session(:language, language)
+    |> maybe_put_session_language(language)
     |> assign(:language, language)
+  end
+
+  # Only write to session if:
+  # 1. Session is available (not skipped for caching)
+  # 2. Language has changed from what's in session
+  defp maybe_put_session_language(conn, language) do
+    cond do
+      # Skip session write if session is being skipped for caching
+      conn.assigns[:skip_session] ->
+        conn
+
+      # Only write if language changed
+      get_session(conn, :language) != language ->
+        put_session(conn, :language, language)
+
+      # No change needed
+      true ->
+        conn
+    end
   end
 
   defp determine_language(conn) do
