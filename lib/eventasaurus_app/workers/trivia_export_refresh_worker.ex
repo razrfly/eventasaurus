@@ -68,15 +68,18 @@ defmodule EventasaurusApp.Workers.TriviaExportRefreshWorker do
 
     case result do
       {:ok, _} ->
-        # Get row count after refresh
-        {:ok, %{rows: [[count]]}} =
-          Repo.query("SELECT COUNT(*) FROM trivia_events_export")
+        # Get row count after refresh (defensive - don't fail job if count query fails)
+        row_count =
+          case Repo.query("SELECT COUNT(*) FROM trivia_events_export") do
+            {:ok, %{rows: [[count]]}} -> count
+            _ -> nil
+          end
 
         Logger.info(
-          "[TriviaExportRefreshWorker] Refresh completed in #{duration_ms}ms. Row count: #{count}"
+          "[TriviaExportRefreshWorker] Refresh completed in #{duration_ms}ms. Row count: #{row_count || "unknown"}"
         )
 
-        {:ok, %{duration_ms: duration_ms, row_count: count}}
+        {:ok, %{duration_ms: duration_ms, row_count: row_count}}
 
       {:error, reason} ->
         Logger.error(
