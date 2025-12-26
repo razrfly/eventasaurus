@@ -5,8 +5,10 @@ defmodule EventasaurusApp.Repo.Migrations.ConvertTriviaEventsExportToMaterialize
   @disable_migration_lock true
 
   def up do
-    # Step 1: Drop the existing regular VIEW
+    # Step 1: Drop the existing VIEW or MATERIALIZED VIEW (handles partial migration state)
+    # Must drop VIEW first since it will fail if we try DROP MATERIALIZED VIEW on a regular view
     execute "DROP VIEW IF EXISTS trivia_events_export"
+    execute "DROP MATERIALIZED VIEW IF EXISTS trivia_events_export"
 
     # Step 2: Create MATERIALIZED VIEW with the same query
     # This pre-computes and stores the results physically
@@ -123,11 +125,12 @@ defmodule EventasaurusApp.Repo.Migrations.ConvertTriviaEventsExportToMaterialize
 
     # Step 4: Create GiST spatial index for PostGIS geospatial queries
     # This is the KEY performance fix - enables st_dwithin to use an index
+    # Note: Use CAST() instead of :: syntax for PlanetScale PostgreSQL compatibility
     execute """
     CREATE INDEX CONCURRENTLY trivia_events_export_geog_idx
     ON trivia_events_export
     USING gist (
-      st_setsrid(st_makepoint(venue_longitude, venue_latitude), 4326)::geography
+      CAST(st_setsrid(st_makepoint(venue_longitude, venue_latitude), 4326) AS geography)
     )
     WHERE venue_latitude IS NOT NULL AND venue_longitude IS NOT NULL
     """
