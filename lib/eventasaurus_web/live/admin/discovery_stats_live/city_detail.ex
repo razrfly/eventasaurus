@@ -29,8 +29,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   import Ecto.Query
   require Logger
 
-  # 30 seconds
-  @refresh_interval 30_000
+  # 5 minutes (reduced from 30s to lower query load on job_execution_summaries)
+  @refresh_interval 300_000
 
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
@@ -837,7 +837,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
 
         <!-- Auto-refresh indicator -->
         <div class="mt-4 text-center text-xs text-gray-500">
-          Auto-refreshing every 30 seconds
+          Auto-refreshing every 5 minutes
         </div>
       <% end %>
     </div>
