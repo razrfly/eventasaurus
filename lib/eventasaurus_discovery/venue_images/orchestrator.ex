@@ -35,6 +35,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   import Ecto.Query
 
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Images.ImageCacheService
   alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
   alias EventasaurusDiscovery.VenueImages.RateLimiter
 
@@ -517,16 +518,10 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   end
 
   defp update_venue_with_images(venue, images, metadata) do
-    alias EventasaurusApp.Venues.Venue
-
     # Calculate next enrichment due date (30 days from now)
     # 30 days = 30 * 86400 seconds
     now = DateTime.utc_now()
     next_enrichment = DateTime.add(now, 30 * 86_400, :second) |> DateTime.to_iso8601()
-
-    # Get ImageKit upload config
-    imagekit_config = Application.get_env(:eventasaurus, :imagekit, [])
-    upload_enabled = Keyword.get(imagekit_config, :upload_enabled, true)
 
     # Get max images to process per provider (for dev environment optimization)
     # nil means no limit (production default)
@@ -534,7 +529,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       Application.get_env(:eventasaurus, :venue_images, [])
       |> Keyword.get(:max_images_per_provider)
 
-    # Get max images per venue (controls ImageKit storage costs)
+    # Get max images per venue (controls R2 storage usage)
     max_images_per_venue =
       Application.get_env(:eventasaurus, :venue_images, [])
       |> Keyword.get(:max_images_per_venue, 25)
@@ -572,108 +567,84 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       )
     end
 
-    # Convert new images to proper structure with string keys (JSONB requirement)
-    # AND upload to ImageKit for permanent storage (if enabled)
-    new_structured_images =
+    # Cache images to R2 via ImageCacheService
+    # This queues async jobs to download from provider and upload to R2
+    # The cached_images table tracks status and provides fallback to original URL
+    cache_results =
       limited_images
       |> Enum.with_index()
-      |> Enum.map(fn {img, index} ->
+      |> Enum.map(fn {img, position} ->
         provider_url = img.url || img["url"]
         provider = img.provider || img["provider"]
 
-        # Add delay between uploads to respect Google rate limits
-        # Skip delay for first image
-        if index > 0 do
-          delay_ms = calculate_upload_delay(provider, index)
-          Logger.debug("⏱️  Rate limit delay: #{delay_ms}ms before image #{index + 1}")
-          Process.sleep(delay_ms)
-        end
-
-        # Upload to ImageKit (only if enabled)
-        upload_result =
-          if upload_enabled do
-            upload_to_imagekit(venue, provider_url, provider)
-          else
-            # Skip upload in development to save API credits
-            Logger.debug("[DEV] ImageKit upload disabled - skipping upload for #{provider}")
-            {:skip, :upload_disabled}
-          end
-
-        base_image = %{
+        # Build complete metadata to preserve ALL source data
+        # This is stored in cached_images.metadata without transformation
+        image_metadata = %{
+          # Original image data from provider
           "provider" => provider,
+          "provider_url" => provider_url,
           "width" => img[:width] || img["width"],
           "height" => img[:height] || img["height"],
           "quality_score" => img[:quality_score] || img["quality_score"],
           "attribution" => img[:attribution] || img["attribution"],
-          "fetched_at" => img[:fetched_at] || img["fetched_at"] || DateTime.to_iso8601(now)
+          "html_attributions" => img[:html_attributions] || img["html_attributions"],
+          "photo_reference" => img[:photo_reference] || img["photo_reference"],
+          # Enrichment context
+          "fetched_at" => img[:fetched_at] || img["fetched_at"] || DateTime.to_iso8601(now),
+          "venue_id" => venue.id,
+          "venue_slug" => venue.slug
         }
-
-        case upload_result do
-          {:ok, imagekit_url, imagekit_path} ->
-            Map.merge(base_image, %{
-              "url" => imagekit_url,
-              "provider_url" => provider_url,
-              "imagekit_path" => imagekit_path,
-              "upload_status" => "uploaded"
-            })
-
-          {:skip, :upload_disabled} ->
-            # Upload disabled (development mode) - record image details but don't upload
-            Map.merge(base_image, %{
-              "url" => provider_url,
-              "provider_url" => provider_url,
-              "upload_status" => "skipped_dev"
-            })
-
-          {:error, reason} ->
-            # Classify error for better observability
-            error_type = classify_error(reason)
-
-            # Extract HTTP status code if available
-            status_code =
-              case reason do
-                {:download_failed, {:http_status, code}} -> code
-                {:http_error, code, _body} -> code
-                _ -> nil
-              end
-
-            # Build detailed error information for metadata
-            error_detail = %{
-              "error" => inspect(reason),
-              "error_type" => Atom.to_string(error_type),
-              "status_code" => status_code,
-              "timestamp" => DateTime.to_iso8601(now)
-            }
-
-            # Enhanced logging with error classification
-            # Safely truncate URL with nil guard
-            truncated_url =
-              if provider_url, do: String.slice(provider_url, 0..80), else: "(nil)"
-
-            Logger.warning("""
-            ⚠️  Image upload failed for venue #{venue.id}:
-               Provider: #{provider}
-               Error Type: #{error_type}
-               #{if status_code, do: "Status Code: #{status_code}\n", else: ""}   URL: #{truncated_url}...
-               Reason: #{inspect(reason)}
-            """)
-
-            Map.merge(base_image, %{
-              "url" => provider_url,
-              "provider_url" => provider_url,
-              "upload_status" => "failed",
-              "error_details" => error_detail
-            })
-        end
         |> Enum.reject(fn {_k, v} -> is_nil(v) end)
         |> Map.new()
+
+        # Queue the image for R2 caching
+        # ImageCacheService handles deduplication and creates Oban job
+        case ImageCacheService.cache_image("venue", venue.id, position, provider_url,
+               source: provider,
+               priority: 1,
+               metadata: image_metadata
+             ) do
+          {:ok, cached_image} ->
+            Logger.debug(
+              "📸 Queued image #{position} for venue #{venue.id} (cached_image_id: #{cached_image.id})"
+            )
+
+            {:ok, position, cached_image}
+
+          {:exists, cached_image} ->
+            Logger.debug(
+              "⏭️  Image #{position} for venue #{venue.id} already exists (cached_image_id: #{cached_image.id})"
+            )
+
+            {:exists, position, cached_image}
+
+          {:error, changeset} ->
+            Logger.warning(
+              "⚠️  Failed to queue image #{position} for venue #{venue.id}: #{inspect(changeset.errors)}"
+            )
+
+            {:error, position, changeset}
+        end
       end)
 
-    # Merge with existing images (deduplicate by URL, keep highest quality)
-    existing_images = venue.venue_images || []
-    merged_images = merge_and_deduplicate_images(existing_images, new_structured_images)
+    # Count results for logging and metadata
+    {queued, existing, errors} =
+      Enum.reduce(cache_results, {0, 0, 0}, fn result, {q, e, err} ->
+        case result do
+          {:ok, _, _} -> {q + 1, e, err}
+          {:exists, _, _} -> {q, e + 1, err}
+          {:error, _, _} -> {q, e, err + 1}
+        end
+      end)
+
+    images_cached = queued + existing
+
+    Logger.info(
+      "📸 R2 caching: #{queued} queued, #{existing} existing, #{errors} errors for venue #{venue.id}"
+    )
 
     # Build enrichment metadata with history
+    # NOTE: We no longer update venue_images JSONB - images are now in cached_images table
     existing_metadata = venue.image_enrichment_metadata || %{}
     existing_history = existing_metadata["enrichment_history"] || []
 
@@ -683,30 +654,32 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       |> Kernel.++(metadata.providers_succeeded || metadata[:providers_succeeded] || [])
       |> Enum.uniq()
 
-    # Calculate new images added (not just fetched)
-    images_before = length(existing_images)
-    images_after = length(merged_images)
-    net_new_images = max(images_after - images_before, 0)
-
     # Create history entry for this enrichment
     history_entry = %{
       "enriched_at" => DateTime.to_iso8601(now),
       "providers" => metadata.providers_succeeded || metadata[:providers_succeeded] || [],
       "images_fetched" => length(images),
-      "images_added" => net_new_images,
-      "cost_usd" => metadata.total_cost || metadata[:total_cost] || 0.0
+      "images_cached" => images_cached,
+      "images_queued" => queued,
+      "images_existing" => existing,
+      "cache_errors" => errors,
+      "cost_usd" => metadata.total_cost || metadata[:total_cost] || 0.0,
+      # New field: indicates images are in cached_images table, not venue_images JSONB
+      "storage_system" => "r2"
     }
 
-    # Determine last attempt result
-    # Only set "no_images" when providers explicitly returned ZERO_RESULTS
-    # Set "error" for API errors (INVALID_REQUEST, auth failures, rate limits, etc.)
-    # Set "success" when images were successfully fetched
+    # Determine last attempt result based on cache results
+    # Success if we cached any images (queued or existing)
     last_attempt_result =
-      determine_attempt_result(
-        new_structured_images,
-        metadata.providers_failed || metadata[:providers_failed] || [],
-        metadata.error_details || metadata[:error_details] || %{}
-      )
+      cond do
+        images_cached > 0 -> "success"
+        errors > 0 -> "error"
+        true -> determine_attempt_result(
+          limited_images,
+          metadata.providers_failed || metadata[:providers_failed] || [],
+          metadata.error_details || metadata[:error_details] || %{}
+        )
+      end
 
     # Store detailed information about this attempt for cooldown logic
     last_attempt_details =
@@ -731,14 +704,16 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
     enrichment_metadata = %{
       # Schema versioning for future-proof migrations
-      "schema_version" => "1.0",
+      "schema_version" => "2.0",
       "scoring_version" => "1.0",
+      # Indicates images are now stored in cached_images table via R2
+      "storage_system" => "r2",
       # Single timestamp: when was this venue last checked for images?
       "last_checked_at" => DateTime.to_iso8601(now),
       "completeness_score" => completeness_score,
       "next_enrichment_due" => next_enrichment,
       "providers_used" => all_providers_used,
-      "total_images_fetched" => length(merged_images),
+      "total_images_cached" => images_cached,
       "cost_breakdown" => metadata.cost_breakdown || metadata[:cost_breakdown] || %{},
       # Keep last 10
       "enrichment_history" => [history_entry | existing_history] |> Enum.take(10),
@@ -752,8 +727,12 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       "last_check_details" => last_attempt_details
     }
 
-    # Use the specialized changeset function from Venue schema
-    changeset = Venue.update_venue_images(venue, merged_images, enrichment_metadata)
+    # Update ONLY the enrichment metadata, NOT venue_images JSONB
+    # Images are now stored in the cached_images table
+    changeset =
+      venue
+      |> Ecto.Changeset.change()
+      |> Ecto.Changeset.put_change(:image_enrichment_metadata, enrichment_metadata)
 
     case Repo.update(changeset) do
       {:ok, updated_venue} ->
@@ -761,7 +740,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
           length(metadata.providers_succeeded || metadata[:providers_succeeded] || [])
 
         Logger.info(
-          "✅ Stored #{length(merged_images)} images for venue #{venue.id} (+#{net_new_images} new) from #{providers_count} provider(s)"
+          "✅ Cached #{images_cached} images for venue #{venue.id} (#{queued} new, #{existing} existing) from #{providers_count} provider(s)"
         )
 
         {:ok, updated_venue}
@@ -770,127 +749,6 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
         Logger.error("❌ Failed to update venue #{venue.id}: #{inspect(changeset.errors)}")
         {:error, :update_failed}
     end
-  end
-
-  # Upload image to ImageKit with hash-based deterministic filename
-  defp upload_to_imagekit(venue, provider_url, provider) do
-    alias Eventasaurus.ImageKit.{Uploader, Filename}
-
-    # Generate deterministic filename using hash
-    filename = Filename.generate(provider_url, provider)
-
-    # Sanitize slug - handle nil or invalid slugs
-    safe_slug =
-      case venue.slug do
-        s when is_binary(s) and s != "" ->
-          # Basic sanitization: replace unsafe chars with hyphens
-          trimmed =
-            s
-            |> String.replace(~r/[^a-z0-9\-]/i, "-")
-            |> String.downcase()
-            |> String.trim("-")
-
-          if trimmed != "", do: trimmed, else: "venue-#{venue.id}"
-
-        _ ->
-          # Fallback to ID if slug is nil or invalid
-          "venue-#{venue.id}"
-      end
-
-    folder = Filename.build_folder_path(safe_slug)
-    imagekit_path = Filename.build_full_path(safe_slug, filename)
-
-    # Add tags for organization and searchability
-    tags = [
-      provider,
-      "venue:#{safe_slug}"
-    ]
-
-    # Upload to ImageKit
-    case Uploader.upload_from_url(provider_url,
-           folder: folder,
-           filename: filename,
-           tags: tags
-         ) do
-      {:ok, imagekit_url} ->
-        {:ok, imagekit_url, imagekit_path}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  # Merge existing and new images, deduplicating by URL and keeping highest quality
-  defp merge_and_deduplicate_images(existing_images, new_images) do
-    all_images = existing_images ++ new_images
-
-    # Group by provider_url (or fall back to url)
-    # This ensures failed and successful uploads of the same photo deduplicate correctly
-    # Failed: url = google_url, provider_url = google_url
-    # Success: url = imagekit_url, provider_url = google_url
-    # Both have same provider_url, so they deduplicate!
-    all_images
-    |> Enum.group_by(fn img -> img["provider_url"] || img["url"] end)
-    |> Enum.map(fn {_url, duplicate_images} ->
-      # Pick the image with highest quality score
-      # Prefer images with quality_score, fall back to newest (last in list)
-      duplicate_images
-      |> Enum.max_by(fn img ->
-        {
-          img["quality_score"] || 0.0,
-          img["fetched_at"] || "1970-01-01T00:00:00Z"
-        }
-      end)
-    end)
-    # Sort by quality score descending
-    |> Enum.sort_by(fn img -> -(img["quality_score"] || 0.0) end)
-  end
-
-  # Classify error type for observability and metrics
-  defp classify_error({:download_failed, {:http_status, status_code}}) do
-    case status_code do
-      429 -> :rate_limited
-      401 -> :auth_error
-      403 -> :forbidden
-      404 -> :not_found
-      500 -> :server_error
-      502 -> :bad_gateway
-      503 -> :service_unavailable
-      504 -> :gateway_timeout
-      _ -> :http_error
-    end
-  end
-
-  defp classify_error({:download_failed, %Mint.TransportError{reason: :timeout}}) do
-    :network_timeout
-  end
-
-  defp classify_error({:download_failed, %Mint.TransportError{}}) do
-    :network_error
-  end
-
-  defp classify_error({:download_failed, _}) do
-    :download_failed
-  end
-
-  defp classify_error(:authentication_failed) do
-    :auth_error
-  end
-
-  defp classify_error(:forbidden) do
-    :forbidden
-  end
-
-  defp classify_error(:file_too_large) do
-    :file_too_large
-  end
-
-  defp classify_error({:http_error, status_code, _body}) do
-    classify_error({:download_failed, {:http_status, status_code}})
-  end
-
-  defp classify_error(_) do
-    :unknown_error
   end
 
   # Determines the result of the last enrichment attempt
@@ -993,21 +851,6 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
   defp is_zero_results?(_), do: false
 
-  # Calculate delay between ImageKit uploads to respect provider rate limits
-  # Different providers have different rate limit thresholds
-  defp calculate_upload_delay(provider, _index) do
-    case provider do
-      # Google Places: 2 requests/second = 500ms delay
-      # Conservative to avoid rate limits when fetching photo URLs
-      "google_places" -> 500
-      # Foursquare: 5 requests/second = 200ms delay
-      "foursquare" -> 200
-      # Here: 5 requests/second = 200ms delay
-      "here" -> 200
-      # Default: 100ms for unknown providers
-      _ -> 100
-    end
-  end
 
   defp parse_datetime(nil), do: {:error, nil}
 
