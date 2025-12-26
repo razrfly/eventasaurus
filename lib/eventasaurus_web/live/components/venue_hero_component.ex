@@ -2,12 +2,15 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
   @moduledoc """
   Hero section component for venue/restaurant/activity display.
 
-  Features primary photo, title, rating, price level, and key metadata
-  from Google Places API data.
+  Features primary photo, title, rating, price level, and key metadata.
+  Uses cached_images table (R2 storage) as the source for venue photos.
   """
 
   use EventasaurusWeb, :live_component
   import EventasaurusWeb.CoreComponents
+
+  alias EventasaurusApp.Images.ImageCacheService
+  alias EventasaurusApp.Images.CachedImage
 
   @impl true
   def update(assigns, socket) do
@@ -277,22 +280,17 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
         _ -> []
       end
 
-    # Extract images with priority order:
-    # 1. venue_images (new provider-agnostic aggregation)
-    # 2. rich_data standardized format
-    # 3. old format (backward compatibility)
+    # Extract images from cached_images table (R2 storage)
+    # Falls back to rich_data for legacy compatibility
     venue = Map.get(socket.assigns, :venue)
 
     {primary_image, secondary_image} =
       cond do
-        # New venue_images JSONB field
-        venue && is_map(venue) && Map.has_key?(venue, :venue_images) ->
-          extract_hero_images_from_venue_images(venue.venue_images)
+        # Primary: Get from cached_images table
+        venue && is_map(venue) && Map.has_key?(venue, :id) ->
+          extract_hero_images_from_cached_images(venue.id)
 
-        venue && is_map(venue) && Map.has_key?(venue, "venue_images") ->
-          extract_hero_images_from_venue_images(venue["venue_images"])
-
-        # Standardized format
+        # Standardized format fallback
         match?(%{primary_image: %{url: _}}, rich_data) ->
           primary = %{"url" => rich_data.primary_image.url}
 
@@ -405,46 +403,41 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
     end
   end
 
-  # Extract primary and secondary images from venue_images JSONB field
-  defp extract_hero_images_from_venue_images(venue_images) when is_list(venue_images) do
-    # Take first two images by position
-    sorted_images =
-      venue_images
-      |> Enum.filter(&is_valid_venue_image?/1)
-      |> Enum.sort_by(&get_image_position/1)
+  # Extract primary and secondary images from cached_images table
+  defp extract_hero_images_from_cached_images(venue_id) when is_integer(venue_id) do
+    # Get first two cached images by position
+    cached_images =
+      ImageCacheService.get_entity_images("venue", venue_id)
       |> Enum.take(2)
 
-    case sorted_images do
+    case cached_images do
       [primary, secondary | _] ->
-        {normalize_hero_image(primary), normalize_hero_image(secondary)}
+        {normalize_cached_image_for_hero(primary), normalize_cached_image_for_hero(secondary)}
 
       [primary] ->
-        {normalize_hero_image(primary), nil}
+        {normalize_cached_image_for_hero(primary), nil}
 
       [] ->
         {nil, nil}
     end
   end
 
-  defp extract_hero_images_from_venue_images(_), do: {nil, nil}
+  defp extract_hero_images_from_cached_images(_), do: {nil, nil}
 
-  defp is_valid_venue_image?(image) when is_map(image) do
-    url = Map.get(image, :url) || Map.get(image, "url")
-    is_binary(url) && String.length(url) > 0
-  end
-
-  defp is_valid_venue_image?(_), do: false
-
-  defp get_image_position(image) do
-    Map.get(image, :position) || Map.get(image, "position") || 999
-  end
-
-  defp normalize_hero_image(image) when is_map(image) do
+  # Convert CachedImage struct to the map format expected by the hero component
+  defp normalize_cached_image_for_hero(%CachedImage{} = cached_image) do
     %{
-      "url" => Map.get(image, :url) || Map.get(image, "url"),
-      "provider" => Map.get(image, :provider) || Map.get(image, "provider"),
-      "attribution" => Map.get(image, :attribution) || Map.get(image, "attribution"),
-      "attribution_url" => Map.get(image, :attribution_url) || Map.get(image, "attribution_url")
+      "url" => CachedImage.effective_url(cached_image),
+      "provider" => cached_image.original_source,
+      "attribution" => get_attribution(cached_image),
+      "attribution_url" => nil
     }
   end
+
+  # Extract attribution from metadata if available
+  defp get_attribution(%CachedImage{metadata: metadata}) when is_map(metadata) do
+    metadata["attribution"] || metadata[:attribution]
+  end
+
+  defp get_attribution(_), do: nil
 end
