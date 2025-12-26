@@ -8,8 +8,8 @@ defmodule EventasaurusWeb.Admin.JobMonitorLive do
     socket = assign_defaults(socket)
 
     if connected?(socket) do
-      # Auto-refresh stats every 30 seconds
-      :timer.send_interval(30_000, self(), :refresh_stats)
+      # Auto-refresh stats every 5 minutes (reduced from 30s to lower query load)
+      :timer.send_interval(300_000, self(), :refresh_stats)
       {:ok, load_stats(socket)}
     else
       {:ok, socket}
