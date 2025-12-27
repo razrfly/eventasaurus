@@ -293,11 +293,11 @@ defmodule EventasaurusWeb.Router do
     plug EventasaurusWeb.Plugs.AggregationTypeRedirect
   end
 
-  # Cacheable browser pipeline for public pages that can be CDN-cached
-  # Uses ConditionalSessionPlug to skip session for anonymous users on cacheable routes
+  # Public content pipeline for CDN-cacheable pages
+  # Uses ConditionalSessionPlug to skip session for anonymous users
   # This prevents Set-Cookie headers which would cause Cloudflare to bypass cache
   # See: https://github.com/razrfly/eventasaurus/issues/2940
-  pipeline :cacheable_browser do
+  pipeline :public do
     plug :accepts, ["html"]
     # Check if this is a cacheable route with no auth cookie FIRST
     plug EventasaurusWeb.Plugs.ConditionalSessionPlug
@@ -352,8 +352,9 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
-  # City browser pipeline with city validation
-  pipeline :city_browser do
+  # Public city pipeline with city validation
+  # Same as :public but adds ValidateCity plug
+  pipeline :public_city do
     plug :accepts, ["html"]
     plug :fetch_session
     plug :fetch_live_flash
@@ -650,7 +651,7 @@ defmodule EventasaurusWeb.Router do
       # /register without event_id goes to invite-only page (registration is invite-only)
       get "/register", PageController, :redirect_to_invite_only
 
-      # Note: /performers/:slug and /venues/:slug moved to cacheable_public live_session (Phase 2)
+      # Note: /performers/:slug and /venues/:slug moved to :catalog live_session (Phase 2)
     end
   end
 
@@ -683,7 +684,7 @@ defmodule EventasaurusWeb.Router do
       {EventasaurusWeb.Live.CityHooks, :assign_city}
     ] do
     scope "/c", EventasaurusWeb do
-      pipe_through :city_browser
+      pipe_through :public_city
 
       # City homepage (shows events by default)
       live "/:city_slug", CityLive.Index, :index
@@ -779,19 +780,19 @@ defmodule EventasaurusWeb.Router do
         as: :poll_social_card_cached
   end
 
-  # Cacheable public pages (CDN-cacheable for anonymous users)
+  # Content catalog pages (CDN-cacheable for anonymous users)
   # See issue #2940 for implementation details
-  # These routes use the cacheable_browser pipeline which skips session for anonymous users,
+  # These routes use the :public pipeline which skips session for anonymous users,
   # preventing Set-Cookie headers and allowing Cloudflare to cache responses.
   #
   # Cache TTLs:
   # - Show pages (Phase 1+2): 48h TTL (s-maxage=172800)
   # - Index pages (Phase 3): 1h TTL (s-maxage=3600)
   # - Aggregated content (Phase 4): 1h TTL (s-maxage=3600)
-  live_session :cacheable_public,
+  live_session :catalog,
     on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
     scope "/", EventasaurusWeb do
-      pipe_through :cacheable_browser
+      pipe_through :public
 
       # Phase 3: Index pages (1h cache)
       live "/activities", PublicEventsHomeLive, :index
@@ -821,15 +822,15 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
-  # Public event routes (with theme support)
-  live_session :public,
+  # User-created event routes (with theme support)
+  live_session :events,
     on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
-      # ===== SCRAPED/DISCOVERY EVENTS (from external APIs) =====
-      # Note: /activities and /movies index pages moved to cacheable_public live_session (Phase 3)
-      # Note: Aggregated content routes (/social, /food, etc.) moved to cacheable_public (Phase 4)
+      # ===== USER-CREATED EVENTS =====
+      # Note: Scraped content moved to :catalog live_session
+      # Note: /activities, /movies, and aggregated content now use :public pipeline
 
       # Guest-accessible checkout
       live "/events/:slug/checkout", CheckoutLive

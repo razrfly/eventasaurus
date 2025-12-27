@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
 
   if Mix.env() == :dev do
     import Plug.Conn
+    require Logger
     alias EventasaurusApp.Repo
     alias EventasaurusApp.Accounts.User
 
@@ -28,7 +29,16 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
     def init(opts), do: opts
 
     def call(conn, _opts) do
-      require Logger
+      # Skip dev auth for readonly sessions (cacheable anonymous requests)
+      # These are definitionally anonymous so no need to check for dev login
+      if conn.assigns[:readonly_session] do
+        conn
+      else
+        call_with_session(conn)
+      end
+    end
+
+    defp call_with_session(conn) do
       # Only process if we have a dev mode login flag
       dev_mode_login = get_session(conn, "dev_mode_login")
 

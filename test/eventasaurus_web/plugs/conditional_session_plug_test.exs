@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities/summer-festival")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       # Show pages use default TTL (no :cache_ttl assign)
       refute Map.has_key?(conn.assigns, :cache_ttl)
@@ -25,7 +25,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities/summer-festival/2025-01-15")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -36,7 +36,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities/my-awesome-event-123")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
   end
@@ -48,7 +48,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/venues/awesome-venue")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -59,7 +59,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/venues/the-jazz-club-123")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
   end
@@ -71,7 +71,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/performers/john-doe")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -82,7 +82,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/performers/the-rolling-stones-123")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
   end
@@ -94,7 +94,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/movies/157336")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -105,7 +105,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/movies/interstellar-157336")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
   end
@@ -117,7 +117,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       # Index pages get specific TTL
       assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
@@ -130,7 +130,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/movies")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
       assert conn.assigns[:cache_ttl] == 3600
@@ -143,7 +143,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> put_req_cookie("__session", "valid-session-token")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
 
@@ -154,7 +154,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> put_req_cookie("__session", "valid-session-token")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
   end
@@ -166,7 +166,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/social/pubquiz-pl")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
       assert conn.assigns[:cache_ttl] == 3600
@@ -178,7 +178,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/food/street-food-festival")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -189,7 +189,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/music/jazz-nights")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -200,7 +200,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/happenings/city-festival")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -211,7 +211,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/comedy/standup-night")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -222,7 +222,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/dance/salsa-social")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -233,7 +233,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/classes/yoga-workshop")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -244,7 +244,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/festivals/summer-fest")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -255,7 +255,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/sports/marathon-2025")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -266,7 +266,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/theater/hamlet-production")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -278,7 +278,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> put_req_cookie("__session", "valid-session-token")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
 
@@ -289,7 +289,307 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/social/pubquiz-pl/extra")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
+      refute conn.assigns[:cacheable_request]
+    end
+  end
+
+  describe "City-prefixed show pages (48h TTL)" do
+    test "marks /c/:city_slug/venues/:venue_slug as cacheable" do
+      conn =
+        :get
+        |> conn("/c/warsaw/venues/palladium")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      # Show pages use default TTL (no :cache_ttl assign)
+      refute Map.has_key?(conn.assigns, :cache_ttl)
+    end
+
+    test "marks /c/:city_slug/movies/:movie_slug as cacheable" do
+      conn =
+        :get
+        |> conn("/c/krakow/movies/interstellar-157336")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      refute Map.has_key?(conn.assigns, :cache_ttl)
+    end
+
+    test "marks /c/:city_slug/festivals/:container_slug as cacheable" do
+      conn =
+        :get
+        |> conn("/c/warsaw/festivals/summer-fest-2025")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      refute Map.has_key?(conn.assigns, :cache_ttl)
+    end
+
+    test "marks /c/:city_slug/conferences/:container_slug as cacheable" do
+      conn =
+        :get
+        |> conn("/c/krakow/conferences/tech-summit")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      refute Map.has_key?(conn.assigns, :cache_ttl)
+    end
+
+    test "marks /c/:city_slug/tours/:container_slug as cacheable" do
+      conn =
+        :get
+        |> conn("/c/warsaw/tours/city-walking-tour")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+    end
+
+    test "marks /c/:city_slug/series/:container_slug as cacheable" do
+      conn =
+        :get
+        |> conn("/c/warsaw/series/weekly-comedy")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+    end
+
+    test "marks /c/:city_slug/exhibitions/:container_slug as cacheable" do
+      conn =
+        :get
+        |> conn("/c/krakow/exhibitions/modern-art")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+    end
+
+    test "marks /c/:city_slug/tournaments/:container_slug as cacheable" do
+      conn =
+        :get
+        |> conn("/c/warsaw/tournaments/chess-championship")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+    end
+
+    test "does not mark city show page as cacheable when authenticated" do
+      conn =
+        :get
+        |> conn("/c/warsaw/venues/palladium")
+        |> put_req_cookie("__session", "valid-session-token")
+        |> ConditionalSessionPlug.call([])
+
+      refute conn.assigns[:readonly_session]
+      refute conn.assigns[:cacheable_request]
+    end
+  end
+
+  describe "City-prefixed index pages (1h TTL)" do
+    test "marks /c/:city_slug (city homepage) as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/warsaw")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/events as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/krakow/events")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/venues as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/warsaw/venues")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/festivals as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/warsaw/festivals")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/conferences as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/krakow/conferences")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/tours as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/warsaw/tours")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/series as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/krakow/series")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/exhibitions as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/warsaw/exhibitions")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/tournaments as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/krakow/tournaments")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "does not mark city index page as cacheable when authenticated" do
+      conn =
+        :get
+        |> conn("/c/warsaw")
+        |> put_req_cookie("__session", "valid-session-token")
+        |> ConditionalSessionPlug.call([])
+
+      refute conn.assigns[:readonly_session]
+      refute conn.assigns[:cacheable_request]
+    end
+  end
+
+  describe "City aggregated content pages (1h TTL)" do
+    test "marks /c/:city_slug/:content_type/:identifier as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/warsaw/trivia/pubquiz-pl")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/social/:identifier as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/krakow/social/networking-event")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "marks /c/:city_slug/food/:identifier as cacheable with 1h TTL" do
+      conn =
+        :get
+        |> conn("/c/warsaw/food/street-food-fest")
+        |> ConditionalSessionPlug.call([])
+
+      assert conn.assigns[:readonly_session] == true
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:cache_ttl] == 3600
+    end
+
+    test "does not mark city aggregated content as cacheable when authenticated" do
+      conn =
+        :get
+        |> conn("/c/warsaw/trivia/pubquiz-pl")
+        |> put_req_cookie("__session", "valid-session-token")
+        |> ConditionalSessionPlug.call([])
+
+      refute conn.assigns[:readonly_session]
+      refute conn.assigns[:cacheable_request]
+    end
+  end
+
+  describe "Non-cacheable city routes" do
+    test "does not mark /c/:city_slug/search as cacheable" do
+      conn =
+        :get
+        |> conn("/c/warsaw/search")
+        |> ConditionalSessionPlug.call([])
+
+      refute conn.assigns[:readonly_session]
+      refute conn.assigns[:cacheable_request]
+    end
+
+    test "does not mark /c/:city_slug/events/today as cacheable" do
+      conn =
+        :get
+        |> conn("/c/warsaw/events/today")
+        |> ConditionalSessionPlug.call([])
+
+      refute conn.assigns[:readonly_session]
+      refute conn.assigns[:cacheable_request]
+    end
+
+    test "does not mark /c/:city_slug/events/weekend as cacheable" do
+      conn =
+        :get
+        |> conn("/c/krakow/events/weekend")
+        |> ConditionalSessionPlug.call([])
+
+      refute conn.assigns[:readonly_session]
+      refute conn.assigns[:cacheable_request]
+    end
+
+    test "does not mark /c/:city_slug/events/week as cacheable" do
+      conn =
+        :get
+        |> conn("/c/warsaw/events/week")
+        |> ConditionalSessionPlug.call([])
+
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
   end
@@ -301,7 +601,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
 
@@ -311,7 +611,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities/slug/date/extra")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
 
@@ -321,7 +621,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/admin/dashboard")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
   end
@@ -334,7 +634,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> put_req_cookie("__session", "valid-session-token")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
 
@@ -345,7 +645,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> put_req_cookie("__session", "valid-session-token")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
   end
@@ -358,7 +658,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> put_req_cookie("__session", "")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
 
@@ -369,7 +669,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> put_req_cookie("other_cookie", "some-value")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
 
@@ -384,7 +684,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> ConditionalSessionPlug.call([])
 
       # Test infrastructure normalizes "   " to "", so treated as anonymous
-      assert conn.assigns[:skip_session] == true
+      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
 
@@ -396,7 +696,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> put_req_cookie("__session", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:skip_session]
+      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
   end
