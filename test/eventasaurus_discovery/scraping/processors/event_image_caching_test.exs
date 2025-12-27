@@ -1,12 +1,6 @@
 defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
   @moduledoc """
   Tests for the EventImageCaching module.
-
-  Verifies:
-  - Source enablement for all sources (16 total)
-  - Priority assignment for high-priority sources
-  - Metadata extraction from scraped data
-  - Image caching integration with ImageCacheService
   """
   use EventasaurusApp.DataCase, async: false
 
@@ -20,34 +14,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
   alias EventasaurusDiscovery.Locations.{City, Country}
 
   describe "enabled?/1" do
-    test "returns true for all enabled sources" do
-      enabled = [
-        "bandsintown",
-        "cinema_city",
-        "geeks_who_drink",
-        "inquizition",
-        "karnet",
-        "kupbilecik",
-        "pubquiz-pl",
-        "question-one",
-        "quizmeisters",
-        "repertuary",
-        "resident_advisor",
-        "sortiraparis",
-        "speed_quizzing",
-        "ticketmaster",
-        "waw4free",
-        "week_pl"
-      ]
-
-      for source <- enabled do
-        assert EventImageCaching.enabled?(source) == true, "Expected #{source} to be enabled"
-      end
-    end
-
-    test "returns false for unknown sources" do
-      assert EventImageCaching.enabled?("unknown-source") == false
-      assert EventImageCaching.enabled?("fake-source") == false
+    test "returns true for any valid source slug" do
+      assert EventImageCaching.enabled?("bandsintown") == true
+      assert EventImageCaching.enabled?("cinema-city") == true
+      assert EventImageCaching.enabled?("any-source") == true
     end
 
     test "returns false for nil" do
@@ -61,7 +31,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
     end
 
     test "returns 2 for normal priority sources" do
-      assert EventImageCaching.priority("pubquiz-pl") == 2
+      assert EventImageCaching.priority("bandsintown") == 2
+      assert EventImageCaching.priority("cinema-city") == 2
     end
 
     test "returns 2 for nil" do
@@ -109,7 +80,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
 
       metadata = EventImageCaching.extract_metadata(scraped_data, "question-one")
 
-      # Large field should be filtered out
       refute Map.has_key?(metadata["raw_data"], "large_field")
       assert Map.has_key?(metadata["raw_data"], "title")
     end
@@ -125,7 +95,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
 
   describe "cache_event_image/4" do
     setup do
-      # Create test data hierarchy
       {:ok, country} =
         Repo.insert(%Country{
           name: "Poland",
@@ -193,18 +162,18 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
       assert {:fallback, nil} = EventImageCaching.cache_event_image(nil, 123, "question-one", %{})
     end
 
-    test "returns fallback for unknown sources" do
+    test "returns fallback for nil source_slug" do
       result = EventImageCaching.cache_event_image(
         "https://example.com/image.jpg",
         123,
-        "unknown-source",
+        nil,
         %{}
       )
 
       assert {:fallback, "https://example.com/image.jpg"} = result
     end
 
-    test "queues image for caching for enabled sources", %{event_source: event_source} do
+    test "queues image for caching for any valid source", %{event_source: event_source} do
       image_url = "https://question-one.com/events/image.jpg"
       scraped_data = %{"title" => "Test", "venue" => "Bar"}
 
@@ -215,10 +184,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
         scraped_data
       )
 
-      # Should return :ok with original URL (image queued for caching)
       assert {:ok, ^image_url} = result
 
-      # Verify CachedImage record was created
       cached = Repo.get_by(CachedImage,
         entity_type: "public_event_source",
         entity_id: event_source.id,
@@ -235,7 +202,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
       image_url = "https://question-one.com/events/already-cached.jpg"
       cdn_url = "https://cdn.example.com/cached-image.jpg"
 
-      # Pre-create a cached image record
       {:ok, _cached} = Repo.insert(%CachedImage{
         entity_type: "public_event_source",
         entity_id: event_source.id,
@@ -257,45 +223,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
     end
   end
 
-  describe "enabled_sources/0" do
-    test "returns list of all 16 enabled sources" do
-      sources = EventImageCaching.enabled_sources()
-
-      assert is_list(sources)
-      assert length(sources) == 16
-
-      expected = [
-        "bandsintown",
-        "cinema_city",
-        "geeks_who_drink",
-        "inquizition",
-        "karnet",
-        "kupbilecik",
-        "pubquiz-pl",
-        "question-one",
-        "quizmeisters",
-        "repertuary",
-        "resident_advisor",
-        "sortiraparis",
-        "speed_quizzing",
-        "ticketmaster",
-        "waw4free",
-        "week_pl"
-      ]
-
-      for source <- expected do
-        assert source in sources, "Expected #{source} to be in enabled_sources"
-      end
-    end
-  end
-
   describe "stats/0" do
     test "returns statistics map" do
       stats = EventImageCaching.stats()
 
       assert is_map(stats)
       assert Map.has_key?(stats, :overall)
-      assert Map.has_key?(stats, :enabled_sources)
       assert Map.has_key?(stats, :high_priority_sources)
     end
   end
