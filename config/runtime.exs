@@ -142,7 +142,12 @@ config :eventasaurus, Oban,
        # Trivia export materialized view refresh daily at 5 AM UTC
        # Refreshes pre-computed trivia events data for QuizAdvisor API
        # See: lib/eventasaurus_app/workers/trivia_export_refresh_worker.ex
-       {"0 5 * * *", EventasaurusApp.Workers.TriviaExportRefreshWorker}
+       {"0 5 * * *", EventasaurusApp.Workers.TriviaExportRefreshWorker},
+       # Job execution stats materialized view refresh hourly at minute 30
+       # Pre-aggregates collision dashboard statistics for fast queries
+       # Hourly is sufficient since dashboard caches results and data isn't time-sensitive
+       # See: lib/eventasaurus_app/workers/job_execution_stats_refresh_worker.ex
+       {"30 * * * *", EventasaurusApp.Workers.JobExecutionStatsRefreshWorker}
        # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]

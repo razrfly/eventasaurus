@@ -399,9 +399,74 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
 
   @doc """
   Lightweight version of stats using database aggregations (avoids loading all records into memory).
+
+  Uses the `job_execution_stats` materialized view when available for optimal performance.
+  Falls back to direct queries against `job_execution_summaries` if the view doesn't exist.
   """
   def stats_lightweight(opts \\ []) do
     hours = Keyword.get(opts, :hours, 24)
+
+    case stats_from_materialized_view(hours) do
+      {:ok, stats} -> {:ok, stats}
+      {:error, _} -> stats_from_raw_table(hours)
+    end
+  end
+
+  # Query the pre-aggregated materialized view (fast path: <50ms vs 1-6 seconds)
+  defp stats_from_materialized_view(hours) do
+    cutoff = hours_ago(hours)
+
+    result =
+      Repo.replica().one(
+        from(fragment("job_execution_stats"),
+          where: fragment("hour_bucket >= ?", ^cutoff),
+          select: %{
+            total_processed: fragment("COALESCE(SUM(total_processed), 0)::bigint"),
+            total_collisions: fragment("COALESCE(SUM(collision_count), 0)::bigint"),
+            same_source_count: fragment("COALESCE(SUM(same_source_collisions), 0)::bigint"),
+            cross_source_count: fragment("COALESCE(SUM(cross_source_collisions), 0)::bigint"),
+            avg_confidence: fragment("AVG(avg_confidence)"),
+            sources_with_collisions:
+              fragment("COUNT(DISTINCT CASE WHEN collision_count > 0 THEN source END)::bigint")
+          }
+        )
+      )
+
+    if result do
+      total_processed = result.total_processed || 0
+      total_collisions = result.total_collisions || 0
+
+      collision_rate =
+        if total_processed > 0,
+          do: Float.round(total_collisions / total_processed * 100, 1),
+          else: 0.0
+
+      avg_confidence =
+        if result.avg_confidence, do: Float.round(result.avg_confidence, 2), else: nil
+
+      {:ok,
+       %{
+         period_hours: hours,
+         total_processed: total_processed,
+         total_collisions: total_collisions,
+         same_source_count: result.same_source_count || 0,
+         cross_source_count: result.cross_source_count || 0,
+         collision_rate: collision_rate,
+         avg_confidence: avg_confidence,
+         sources_with_collisions: result.sources_with_collisions || 0,
+         by_source: []
+       }}
+    else
+      {:error, :no_data}
+    end
+  rescue
+    # Materialized view doesn't exist yet - fall back to raw table
+    e in Postgrex.Error -> {:error, e}
+    e -> {:error, e}
+  end
+
+  # Fallback: Query the raw job_execution_summaries table (slow path)
+  defp stats_from_raw_table(hours) do
     cutoff = hours_ago(hours)
 
     # Use database aggregations instead of loading all records
