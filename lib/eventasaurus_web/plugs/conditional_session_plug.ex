@@ -1,29 +1,59 @@
 defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
   @moduledoc """
-  Marks cacheable routes for anonymous users to enable CDN caching.
+  Marks cacheable routes for CDN caching with client-side auth hydration.
 
-  This plug enables CDN caching by preventing Set-Cookie headers on public pages
-  for users who are not logged in. It does this by marking sessions as "read-only"
-  for cacheable routes, which prevents session writes (that cause Set-Cookie headers)
-  while still allowing session reads (required for LiveView CSRF tokens).
+  This plug enables CDN caching by:
+  1. Setting appropriate cache control headers via assigns
+  2. Marking routes as cacheable for downstream processing
+  3. Working with Cloudflare Transform Rules to strip Set-Cookie headers
+
+  ## CDN Caching Strategy
+
+  We cache the SAME HTML for everyone on public pages, regardless of auth state.
+  Auth UI is hydrated client-side using Clerk's JavaScript SDK (SignedIn/SignedOut
+  components).
+
+  Why we don't differentiate by auth cookies:
+  - Cloudflare doesn't vary cache by cookies (unless Enterprise with custom cache keys)
+  - Even if we served different headers to authenticated users, they'd still get
+    the cached anonymous version
+  - The solution is to cache the same page for everyone and let Clerk's client-side
+    components hydrate the auth UI after page load
+
+  See: https://github.com/razrfly/eventasaurus/issues/2970
+
+  ## Important: Cookie Stripping at CDN Level
+
+  We do NOT strip cookies at the origin because it breaks LiveView WebSocket
+  authentication. Phoenix LiveView requires the session cookie to be present
+  during WebSocket connection for `authorize_session` validation.
+
+  Instead, Cloudflare Transform Rules should strip the `Set-Cookie` header
+  from cacheable responses. This allows:
+  - First request: Session cookie is set, response is not cached
+  - Subsequent requests: Browser sends cookie, CDN serves cached response
+  - LiveView: WebSocket connects with session cookie, works correctly
+
+  ## Cloudflare Transform Rule Configuration
+
+  Create a Transform Rule in Cloudflare to strip Set-Cookie headers:
+
+      Rule name: Strip Set-Cookie for cacheable pages
+      When: (http.host eq "your-domain.com" and starts_with(http.request.uri.path, "/activities"))
+      Then: Remove response header "Set-Cookie"
+
+  Repeat for other cacheable route patterns.
 
   ## How it works
 
   1. Checks if the request path matches a cacheable route pattern
-  2. Checks if the user has an auth cookie (`__session` from Clerk)
-  3. If cacheable route AND no auth cookie → mark session as readonly (page can be cached)
-  4. Otherwise → normal session handling with writes allowed
-
-  ## Important: Session Read vs Write
-
-  - Sessions are ALWAYS fetched (required for LiveView CSRF token validation)
-  - For cacheable anonymous requests, session WRITES are prevented (no Set-Cookie)
-  - This allows CDN caching while maintaining LiveView WebSocket functionality
+  2. If cacheable route → mark for caching and set TTL
+  3. CacheControlPlug reads these assigns and sets Cache-Control headers
+  4. Cloudflare strips Set-Cookie via Transform Rules
 
   ## Safety
 
   - Uses an allowlist approach: only explicitly listed patterns can be cached
-  - Any route with `__session` cookie is never cached
   - New routes default to NOT cached (must be added to allowlist)
 
   ## Cacheable Routes
@@ -75,35 +105,25 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
 
   @impl Plug
   def call(conn, _opts) do
+    # CDN Caching Strategy: Cache the SAME HTML for everyone on public pages.
+    # Auth UI is hydrated client-side using Clerk's JavaScript SDK.
+    #
+    # We mark cacheable routes with assigns that CacheControlPlug uses to set
+    # appropriate Cache-Control headers. Cookie stripping is done at the CDN
+    # level (Cloudflare Transform Rules) to avoid breaking LiveView.
+    #
+    # See: https://github.com/razrfly/eventasaurus/issues/2970
     case route_cache_config(conn.request_path) do
       {:cacheable, ttl} when not is_nil(ttl) ->
-        if has_auth_cookie?(conn) do
-          conn
-        else
-          # Mark session as readonly and register callback to strip session cookie
-          # Session is still fetched for LiveView CSRF token validation
-          # The before_send callback runs AFTER Plug.Session adds the cookie (LIFO order)
-          # Note: Dev mode login is checked in CacheControlPlug (after session is fetched)
-          conn
-          |> assign(:readonly_session, true)
-          |> assign(:cacheable_request, true)
-          |> assign(:cache_ttl, ttl)
-          |> register_cookie_stripping_callback()
-        end
+        # Mark as cacheable with specific TTL (e.g., index pages with 1h TTL)
+        conn
+        |> assign(:cacheable_request, true)
+        |> assign(:cache_ttl, ttl)
 
       :cacheable ->
-        if has_auth_cookie?(conn) do
-          conn
-        else
-          # Mark session as readonly and register callback to strip session cookie
-          # Session is still fetched for LiveView CSRF token validation
-          # The before_send callback runs AFTER Plug.Session adds the cookie (LIFO order)
-          # Note: Dev mode login is checked in CacheControlPlug (after session is fetched)
-          conn
-          |> assign(:readonly_session, true)
-          |> assign(:cacheable_request, true)
-          |> register_cookie_stripping_callback()
-        end
+        # Mark as cacheable with default TTL (e.g., show pages with 48h TTL)
+        conn
+        |> assign(:cacheable_request, true)
 
       :not_cacheable ->
         conn
@@ -118,13 +138,10 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
     cond do
       # Phase 3: Index pages (1h TTL) - includes city-prefixed indexes
       index_page?(path) -> {:cacheable, CacheControlPlug.index_page_ttl()}
-
       # Phase 4: Aggregated content pages (1h TTL) - includes city aggregated content
       aggregated_content_page?(path) -> {:cacheable, CacheControlPlug.index_page_ttl()}
-
       # Phase 1 + 2: Show pages (48h TTL - default) - includes city-prefixed shows
       show_page?(path) -> :cacheable
-
       # Everything else
       true -> :not_cacheable
     end
@@ -210,64 +227,5 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
     ]
 
     Enum.any?(patterns, fn pattern -> Regex.match?(pattern, path) end)
-  end
-
-  defp has_auth_cookie?(conn) do
-    # Fetch cookies if not already fetched
-    conn = fetch_cookies(conn)
-    cookie = conn.cookies["__session"]
-    cookie != nil and cookie != ""
-  end
-
-  # Register a before_send callback to strip the session cookie for cacheable requests
-  # This callback is registered BEFORE fetch_session, so it runs AFTER Plug.Session's
-  # callback (due to LIFO order). This allows us to strip the cookie after it's added.
-  #
-  # Why this works:
-  # 1. ConditionalSessionPlug runs first, registers this callback
-  # 2. fetch_session runs, Plug.Session registers its callback
-  # 3. Response is sent, before_send runs in LIFO order:
-  #    - Plug.Session's callback runs FIRST (adds Set-Cookie)
-  #    - Our callback runs SECOND (strips the cookie if still cacheable)
-  #
-  # The assigns check ensures we don't strip cookies if:
-  # - User became authenticated during the request (CacheControlPlug clears assigns)
-  # - The request is no longer cacheable for any reason
-  defp register_cookie_stripping_callback(conn) do
-    register_before_send(conn, fn response_conn ->
-      if response_conn.assigns[:cacheable_request] && response_conn.assigns[:readonly_session] do
-        strip_session_cookie(response_conn)
-      else
-        response_conn
-      end
-    end)
-  end
-
-  # Strip the Phoenix session cookie from resp_cookies by removing it entirely
-  # This enables CDN caching by preventing ANY Set-Cookie header for the session
-  #
-  # IMPORTANT: We directly remove from resp_cookies map, NOT using delete_resp_cookie!
-  # delete_resp_cookie adds an "expiration" cookie (max-age=0) which still produces
-  # a Set-Cookie header. For CDN caching, we need ZERO Set-Cookie headers.
-  #
-  # The conversion from resp_cookies to set-cookie headers happens AFTER all before_send
-  # callbacks run. So at callback time, the cookie exists in resp_cookies but hasn't
-  # been converted to a header yet.
-  @session_cookie_name "_eventasaurus_key"
-
-  defp strip_session_cookie(conn) do
-    require Logger
-
-    if Map.has_key?(conn.resp_cookies, @session_cookie_name) do
-      Logger.debug(
-        "[ConditionalSession] Stripping session cookie for cacheable request: #{conn.request_path}"
-      )
-
-      # Directly remove from resp_cookies map - don't use delete_resp_cookie
-      # which would add an expiration cookie that still produces a Set-Cookie header
-      %{conn | resp_cookies: Map.delete(conn.resp_cookies, @session_cookie_name)}
-    else
-      conn
-    end
   end
 end

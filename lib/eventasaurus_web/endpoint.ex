@@ -20,8 +20,17 @@ defmodule EventasaurusWeb.Endpoint do
     http_only: true
   ]
 
+  # CDN Caching: Disable CSRF check for WebSocket connections to allow HTTP caching.
+  # Security: check_origin is enabled in production (via runtime.exs) to prevent
+  # Cross-Site WebSocket Hijacking (CSWSH) attacks. Origin validation is sufficient
+  # security for WebSocket since SameSite cookie attribute doesn't apply to WS.
+  # See: https://svground.fr/blog/posts/caching-liveviews-part-1/
+  # See: https://github.com/razrfly/eventasaurus/issues/2970
   socket "/live", Phoenix.LiveView.Socket,
-    websocket: [connect_info: [session: @session_options]],
+    websocket: [
+      check_csrf: false,
+      connect_info: [session: @session_options]
+    ],
     longpoll: [connect_info: [session: @session_options]]
 
   # Serve at "/" the static files from "priv/static" directory.

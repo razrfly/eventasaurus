@@ -327,54 +327,69 @@
             <.logo class="text-3xl" />
           </div>
           
-          <!-- Desktop Navigation -->
-          <div class="hidden lg:flex items-center space-x-8">
-            <%= if @conn.assigns[:user] do %>
-              <div class="flex items-center space-x-6">
-                <a href="/dashboard" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
-                  Dashboard
-                </a>
-                <a href="/groups" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
-                  Groups
-                </a>
-                <a href="/people/discover" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
-                  People
-                </a>
-                <a href="/settings" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
-                  Settings
-                </a>
-                <a href="/about" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
-                  About
-                </a>
-                <a href="/our-story" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
-                  Our Story
-                </a>
+          <!-- Desktop Navigation - Client-side Clerk hydration for CDN caching -->
+          <!-- See: https://github.com/razrfly/eventasaurus/issues/2970 -->
+          <div id="clerk-auth-desktop-nav" phx-hook="ClerkAuthUI" data-type="desktop-nav" class="hidden lg:flex items-center space-x-8">
+            <!-- Loading skeleton (shown until Clerk initializes) -->
+            <div data-clerk-loading class="flex items-center space-x-6">
+              <div class="animate-pulse flex items-center space-x-6">
+                <div class="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div class="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div class="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
               </div>
-            <% else %>
-              <div class="flex items-center space-x-6">
-                <a href="/about" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">About</a>
-                <a href="/our-story" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">Our Story</a>
-                <a href="/whats-new" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">What's New</a>
-              </div>
-            <% end %>
+            </div>
+            <!-- Authenticated user navigation (hidden until Clerk confirms auth) -->
+            <div data-clerk-signed-in class="hidden flex items-center space-x-6">
+              <a href="/dashboard" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
+                Dashboard
+              </a>
+              <a href="/groups" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
+                Groups
+              </a>
+              <a href="/people/discover" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
+                People
+              </a>
+              <a href="/settings" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
+                Settings
+              </a>
+              <a href="/about" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
+                About
+              </a>
+              <a href="/our-story" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
+                Our Story
+              </a>
+            </div>
+            <!-- Anonymous user navigation (hidden until Clerk confirms no auth) -->
+            <div data-clerk-signed-out class="hidden flex items-center space-x-6">
+              <a href="/about" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">About</a>
+              <a href="/our-story" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">Our Story</a>
+              <a href="/whats-new" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">What's New</a>
+            </div>
           </div>
           
-          <!-- Desktop Auth Buttons -->
-          <div class="hidden lg:flex items-center space-x-4">
-            <%= if @conn.assigns[:user] do %>
-              <!-- Authenticated user UI -->
-              <span class="text-sm text-gray-700 dark:text-gray-300">
-                <%= @conn.assigns[:user].email %>
-              </span>
+          <!-- Desktop Auth Buttons - Client-side Clerk hydration for CDN caching -->
+          <!-- See: https://github.com/razrfly/eventasaurus/issues/2970 -->
+          <div id="clerk-auth-desktop" phx-hook="ClerkAuthUI" data-type="desktop" class="hidden lg:flex items-center space-x-4">
+            <!-- Loading skeleton (shown until Clerk initializes) -->
+            <div data-clerk-loading class="flex items-center space-x-4">
+              <div class="animate-pulse flex items-center space-x-4">
+                <div class="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div class="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+              </div>
+            </div>
+            <!-- Authenticated user UI (hidden until Clerk confirms auth) -->
+            <div data-clerk-signed-in class="hidden flex items-center space-x-4">
+              <span class="text-sm text-gray-700 dark:text-gray-300" data-clerk-user-email></span>
               <!-- User Avatar - Click to Settings -->
               <a href="/settings" class="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500 rounded-full" title="Go to Settings">
-                <%= avatar_img_size(@conn.assigns[:user], :sm, class: "hover:scale-105 transition-transform cursor-pointer border-2 border-gray-300 hover:border-gray-500") %>
+                <img data-clerk-user-avatar src="" alt="User avatar" class="w-8 h-8 rounded-full hover:scale-105 transition-transform cursor-pointer border-2 border-gray-300 hover:border-gray-500" />
               </a>
               <a href="#" onclick="window.signOut(); return false;" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
                 Log out
               </a>
-            <% else %>
-              <!-- Anonymous user UI -->
+            </div>
+            <!-- Anonymous user UI (hidden until Clerk confirms no auth) -->
+            <div data-clerk-signed-out class="hidden flex items-center space-x-4">
               <a href={"/login?return_to=#{URI.encode_www_form(Phoenix.Controller.current_path(@conn))}"} class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
                 Sign In
               </a>
@@ -387,7 +402,7 @@
                   Get Started
                 </a>
               <% end %>
-            <% end %>
+            </div>
           </div>
           
           <!-- Mobile Menu Button -->
@@ -415,9 +430,18 @@
           </button>
         </div>
         
-        <!-- Mobile Menu Navigation -->
-        <div class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-          <%= if @conn.assigns[:user] do %>
+        <!-- Mobile Menu Navigation - Client-side Clerk hydration for CDN caching -->
+        <!-- See: https://github.com/razrfly/eventasaurus/issues/2970 -->
+        <div id="clerk-auth-mobile-nav" phx-hook="ClerkAuthUI" data-type="mobile-nav" class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+          <!-- Loading skeleton (shown until Clerk initializes) -->
+          <div data-clerk-loading class="space-y-1">
+            <div class="animate-pulse space-y-2">
+              <div class="h-10 w-full bg-gray-200 dark:bg-gray-700 rounded-md"></div>
+              <div class="h-10 w-full bg-gray-200 dark:bg-gray-700 rounded-md"></div>
+            </div>
+          </div>
+          <!-- Authenticated user navigation (hidden until Clerk confirms auth) -->
+          <div data-clerk-signed-in class="hidden space-y-1">
             <a href="/dashboard" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               Dashboard
             </a>
@@ -436,7 +460,9 @@
             <a href="/our-story" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               Our Story
             </a>
-          <% else %>
+          </div>
+          <!-- Anonymous user navigation (hidden until Clerk confirms no auth) -->
+          <div data-clerk-signed-out class="hidden space-y-1">
             <a href="/about" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               About
             </a>
@@ -446,25 +472,35 @@
             <a href="/whats-new" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               What's New
             </a>
-          <% end %>
+          </div>
         </div>
         
-        <!-- Mobile Menu Footer -->
-        <div class="border-t border-gray-200 dark:border-gray-800 p-4 space-y-3">
-          <%= if @conn.assigns[:user] do %>
+        <!-- Mobile Menu Footer - Client-side Clerk hydration for CDN caching -->
+        <!-- See: https://github.com/razrfly/eventasaurus/issues/2970 -->
+        <div id="clerk-auth-mobile-footer" phx-hook="ClerkAuthUI" data-type="mobile-footer" class="border-t border-gray-200 dark:border-gray-800 p-4 space-y-3">
+          <!-- Loading skeleton (shown until Clerk initializes) -->
+          <div data-clerk-loading class="space-y-3">
+            <div class="animate-pulse flex items-center space-x-3 px-3 py-2">
+              <div class="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+              <div class="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+            <div class="animate-pulse h-10 w-full bg-gray-200 dark:bg-gray-700 rounded-md"></div>
+          </div>
+          <!-- Authenticated user footer (hidden until Clerk confirms auth) -->
+          <div data-clerk-signed-in class="hidden space-y-3">
             <div class="px-3 py-2 flex items-center space-x-3">
               <!-- User Avatar - Click to Settings -->
               <a href="/settings" class="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500 rounded-full" title="Go to Settings">
-                <%= avatar_img_size(@conn.assigns[:user], :sm, class: "hover:scale-105 transition-transform cursor-pointer border-2 border-gray-300 hover:border-gray-500") %>
+                <img data-clerk-user-avatar src="" alt="User avatar" class="w-8 h-8 rounded-full hover:scale-105 transition-transform cursor-pointer border-2 border-gray-300 hover:border-gray-500" />
               </a>
-              <p class="text-sm text-gray-700 dark:text-gray-300">
-                <%= @conn.assigns[:user].email %>
-              </p>
+              <p class="text-sm text-gray-700 dark:text-gray-300" data-clerk-user-email></p>
             </div>
             <a href="#" onclick="window.signOut(); return false;" class="block w-full text-center px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               Log out
             </a>
-          <% else %>
+          </div>
+          <!-- Anonymous user footer (hidden until Clerk confirms no auth) -->
+          <div data-clerk-signed-out class="hidden space-y-3">
             <a href={"/login?return_to=#{URI.encode_www_form(Phoenix.Controller.current_path(@conn))}"} class="block w-full text-center px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               Sign In
             </a>
@@ -477,7 +513,7 @@
                 Get Started
               </a>
             <% end %>
-          <% end %>
+          </div>
         </div>
       </div>
     </div>

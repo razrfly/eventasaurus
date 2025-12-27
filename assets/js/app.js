@@ -11,6 +11,7 @@ import { SpotifySearch } from "./spotify_search";
 import { initializeClipboard } from "./utils/clipboard";
 import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
 import { initClerkClient, ClerkAuthHandler, signOut as clerkSignOut, openSignIn as clerkOpenSignIn, openSignUp as clerkOpenSignUp } from "./auth/clerk-manager";
+import ClerkAuthUI from "./hooks/clerk-auth-ui";
 import FormHooks from "./hooks/forms";
 import UIHooks from "./hooks/ui-interactions";
 import PaymentHooks from "./hooks/payment-business-logic";
@@ -63,6 +64,7 @@ const ModularHooks = {
   ...CountdownHooks, // Countdown timer for threshold deadlines
   ClerkAuthHandler, // Clerk auth handler
   AuthHandler: ClerkAuthHandler, // Active auth handler (Clerk)
+  ClerkAuthUI, // Client-side auth UI hydration for CDN-cached pages
   ChartHook, // Chart.js hook for Phase 6
   VenuesMap, // Interactive Google Maps for venues page
   MapboxVenuesMap // Interactive Mapbox map for venues page
