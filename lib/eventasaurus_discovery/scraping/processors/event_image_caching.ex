@@ -1,84 +1,39 @@
 defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
   @moduledoc """
-  Configuration and integration for event image caching to R2.
+  Integration for event image caching to R2.
 
-  Phase 2 of image caching - extends the existing venue image caching to events.
-  Uses a phased source-by-source rollout for safe deployment.
+  Extends venue image caching to events. All sources with valid slugs
+  are automatically enabled for lazy image caching on render.
 
   ## Usage
 
-  This module is called from EventProcessor.update_event_source/4 to:
-  1. Check if the source is enabled for image caching
+  Called from EventProcessor.update_event_source/4 to:
+  1. Queue the image for caching via ImageCacheService
   2. Extract raw metadata for debugging
-  3. Queue the image for caching via ImageCacheService
-  4. Return the cached URL or fall back to original
-
-  ## Configuration
-
-  Sources are enabled by adding their slug to @enabled_sources.
-  Each wave is validated before proceeding to the next.
+  3. Return the cached URL or fall back to original
   """
 
   require Logger
 
   alias EventasaurusApp.Images.ImageCacheService
 
-  # All sources enabled for image caching
-  @enabled_sources [
-    "bandsintown",
-    "cinema_city",
-    "geeks_who_drink",
-    "inquizition",
-    "karnet",
-    "kupbilecik",
-    "pubquiz-pl",
-    "question-one",
-    "quizmeisters",
-    "repertuary",
-    "resident_advisor",
-    "sortiraparis",
-    "speed_quizzing",
-    "ticketmaster",
-    "waw4free",
-    "week_pl"
-  ]
-
-  # High priority sources (known failure domains, cache immediately)
-  @high_priority_sources [
-    "question-one"
-  ]
+  # High priority sources (known failure domains like expiring URLs)
+  @high_priority_sources ["question-one"]
 
   @doc """
   Check if image caching is enabled for a given source.
 
-  ## Parameters
-
-  - `source_slug` - The slug of the source (e.g., "question-one", "pubquiz-pl")
-
-  ## Returns
-
-  - `true` if the source is enabled for image caching
-  - `false` otherwise
+  All valid source slugs are enabled. Only nil is disabled.
   """
   @spec enabled?(String.t() | nil) :: boolean()
   def enabled?(nil), do: false
-  def enabled?(source_slug) when is_binary(source_slug) do
-    source_slug in @enabled_sources
-  end
+  def enabled?(source_slug) when is_binary(source_slug), do: true
 
   @doc """
   Get the Oban job priority for a source.
 
   High priority sources (known failure domains) get priority 1.
   Normal sources get priority 2.
-
-  ## Parameters
-
-  - `source_slug` - The slug of the source
-
-  ## Returns
-
-  - Integer priority (1 = high, 2 = normal)
   """
   @spec priority(String.t() | nil) :: integer()
   def priority(nil), do: 2
@@ -88,21 +43,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
 
   @doc """
   Cache an event image and return the effective URL.
-
-  If caching is enabled for the source:
-  1. Extracts metadata from the scraped data for debugging
-  2. Queues the image for caching via ImageCacheService
-  3. Returns {:ok, url} where url is either cached or original
-
-  If caching is disabled or fails:
-  - Returns {:fallback, original_url}
-
-  ## Parameters
-
-  - `image_url` - The original image URL to cache
-  - `event_source_id` - The ID of the PublicEventSource record
-  - `source_slug` - The slug of the source (e.g., "question-one")
-  - `scraped_data` - The raw scraped data map for metadata extraction
 
   ## Returns
 
@@ -124,7 +64,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
     end
   end
 
-  # Internal: Actually perform the caching
   defp do_cache_image(image_url, event_source_id, source_slug, scraped_data) do
     metadata = extract_metadata(scraped_data, source_slug)
     priority = priority(source_slug)
@@ -137,7 +76,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
       Priority: #{priority}
     """)
 
-    # Use position 0 for primary event image
     case ImageCacheService.cache_image(
            "public_event_source",
            event_source_id,
@@ -148,12 +86,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
            priority: priority
          ) do
       {:ok, _cached_image} ->
-        # Image queued for caching - return original URL for now
-        # The cached URL will be used once the job completes
         {:ok, image_url}
 
       {:exists, cached_image} ->
-        # Already cached - return the CDN URL if available
         if cached_image.status == "cached" && cached_image.cdn_url do
           Logger.debug("📷 Using cached image for event source #{event_source_id}")
           {:cached, cached_image.cdn_url}
@@ -174,21 +109,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
 
   @doc """
   Extract raw metadata from scraped data for debugging.
-
-  Preserves the complete source data to aid in debugging image failures.
-
-  ## Parameters
-
-  - `scraped_data` - The raw scraped data map
-  - `source_slug` - The slug of the source
-
-  ## Returns
-
-  Map with extracted metadata including:
-  - source_slug: The source identifier
-  - extraction_timestamp: When the data was extracted
-  - original_keys: List of keys in the scraped data
-  - raw_data: The complete scraped data (for debugging)
   """
   @spec extract_metadata(map(), String.t() | nil) :: map()
   def extract_metadata(scraped_data, source_slug) when is_map(scraped_data) do
@@ -209,68 +129,37 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
     }
   end
 
-  # Extract keys from a map, handling both atom and string keys
   defp extract_keys(data) when is_map(data) do
-    data
-    |> Map.keys()
-    |> Enum.map(&to_string/1)
-    |> Enum.sort()
+    data |> Map.keys() |> Enum.map(&to_string/1) |> Enum.sort()
   end
 
   defp extract_keys(_), do: []
 
-  # Sanitize data for storage - remove very large fields
   defp sanitize_for_storage(data) when is_map(data) do
     data
-    |> Enum.reject(fn {_k, v} ->
-      # Remove very large binary data
-      is_binary(v) && byte_size(v) > 10_000
-    end)
-    |> Enum.map(fn {k, v} ->
-      # Convert atom keys to strings
-      {to_string(k), sanitize_value(v)}
-    end)
+    |> Enum.reject(fn {_k, v} -> is_binary(v) && byte_size(v) > 10_000 end)
+    |> Enum.map(fn {k, v} -> {to_string(k), sanitize_value(v)} end)
     |> Map.new()
   end
 
   defp sanitize_for_storage(data), do: data
 
-  # Recursively sanitize nested maps
   defp sanitize_value(v) when is_map(v), do: sanitize_for_storage(v)
   defp sanitize_value(v) when is_list(v), do: Enum.map(v, &sanitize_value/1)
   defp sanitize_value(v), do: v
 
-  # Truncate long URLs for logging
   defp truncate_url(nil), do: nil
   defp truncate_url(url) when is_binary(url) do
-    if String.length(url) > 80 do
-      String.slice(url, 0, 77) <> "..."
-    else
-      url
-    end
+    if String.length(url) > 80, do: String.slice(url, 0, 77) <> "...", else: url
   end
 
   @doc """
-  Get the list of currently enabled sources.
-
-  Useful for monitoring and debugging.
-  """
-  @spec enabled_sources() :: [String.t()]
-  def enabled_sources, do: @enabled_sources
-
-  @doc """
-  Get image caching statistics for enabled sources.
-
-  Returns counts of cached, pending, and failed images per source.
+  Get image caching statistics.
   """
   @spec stats() :: map()
   def stats do
-    # Get overall stats from ImageCacheService
-    overall = ImageCacheService.stats()
-
     %{
-      overall: overall,
-      enabled_sources: @enabled_sources,
+      overall: ImageCacheService.stats(),
       high_priority_sources: @high_priority_sources
     }
   end
