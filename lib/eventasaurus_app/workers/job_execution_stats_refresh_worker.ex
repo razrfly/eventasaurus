@@ -1,6 +1,6 @@
 defmodule EventasaurusApp.Workers.JobExecutionStatsRefreshWorker do
   @moduledoc """
-  Worker to refresh the job_execution_stats materialized view every 15 minutes.
+  Worker to refresh the job_execution_stats materialized view hourly.
 
   ## Why a Materialized View?
 
