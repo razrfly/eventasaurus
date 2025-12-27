@@ -5,10 +5,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
   Phase 2 of image caching - extends the existing venue image caching to events.
   Uses a phased source-by-source rollout for safe deployment.
 
-  ## Wave 1 Sources (Test)
-  - question-one: 125 images (known 403 failures - perfect test case)
-  - pubquiz-pl: 106 images (small, low risk)
-
   ## Usage
 
   This module is called from EventProcessor.update_event_source/4 to:
@@ -27,11 +23,24 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
 
   alias EventasaurusApp.Images.ImageCacheService
 
-  # Wave 1 sources (enabled for testing)
-  # Add more sources as each wave is validated
+  # All sources enabled for image caching
   @enabled_sources [
+    "bandsintown",
+    "cinema_city",
+    "geeks_who_drink",
+    "inquizition",
+    "karnet",
+    "kupbilecik",
+    "pubquiz-pl",
     "question-one",
-    "pubquiz-pl"
+    "quizmeisters",
+    "repertuary",
+    "resident_advisor",
+    "sortiraparis",
+    "speed_quizzing",
+    "ticketmaster",
+    "waw4free",
+    "week_pl"
   ]
 
   # High priority sources (known failure domains, cache immediately)

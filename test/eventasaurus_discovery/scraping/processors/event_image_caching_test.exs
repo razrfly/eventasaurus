@@ -3,7 +3,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
   Tests for the EventImageCaching module.
 
   Verifies:
-  - Source enablement for Wave 1 sources (question-one, pubquiz-pl)
+  - Source enablement for all sources (16 total)
   - Priority assignment for high-priority sources
   - Metadata extraction from scraped data
   - Image caching integration with ImageCacheService
@@ -20,15 +20,34 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
   alias EventasaurusDiscovery.Locations.{City, Country}
 
   describe "enabled?/1" do
-    test "returns true for Wave 1 sources" do
-      assert EventImageCaching.enabled?("question-one") == true
-      assert EventImageCaching.enabled?("pubquiz-pl") == true
+    test "returns true for all enabled sources" do
+      enabled = [
+        "bandsintown",
+        "cinema_city",
+        "geeks_who_drink",
+        "inquizition",
+        "karnet",
+        "kupbilecik",
+        "pubquiz-pl",
+        "question-one",
+        "quizmeisters",
+        "repertuary",
+        "resident_advisor",
+        "sortiraparis",
+        "speed_quizzing",
+        "ticketmaster",
+        "waw4free",
+        "week_pl"
+      ]
+
+      for source <- enabled do
+        assert EventImageCaching.enabled?(source) == true, "Expected #{source} to be enabled"
+      end
     end
 
-    test "returns false for non-Wave 1 sources" do
-      assert EventImageCaching.enabled?("bandsintown") == false
-      assert EventImageCaching.enabled?("ticketmaster") == false
-      assert EventImageCaching.enabled?("cinema-city") == false
+    test "returns false for unknown sources" do
+      assert EventImageCaching.enabled?("unknown-source") == false
+      assert EventImageCaching.enabled?("fake-source") == false
     end
 
     test "returns false for nil" do
@@ -174,11 +193,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
       assert {:fallback, nil} = EventImageCaching.cache_event_image(nil, 123, "question-one", %{})
     end
 
-    test "returns fallback for disabled sources" do
+    test "returns fallback for unknown sources" do
       result = EventImageCaching.cache_event_image(
         "https://example.com/image.jpg",
         123,
-        "bandsintown",
+        "unknown-source",
         %{}
       )
 
@@ -239,12 +258,34 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
   end
 
   describe "enabled_sources/0" do
-    test "returns list of enabled sources" do
+    test "returns list of all 16 enabled sources" do
       sources = EventImageCaching.enabled_sources()
 
       assert is_list(sources)
-      assert "question-one" in sources
-      assert "pubquiz-pl" in sources
+      assert length(sources) == 16
+
+      expected = [
+        "bandsintown",
+        "cinema_city",
+        "geeks_who_drink",
+        "inquizition",
+        "karnet",
+        "kupbilecik",
+        "pubquiz-pl",
+        "question-one",
+        "quizmeisters",
+        "repertuary",
+        "resident_advisor",
+        "sortiraparis",
+        "speed_quizzing",
+        "ticketmaster",
+        "waw4free",
+        "week_pl"
+      ]
+
+      for source <- expected do
+        assert source in sources, "Expected #{source} to be in enabled_sources"
+      end
     end
   end
 
