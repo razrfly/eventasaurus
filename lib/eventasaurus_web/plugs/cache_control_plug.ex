@@ -150,8 +150,13 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
   # Check for dev mode login in session (only relevant in dev environment)
   # This runs AFTER maybe_fetch_session, so session data is available
   # This ensures dev-mode logged-in users don't get cached responses
+  #
+  # Note: We check the environment at compile time using @env module attribute
+  # because Mix.env() is not available in production releases.
+  @env Mix.env()
+
   defp has_dev_mode_login?(conn) do
-    if Mix.env() == :dev do
+    if @env == :dev do
       # Session should be fetched by now (after maybe_fetch_session in pipeline)
       case conn.private[:plug_session] do
         nil ->
