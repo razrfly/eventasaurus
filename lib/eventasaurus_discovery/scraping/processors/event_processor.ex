@@ -18,6 +18,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   alias EventasaurusDiscovery.Services.RecurringEventUpdater
   alias EventasaurusDiscovery.Categories.CategoryExtractor
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Scraping.Processors.EventImageCaching
   alias Eventasaurus.Discovery.OccurrenceValidator
   alias Ecto.Multi
 
@@ -836,7 +837,53 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
           end
         end
     end
+    |> maybe_cache_event_image(source_id, data)
   end
+
+  # Phase 2 Event Image Caching: Cache images for enabled sources
+  # Uses source-by-source rollout controlled by EventImageCaching module
+  defp maybe_cache_event_image({:ok, %PublicEventSource{} = event_source}, source_id, data) do
+    # Look up source slug for caching decision
+    source_slug =
+      case Repo.get(Source, source_id) do
+        %Source{slug: slug} when is_binary(slug) -> slug
+        _ -> nil
+      end
+
+    # Only proceed if image caching is enabled for this source
+    if EventImageCaching.enabled?(source_slug) do
+      # Extract image URL from data
+      image_url = data[:image_url] || data["image_url"]
+
+      if image_url do
+        # Get raw data for metadata extraction
+        raw_data = data[:raw_data] || data["raw_data"] || data[:raw_event_data] || data["raw_event_data"] || %{}
+
+        case EventImageCaching.cache_event_image(image_url, event_source.id, source_slug, raw_data) do
+          {:cached, cdn_url} ->
+            # Image already cached - update the event source with CDN URL
+            Logger.info("📷 Using cached CDN URL for event source #{event_source.id}")
+            event_source
+            |> PublicEventSource.changeset(%{image_url: cdn_url})
+            |> Repo.update()
+
+          {:ok, _original_url} ->
+            # Image queued for caching - return event source as-is
+            {:ok, event_source}
+
+          {:fallback, _url} ->
+            # Caching failed - continue with original URL
+            {:ok, event_source}
+        end
+      else
+        {:ok, event_source}
+      end
+    else
+      {:ok, event_source}
+    end
+  end
+
+  defp maybe_cache_event_image({:error, _} = error, _source_id, _data), do: error
 
   defp process_performers(_event, %{performer_names: []}), do: {:ok, []}
 
