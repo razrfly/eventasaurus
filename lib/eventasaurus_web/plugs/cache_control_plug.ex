@@ -20,7 +20,7 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   ## Set-Cookie Stripping
 
-  For catalog routes (using :public or :public_city pipelines), this plug uses
+  For catalog routes (using the :public pipeline), this plug uses
   `register_before_send/2` to strip any Set-Cookie headers before the response
   is sent. This is critical because:
 
@@ -55,7 +55,7 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   ## Usage
 
-  Used in the :public and :public_city pipelines for CDN-cacheable content:
+  Used in the :public pipeline for CDN-cacheable content:
 
       pipeline :public do
         plug EventasaurusWeb.Plugs.CacheControlPlug
@@ -63,6 +63,9 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
       end
 
   Also used in :browser pipeline to set no-cache headers for authenticated users.
+
+  Note: The :public_city pipeline was consolidated into :public. City validation
+  is now handled by CityHooks in the live_session on_mount.
 
   ## References
 
