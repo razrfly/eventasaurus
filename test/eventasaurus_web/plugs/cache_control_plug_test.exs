@@ -83,67 +83,32 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlugTest do
     end
   end
 
-  describe "authenticated users (has __session cookie)" do
-    test "sets cache-control header to prevent caching" do
+  # CDN Caching Strategy (Issue #2970):
+  # We no longer differentiate cache headers by auth state because Cloudflare
+  # doesn't vary cache by cookies. Instead, we cache the same HTML for everyone
+  # and use Clerk's JavaScript SDK to hydrate auth UI client-side.
+  #
+  # The old "authenticated users" tests have been removed since we now serve
+  # the same cache headers regardless of whether __session cookie is present.
+
+  describe "edge cases - cookies don't affect caching (Issue #2970)" do
+    # Since Cloudflare doesn't vary cache by cookies, we cache the same HTML
+    # for everyone. Auth UI is hydrated client-side using Clerk.
+
+    test "requests with __session cookie get same cache headers as anonymous" do
       conn =
         :get
         |> conn("/")
-        |> put_req_cookie("__session", "test-session-token")
+        |> put_req_cookie("__session", "valid-session-token")
         |> CacheControlPlug.call([])
 
+      # Same headers as anonymous - CDN caches for everyone
       assert get_resp_header(conn, "cache-control") == [
-               "private, no-store, no-cache, must-revalidate"
+               "public, s-maxage=172800, max-age=0, must-revalidate"
              ]
     end
 
-    test "sets pragma header to no-cache for HTTP/1.0 compatibility" do
-      conn =
-        :get
-        |> conn("/")
-        |> put_req_cookie("__session", "test-session-token")
-        |> CacheControlPlug.call([])
-
-      assert get_resp_header(conn, "pragma") == ["no-cache"]
-    end
-
-    test "sets expires header to 0" do
-      conn =
-        :get
-        |> conn("/")
-        |> put_req_cookie("__session", "test-session-token")
-        |> CacheControlPlug.call([])
-
-      assert get_resp_header(conn, "expires") == ["0"]
-    end
-
-    test "does not set vary header" do
-      conn =
-        :get
-        |> conn("/")
-        |> put_req_cookie("__session", "test-session-token")
-        |> CacheControlPlug.call([])
-
-      assert get_resp_header(conn, "vary") == []
-    end
-
-    test "ignores :cache_ttl and :cacheable_request assigns when authenticated" do
-      conn =
-        :get
-        |> conn("/activities")
-        |> put_req_cookie("__session", "test-session-token")
-        |> Plug.Conn.assign(:cacheable_request, true)
-        |> Plug.Conn.assign(:cache_ttl, 3600)
-        |> CacheControlPlug.call([])
-
-      # Should still be no-cache because user is authenticated
-      assert get_resp_header(conn, "cache-control") == [
-               "private, no-store, no-cache, must-revalidate"
-             ]
-    end
-  end
-
-  describe "edge cases" do
-    test "empty __session cookie is treated as anonymous" do
+    test "empty __session cookie gets cacheable headers" do
       conn =
         :get
         |> conn("/")
@@ -155,7 +120,7 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlugTest do
              ]
     end
 
-    test "other cookies without __session is treated as anonymous" do
+    test "other cookies get cacheable headers" do
       conn =
         :get
         |> conn("/")
@@ -168,19 +133,20 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlugTest do
     end
   end
 
-  describe "cacheable assigns management for authenticated users" do
-    test "clears cacheable assigns when user has __session cookie" do
+  describe "cacheable assigns management (Issue #2970)" do
+    # With client-side Clerk hydration, we no longer clear assigns based on auth cookies.
+    # CacheControlPlug just reads the assigns set by ConditionalSessionPlug.
+
+    test "preserves cacheable assigns on cacheable routes regardless of auth cookies" do
       conn =
         :get
         |> conn("/activities/some-event")
         |> put_req_cookie("__session", "user-session-token")
         |> Plug.Conn.assign(:cacheable_request, true)
-        |> Plug.Conn.assign(:readonly_session, true)
         |> CacheControlPlug.call([])
 
-      # Cacheable assigns should be cleared so before_send callback doesn't strip cookie
-      assert conn.assigns[:cacheable_request] == false
-      assert conn.assigns[:readonly_session] == false
+      # Assigns are preserved - we cache for everyone with client-side hydration
+      assert conn.assigns[:cacheable_request] == true
     end
 
     test "preserves cacheable assigns for anonymous users on cacheable routes" do
@@ -188,12 +154,10 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlugTest do
         :get
         |> conn("/activities/some-event")
         |> Plug.Conn.assign(:cacheable_request, true)
-        |> Plug.Conn.assign(:readonly_session, true)
         |> CacheControlPlug.call([])
 
-      # Cacheable assigns should be preserved so before_send callback strips cookie
+      # Cacheable assigns should be preserved
       assert conn.assigns[:cacheable_request] == true
-      assert conn.assigns[:readonly_session] == true
     end
 
     test "does not set cacheable assigns for non-cacheable routes" do
@@ -205,7 +169,6 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlugTest do
 
       # No cacheable assigns should be set
       refute Map.has_key?(conn.assigns, :cacheable_request)
-      refute Map.has_key?(conn.assigns, :readonly_session)
     end
   end
 end

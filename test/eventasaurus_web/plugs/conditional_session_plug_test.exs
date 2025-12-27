@@ -6,6 +6,14 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
   alias EventasaurusWeb.Plugs.ConditionalSessionPlug
   alias EventasaurusWeb.Plugs.CacheControlPlug
 
+  # CDN Caching Strategy (Issue #2970):
+  # This plug marks routes as cacheable with appropriate TTL assigns.
+  # Cookie stripping is done at the CDN level (Cloudflare Transform Rules),
+  # NOT at the origin, because stripping breaks LiveView WebSocket auth.
+  #
+  # We cache the SAME HTML for everyone on public pages, regardless of auth state.
+  # Auth UI is hydrated client-side using Clerk's JavaScript SDK.
+
   describe "Phase 1: cacheable activities show pages (48h TTL)" do
     test "marks /activities/:slug as cacheable without custom TTL" do
       conn =
@@ -13,7 +21,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities/summer-festival")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       # Show pages use default TTL (no :cache_ttl assign)
       refute Map.has_key?(conn.assigns, :cache_ttl)
@@ -25,7 +32,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities/summer-festival/2025-01-15")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -36,7 +42,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities/my-awesome-event-123")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
   end
@@ -48,7 +53,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/venues/awesome-venue")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -59,7 +63,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/venues/the-jazz-club-123")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
   end
@@ -71,7 +74,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/performers/john-doe")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -82,7 +84,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/performers/the-rolling-stones-123")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
   end
@@ -94,7 +95,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/movies/157336")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -105,7 +105,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/movies/interstellar-157336")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
   end
@@ -117,7 +116,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       # Index pages get specific TTL
       assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
@@ -130,32 +128,9 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/movies")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
       assert conn.assigns[:cache_ttl] == 3600
-    end
-
-    test "does not mark /activities index as cacheable when authenticated" do
-      conn =
-        :get
-        |> conn("/activities")
-        |> put_req_cookie("__session", "valid-session-token")
-        |> ConditionalSessionPlug.call([])
-
-      refute conn.assigns[:readonly_session]
-      refute conn.assigns[:cacheable_request]
-    end
-
-    test "does not mark /movies index as cacheable when authenticated" do
-      conn =
-        :get
-        |> conn("/movies")
-        |> put_req_cookie("__session", "valid-session-token")
-        |> ConditionalSessionPlug.call([])
-
-      refute conn.assigns[:readonly_session]
-      refute conn.assigns[:cacheable_request]
     end
   end
 
@@ -169,7 +144,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/social/pubquiz-pl")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
       assert conn.assigns[:cache_ttl] == 3600
@@ -181,7 +155,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/food/street-food-festival")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -194,23 +167,9 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
           |> conn(path)
           |> ConditionalSessionPlug.call([])
 
-        refute conn.assigns[:readonly_session],
-               "#{path} should not be marked readonly_session"
-
         refute conn.assigns[:cacheable_request],
                "#{path} should not be marked cacheable_request"
       end
-    end
-
-    test "does not mark aggregated content as cacheable when authenticated" do
-      conn =
-        :get
-        |> conn("/social/pubquiz-pl")
-        |> put_req_cookie("__session", "valid-session-token")
-        |> ConditionalSessionPlug.call([])
-
-      refute conn.assigns[:readonly_session]
-      refute conn.assigns[:cacheable_request]
     end
 
     test "does not mark nested aggregated content paths as cacheable" do
@@ -220,7 +179,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/social/pubquiz-pl/extra")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
   end
@@ -232,7 +190,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/venues/palladium")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       # Show pages use default TTL (no :cache_ttl assign)
       refute Map.has_key?(conn.assigns, :cache_ttl)
@@ -244,7 +201,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/krakow/movies/interstellar-157336")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -255,7 +211,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/festivals/summer-fest-2025")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -266,7 +221,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/krakow/conferences/tech-summit")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       refute Map.has_key?(conn.assigns, :cache_ttl)
     end
@@ -277,7 +231,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/tours/city-walking-tour")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
 
@@ -287,7 +240,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/series/weekly-comedy")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
 
@@ -297,7 +249,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/krakow/exhibitions/modern-art")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
 
@@ -307,19 +258,7 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/tournaments/chess-championship")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
-    end
-
-    test "does not mark city show page as cacheable when authenticated" do
-      conn =
-        :get
-        |> conn("/c/warsaw/venues/palladium")
-        |> put_req_cookie("__session", "valid-session-token")
-        |> ConditionalSessionPlug.call([])
-
-      refute conn.assigns[:readonly_session]
-      refute conn.assigns[:cacheable_request]
     end
   end
 
@@ -330,7 +269,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
       assert conn.assigns[:cache_ttl] == 3600
@@ -342,7 +280,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/venues")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -353,7 +290,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/festivals")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -364,7 +300,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/krakow/conferences")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -375,7 +310,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/tours")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -386,7 +320,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/krakow/series")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -397,7 +330,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/exhibitions")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
@@ -408,20 +340,8 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/krakow/tournaments")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
-    end
-
-    test "does not mark city index page as cacheable when authenticated" do
-      conn =
-        :get
-        |> conn("/c/warsaw")
-        |> put_req_cookie("__session", "valid-session-token")
-        |> ConditionalSessionPlug.call([])
-
-      refute conn.assigns[:readonly_session]
-      refute conn.assigns[:cacheable_request]
     end
   end
 
@@ -435,7 +355,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/krakow/social/networking-event")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == CacheControlPlug.index_page_ttl()
       assert conn.assigns[:cache_ttl] == 3600
@@ -447,36 +366,25 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/food/street-food-fest")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
       assert conn.assigns[:cache_ttl] == 3600
     end
 
     test "does not mark unimplemented city content types as cacheable" do
       # Trivia, music, comedy, etc. are not implemented yet - no catch-all pattern
-      for path <- ["/c/warsaw/trivia/pubquiz-pl", "/c/warsaw/music/jazz", "/c/warsaw/comedy/standup"] do
+      for path <- [
+            "/c/warsaw/trivia/pubquiz-pl",
+            "/c/warsaw/music/jazz",
+            "/c/warsaw/comedy/standup"
+          ] do
         conn =
           :get
           |> conn(path)
           |> ConditionalSessionPlug.call([])
 
-        refute conn.assigns[:readonly_session],
-               "#{path} should not be marked readonly_session"
-
         refute conn.assigns[:cacheable_request],
                "#{path} should not be marked cacheable_request"
       end
-    end
-
-    test "does not mark city aggregated content as cacheable when authenticated" do
-      conn =
-        :get
-        |> conn("/c/warsaw/social/pubquiz-pl")
-        |> put_req_cookie("__session", "valid-session-token")
-        |> ConditionalSessionPlug.call([])
-
-      refute conn.assigns[:readonly_session]
-      refute conn.assigns[:cacheable_request]
     end
   end
 
@@ -487,20 +395,17 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/c/warsaw/search")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
-
   end
 
-  describe "non-cacheable routes without auth cookie" do
+  describe "non-cacheable routes" do
     test "does not mark / as cacheable" do
       conn =
         :get
         |> conn("/")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
 
@@ -510,7 +415,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/activities/slug/date/extra")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
 
@@ -520,234 +424,87 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
         |> conn("/admin/dashboard")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:readonly_session]
       refute conn.assigns[:cacheable_request]
     end
   end
 
-  describe "authenticated users (has __session cookie)" do
-    test "does not mark cacheable route as cacheable when authenticated" do
+  describe "CDN caching strategy - auth cookies don't affect caching (Issue #2970)" do
+    # With client-side Clerk hydration, we cache the same HTML for everyone.
+    # Auth UI is hydrated client-side using Clerk's JavaScript SDK.
+    # The __session cookie no longer prevents CDN caching.
+
+    test "marks cacheable route as cacheable even with __session cookie" do
       conn =
         :get
         |> conn("/activities/summer-festival")
         |> put_req_cookie("__session", "valid-session-token")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:readonly_session]
-      refute conn.assigns[:cacheable_request]
+      # Caches for everyone - auth UI is hydrated client-side
+      assert conn.assigns[:cacheable_request] == true
     end
 
-    test "does not mark date-based route as cacheable when authenticated" do
+    test "marks date-based route as cacheable even with __session cookie" do
       conn =
         :get
         |> conn("/activities/summer-festival/2025-01-15")
         |> put_req_cookie("__session", "valid-session-token")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:readonly_session]
-      refute conn.assigns[:cacheable_request]
+      # Caches for everyone - auth UI is hydrated client-side
+      assert conn.assigns[:cacheable_request] == true
     end
   end
 
-  describe "edge cases" do
-    test "empty __session cookie is treated as anonymous" do
+  describe "edge cases - all cookies get same caching (Issue #2970)" do
+    # With client-side Clerk hydration, we cache for everyone regardless of cookies.
+
+    test "empty __session cookie gets cacheable headers" do
       conn =
         :get
         |> conn("/activities/summer-festival")
         |> put_req_cookie("__session", "")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
 
-    test "other cookies without __session are treated as anonymous" do
+    test "other cookies get cacheable headers" do
       conn =
         :get
         |> conn("/activities/summer-festival")
         |> put_req_cookie("other_cookie", "some-value")
         |> ConditionalSessionPlug.call([])
 
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
 
-    test "whitespace-only __session cookie in test is normalized to empty" do
-      # Note: Plug.Test normalizes whitespace-only cookies to empty strings
-      # In production, whitespace would be preserved and treated as authenticated
-      # This test documents the test infrastructure behavior
+    test "whitespace-only __session cookie gets cacheable headers" do
       conn =
         :get
         |> conn("/activities/summer-festival")
         |> put_req_cookie("__session", "   ")
         |> ConditionalSessionPlug.call([])
 
-      # Test infrastructure normalizes "   " to "", so treated as anonymous
-      assert conn.assigns[:readonly_session] == true
       assert conn.assigns[:cacheable_request] == true
     end
 
-    test "real token is treated as authenticated" do
-      # Any real token value prevents caching
+    test "real JWT token gets cacheable headers (auth via client-side hydration)" do
+      # With Issue #2970, we cache for everyone regardless of auth state
+      # Auth UI is hydrated client-side using Clerk's JavaScript SDK
       conn =
         :get
         |> conn("/activities/summer-festival")
         |> put_req_cookie("__session", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9")
         |> ConditionalSessionPlug.call([])
 
-      refute conn.assigns[:readonly_session]
-      refute conn.assigns[:cacheable_request]
+      # Caches for everyone - auth UI is hydrated client-side
+      assert conn.assigns[:cacheable_request] == true
     end
   end
 
-  describe "session cookie stripping via before_send callback" do
-    import Plug.Conn
-
-    # Helper to set up a conn with session initialized and modified
-    # Uses the same cookie name as the production application
-    # Note: We must actually PUT something in the session for Set-Cookie to be generated
-    defp with_session(conn) do
-      opts =
-        Plug.Session.init(
-          store: :cookie,
-          key: "_eventasaurus_key",
-          signing_salt: "test_salt",
-          encryption_salt: "test_encryption_salt"
-        )
-
-      # Must set secret_key_base for cookie store to work
-      conn
-      |> Map.put(:secret_key_base, String.duplicate("a", 64))
-      |> Plug.Session.call(opts)
-      |> fetch_session()
-      |> put_session("_csrf_token", "test_csrf_token")
-    end
-
-    test "strips session cookie from resp_cookies for cacheable anonymous requests" do
-      # Simulate the full pipeline: ConditionalSessionPlug → Session → Response
-      conn =
-        :get
-        |> conn("/activities/summer-festival")
-        |> ConditionalSessionPlug.call([])
-        |> with_session()
-
-      # Verify assigns are set
-      assert conn.assigns[:cacheable_request] == true
-      assert conn.assigns[:readonly_session] == true
-
-      # Send response to trigger before_send callbacks
-      conn = send_resp(conn, 200, "OK")
-
-      # Session cookie should be stripped from resp_cookies (which becomes set-cookie header)
-      refute Map.has_key?(conn.resp_cookies, "_eventasaurus_key"),
-             "Session cookie should be stripped for cacheable requests"
-
-      # Verify no set-cookie header for the session cookie
-      set_cookie_headers = get_resp_header(conn, "set-cookie")
-
-      session_cookies =
-        Enum.filter(set_cookie_headers, fn cookie ->
-          String.starts_with?(cookie, "_eventasaurus_key=")
-        end)
-
-      assert session_cookies == [], "Session cookie header should not be present"
-    end
-
-    test "does not strip session cookie for authenticated users" do
-      # Authenticated user (has __session cookie) - callback should never be registered
-      conn =
-        :get
-        |> conn("/activities/summer-festival")
-        |> put_req_cookie("__session", "valid-session-token")
-        |> ConditionalSessionPlug.call([])
-        |> with_session()
-
-      # ConditionalSessionPlug should NOT register the callback for authenticated users
-      # Verify assigns are NOT set (no cacheable_request for auth users)
-      refute conn.assigns[:cacheable_request]
-      refute conn.assigns[:readonly_session]
-
-      # Send response
-      conn = send_resp(conn, 200, "OK")
-
-      # Session cookie should NOT be stripped for authenticated users
-      set_cookie_headers = get_resp_header(conn, "set-cookie")
-
-      session_cookies =
-        Enum.filter(set_cookie_headers, fn cookie ->
-          String.starts_with?(cookie, "_eventasaurus_key=")
-        end)
-
-      # Cookie should be present (not stripped)
-      assert length(session_cookies) > 0,
-             "Session cookie should NOT be stripped for authenticated users"
-    end
-
-    test "callback respects cleared assigns when CacheControlPlug clears them" do
-      # This tests that even if the callback IS registered, clearing the assigns
-      # will prevent stripping. This simulates the dev_mode_login case where
-      # the callback is registered but later cleared by CacheControlPlug.
-      conn =
-        :get
-        |> conn("/activities/summer-festival")
-        |> ConditionalSessionPlug.call([])
-        |> with_session()
-
-      # At this point, callback is registered and assigns are set
-      assert conn.assigns[:cacheable_request] == true
-      assert conn.assigns[:readonly_session] == true
-
-      # Simulate CacheControlPlug clearing assigns (e.g., for dev mode login)
-      conn =
-        conn
-        |> assign(:cacheable_request, false)
-        |> assign(:readonly_session, false)
-
-      # Send response
-      conn = send_resp(conn, 200, "OK")
-
-      # Session cookie should NOT be stripped because assigns are cleared
-      set_cookie_headers = get_resp_header(conn, "set-cookie")
-
-      session_cookies =
-        Enum.filter(set_cookie_headers, fn cookie ->
-          String.starts_with?(cookie, "_eventasaurus_key=")
-        end)
-
-      # Cookie should be present (not stripped due to cleared assigns)
-      assert length(session_cookies) > 0,
-             "Session cookie should NOT be stripped when cacheable_request is false"
-    end
-
-    test "preserves other cookies while stripping session cookie" do
-      conn =
-        :get
-        |> conn("/activities/summer-festival")
-        |> ConditionalSessionPlug.call([])
-        |> with_session()
-        # Add another cookie to response
-        |> put_resp_cookie("language", "pl")
-
-      # Send response
-      conn = send_resp(conn, 200, "OK")
-
-      set_cookie_headers = get_resp_header(conn, "set-cookie")
-
-      # Session cookie should be stripped
-      session_cookies =
-        Enum.filter(set_cookie_headers, fn cookie ->
-          String.starts_with?(cookie, "_eventasaurus_key=")
-        end)
-
-      assert session_cookies == []
-
-      # Other cookies should be preserved
-      language_cookies =
-        Enum.filter(set_cookie_headers, fn cookie ->
-          String.starts_with?(cookie, "language=")
-        end)
-
-      assert length(language_cookies) > 0, "Non-session cookies should be preserved"
-    end
-  end
+  # Note: Cookie stripping tests have been removed because cookie stripping
+  # is now done at the CDN level (Cloudflare Transform Rules), not at the origin.
+  # Stripping cookies at the origin breaks LiveView WebSocket authentication.
+  # See: https://github.com/razrfly/eventasaurus/issues/2970
 end
