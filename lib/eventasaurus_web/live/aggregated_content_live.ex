@@ -54,7 +54,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     end
   end
 
-  # City-scoped route: /c/:city_slug/:content_type/:identifier
+  # City-scoped route with explicit content type: /c/:city_slug/:content_type/:identifier
   @impl true
   def mount(
         %{"city_slug" => city_slug, "content_type" => content_type, "identifier" => identifier},
@@ -90,12 +90,49 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     end
   end
 
+  # City-scoped route with implicit content type: /c/:city_slug/social/:identifier, /c/:city_slug/food/:identifier
+  # Content type is extracted from URL path in handle_params
+  @impl true
+  def mount(
+        %{"city_slug" => city_slug, "identifier" => identifier} = params,
+        _session,
+        socket
+      )
+      when not is_map_key(params, "content_type") do
+    # Capture request URI for building absolute URLs (ngrok support)
+    request_uri = extract_request_uri(socket)
+
+    # Look up city
+    case Locations.get_city_by_slug(city_slug) do
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:error, "City not found")
+         |> push_navigate(to: ~p"/activities")}
+
+      city ->
+        # Content type will be extracted from URL path in handle_params
+        {:ok,
+         socket
+         |> assign(:city, city)
+         |> assign(:content_type, nil)
+         |> assign(:content_type_slug, nil)
+         |> assign(:identifier, identifier)
+         |> assign(:scope, :city_only)
+         |> assign(:page_title, nil)
+         |> assign(:source_name, get_source_name(identifier))
+         |> assign(:is_multi_city_route, false)
+         |> assign(:request_uri, request_uri)}
+    end
+  end
+
   @impl true
   def handle_params(params, url, socket) do
-    # Extract content type from URL path for multi-city routes
-    # URL format: /social/:identifier or /movies/:identifier, etc.
+    # Extract content type from URL path when not provided in params
+    # Handles both multi-city routes (/social/:identifier) and
+    # city-scoped routes with implicit type (/c/:city_slug/social/:identifier)
     socket =
-      if socket.assigns[:is_multi_city_route] && is_nil(socket.assigns[:content_type]) do
+      if is_nil(socket.assigns[:content_type]) do
         content_type_slug = extract_content_type_from_url(url)
         schema_type = AggregationTypeSlug.from_slug(content_type_slug)
 
@@ -137,13 +174,15 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     case PublicEventContainers.get_container_by_slug(identifier) do
       %{slug: container_slug, container_type: container_type} = _container ->
         # Redirect to type-specific container route for semantic URLs
+        # IMPORTANT: Use redirect/2 instead of push_navigate/2 because
+        # the target route is in a different live_session (:city vs :catalog)
         type_plural =
           EventasaurusDiscovery.PublicEvents.PublicEventContainer.container_type_plural(
             container_type
           )
 
         {:noreply,
-         push_navigate(socket, to: ~p"/c/#{city.slug}/#{type_plural}/#{container_slug}")}
+         redirect(socket, to: "/c/#{city.slug}/#{type_plural}/#{container_slug}")}
 
       nil ->
         # Not a container - continue with source aggregation
@@ -153,13 +192,23 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   end
 
   # Extract content type slug from URL path
-  # e.g., "/social/pubquiz-pl?city=krakow" -> "social"
+  # Handles both URL formats:
+  # - "/social/pubquiz-pl" -> "social" (multi-city route, first segment)
+  # - "/c/warsaw/social/pubquiz-pl" -> "social" (city-scoped route, third segment)
   defp extract_content_type_from_url(url) do
-    url
-    |> URI.parse()
-    |> Map.get(:path, "")
-    |> String.split("/", trim: true)
-    |> List.first()
+    segments =
+      url
+      |> URI.parse()
+      |> Map.get(:path, "")
+      |> String.split("/", trim: true)
+
+    case segments do
+      # City-scoped route: /c/:city_slug/:content_type/:identifier
+      ["c", _city_slug, content_type, _identifier | _] -> content_type
+      # Multi-city route: /:content_type/:identifier
+      [content_type | _] -> content_type
+      _ -> nil
+    end
   end
 
   @impl true
@@ -171,31 +220,23 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       end
 
     # Navigate to appropriate route based on scope
-    socket =
-      socket
-      |> assign(:scope, scope)
-      |> then(fn socket ->
-        if scope == :all_cities do
-          # Expanding to all cities - use multi-city route
-          # Multi-city routes use plural slugs: /festivals/:identifier, /social/:identifier
-          multi_city_slug = singular_to_plural_slug(socket.assigns.content_type_slug)
+    # IMPORTANT: Use redirect/2 instead of push_navigate/2 because the routes
+    # are in different live_sessions (:catalog vs :city). Cross-session navigation
+    # requires a full page load via redirect.
+    url =
+      if scope == :all_cities do
+        # Expanding to all cities - use multi-city route (in :catalog live_session)
+        # Multi-city routes use plural slugs: /festivals/:identifier, /social/:identifier
+        multi_city_slug = singular_to_plural_slug(socket.assigns.content_type_slug)
+        "/#{multi_city_slug}/#{socket.assigns.identifier}?scope=all&city=#{socket.assigns.city.slug}"
+      else
+        # Collapsing to city only - use city-scoped route (in :city live_session)
+        # City-scoped routes use singular slugs: /c/:city_slug/:content_type/:identifier
+        city_content_slug = plural_to_singular_slug(socket.assigns.content_type_slug)
+        "/c/#{socket.assigns.city.slug}/#{city_content_slug}/#{socket.assigns.identifier}"
+      end
 
-          push_navigate(socket,
-            to:
-              "/#{multi_city_slug}/#{socket.assigns.identifier}?scope=all&city=#{socket.assigns.city.slug}"
-          )
-        else
-          # Collapsing to city only - use city-scoped route
-          # City-scoped routes use singular slugs: /c/:city_slug/:content_type/:identifier
-          city_content_slug = plural_to_singular_slug(socket.assigns.content_type_slug)
-
-          push_navigate(socket,
-            to: "/c/#{socket.assigns.city.slug}/#{city_content_slug}/#{socket.assigns.identifier}"
-          )
-        end
-      end)
-
-    {:noreply, socket}
+    {:noreply, redirect(socket, to: url)}
   end
 
   # Load events based on scope - OPTIMIZED VERSION

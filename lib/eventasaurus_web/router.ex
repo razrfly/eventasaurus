@@ -324,35 +324,28 @@ defmodule EventasaurusWeb.Router do
     plug EventasaurusWeb.Plugs.AggregationTypeRedirect
   end
 
-  # Helper function to conditionally fetch session
-  # Skipped when ConditionalSessionPlug marks the request as readonly (cacheable anonymous)
+  # Helper function to fetch session
+  # IMPORTANT: Session must ALWAYS be fetched for LiveView CSRF token validation
+  # The :readonly_session assign is used by LanguagePlug to prevent session WRITES,
+  # but we still need to READ the session for LiveView to work
   defp maybe_fetch_session(conn, _opts) do
-    if conn.assigns[:readonly_session] do
-      conn
-    else
-      fetch_session(conn)
-    end
+    # Always fetch session - LiveView websocket needs it for CSRF validation
+    # The readonly_session flag only prevents writes, not reads
+    fetch_session(conn)
   end
 
-  # Helper function to conditionally protect from forgery
-  # Skipped when ConditionalSessionPlug marks the request as readonly (cacheable anonymous)
+  # Helper function to protect from forgery
+  # IMPORTANT: CSRF protection must ALWAYS be enabled for LiveView to work
   defp maybe_protect_from_forgery(conn, _opts) do
-    if conn.assigns[:readonly_session] do
-      conn
-    else
-      protect_from_forgery(conn)
-    end
+    # Always protect from forgery - LiveView needs CSRF tokens
+    protect_from_forgery(conn)
   end
 
-  # Helper function to conditionally fetch live flash (requires session)
-  # Skipped when ConditionalSessionPlug marks the request as readonly (cacheable anonymous)
+  # Helper function to fetch live flash
+  # IMPORTANT: Live flash must ALWAYS be fetched for LiveView to work
   defp maybe_fetch_live_flash(conn, _opts) do
-    if conn.assigns[:readonly_session] do
-      # Assign empty flash for LiveView compatibility
-      assign(conn, :flash, %{})
-    else
-      fetch_live_flash(conn, [])
-    end
+    # Always fetch live flash - LiveView requires it
+    fetch_live_flash(conn, [])
   end
 
 
