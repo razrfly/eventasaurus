@@ -5,7 +5,7 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
   ## Caching Strategy
 
   - **Public catalog pages** (`:cacheable_request` + `:readonly_session` assigns set):
-    - Session is readonly (no writes), Set-Cookie header is STRIPPED before response
+    - Set-Cookie header is STRIPPED via before_send callback in ConditionalSessionPlug
     - `Cache-Control: public, s-maxage=TTL, max-age=0, must-revalidate`
     - CDN caches the response (no Set-Cookie = Cloudflare respects Cache-Control)
     - Show pages: 48h TTL, Index pages: 1h TTL
@@ -17,23 +17,22 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
   - **Authenticated users** (has `__session` cookie): No caching
     - `Cache-Control: private, no-store, no-cache, must-revalidate`
     - Every request goes to origin server
+    - Cacheable assigns are CLEARED so cookie stripping doesn't happen
 
-  ## Preventing Set-Cookie Headers
+  ## How Set-Cookie Stripping Works
 
-  For cacheable catalog routes, this plug calls `configure_session(ignore: true)`
-  which tells Plug.Session NOT to write its session cookie. This is critical because:
+  The cookie stripping is done via `register_before_send` in ConditionalSessionPlug:
 
-  1. Cloudflare automatically bypasses cache when Set-Cookie is present
-  2. Phoenix adds Set-Cookie via Plug.Session's `before_send` callback
-  3. Using `configure_session(ignore: true)` prevents the cookie at the source
+  1. ConditionalSessionPlug runs FIRST, registers a before_send callback
+  2. fetch_session runs, Plug.Session registers ITS before_send callback
+  3. Response is sent, before_send runs in LIFO order:
+     - Plug.Session's callback runs FIRST (adds Set-Cookie)
+     - Our callback runs SECOND (strips the session cookie if still cacheable)
 
-  Note: We cannot use `register_before_send` to strip the cookie because callbacks
-  run in LIFO order (last registered runs first). Since CacheControlPlug runs after
-  `fetch_session`, our callback would run BEFORE Session's callback adds the cookie.
-
-  The session ignoring only occurs when BOTH conditions are true:
-  - `conn.assigns[:cacheable_request]` is truthy
-  - `conn.assigns[:readonly_session]` is truthy
+  This approach works because:
+  - Session is NOT ignored, so LiveView CSRF tokens work correctly
+  - Cookie is stripped at the very end, after all session operations complete
+  - Authenticated users have assigns cleared, so stripping doesn't happen
 
   ## Cache TTL Configuration
 
@@ -103,18 +102,29 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
   @impl Plug
   def call(conn, _opts) do
     cond do
-      # Authenticated user - no caching
+      # Authenticated user (production Clerk session) - no caching
+      # Clear cacheable assigns so the before_send callback won't strip cookies
       has_session_cookie?(conn) ->
-        set_no_cache_headers(conn)
+        conn
+        |> clear_cacheable_assigns()
+        |> set_no_cache_headers()
+
+      # Dev mode authenticated user - no caching
+      # This check must be in CacheControlPlug (not ConditionalSessionPlug)
+      # because session is only available after maybe_fetch_session runs
+      # Clear cacheable assigns so the before_send callback won't strip cookies
+      has_dev_mode_login?(conn) ->
+        conn
+        |> clear_cacheable_assigns()
+        |> set_no_cache_headers()
 
       # Cacheable route with anonymous user - use specific TTL if set
       # This is set by ConditionalSessionPlug for allowlisted routes
+      # The before_send callback registered by ConditionalSessionPlug will strip
+      # the session cookie since cacheable assigns are still set
       conn.assigns[:cacheable_request] ->
         ttl = conn.assigns[:cache_ttl] || @default_ttl
-
-        conn
-        |> set_cacheable_headers(ttl)
-        |> prevent_session_cookie()
+        set_cacheable_headers(conn, ttl)
 
       # Default anonymous - still set cache headers (may be bypassed by Set-Cookie)
       true ->
@@ -122,36 +132,12 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
     end
   end
 
-  # Prevent Plug.Session from adding Set-Cookie header for cacheable requests
-  # Uses configure_session(ignore: true) which tells Session's before_send callback
-  # to skip writing the cookie entirely.
-  #
-  # This is the correct approach because:
-  # 1. before_send callbacks run in LIFO order (last registered runs first)
-  # 2. Session registers its callback when fetch_session is called (early)
-  # 3. Our callback would run BEFORE Session's, so we can't strip what isn't there yet
-  # 4. configure_session(ignore: true) prevents Session from adding the cookie at all
-  defp prevent_session_cookie(conn) do
-    require Logger
-
-    cacheable = conn.assigns[:cacheable_request]
-    readonly = conn.assigns[:readonly_session]
-
-    if cacheable && readonly do
-      Logger.debug(
-        "[CacheControl] Configuring session to ignore for #{conn.request_path} " <>
-          "(preventing Set-Cookie header)"
-      )
-
-      configure_session(conn, ignore: true)
-    else
-      Logger.debug(
-        "[CacheControl] NOT ignoring session for #{conn.request_path} " <>
-          "cacheable=#{inspect(cacheable)} readonly=#{inspect(readonly)}"
-      )
-
-      conn
-    end
+  # Clear cacheable assigns so the before_send callback won't strip cookies
+  # This is called for authenticated users who should have normal session behavior
+  defp clear_cacheable_assigns(conn) do
+    conn
+    |> assign(:cacheable_request, false)
+    |> assign(:readonly_session, false)
   end
 
   # Check if the request has a Clerk session cookie
@@ -159,6 +145,27 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
     conn = fetch_cookies(conn)
     cookie_value = conn.cookies["__session"]
     cookie_value != nil and cookie_value != ""
+  end
+
+  # Check for dev mode login in session (only relevant in dev environment)
+  # This runs AFTER maybe_fetch_session, so session data is available
+  # This ensures dev-mode logged-in users don't get cached responses
+  defp has_dev_mode_login?(conn) do
+    if Mix.env() == :dev do
+      # Session should be fetched by now (after maybe_fetch_session in pipeline)
+      case conn.private[:plug_session] do
+        nil ->
+          # Session not fetched - this shouldn't happen in :public pipeline
+          false
+
+        _session ->
+          # Session exists, check for dev login flag
+          get_session(conn, "dev_mode_login") == true
+      end
+    else
+      # In production, there's no dev mode login
+      false
+    end
   end
 
   # Headers for authenticated users - no caching

@@ -599,4 +599,155 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlugTest do
       refute conn.assigns[:cacheable_request]
     end
   end
+
+  describe "session cookie stripping via before_send callback" do
+    import Plug.Conn
+
+    # Helper to set up a conn with session initialized and modified
+    # Uses the same cookie name as the production application
+    # Note: We must actually PUT something in the session for Set-Cookie to be generated
+    defp with_session(conn) do
+      opts =
+        Plug.Session.init(
+          store: :cookie,
+          key: "_eventasaurus_key",
+          signing_salt: "test_salt",
+          encryption_salt: "test_encryption_salt"
+        )
+
+      # Must set secret_key_base for cookie store to work
+      conn
+      |> Map.put(:secret_key_base, String.duplicate("a", 64))
+      |> Plug.Session.call(opts)
+      |> fetch_session()
+      |> put_session("_csrf_token", "test_csrf_token")
+    end
+
+    test "strips session cookie from resp_cookies for cacheable anonymous requests" do
+      # Simulate the full pipeline: ConditionalSessionPlug → Session → Response
+      conn =
+        :get
+        |> conn("/activities/summer-festival")
+        |> ConditionalSessionPlug.call([])
+        |> with_session()
+
+      # Verify assigns are set
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:readonly_session] == true
+
+      # Send response to trigger before_send callbacks
+      conn = send_resp(conn, 200, "OK")
+
+      # Session cookie should be stripped from resp_cookies (which becomes set-cookie header)
+      refute Map.has_key?(conn.resp_cookies, "_eventasaurus_key"),
+             "Session cookie should be stripped for cacheable requests"
+
+      # Verify no set-cookie header for the session cookie
+      set_cookie_headers = get_resp_header(conn, "set-cookie")
+
+      session_cookies =
+        Enum.filter(set_cookie_headers, fn cookie ->
+          String.starts_with?(cookie, "_eventasaurus_key=")
+        end)
+
+      assert session_cookies == [], "Session cookie header should not be present"
+    end
+
+    test "does not strip session cookie for authenticated users" do
+      # Authenticated user (has __session cookie) - callback should never be registered
+      conn =
+        :get
+        |> conn("/activities/summer-festival")
+        |> put_req_cookie("__session", "valid-session-token")
+        |> ConditionalSessionPlug.call([])
+        |> with_session()
+
+      # ConditionalSessionPlug should NOT register the callback for authenticated users
+      # Verify assigns are NOT set (no cacheable_request for auth users)
+      refute conn.assigns[:cacheable_request]
+      refute conn.assigns[:readonly_session]
+
+      # Send response
+      conn = send_resp(conn, 200, "OK")
+
+      # Session cookie should NOT be stripped for authenticated users
+      set_cookie_headers = get_resp_header(conn, "set-cookie")
+
+      session_cookies =
+        Enum.filter(set_cookie_headers, fn cookie ->
+          String.starts_with?(cookie, "_eventasaurus_key=")
+        end)
+
+      # Cookie should be present (not stripped)
+      assert length(session_cookies) > 0,
+             "Session cookie should NOT be stripped for authenticated users"
+    end
+
+    test "callback respects cleared assigns when CacheControlPlug clears them" do
+      # This tests that even if the callback IS registered, clearing the assigns
+      # will prevent stripping. This simulates the dev_mode_login case where
+      # the callback is registered but later cleared by CacheControlPlug.
+      conn =
+        :get
+        |> conn("/activities/summer-festival")
+        |> ConditionalSessionPlug.call([])
+        |> with_session()
+
+      # At this point, callback is registered and assigns are set
+      assert conn.assigns[:cacheable_request] == true
+      assert conn.assigns[:readonly_session] == true
+
+      # Simulate CacheControlPlug clearing assigns (e.g., for dev mode login)
+      conn =
+        conn
+        |> assign(:cacheable_request, false)
+        |> assign(:readonly_session, false)
+
+      # Send response
+      conn = send_resp(conn, 200, "OK")
+
+      # Session cookie should NOT be stripped because assigns are cleared
+      set_cookie_headers = get_resp_header(conn, "set-cookie")
+
+      session_cookies =
+        Enum.filter(set_cookie_headers, fn cookie ->
+          String.starts_with?(cookie, "_eventasaurus_key=")
+        end)
+
+      # Cookie should be present (not stripped due to cleared assigns)
+      assert length(session_cookies) > 0,
+             "Session cookie should NOT be stripped when cacheable_request is false"
+    end
+
+    test "preserves other cookies while stripping session cookie" do
+      conn =
+        :get
+        |> conn("/activities/summer-festival")
+        |> ConditionalSessionPlug.call([])
+        |> with_session()
+        # Add another cookie to response
+        |> put_resp_cookie("language", "pl")
+
+      # Send response
+      conn = send_resp(conn, 200, "OK")
+
+      set_cookie_headers = get_resp_header(conn, "set-cookie")
+
+      # Session cookie should be stripped
+      session_cookies =
+        Enum.filter(set_cookie_headers, fn cookie ->
+          String.starts_with?(cookie, "_eventasaurus_key=")
+        end)
+
+      assert session_cookies == []
+
+      # Other cookies should be preserved
+      language_cookies =
+        Enum.filter(set_cookie_headers, fn cookie ->
+          String.starts_with?(cookie, "language=")
+        end)
+
+      assert length(language_cookies) > 0, "Non-session cookies should be preserved"
+    end
+  end
 end
