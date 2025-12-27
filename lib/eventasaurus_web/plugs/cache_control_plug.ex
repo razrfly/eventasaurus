@@ -4,18 +4,29 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   ## Caching Strategy
 
-  - **Cacheable routes with anonymous users** (`:cacheable_request` assign set):
+  - **Show pages** (`:cacheable_request` assign set, `:cache_ttl` not set):
     - Session is skipped, no Set-Cookie header sent
-    - `Cache-Control: public, s-maxage=43200, max-age=0, must-revalidate`
+    - `Cache-Control: public, s-maxage=172800, max-age=0, must-revalidate` (48 hours)
     - CDN can cache the response (no Set-Cookie to trigger bypass)
 
+  - **Index pages** (`:cacheable_request` and `:cache_ttl` assigns set):
+    - Session is skipped, no Set-Cookie header sent
+    - `Cache-Control: public, s-maxage=3600, max-age=0, must-revalidate` (1 hour)
+    - CDN caches with shorter TTL for more dynamic content
+
   - **Other anonymous users** (no `__session` cookie): CDN caching headers set
-    - `Cache-Control: public, s-maxage=43200, max-age=0, must-revalidate`
+    - `Cache-Control: public, s-maxage=172800, max-age=0, must-revalidate`
     - Note: May still have Set-Cookie which causes Cloudflare to bypass
 
   - **Authenticated users** (has `__session` cookie): No caching
     - `Cache-Control: private, no-store, no-cache, must-revalidate`
     - Every request goes to origin server
+
+  ## Cache TTL Configuration
+
+  TTL values are easily configurable via module attributes:
+  - `@show_page_ttl` - Show pages (48 hours = 172800 seconds)
+  - `@index_page_ttl` - Index pages (1 hour = 3600 seconds)
 
   ## Why Check Cookie Instead of Auth State?
 
@@ -53,8 +64,20 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   @behaviour Plug
 
-  # CDN cache duration for anonymous users (12 hours in seconds)
-  @anonymous_cdn_ttl 43200
+  # =============================================================================
+  # CACHE TTL CONFIGURATION (easily adjustable)
+  # =============================================================================
+
+  # Show pages: /activities/:slug, /venues/:slug, /performers/:slug, /movies/:id
+  # These are relatively static and can be cached longer
+  @show_page_ttl 172_800  # 48 hours in seconds
+
+  # Index pages: /activities, /movies (Phase 3)
+  # These change more frequently and need shorter cache
+  @index_page_ttl 3_600  # 1 hour in seconds
+
+  # Default TTL for other cacheable routes
+  @default_ttl @show_page_ttl
 
   @impl Plug
   def init(opts), do: opts
@@ -66,14 +89,15 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
       has_session_cookie?(conn) ->
         set_no_cache_headers(conn)
 
-      # Cacheable route with anonymous user - aggressive caching
+      # Cacheable route with anonymous user - use specific TTL if set
       # This is set by ConditionalSessionPlug for allowlisted routes
       conn.assigns[:cacheable_request] ->
-        set_cacheable_headers(conn)
+        ttl = conn.assigns[:cache_ttl] || @default_ttl
+        set_cacheable_headers(conn, ttl)
 
       # Default anonymous - still set cache headers (may be bypassed by Set-Cookie)
       true ->
-        set_cacheable_headers(conn)
+        set_cacheable_headers(conn, @default_ttl)
     end
   end
 
@@ -93,12 +117,16 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
   end
 
   # Headers for anonymous users - CDN caching enabled
-  defp set_cacheable_headers(conn) do
+  defp set_cacheable_headers(conn, ttl) do
     conn
     |> put_resp_header(
       "cache-control",
-      "public, s-maxage=#{@anonymous_cdn_ttl}, max-age=0, must-revalidate"
+      "public, s-maxage=#{ttl}, max-age=0, must-revalidate"
     )
     |> put_resp_header("vary", "Accept-Encoding")
   end
+
+  # Expose TTL values for use by ConditionalSessionPlug
+  def show_page_ttl, do: @show_page_ttl
+  def index_page_ttl, do: @index_page_ttl
 end

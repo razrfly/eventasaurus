@@ -18,10 +18,40 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
   - Any route with `__session` cookie is never cached
   - New routes default to NOT cached (must be added to allowlist)
 
-  ## Phase 1: Activities show pages only
+  ## Cacheable Routes
+
+  ### Show Pages (48h TTL)
+  Phase 1: Activities show pages
+  - /activities/:slug
+  - /activities/:slug/:date_slug
+
+  Phase 2: Venues, Performers, Movies show pages
+  - /venues/:slug
+  - /performers/:slug
+  - /movies/:identifier
+
+  ### Index Pages (1h TTL)
+  Phase 3: Index/listing pages
+  - /activities
+  - /movies
+
+  ### Aggregated Content Pages (1h TTL)
+  Phase 4: Multi-city aggregated content
+  - /social/:identifier
+  - /food/:identifier
+  - /music/:identifier
+  - /happenings/:identifier
+  - /comedy/:identifier
+  - /dance/:identifier
+  - /classes/:identifier
+  - /festivals/:identifier
+  - /sports/:identifier
+  - /theater/:identifier
   """
 
   import Plug.Conn
+
+  alias EventasaurusWeb.Plugs.CacheControlPlug
 
   @behaviour Plug
 
@@ -30,23 +60,108 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
 
   @impl Plug
   def call(conn, _opts) do
-    if cacheable_route?(conn.request_path) and not has_auth_cookie?(conn) do
-      conn
-      |> assign(:skip_session, true)
-      |> assign(:cacheable_request, true)
-    else
-      conn
+    case route_cache_config(conn.request_path) do
+      {:cacheable, ttl} when not is_nil(ttl) ->
+        if has_auth_cookie?(conn) do
+          conn
+        else
+          conn
+          |> assign(:skip_session, true)
+          |> assign(:cacheable_request, true)
+          |> assign(:cache_ttl, ttl)
+        end
+
+      :cacheable ->
+        if has_auth_cookie?(conn) do
+          conn
+        else
+          conn
+          |> assign(:skip_session, true)
+          |> assign(:cacheable_request, true)
+        end
+
+      :not_cacheable ->
+        conn
     end
   end
 
-  # Phase 1: Only activities show pages
-  # Add more patterns in future phases
-  defp cacheable_route?(path) do
+  # Returns cache configuration for a route:
+  # - {:cacheable, ttl} for index pages (with specific TTL)
+  # - :cacheable for show pages (uses default TTL)
+  # - :not_cacheable for everything else
+  defp route_cache_config(path) do
+    cond do
+      # Phase 3: Index pages (1h TTL)
+      index_page?(path) -> {:cacheable, CacheControlPlug.index_page_ttl()}
+
+      # Phase 4: Aggregated content pages (1h TTL)
+      aggregated_content_page?(path) -> {:cacheable, CacheControlPlug.index_page_ttl()}
+
+      # Phase 1 + 2: Show pages (48h TTL - default)
+      show_page?(path) -> :cacheable
+
+      # Everything else
+      true -> :not_cacheable
+    end
+  end
+
+  # Phase 3: Index page patterns (1h cache)
+  defp index_page?(path) do
     patterns = [
+      # /activities (index)
+      ~r{^/activities$},
+      # /movies (index)
+      ~r{^/movies$}
+    ]
+
+    Enum.any?(patterns, fn pattern -> Regex.match?(pattern, path) end)
+  end
+
+  # Phase 1 + 2: Show page patterns (48h cache)
+  defp show_page?(path) do
+    patterns = [
+      # Phase 1: Activities
       # /activities/:slug
       ~r{^/activities/[^/]+$},
       # /activities/:slug/:date_slug
-      ~r{^/activities/[^/]+/[^/]+$}
+      ~r{^/activities/[^/]+/[^/]+$},
+
+      # Phase 2: Venues, Performers, Movies
+      # /venues/:slug
+      ~r{^/venues/[^/]+$},
+      # /performers/:slug
+      ~r{^/performers/[^/]+$},
+      # /movies/:identifier (TMDB ID or slug-tmdb_id)
+      ~r{^/movies/[^/]+$}
+    ]
+
+    Enum.any?(patterns, fn pattern -> Regex.match?(pattern, path) end)
+  end
+
+  # Phase 4: Aggregated content page patterns (1h cache)
+  # These are multi-city aggregated content pages like /social/pubquiz-pl
+  defp aggregated_content_page?(path) do
+    patterns = [
+      # /social/:identifier
+      ~r{^/social/[^/]+$},
+      # /food/:identifier
+      ~r{^/food/[^/]+$},
+      # /music/:identifier
+      ~r{^/music/[^/]+$},
+      # /happenings/:identifier
+      ~r{^/happenings/[^/]+$},
+      # /comedy/:identifier
+      ~r{^/comedy/[^/]+$},
+      # /dance/:identifier
+      ~r{^/dance/[^/]+$},
+      # /classes/:identifier
+      ~r{^/classes/[^/]+$},
+      # /festivals/:identifier
+      ~r{^/festivals/[^/]+$},
+      # /sports/:identifier
+      ~r{^/sports/[^/]+$},
+      # /theater/:identifier
+      ~r{^/theater/[^/]+$}
     ]
 
     Enum.any?(patterns, fn pattern -> Regex.match?(pattern, path) end)
