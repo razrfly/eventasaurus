@@ -31,7 +31,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreateJobExecutionStatsMaterializedVie
 
   ## Refresh Strategy
 
-  Refreshed every 15 minutes by JobExecutionStatsRefreshWorker.
+  Refreshed hourly (at minute 30) by JobExecutionStatsRefreshWorker.
   Uses CONCURRENTLY for zero-downtime refresh.
   """
 
@@ -68,8 +68,11 @@ defmodule EventasaurusApp.Repo.Migrations.CreateJobExecutionStatsMaterializedVie
       COUNT(*) FILTER (WHERE j.results -> 'collision_data' ->> 'type' = 'cross_source') AS cross_source_collisions,
 
       -- Confidence score aggregations (for cross-source collisions)
-      AVG((j.results -> 'collision_data' ->> 'confidence')::float)
-        FILTER (WHERE j.results -> 'collision_data' ->> 'confidence' IS NOT NULL) AS avg_confidence,
+      -- Store sum and count for proper weighted average calculation across buckets
+      SUM((j.results -> 'collision_data' ->> 'confidence')::float)
+        FILTER (WHERE j.results -> 'collision_data' ->> 'confidence' IS NOT NULL) AS confidence_sum,
+      COUNT(*)
+        FILTER (WHERE j.results -> 'collision_data' ->> 'confidence' IS NOT NULL) AS confidence_count,
       MIN((j.results -> 'collision_data' ->> 'confidence')::float)
         FILTER (WHERE j.results -> 'collision_data' ->> 'confidence' IS NOT NULL) AS min_confidence,
       MAX((j.results -> 'collision_data' ->> 'confidence')::float)
@@ -116,7 +119,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreateJobExecutionStatsMaterializedVie
     execute("""
     CREATE INDEX CONCURRENTLY job_execution_stats_dashboard_idx
     ON job_execution_stats (hour_bucket DESC)
-    INCLUDE (total_processed, collision_count, same_source_collisions, cross_source_collisions, avg_confidence)
+    INCLUDE (total_processed, collision_count, same_source_collisions, cross_source_collisions, confidence_sum, confidence_count)
     """)
   end
 

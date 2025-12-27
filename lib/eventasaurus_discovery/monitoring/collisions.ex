@@ -425,7 +425,11 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
             total_collisions: fragment("COALESCE(SUM(collision_count), 0)::bigint"),
             same_source_count: fragment("COALESCE(SUM(same_source_collisions), 0)::bigint"),
             cross_source_count: fragment("COALESCE(SUM(cross_source_collisions), 0)::bigint"),
-            avg_confidence: fragment("AVG(avg_confidence)"),
+            # Compute proper weighted average: SUM(confidence_sum) / SUM(confidence_count)
+            avg_confidence:
+              fragment(
+                "CASE WHEN SUM(confidence_count) > 0 THEN SUM(confidence_sum) / SUM(confidence_count) ELSE NULL END"
+              ),
             sources_with_collisions:
               fragment("COUNT(DISTINCT CASE WHEN collision_count > 0 THEN source END)::bigint")
           }
