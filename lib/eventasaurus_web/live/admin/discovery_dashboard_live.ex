@@ -18,7 +18,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   }
 
   alias EventasaurusDiscovery.Sources.SourceRegistry
-  alias EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob
   alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
   # Collisions module now used via DashboardStats cache
 
@@ -600,47 +599,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     end
   end
 
-  @impl true
-  def handle_event("start_backfill", params, socket) do
-    city_id = parse_int(params["city_id"], nil)
-    providers = Map.get(params, "providers", [])
-    limit = parse_int(params["limit"], 10)
-    geocode = socket.assigns.backfill_geocode
-
-    cond do
-      is_nil(city_id) ->
-        {:noreply, put_flash(socket, :error, "Please select a city")}
-
-      Enum.empty?(providers) ->
-        {:noreply, put_flash(socket, :error, "Please select at least one provider")}
-
-      true ->
-        # Enqueue backfill orchestrator job
-        case BackfillOrchestratorJob.enqueue(
-               city_id: city_id,
-               providers: providers,
-               limit: limit,
-               geocode: geocode
-             ) do
-          {:ok, job} ->
-            city = Enum.find(socket.assigns.cities, &(&1.id == city_id))
-            city_name = if city, do: city.name, else: "City ##{city_id}"
-
-            socket =
-              socket
-              |> put_flash(
-                :info,
-                "Queued venue backfill orchestrator job ##{job.id} for #{city_name} (will spawn #{limit} individual enrichment jobs, #{length(providers)} providers)"
-              )
-              |> assign(:backfill_running, true)
-
-            {:noreply, socket}
-
-          {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Failed to queue backfill: #{inspect(reason)}")}
-        end
-    end
-  end
+  # NOTE: start_backfill handler removed in Issue #2977
+  # Venue image enrichment now uses R2/cached_images system
 
   @impl true
   def handle_event("toggle_provider", %{"provider" => provider}, socket) do

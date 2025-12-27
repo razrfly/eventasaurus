@@ -321,8 +321,8 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   defp maintenance_jobs do
     [
       "EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob",
-      "EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob",
-      "EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"
+      "EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob"
+      # VenueImages.BackfillOrchestratorJob removed - migrated to R2/cached_images (Issue #2977)
     ]
     |> Enum.map(fn worker_name ->
       %{
@@ -343,8 +343,7 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   defp humanize_maintenance_job_name("EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob"),
     do: "Geocoding Provider ID Backfill"
 
-  defp humanize_maintenance_job_name("EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"),
-    do: "Venue Images Backfill Orchestrator"
+  # VenueImages.BackfillOrchestratorJob removed - migrated to R2/cached_images (Issue #2977)
 
   defp humanize_maintenance_job_name(worker_name) do
     worker_name
@@ -365,10 +364,7 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
        ),
        do: "Backfills provider IDs for existing geocoded venues"
 
-  defp generate_maintenance_job_description(
-         "EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"
-       ),
-       do: "Orchestrates venue image backfill operations"
+  # VenueImages.BackfillOrchestratorJob removed - migrated to R2/cached_images (Issue #2977)
 
   defp generate_maintenance_job_description(_worker_name),
     do: "Maintenance background job"

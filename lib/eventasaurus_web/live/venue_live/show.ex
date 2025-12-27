@@ -334,7 +334,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
   # Shared logic for loading and assigning venue data to socket
   defp load_and_assign_venue(venue, socket) do
-    # Preload city and country (venue_images is a field, not an association)
+    # Preload city and country (images come from cached_images table)
     venue = Repo.preload(venue, city_ref: :country)
 
     # Get all upcoming events for this venue (for filtering)
