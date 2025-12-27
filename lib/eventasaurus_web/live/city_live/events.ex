@@ -197,7 +197,7 @@ defmodule EventasaurusWeb.CityLive.Events do
     assigns = assign(assigns, :container, container)
 
     ~H"""
-    <.link navigate={~p"/c/#{@city.slug}/#{PublicEventContainer.container_type_plural(@container.container_type)}/#{@container.slug}"} class="block">
+    <.link navigate={"/c/#{@city.slug}/#{PublicEventContainer.container_type_plural(@container.container_type)}/#{@container.slug}"} class="block">
       <div class="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden">
         <!-- Container Image/Placeholder -->
         <div class="w-full h-48 bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center">

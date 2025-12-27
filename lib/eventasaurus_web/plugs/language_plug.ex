@@ -54,8 +54,8 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
         lang
 
       _ ->
-        # 2. Check session (always available now, even for readonly sessions)
-        session_lang = get_normalized_language(get_session(conn, :language))
+        # 2. Check session (only if session is fetched - skip for readonly/cacheable requests)
+        session_lang = get_session_language_safe(conn)
 
         case session_lang do
           lang when is_binary(lang) and byte_size(lang) == 2 ->
@@ -78,6 +78,15 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
                 end
             end
         end
+    end
+  end
+
+  # Safely get session language - returns nil if session not fetched
+  # This handles the case where readonly_session is set and session is skipped
+  defp get_session_language_safe(conn) do
+    case conn.private[:plug_session] do
+      nil -> nil
+      _session -> get_normalized_language(get_session(conn, :language))
     end
   end
 

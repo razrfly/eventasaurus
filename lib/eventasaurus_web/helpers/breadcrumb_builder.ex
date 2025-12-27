@@ -561,7 +561,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
               %{
                 label: container.title,
                 path:
-                  ~p"/c/#{city_slug}/#{PublicEventContainer.container_type_plural(container.container_type)}/#{container.slug}"
+                  "/c/#{city_slug}/#{PublicEventContainer.container_type_plural(container.container_type)}/#{container.slug}"
               }
             ]
         else
