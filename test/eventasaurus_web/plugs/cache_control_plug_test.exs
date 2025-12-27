@@ -168,67 +168,101 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlugTest do
     end
   end
 
-  describe "Set-Cookie stripping for cacheable routes" do
-    test "strips Set-Cookie header when cacheable_request and readonly_session are set" do
+  describe "session cookie prevention for cacheable routes" do
+    # Helper to set up a conn with session initialized
+    # This simulates what happens in a real request pipeline
+    defp with_session(conn) do
+      opts =
+        Plug.Session.init(
+          store: :cookie,
+          key: "_test_key",
+          signing_salt: "test_salt",
+          encryption_salt: "test_encryption_salt"
+        )
+
+      conn
+      |> Plug.Session.call(opts)
+      |> fetch_session()
+    end
+
+    test "sets session to ignore when cacheable_request and readonly_session are set" do
       conn =
         :get
         |> conn("/activities/some-event")
+        |> with_session()
         |> Plug.Conn.assign(:cacheable_request, true)
         |> Plug.Conn.assign(:readonly_session, true)
-        |> Plug.Conn.put_resp_header("set-cookie", "test=value; Path=/")
         |> CacheControlPlug.call([])
 
-      # Simulate sending the response to trigger the before_send callback
-      conn = Plug.Conn.send_resp(conn, 200, "OK")
-
-      # Set-Cookie should be stripped
-      assert get_resp_header(conn, "set-cookie") == []
+      # Session should be marked as ignored
+      assert conn.private[:plug_session_info] == :ignore
     end
 
-    test "does not strip Set-Cookie when only cacheable_request is set (no readonly_session)" do
+    test "does not set session to ignore when only cacheable_request is set (no readonly_session)" do
       conn =
         :get
         |> conn("/activities/some-event")
+        |> with_session()
         |> Plug.Conn.assign(:cacheable_request, true)
         # Note: readonly_session is NOT set
-        |> Plug.Conn.put_resp_header("set-cookie", "test=value; Path=/")
         |> CacheControlPlug.call([])
 
-      # Simulate sending the response
-      conn = Plug.Conn.send_resp(conn, 200, "OK")
-
-      # Set-Cookie should NOT be stripped (readonly_session not set)
-      assert get_resp_header(conn, "set-cookie") == ["test=value; Path=/"]
+      # Session should NOT be marked as ignored
+      refute conn.private[:plug_session_info] == :ignore
     end
 
-    test "does not strip Set-Cookie for non-cacheable routes" do
+    test "does not set session to ignore for non-cacheable routes" do
       conn =
         :get
         |> conn("/dashboard")
+        |> with_session()
         # Neither cacheable_request nor readonly_session are set
-        |> Plug.Conn.put_resp_header("set-cookie", "session=abc123; Path=/")
         |> CacheControlPlug.call([])
 
-      # Simulate sending the response
-      conn = Plug.Conn.send_resp(conn, 200, "OK")
-
-      # Set-Cookie should NOT be stripped
-      assert get_resp_header(conn, "set-cookie") == ["session=abc123; Path=/"]
+      # Session should NOT be marked as ignored
+      refute conn.private[:plug_session_info] == :ignore
     end
 
-    test "does not strip Set-Cookie for authenticated users" do
+    test "does not set session to ignore for authenticated users" do
       conn =
         :get
         |> conn("/activities/some-event")
         |> put_req_cookie("__session", "user-session-token")
-        |> Plug.Conn.put_resp_header("set-cookie", "refresh=token; Path=/")
+        |> with_session()
         |> CacheControlPlug.call([])
 
-      # Simulate sending the response
+      # For authenticated users, the plug takes the no-cache path, not the cacheable path
+      # So session should NOT be explicitly ignored (though it doesn't matter since we don't cache)
+      refute conn.private[:plug_session_info] == :ignore
+    end
+
+    test "session cookie is not written when session is set to ignore" do
+      # This test verifies the end-to-end behavior: when session is ignored,
+      # Plug.Session's before_send callback won't write a Set-Cookie header
+      conn =
+        :get
+        |> conn("/activities/some-event")
+        |> with_session()
+        |> Plug.Conn.assign(:cacheable_request, true)
+        |> Plug.Conn.assign(:readonly_session, true)
+        |> CacheControlPlug.call([])
+
+      # Verify session is marked as ignore
+      assert conn.private[:plug_session_info] == :ignore
+
+      # Send response to trigger before_send callbacks
       conn = Plug.Conn.send_resp(conn, 200, "OK")
 
-      # Set-Cookie should NOT be stripped (user is authenticated)
-      assert get_resp_header(conn, "set-cookie") == ["refresh=token; Path=/"]
+      # No session cookie should be written
+      set_cookie_headers = get_resp_header(conn, "set-cookie")
+
+      # Filter for session cookies (the one we set up with "_test_key")
+      session_cookies =
+        Enum.filter(set_cookie_headers, fn cookie ->
+          String.starts_with?(cookie, "_test_key=")
+        end)
+
+      assert session_cookies == []
     end
   end
 end
