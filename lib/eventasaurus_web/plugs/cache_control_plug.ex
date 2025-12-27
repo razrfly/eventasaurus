@@ -4,23 +4,33 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   ## Caching Strategy
 
-  - **Show pages** (`:cacheable_request` assign set, `:cache_ttl` not set):
-    - Session is skipped, no Set-Cookie header sent
-    - `Cache-Control: public, s-maxage=172800, max-age=0, must-revalidate` (48 hours)
-    - CDN can cache the response (no Set-Cookie to trigger bypass)
+  - **Public catalog pages** (`:cacheable_request` + `:readonly_session` assigns set):
+    - Session is readonly (no writes), Set-Cookie header is STRIPPED before response
+    - `Cache-Control: public, s-maxage=TTL, max-age=0, must-revalidate`
+    - CDN caches the response (no Set-Cookie = Cloudflare respects Cache-Control)
+    - Show pages: 48h TTL, Index pages: 1h TTL
 
-  - **Index pages** (`:cacheable_request` and `:cache_ttl` assigns set):
-    - Session is skipped, no Set-Cookie header sent
-    - `Cache-Control: public, s-maxage=3600, max-age=0, must-revalidate` (1 hour)
-    - CDN caches with shorter TTL for more dynamic content
-
-  - **Other anonymous users** (no `__session` cookie): CDN caching headers set
+  - **Other anonymous users** (no `__session` cookie, not on catalog route):
     - `Cache-Control: public, s-maxage=172800, max-age=0, must-revalidate`
     - Note: May still have Set-Cookie which causes Cloudflare to bypass
 
   - **Authenticated users** (has `__session` cookie): No caching
     - `Cache-Control: private, no-store, no-cache, must-revalidate`
     - Every request goes to origin server
+
+  ## Set-Cookie Stripping
+
+  For catalog routes (using :public or :public_city pipelines), this plug uses
+  `register_before_send/2` to strip any Set-Cookie headers before the response
+  is sent. This is critical because:
+
+  1. Cloudflare automatically bypasses cache when Set-Cookie is present
+  2. Phoenix may add Set-Cookie even for "readonly" sessions (CSRF tokens, etc.)
+  3. Stripping happens at the last moment, after all other plugs have run
+
+  The stripping only occurs when BOTH conditions are true:
+  - `conn.assigns[:cacheable_request]` is truthy
+  - `conn.assigns[:readonly_session]` is truthy
 
   ## Cache TTL Configuration
 
@@ -45,12 +55,14 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   ## Usage
 
-  Add to any pipeline that serves pages with auth-dependent content:
+  Used in the :public and :public_city pipelines for CDN-cacheable content:
 
-      pipeline :browser do
+      pipeline :public do
         plug EventasaurusWeb.Plugs.CacheControlPlug
         # ... other plugs
       end
+
+  Also used in :browser pipeline to set no-cache headers for authenticated users.
 
   ## References
 
@@ -93,12 +105,29 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
       # This is set by ConditionalSessionPlug for allowlisted routes
       conn.assigns[:cacheable_request] ->
         ttl = conn.assigns[:cache_ttl] || @default_ttl
-        set_cacheable_headers(conn, ttl)
+
+        conn
+        |> set_cacheable_headers(ttl)
+        |> strip_set_cookie_for_caching()
 
       # Default anonymous - still set cache headers (may be bypassed by Set-Cookie)
       true ->
         set_cacheable_headers(conn, @default_ttl)
     end
+  end
+
+  # Register a callback to strip Set-Cookie headers before sending the response
+  # This ensures Cloudflare doesn't bypass cache due to Set-Cookie presence
+  # Only applied to routes marked as cacheable (readonly_session + cacheable_request)
+  defp strip_set_cookie_for_caching(conn) do
+    register_before_send(conn, fn conn ->
+      # Only strip if still marked as cacheable (wasn't changed during request)
+      if conn.assigns[:cacheable_request] && conn.assigns[:readonly_session] do
+        delete_resp_header(conn, "set-cookie")
+      else
+        conn
+      end
+    end)
   end
 
   # Check if the request has a Clerk session cookie

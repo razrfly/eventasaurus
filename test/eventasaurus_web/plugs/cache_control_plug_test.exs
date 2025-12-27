@@ -167,4 +167,68 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlugTest do
              ]
     end
   end
+
+  describe "Set-Cookie stripping for cacheable routes" do
+    test "strips Set-Cookie header when cacheable_request and readonly_session are set" do
+      conn =
+        :get
+        |> conn("/activities/some-event")
+        |> Plug.Conn.assign(:cacheable_request, true)
+        |> Plug.Conn.assign(:readonly_session, true)
+        |> Plug.Conn.put_resp_header("set-cookie", "test=value; Path=/")
+        |> CacheControlPlug.call([])
+
+      # Simulate sending the response to trigger the before_send callback
+      conn = Plug.Conn.send_resp(conn, 200, "OK")
+
+      # Set-Cookie should be stripped
+      assert get_resp_header(conn, "set-cookie") == []
+    end
+
+    test "does not strip Set-Cookie when only cacheable_request is set (no readonly_session)" do
+      conn =
+        :get
+        |> conn("/activities/some-event")
+        |> Plug.Conn.assign(:cacheable_request, true)
+        # Note: readonly_session is NOT set
+        |> Plug.Conn.put_resp_header("set-cookie", "test=value; Path=/")
+        |> CacheControlPlug.call([])
+
+      # Simulate sending the response
+      conn = Plug.Conn.send_resp(conn, 200, "OK")
+
+      # Set-Cookie should NOT be stripped (readonly_session not set)
+      assert get_resp_header(conn, "set-cookie") == ["test=value; Path=/"]
+    end
+
+    test "does not strip Set-Cookie for non-cacheable routes" do
+      conn =
+        :get
+        |> conn("/dashboard")
+        # Neither cacheable_request nor readonly_session are set
+        |> Plug.Conn.put_resp_header("set-cookie", "session=abc123; Path=/")
+        |> CacheControlPlug.call([])
+
+      # Simulate sending the response
+      conn = Plug.Conn.send_resp(conn, 200, "OK")
+
+      # Set-Cookie should NOT be stripped
+      assert get_resp_header(conn, "set-cookie") == ["session=abc123; Path=/"]
+    end
+
+    test "does not strip Set-Cookie for authenticated users" do
+      conn =
+        :get
+        |> conn("/activities/some-event")
+        |> put_req_cookie("__session", "user-session-token")
+        |> Plug.Conn.put_resp_header("set-cookie", "refresh=token; Path=/")
+        |> CacheControlPlug.call([])
+
+      # Simulate sending the response
+      conn = Plug.Conn.send_resp(conn, 200, "OK")
+
+      # Set-Cookie should NOT be stripped (user is authenticated)
+      assert get_resp_header(conn, "set-cookie") == ["refresh=token; Path=/"]
+    end
+  end
 end

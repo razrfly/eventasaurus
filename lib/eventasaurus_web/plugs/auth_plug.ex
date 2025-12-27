@@ -35,19 +35,25 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       plug :fetch_auth_user
   """
   def fetch_auth_user(conn, _opts) do
-    # If dev auth bypass already set the user, skip everything
-    # Also check session for dev_mode_login as a fallback (in case DevAuthPlug already set auth_user)
-    cond do
-      conn.assigns[:dev_mode_auth] ->
-        # DevAuthPlug already handled this
-        conn
+    # For readonly sessions (cacheable anonymous requests), treat as anonymous
+    # Session is still available for reading (CSRF tokens), but we know user is anonymous
+    if conn.assigns[:readonly_session] do
+      assign(conn, :auth_user, nil)
+    else
+      # If dev auth bypass already set the user, skip everything
+      # Also check session for dev_mode_login as a fallback (in case DevAuthPlug already set auth_user)
+      cond do
+        conn.assigns[:dev_mode_auth] ->
+          # DevAuthPlug already handled this
+          conn
 
-      get_session(conn, :dev_mode_login) == true && conn.assigns[:auth_user] ->
-        # DevAuthPlug set auth_user but maybe dev_mode_auth wasn't set - keep the existing auth_user
-        conn
+        get_session(conn, :dev_mode_login) == true && conn.assigns[:auth_user] ->
+          # DevAuthPlug set auth_user but maybe dev_mode_auth wasn't set - keep the existing auth_user
+          conn
 
-      true ->
-        fetch_clerk_auth_user(conn)
+        true ->
+          fetch_clerk_auth_user(conn)
+      end
     end
   end
 
@@ -103,9 +109,14 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   def assign_user_struct(conn, _opts) do
     case ensure_user_struct(conn.assigns[:auth_user]) do
       {:ok, user} ->
-        conn
-        |> assign(:user, user)
-        |> put_session("current_user_id", user.id)
+        conn = assign(conn, :user, user)
+
+        # Skip session write if session is readonly for caching
+        if conn.assigns[:readonly_session] do
+          conn
+        else
+          put_session(conn, "current_user_id", user.id)
+        end
 
       {:error, _} ->
         assign(conn, :user, nil)

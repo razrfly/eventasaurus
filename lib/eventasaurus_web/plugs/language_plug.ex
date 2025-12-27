@@ -29,12 +29,12 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
   end
 
   # Only write to session if:
-  # 1. Session is available (not skipped for caching)
+  # 1. Session is not readonly (cacheable anonymous request)
   # 2. Language has changed from what's in session
   defp maybe_put_session_language(conn, language) do
     cond do
-      # Skip session write if session is being skipped for caching
-      conn.assigns[:skip_session] ->
+      # Skip session write if session is readonly for caching
+      conn.assigns[:readonly_session] ->
         conn
 
       # Only write if language changed
@@ -54,8 +54,10 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
         lang
 
       _ ->
-        # 2. Check session
-        case get_normalized_language(get_session(conn, :language)) do
+        # 2. Check session (always available now, even for readonly sessions)
+        session_lang = get_normalized_language(get_session(conn, :language))
+
+        case session_lang do
           lang when is_binary(lang) and byte_size(lang) == 2 ->
             lang
 

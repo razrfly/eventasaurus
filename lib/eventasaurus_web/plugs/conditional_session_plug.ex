@@ -1,16 +1,24 @@
 defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
   @moduledoc """
-  Conditionally skips session initialization for cacheable routes with anonymous users.
+  Marks cacheable routes for anonymous users to enable CDN caching.
 
   This plug enables CDN caching by preventing Set-Cookie headers on public pages
-  for users who are not logged in.
+  for users who are not logged in. It does this by marking sessions as "read-only"
+  for cacheable routes, which prevents session writes (that cause Set-Cookie headers)
+  while still allowing session reads (required for LiveView CSRF tokens).
 
   ## How it works
 
   1. Checks if the request path matches a cacheable route pattern
   2. Checks if the user has an auth cookie (`__session` from Clerk)
-  3. If cacheable route AND no auth cookie → skip session (page can be cached)
-  4. Otherwise → normal session handling
+  3. If cacheable route AND no auth cookie → mark session as readonly (page can be cached)
+  4. Otherwise → normal session handling with writes allowed
+
+  ## Important: Session Read vs Write
+
+  - Sessions are ALWAYS fetched (required for LiveView CSRF token validation)
+  - For cacheable anonymous requests, session WRITES are prevented (no Set-Cookie)
+  - This allows CDN caching while maintaining LiveView WebSocket functionality
 
   ## Safety
 
@@ -47,6 +55,21 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
   - /festivals/:identifier
   - /sports/:identifier
   - /theater/:identifier
+
+  ### City-Prefixed Routes (Phase 2+3 completion)
+  Show pages (48h TTL):
+  - /c/:city_slug/venues/:venue_slug
+  - /c/:city_slug/movies/:movie_slug
+  - /c/:city_slug/festivals/:container_slug (and other container types)
+
+  Index pages (1h TTL):
+  - /c/:city_slug (city homepage)
+  - /c/:city_slug/events
+  - /c/:city_slug/venues
+  - /c/:city_slug/festivals (and other container type indexes)
+
+  City aggregated content (1h TTL):
+  - /c/:city_slug/:content_type/:identifier
   """
 
   import Plug.Conn
@@ -65,8 +88,10 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
         if has_auth_cookie?(conn) do
           conn
         else
+          # Mark session as readonly to prevent writes (which cause Set-Cookie headers)
+          # Session is still fetched for LiveView CSRF token validation
           conn
-          |> assign(:skip_session, true)
+          |> assign(:readonly_session, true)
           |> assign(:cacheable_request, true)
           |> assign(:cache_ttl, ttl)
         end
@@ -75,8 +100,10 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
         if has_auth_cookie?(conn) do
           conn
         else
+          # Mark session as readonly to prevent writes (which cause Set-Cookie headers)
+          # Session is still fetched for LiveView CSRF token validation
           conn
-          |> assign(:skip_session, true)
+          |> assign(:readonly_session, true)
           |> assign(:cacheable_request, true)
         end
 
@@ -91,13 +118,13 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
   # - :not_cacheable for everything else
   defp route_cache_config(path) do
     cond do
-      # Phase 3: Index pages (1h TTL)
+      # Phase 3: Index pages (1h TTL) - includes city-prefixed indexes
       index_page?(path) -> {:cacheable, CacheControlPlug.index_page_ttl()}
 
-      # Phase 4: Aggregated content pages (1h TTL)
+      # Phase 4: Aggregated content pages (1h TTL) - includes city aggregated content
       aggregated_content_page?(path) -> {:cacheable, CacheControlPlug.index_page_ttl()}
 
-      # Phase 1 + 2: Show pages (48h TTL - default)
+      # Phase 1 + 2: Show pages (48h TTL - default) - includes city-prefixed shows
       show_page?(path) -> :cacheable
 
       # Everything else
@@ -111,7 +138,23 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
       # /activities (index)
       ~r{^/activities$},
       # /movies (index)
-      ~r{^/movies$}
+      ~r{^/movies$},
+
+      # Phase 3 completion: City-prefixed index pages
+      # /c/:city_slug (city homepage)
+      ~r{^/c/[^/]+$},
+      # /c/:city_slug/events
+      ~r{^/c/[^/]+/events$},
+      # /c/:city_slug/venues
+      ~r{^/c/[^/]+/venues$},
+      # Container type indexes: /c/:city_slug/:container_type
+      # festivals, conferences, tours, series, exhibitions, tournaments
+      ~r{^/c/[^/]+/festivals$},
+      ~r{^/c/[^/]+/conferences$},
+      ~r{^/c/[^/]+/tours$},
+      ~r{^/c/[^/]+/series$},
+      ~r{^/c/[^/]+/exhibitions$},
+      ~r{^/c/[^/]+/tournaments$}
     ]
 
     Enum.any?(patterns, fn pattern -> Regex.match?(pattern, path) end)
@@ -126,13 +169,27 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
       # /activities/:slug/:date_slug
       ~r{^/activities/[^/]+/[^/]+$},
 
-      # Phase 2: Venues, Performers, Movies
+      # Phase 2: Venues, Performers, Movies (non-city-prefixed)
       # /venues/:slug
       ~r{^/venues/[^/]+$},
       # /performers/:slug
       ~r{^/performers/[^/]+$},
       # /movies/:identifier (TMDB ID or slug-tmdb_id)
-      ~r{^/movies/[^/]+$}
+      ~r{^/movies/[^/]+$},
+
+      # Phase 2 completion: City-prefixed show pages
+      # /c/:city_slug/venues/:venue_slug
+      ~r{^/c/[^/]+/venues/[^/]+$},
+      # /c/:city_slug/movies/:movie_slug
+      ~r{^/c/[^/]+/movies/[^/]+$},
+      # Container detail pages: /c/:city_slug/:container_type/:container_slug
+      # festivals, conferences, tours, series, exhibitions, tournaments
+      ~r{^/c/[^/]+/festivals/[^/]+$},
+      ~r{^/c/[^/]+/conferences/[^/]+$},
+      ~r{^/c/[^/]+/tours/[^/]+$},
+      ~r{^/c/[^/]+/series/[^/]+$},
+      ~r{^/c/[^/]+/exhibitions/[^/]+$},
+      ~r{^/c/[^/]+/tournaments/[^/]+$}
     ]
 
     Enum.any?(patterns, fn pattern -> Regex.match?(pattern, path) end)
@@ -140,8 +197,10 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
 
   # Phase 4: Aggregated content page patterns (1h cache)
   # These are multi-city aggregated content pages like /social/pubquiz-pl
+  # and city-specific aggregated content like /c/warsaw/social/pubquiz-pl
   defp aggregated_content_page?(path) do
     patterns = [
+      # Multi-city aggregated content (non-city-prefixed)
       # /social/:identifier
       ~r{^/social/[^/]+$},
       # /food/:identifier
@@ -161,7 +220,14 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
       # /sports/:identifier
       ~r{^/sports/[^/]+$},
       # /theater/:identifier
-      ~r{^/theater/[^/]+$}
+      ~r{^/theater/[^/]+$},
+
+      # City-specific aggregated content: /c/:city_slug/:content_type/:identifier
+      # This pattern matches paths like /c/warsaw/trivia/pubquiz-pl
+      # where content_type is not one of the reserved types (venues, movies, festivals, etc.)
+      # We use a negative lookahead-like approach by explicitly listing the pattern
+      # Note: This catches any /c/city/type/id pattern that wasn't caught by show_page?
+      ~r{^/c/[^/]+/(?!venues|movies|festivals|conferences|tours|series|exhibitions|tournaments|events|search)[^/]+/[^/]+$}
     ]
 
     Enum.any?(patterns, fn pattern -> Regex.match?(pattern, path) end)
