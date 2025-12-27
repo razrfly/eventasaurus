@@ -143,8 +143,6 @@ end
 config :eventasaurus, :dev_quick_login, true
 # Debug staged loading - adds artificial delays to visualize loading stages
 config :eventasaurus, :debug_staged_loading, true
-# Enable fetching production images from ImageKit in dev
-config :eventasaurus, :enable_dev_imagekit_fetch, true
 # Enable week.pl source in full phase (all 13 Polish cities)
 config :eventasaurus, :week_pl_deployment_phase, :full
 

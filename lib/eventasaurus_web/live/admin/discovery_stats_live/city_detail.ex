@@ -158,7 +158,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     # NOTE: Venue image quality stats removed in Issue #2977
     # Venue images now use cached_images table with R2/Cloudflare CDN
     # These placeholders match the template structure but show zeros
-    # since the old ImageKit-based tracking has been deprecated
+    # since the old image tracking has been deprecated
     venue_stats = %{
       total_venues: 0,
       venues_with_images: 0,

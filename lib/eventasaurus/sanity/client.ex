@@ -2,8 +2,7 @@ defmodule Eventasaurus.Sanity.Client do
   @moduledoc """
   Sanity CMS API client for fetching changelog entries.
 
-  Uses Req HTTP client following existing codebase patterns
-  (see lib/eventasaurus/imagekit/fetcher.ex for reference).
+  Uses Req HTTP client following existing codebase patterns.
   """
 
   require Logger

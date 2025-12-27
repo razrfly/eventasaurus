@@ -278,31 +278,6 @@ config :eventasaurus, :cdn,
   enabled: System.get_env("CDN_ENABLED", default_cdn_enabled) == "true",
   domain: System.get_env("CDN_DOMAIN", "cdn.wombie.com")
 
-# ImageKit CDN configuration (for venue images)
-# Enabled by default in production, disabled by default in dev/test
-# Can be overridden with IMAGEKIT_CDN_ENABLED environment variable
-default_imagekit_enabled = if config_env() == :prod, do: "true", else: "false"
-
-# Upload enabled separately from CDN display (saves API credits in dev)
-# Set ENABLE_IMAGEKIT_UPLOAD=true in development to test uploads
-default_upload_enabled = if config_env() == :prod, do: "true", else: "false"
-
-# Use separate folders for dev vs production (never pollute production folder from dev)
-default_imagekit_folder = if config_env() == :prod, do: "/venues", else: "/venues_test"
-raw_imagekit_folder = System.get_env("IMAGEKIT_FOLDER", default_imagekit_folder) |> String.trim()
-
-sanitized_imagekit_folder =
-  raw_imagekit_folder
-  |> (fn f -> if String.starts_with?(f, "/"), do: f, else: "/" <> f end).()
-  |> String.trim_trailing("/")
-
-config :eventasaurus, :imagekit,
-  enabled: System.get_env("IMAGEKIT_CDN_ENABLED", default_imagekit_enabled) == "true",
-  upload_enabled: System.get_env("ENABLE_IMAGEKIT_UPLOAD", default_upload_enabled) == "true",
-  id: System.get_env("IMAGEKIT_ID", "wombie"),
-  endpoint: System.get_env("IMAGEKIT_END_POINT", "https://ik.imagekit.io/wombie"),
-  folder: sanitized_imagekit_folder
-
 # Sanity CMS configuration for changelog
 # Used by Eventasaurus.Sanity.Client to fetch changelog entries
 config :eventasaurus, :sanity,
