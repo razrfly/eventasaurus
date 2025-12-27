@@ -44,17 +44,9 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
   - /movies
 
   ### Aggregated Content Pages (1h TTL)
-  Phase 4: Multi-city aggregated content
+  Phase 4: Multi-city aggregated content (only implemented types)
   - /social/:identifier
   - /food/:identifier
-  - /music/:identifier
-  - /happenings/:identifier
-  - /comedy/:identifier
-  - /dance/:identifier
-  - /classes/:identifier
-  - /festivals/:identifier
-  - /sports/:identifier
-  - /theater/:identifier
 
   ### City-Prefixed Routes (Phase 2+3 completion)
   Show pages (48h TTL):
@@ -64,12 +56,12 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
 
   Index pages (1h TTL):
   - /c/:city_slug (city homepage)
-  - /c/:city_slug/events
   - /c/:city_slug/venues
   - /c/:city_slug/festivals (and other container type indexes)
 
-  City aggregated content (1h TTL):
-  - /c/:city_slug/:content_type/:identifier
+  City aggregated content (1h TTL) - explicit routes only:
+  - /c/:city_slug/social/:identifier
+  - /c/:city_slug/food/:identifier
   """
 
   import Plug.Conn
@@ -143,8 +135,6 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
       # Phase 3 completion: City-prefixed index pages
       # /c/:city_slug (city homepage)
       ~r{^/c/[^/]+$},
-      # /c/:city_slug/events
-      ~r{^/c/[^/]+/events$},
       # /c/:city_slug/venues
       ~r{^/c/[^/]+/venues$},
       # Container type indexes: /c/:city_slug/:container_type
@@ -198,36 +188,19 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
   # Phase 4: Aggregated content page patterns (1h cache)
   # These are multi-city aggregated content pages like /social/pubquiz-pl
   # and city-specific aggregated content like /c/warsaw/social/pubquiz-pl
+  # Only explicit content types are supported - no catch-all patterns
   defp aggregated_content_page?(path) do
     patterns = [
       # Multi-city aggregated content (non-city-prefixed)
-      # /social/:identifier
+      # Add new content types here as they are implemented
       ~r{^/social/[^/]+$},
-      # /food/:identifier
       ~r{^/food/[^/]+$},
-      # /music/:identifier
-      ~r{^/music/[^/]+$},
-      # /happenings/:identifier
-      ~r{^/happenings/[^/]+$},
-      # /comedy/:identifier
-      ~r{^/comedy/[^/]+$},
-      # /dance/:identifier
-      ~r{^/dance/[^/]+$},
-      # /classes/:identifier
-      ~r{^/classes/[^/]+$},
-      # /festivals/:identifier
-      ~r{^/festivals/[^/]+$},
-      # /sports/:identifier
-      ~r{^/sports/[^/]+$},
-      # /theater/:identifier
-      ~r{^/theater/[^/]+$},
 
-      # City-specific aggregated content: /c/:city_slug/:content_type/:identifier
-      # This pattern matches paths like /c/warsaw/trivia/pubquiz-pl
-      # where content_type is not one of the reserved types (venues, movies, festivals, etc.)
-      # We use a negative lookahead-like approach by explicitly listing the pattern
-      # Note: This catches any /c/city/type/id pattern that wasn't caught by show_page?
-      ~r{^/c/[^/]+/(?!venues|movies|festivals|conferences|tours|series|exhibitions|tournaments|events|search)[^/]+/[^/]+$}
+      # City-specific aggregated content - explicit types only
+      # /c/:city_slug/social/:identifier
+      ~r{^/c/[^/]+/social/[^/]+$},
+      # /c/:city_slug/food/:identifier
+      ~r{^/c/[^/]+/food/[^/]+$}
     ]
 
     Enum.any?(patterns, fn pattern -> Regex.match?(pattern, path) end)

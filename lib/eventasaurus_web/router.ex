@@ -669,12 +669,6 @@ defmodule EventasaurusWeb.Router do
       # City homepage (shows events by default)
       live "/:city_slug", CityLive.Index, :index
 
-      # Explicit events routes with filters
-      live "/:city_slug/events", CityLive.Events, :index
-      live "/:city_slug/events/today", CityLive.Events, :today
-      live "/:city_slug/events/weekend", CityLive.Events, :weekend
-      live "/:city_slug/events/week", CityLive.Events, :week
-
       # City venues
       live "/:city_slug/venues", CityLive.Venues, :index
       live "/:city_slug/venues/:venue_slug", VenueLive.Show, :show
@@ -699,11 +693,13 @@ defmodule EventasaurusWeb.Router do
       live "/:city_slug/exhibitions/:container_slug", CityLive.ContainerDetailLive, :exhibition
       live "/:city_slug/tournaments/:container_slug", CityLive.ContainerDetailLive, :tournament
 
-      # Movie screenings aggregation (must be before catch-all aggregated content)
+      # Movie screenings aggregation
       live "/:city_slug/movies/:movie_slug", PublicMovieScreeningsLive, :show
 
-      # Aggregated content-type routes (trivia, movies, classes, etc.)
-      live "/:city_slug/:content_type/:identifier", AggregatedContentLive, :show
+      # Aggregated content-type routes - explicit routes only for existing content types
+      # Add new routes here as content types are implemented (not a catch-all pattern)
+      live "/:city_slug/social/:identifier", AggregatedContentLive, :show
+      live "/:city_slug/food/:identifier", AggregatedContentLive, :show
     end
   end
 
@@ -789,16 +785,9 @@ defmodule EventasaurusWeb.Router do
 
       # Phase 4: Multi-city aggregated content pages (1h cache)
       # These aggregate events across all cities by content type/source
+      # Add new routes here as content types are implemented
       live "/social/:identifier", AggregatedContentLive, :multi_city
       live "/food/:identifier", AggregatedContentLive, :multi_city
-      live "/music/:identifier", AggregatedContentLive, :multi_city
-      live "/happenings/:identifier", AggregatedContentLive, :multi_city
-      live "/comedy/:identifier", AggregatedContentLive, :multi_city
-      live "/dance/:identifier", AggregatedContentLive, :multi_city
-      live "/classes/:identifier", AggregatedContentLive, :multi_city
-      live "/festivals/:identifier", AggregatedContentLive, :multi_city
-      live "/sports/:identifier", AggregatedContentLive, :multi_city
-      live "/theater/:identifier", AggregatedContentLive, :multi_city
     end
   end
 
