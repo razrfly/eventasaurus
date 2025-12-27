@@ -301,13 +301,13 @@ defmodule EventasaurusWeb.Router do
     plug :accepts, ["html"]
     # Check if this is a cacheable route with no auth cookie FIRST
     plug EventasaurusWeb.Plugs.ConditionalSessionPlug
-    # Conditionally fetch session (skipped if :skip_session is set)
+    # Conditionally fetch session (skipped if :readonly_session is set)
     plug :maybe_fetch_session
     # Conditionally fetch flash (requires session)
     plug :maybe_fetch_live_flash
     plug :fetch_query_params
     plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
-    # Conditionally protect from forgery (skipped if :skip_session is set)
+    # Conditionally protect from forgery (skipped if :readonly_session is set)
     plug :maybe_protect_from_forgery
     plug :put_secure_browser_headers
     # Set cache headers based on auth state and cacheability
@@ -325,8 +325,9 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Helper function to conditionally fetch session
+  # Skipped when ConditionalSessionPlug marks the request as readonly (cacheable anonymous)
   defp maybe_fetch_session(conn, _opts) do
-    if conn.assigns[:skip_session] do
+    if conn.assigns[:readonly_session] do
       conn
     else
       fetch_session(conn)
@@ -334,8 +335,9 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Helper function to conditionally protect from forgery
+  # Skipped when ConditionalSessionPlug marks the request as readonly (cacheable anonymous)
   defp maybe_protect_from_forgery(conn, _opts) do
-    if conn.assigns[:skip_session] do
+    if conn.assigns[:readonly_session] do
       conn
     else
       protect_from_forgery(conn)
@@ -343,8 +345,9 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Helper function to conditionally fetch live flash (requires session)
+  # Skipped when ConditionalSessionPlug marks the request as readonly (cacheable anonymous)
   defp maybe_fetch_live_flash(conn, _opts) do
-    if conn.assigns[:skip_session] do
+    if conn.assigns[:readonly_session] do
       # Assign empty flash for LiveView compatibility
       assign(conn, :flash, %{})
     else
@@ -352,29 +355,6 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
-  # Public city pipeline with city validation
-  # Same as :public but adds ValidateCity plug
-  pipeline :public_city do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :fetch_live_flash
-    plug :fetch_query_params
-    plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers
-    # Prevent CDN/browser caching of auth-aware pages (fixes #2625)
-    plug EventasaurusWeb.Plugs.CacheControlPlug
-
-    if Mix.env() == :dev do
-      plug EventasaurusWeb.Dev.DevAuthPlug
-    end
-
-    plug :fetch_auth_user
-    plug :assign_user_struct
-    plug EventasaurusWeb.Plugs.LanguagePlug
-    plug EventasaurusWeb.Plugs.ValidateCity
-    plug EventasaurusWeb.Plugs.AggregationTypeRedirect
-  end
 
   pipeline :api do
     plug :accepts, ["json"]
@@ -684,7 +664,7 @@ defmodule EventasaurusWeb.Router do
       {EventasaurusWeb.Live.CityHooks, :assign_city}
     ] do
     scope "/c", EventasaurusWeb do
-      pipe_through :public_city
+      pipe_through :public
 
       # City homepage (shows events by default)
       live "/:city_slug", CityLive.Index, :index
