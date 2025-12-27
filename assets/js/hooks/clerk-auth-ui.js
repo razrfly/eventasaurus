@@ -26,6 +26,8 @@ import { initClerkClient, getCurrentUser } from "../auth/clerk-manager";
 const ClerkAuthUI = {
   mounted() {
     this.type = this.el.dataset.type || "default";
+    // Store bound handler reference for cleanup
+    this.authChangeHandler = (e) => this.hydrateUI(e.detail.user);
     this.initAuthUI();
   },
 
@@ -50,10 +52,8 @@ const ClerkAuthUI = {
       // Hydrate the UI based on auth state
       this.hydrateUI(user);
 
-      // Listen for auth state changes
-      window.addEventListener("clerk:auth-change", (e) => {
-        this.hydrateUI(e.detail.user);
-      });
+      // Listen for auth state changes (using stored handler for cleanup)
+      window.addEventListener("clerk:auth-change", this.authChangeHandler);
     } catch (error) {
       console.error("[ClerkAuthUI] Error initializing:", error);
       // On error, show anonymous UI as fallback
@@ -126,10 +126,10 @@ const ClerkAuthUI = {
   },
 
   destroyed() {
-    // Cleanup listener if needed
-    // Note: Since we use a named function reference, we'd need to store it
-    // to properly remove it. For now, the listener will be cleaned up
-    // when the page navigates away.
+    // Remove event listener to prevent memory leaks during LiveView navigation
+    if (this.authChangeHandler) {
+      window.removeEventListener("clerk:auth-change", this.authChangeHandler);
+    }
   }
 };
 
