@@ -166,7 +166,7 @@ defmodule EventasaurusApp.Venues.Venue do
     field(:metadata, :map)
     field(:geocoding_performance, :map)
     field(:provider_ids, :map, default: %{})
-    field(:venue_images, {:array, :map})
+    # venue_images removed - now using cached_images table (Issue #2977)
     field(:image_enrichment_metadata, :map)
 
     belongs_to(:city_ref, EventasaurusDiscovery.Locations.City, foreign_key: :city_id)
@@ -201,7 +201,6 @@ defmodule EventasaurusApp.Venues.Venue do
       :metadata,
       :geocoding_performance,
       :provider_ids,
-      :venue_images,
       :image_enrichment_metadata
     ])
     |> validate_required_by_type()
@@ -512,62 +511,10 @@ defmodule EventasaurusApp.Venues.Venue do
   end
 
   @doc """
-  Changeset for updating venue images and enrichment metadata.
-
-  This is used by the image enrichment system to store fetched images.
-
-  ## Parameters
-  - `venue` - Venue struct or changeset
-  - `images` - List of image maps with url, provider, attribution, etc.
-  - `metadata` - Enrichment metadata with providers_used, timestamps, etc.
-
-  ## Examples
-
-      iex> venue |> Venue.update_venue_images(images, metadata) |> Repo.update()
-      {:ok, %Venue{venue_images: [...], image_enrichment_metadata: %{...}}}
-  """
-  def update_venue_images(%Ecto.Changeset{} = changeset, images, metadata)
-      when is_list(images) and is_map(metadata) do
-    changeset
-    |> put_change(:venue_images, images)
-    |> put_change(:image_enrichment_metadata, metadata)
-    |> validate_image_structure()
-  end
-
-  def update_venue_images(%__MODULE__{} = venue, images, metadata)
-      when is_list(images) and is_map(metadata) do
-    changeset(venue, %{})
-    |> update_venue_images(images, metadata)
-  end
-
-  # Validate the structure of venue_images array
-  defp validate_image_structure(changeset) do
-    images = get_change(changeset, :venue_images)
-
-    if images && is_list(images) do
-      # Check that each image has required fields
-      valid? =
-        Enum.all?(images, fn image ->
-          is_map(image) &&
-            Map.has_key?(image, "url") &&
-            is_binary(image["url"])
-        end)
-
-      if valid? do
-        changeset
-      else
-        add_error(changeset, :venue_images, "must be a list of maps with at least a 'url' field")
-      end
-    else
-      changeset
-    end
-  end
-
-  @doc """
   Get the best cover image for a venue with smart fallback chain.
 
   Fallback priority:
-  1. Venue's own venue_images (first image)
+  1. Venue's cached images from R2 (via cached_images table)
   2. City's categorized gallery (category determined by CategoryMapper)
   3. City's "general" category (if primary category has no images)
   4. nil (caller can provide placeholder)
@@ -594,10 +541,11 @@ defmodule EventasaurusApp.Venues.Venue do
       {:error, :no_image}
   """
   def get_cover_image(%__MODULE__{} = venue, opts \\ []) do
+    alias EventasaurusApp.Images.ImageCacheService
+
     cond do
-      # Priority 1: Venue's own images
-      has_venue_image?(venue) ->
-        image_url = get_first_venue_image(venue)
+      # Priority 1: Venue's cached images from R2
+      image_url = ImageCacheService.get_url!("venue", venue.id, 0) ->
         cdn_url = Eventasaurus.CDN.url(image_url, opts)
         {:ok, cdn_url, :venue}
 
@@ -610,24 +558,6 @@ defmodule EventasaurusApp.Venues.Venue do
         {:error, :no_image}
     end
   end
-
-  # Check if venue has its own images
-  defp has_venue_image?(%__MODULE__{venue_images: images}) when is_list(images) do
-    length(images) > 0
-  end
-
-  defp has_venue_image?(_), do: false
-
-  # Get first venue image URL
-  defp get_first_venue_image(%__MODULE__{venue_images: [first | _]}) do
-    case first do
-      %{"url" => url} when is_binary(url) -> url
-      %{url: url} when is_binary(url) -> url
-      _ -> nil
-    end
-  end
-
-  defp get_first_venue_image(_), do: nil
 
   # Check if venue has city with categorized gallery
   defp has_city_with_gallery?(%__MODULE__{

@@ -79,8 +79,6 @@ defmodule Eventasaurus.Application do
       TzWorld.Backend.Memory,
       # Start Hammer rate limiter for geocoding providers
       EventasaurusDiscovery.Geocoding.RateLimiter,
-      # Start rate limiter for venue images providers
-      EventasaurusDiscovery.VenueImages.RateLimiter,
       # Start Oban background job processor
       {Oban, Application.fetch_env!(:eventasaurus, Oban)},
       # Add a Task Supervisor for background jobs

@@ -20,20 +20,6 @@ defmodule EventasaurusWeb.Router do
 
       # CDN testing page (dev - no auth)
       get "/cdn-test", Dev.CdnTestController, :index
-
-      # ImageKit CDN testing page (dev - no auth)
-      get "/imagekit-test", Dev.ImagekitTestController, :index
-
-      # Venue Images testing page (dev - no auth)
-      get "/venue-images", Dev.VenueImagesTestController, :index
-      post "/venue-images/test-enrichment", Dev.VenueImagesTestController, :test_enrichment
-      put "/venue-images/update-provider-ids", Dev.VenueImagesTestController, :update_provider_ids
-
-      post "/venue-images/save-discovered-ids",
-           Dev.VenueImagesTestController,
-           :save_discovered_ids
-
-      post "/venue-images/clear-cache", Dev.VenueImagesTestController, :clear_cache
     end
 
     # Admin routes (dev - no auth, mirrors production paths)
@@ -74,16 +60,7 @@ defmodule EventasaurusWeb.Router do
       # Geocoding Cost Dashboard (dev - no auth)
       live "/geocoding", Admin.GeocodingDashboardLive
       live "/geocoding/providers", Admin.GeocodingProviderLive, :index
-      live "/geocoding/operations/:city_slug", Admin.GeocodingOperationsLive
-
-      # Venue Images Stats Dashboard (dev - no auth)
-      live "/venue-images/stats", Admin.VenueImagesStatsLive
-
-      # Venue Image Operations (dev - no auth)
-      live "/venue-images/operations", Admin.VenueImageOperationsLive
-
-      # Unified Venue Image Enrichment History (dev - no auth)
-      live "/venue-images/enrichment-history", Admin.VenueImageEnrichmentHistoryLive
+      # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
 
       # Venue Duplicate Management (dev - no auth)
       live "/venues/duplicates", Admin.VenueDuplicatesLive
@@ -206,17 +183,7 @@ defmodule EventasaurusWeb.Router do
       # Geocoding Cost Dashboard with admin authentication
       live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
       live "/geocoding/providers", EventasaurusWeb.Admin.GeocodingProviderLive, :index
-      live "/geocoding/operations/:city_slug", EventasaurusWeb.Admin.GeocodingOperationsLive
-
-      # Venue Images Stats Dashboard with admin authentication
-      live "/venue-images/stats", EventasaurusWeb.Admin.VenueImagesStatsLive
-
-      # Venue Image Operations with admin authentication
-      live "/venue-images/operations", EventasaurusWeb.Admin.VenueImageOperationsLive
-
-      # Unified Venue Image Enrichment History with admin authentication
-      live "/venue-images/enrichment-history",
-           EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive
+      # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
 
       # Venue Duplicate Management with admin authentication
       live "/venues/duplicates", EventasaurusWeb.Admin.VenueDuplicatesLive

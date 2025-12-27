@@ -5,20 +5,13 @@ defmodule Eventasaurus.ImageKit do
   In development, returns original URLs unchanged by default.
   In production, returns ImageKit CDN URLs for optimized delivery.
 
-  ## Deprecation Plan
+  ## Note on Venue Images
 
-  **Current State**: Venue images are stored as provider URLs (Google Places, Foursquare).
-  This module provides CDN delivery for those URLs.
+  Venue images have been migrated to R2/Cloudflare CDN storage via the `cached_images`
+  table and `ImageCacheService`. This module is now primarily used for other image types
+  that still need ImageKit CDN transformation (e.g., external event images).
 
-  **Future State** (after migration in #1974):
-  - All venue images will be uploaded to ImageKit Media Library
-  - `venue_images` field will contain native ImageKit URLs
-  - This module will become unnecessary as URLs will already be ImageKit URLs
-
-  **Timeline**:
-  - Phase 1-4: Use this module to deliver provider images via ImageKit
-  - Phase 5: After migration completes, this becomes a simple passthrough
-  - Phase 6: Remove this module entirely (all URLs already ImageKit)
+  See Issue #2977 for the migration details.
 
   ## Configuration
 

@@ -132,11 +132,16 @@ defmodule EventasaurusApp.Venues do
   """
   def list_related_venues(venue_id, city_id, limit \\ 6)
       when is_integer(venue_id) and is_integer(city_id) do
+    # Order by venues with cached images first, then by popularity
     from(v in Venue,
+      left_join: ci in EventasaurusApp.Images.CachedImage,
+      on: ci.entity_type == "venue" and ci.entity_id == v.id,
       where: v.city_id == ^city_id,
       where: v.id != ^venue_id,
+      group_by: v.id,
       order_by: [
-        desc: fragment("COALESCE(jsonb_array_length(?), 0)", v.venue_images),
+        desc: count(ci.id),
+        desc: v.posthog_view_count,
         desc: v.id
       ],
       limit: ^limit
@@ -168,20 +173,24 @@ defmodule EventasaurusApp.Venues do
   """
   def list_related_venues_with_events_count(venue_id, city_id, limit \\ 6)
       when is_integer(venue_id) and is_integer(city_id) do
+    # Order by venues with cached images first, then by popularity
     from(v in Venue,
       left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
       on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+      left_join: ci in EventasaurusApp.Images.CachedImage,
+      on: ci.entity_type == "venue" and ci.entity_id == v.id,
       where: v.city_id == ^city_id,
       where: v.id != ^venue_id,
       group_by: v.id,
       order_by: [
-        desc: fragment("COALESCE(jsonb_array_length(?), 0)", v.venue_images),
+        desc: count(fragment("DISTINCT ?", ci.id)),
+        desc: v.posthog_view_count,
         desc: v.id
       ],
       limit: ^limit,
       select: %{
         venue: v,
-        upcoming_events_count: count(pe.id)
+        upcoming_events_count: count(fragment("DISTINCT ?", pe.id))
       }
     )
     |> Repo.all()
@@ -383,20 +392,21 @@ defmodule EventasaurusApp.Venues do
     }
   end
 
-  # Get venues with most images
+  # Get venues with most images (using cached_images table)
   defp get_best_documented_venues(city_id, limit) do
     venues =
       from(v in Venue,
         left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
         on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+        inner_join: ci in EventasaurusApp.Images.CachedImage,
+        on: ci.entity_type == "venue" and ci.entity_id == v.id,
         where: v.city_id == ^city_id,
-        where: fragment("jsonb_array_length(?) > 0", v.venue_images),
         group_by: v.id,
-        order_by: [desc: fragment("jsonb_array_length(?)", v.venue_images)],
+        order_by: [desc: count(fragment("DISTINCT ?", ci.id))],
         limit: ^limit,
         select: %{
           venue: v,
-          upcoming_events_count: count(pe.id)
+          upcoming_events_count: count(fragment("DISTINCT ?", pe.id))
         }
       )
       |> Repo.all()
@@ -626,7 +636,6 @@ defmodule EventasaurusApp.Venues do
       v1.longitude as lng1,
       v1.slug as slug1,
       v1.provider_ids as provider_ids1,
-      v1.venue_images as venue_images1,
       v2.id as id2,
       v2.name as name2,
       v2.address as address2,
@@ -634,7 +643,6 @@ defmodule EventasaurusApp.Venues do
       v2.longitude as lng2,
       v2.slug as slug2,
       v2.provider_ids as provider_ids2,
-      v2.venue_images as venue_images2,
       ST_Distance(
         ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
         ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography
@@ -669,7 +677,6 @@ defmodule EventasaurusApp.Venues do
               lng1,
               slug1,
               pids1,
-              imgs1,
               id2,
               name2,
               addr2,
@@ -677,7 +684,6 @@ defmodule EventasaurusApp.Venues do
               lng2,
               slug2,
               pids2,
-              imgs2,
               distance,
               name_similarity
             ] = row
@@ -689,8 +695,7 @@ defmodule EventasaurusApp.Venues do
               latitude: lat1,
               longitude: lng1,
               slug: slug1,
-              provider_ids: pids1,
-              venue_images: imgs1
+              provider_ids: pids1
             }
 
             v2 = %Venue{
@@ -700,8 +705,7 @@ defmodule EventasaurusApp.Venues do
               latitude: lat2,
               longitude: lng2,
               slug: slug2,
-              provider_ids: pids2,
-              venue_images: imgs2
+              provider_ids: pids2
             }
 
             venues =
@@ -800,7 +804,7 @@ defmodule EventasaurusApp.Venues do
   This operation:
   1. Reassigns all events, public_events, and groups to the primary venue
   2. Merges provider_ids from duplicate venues into primary
-  3. Merges venue_images from duplicate venues into primary
+  3. Reassigns cached_images from duplicate venues to primary
   4. Deletes the duplicate venues
   5. All operations are atomic (transaction with rollback on failure)
 
@@ -854,18 +858,17 @@ defmodule EventasaurusApp.Venues do
             Map.merge(acc, dup.provider_ids || %{})
           end)
 
-        # 5. Merge venue_images (deduplicate by URL)
-        merged_images =
-          ([primary.venue_images || []] ++
-             Enum.flat_map(duplicates, fn dup -> dup.venue_images || [] end))
-          |> Enum.filter(&is_map/1)
-          |> Enum.uniq_by(fn img -> Map.get(img, "url") end)
+        # 5. Reassign cached_images from duplicate venues to primary
+        # Images are stored in cached_images table with entity_type/entity_id
+        from(ci in EventasaurusApp.Images.CachedImage,
+          where: ci.entity_type == "venue" and ci.entity_id in ^duplicate_venue_ids
+        )
+        |> Repo.update_all(set: [entity_id: primary_venue_id])
 
-        # 6. Update primary venue with merged data
+        # 6. Update primary venue with merged provider_ids
         primary
         |> Venue.changeset(%{
-          provider_ids: merged_provider_ids,
-          venue_images: merged_images
+          provider_ids: merged_provider_ids
         })
         |> Repo.update!()
 

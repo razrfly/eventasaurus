@@ -15,7 +15,7 @@ defmodule EventasaurusDiscovery.VenueRequirementTest do
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Locations.{City, Country}
-  alias EventasaurusDiscovery.Venues.Venue
+  alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Sources.Bandsintown.Transformer, as: BandstownTransformer
   alias EventasaurusDiscovery.Sources.Karnet.Transformer, as: KarnetTransformer
 

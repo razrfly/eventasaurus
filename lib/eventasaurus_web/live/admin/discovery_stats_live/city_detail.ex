@@ -24,7 +24,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   }
 
   alias EventasaurusApp.Venues.{Venue, RegenerateSlugsByCityJob}
-  alias EventasaurusDiscovery.VenueImages.QualityStats
 
   import Ecto.Query
   require Logger
@@ -156,13 +155,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     city_chart_data =
       TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
 
-    # Get venue image quality stats (Phase 2 & Phase 4)
-    venue_stats = QualityStats.get_city_venue_stats(city_id)
-    venue_image_sources = QualityStats.get_venue_image_sources(city_id)
-    recent_enrichments_7d = QualityStats.get_recent_enrichments(city_id, 7)
-    recent_enrichments_30d = QualityStats.get_recent_enrichments(city_id, 30)
-    venues_needing_images = QualityStats.list_venues_without_images(city_id, 20)
-    venues_with_images = QualityStats.list_venues_with_images(city_id, 20)
+    # NOTE: Venue image quality stats removed in Issue #2977
+    # Venue images now use cached_images table with R2/Cloudflare CDN
+    venue_stats = %{total: 0, with_images: 0, without_images: 0}
+    venue_image_sources = %{}
+    recent_enrichments_7d = 0
+    recent_enrichments_30d = 0
+    venues_needing_images = []
+    venues_with_images = []
 
     # Get venue slug quality stats
     slug_stats = get_slug_quality_stats(clustered_city_ids)
@@ -584,18 +584,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         </div>
 
         <!-- Venue Image Quality (Phase 2) -->
+        <!-- Operations History link removed - VenueImages jobs migrated to R2/cached_images (Issue #2977) -->
         <div class="bg-white rounded-lg shadow mb-8">
-          <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900">🏢 Venue Image Quality</h2>
-              <p class="mt-1 text-sm text-gray-500">Image coverage and provider statistics</p>
-            </div>
-            <.link
-              navigate={~p"/admin/geocoding/operations/#{@city.slug}"}
-              class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              📸 View Operations History
-            </.link>
+          <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">🏢 Venue Image Quality</h2>
+            <p class="mt-1 text-sm text-gray-500">Image coverage and provider statistics</p>
           </div>
           <div class="p-6">
             <!-- Venue Stats Card -->

@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.Venues
+  alias EventasaurusApp.Images.ImageCacheService
 
   @impl true
   def mount(_params, _session, socket) do
@@ -167,7 +168,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
                       </div>
                       <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">
                         Provider IDs: <%= map_size(venue.provider_ids || %{}) %> |
-                        Images: <%= length(venue.venue_images || []) %>
+                        Images: <%= length(ImageCacheService.get_entity_images("venue", venue.id)) %>
                       </div>
                     </div>
                   </label>
@@ -314,7 +315,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
                         </div>
                         <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">
                           Provider IDs: <%= map_size(venue.provider_ids || %{}) %> |
-                          Images: <%= length(venue.venue_images || []) %> |
+                          Images: <%= length(ImageCacheService.get_entity_images("venue", venue.id)) %> |
                           Slug: <%= venue.slug %>
                         </div>
                       </div>

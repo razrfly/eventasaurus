@@ -73,7 +73,7 @@ defmodule EventasaurusWeb.VenueSocialCardController do
 
   # Get cover image using the venue's full fallback chain
   # This matches the same logic used by VenueHeroCard in the venue page:
-  # 1. Venue's own venue_images
+  # 1. Venue's cached images from R2
   # 2. City's categorized gallery (e.g., "cinema" for Cinema City)
   # 3. City's "general" category (Unsplash city images)
   defp get_venue_cover_image(venue) do

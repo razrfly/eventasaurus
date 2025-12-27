@@ -1,49 +1,30 @@
 defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
   use EventasaurusApp.DataCase
   alias EventasaurusApp.Venues.Venue
+  alias EventasaurusApp.Images.CachedImage
   alias EventasaurusDiscovery.Locations.{City, Country}
   alias EventasaurusApp.Repo
 
-  describe "get_cover_image/2 - venue with own images" do
-    test "returns venue's own image when available" do
+  describe "get_cover_image/2 - venue with cached images" do
+    test "returns venue's cached image when available" do
       city = create_test_city()
+      venue = create_test_venue(city, %{})
 
-      venue =
-        create_test_venue(city, %{
-          venue_images: [
-            %{"url" => "https://example.com/venue-image.jpg", "provider" => "test"}
-          ]
-        })
+      # Create a cached image for this venue
+      create_cached_image(venue.id, 0, "https://cdn.example.com/venue-image.jpg")
 
       assert {:ok, url, :venue} = Venue.get_cover_image(venue)
-      # URL should be CDN-wrapped
-      assert url =~ "cdn.wombie.com" || url =~ "example.com/venue-image.jpg"
-    end
-
-    test "handles atom-keyed image maps" do
-      city = create_test_city()
-
-      venue =
-        create_test_venue(city, %{
-          venue_images: [
-            %{url: "https://example.com/venue-image.jpg", provider: "test"}
-          ]
-        })
-
-      assert {:ok, url, :venue} = Venue.get_cover_image(venue)
-      assert url =~ "example.com/venue-image.jpg"
+      # URL should be from CDN
+      assert url =~ "cdn.example.com/venue-image.jpg" || url =~ "cdn.wombie.com"
     end
 
     test "returns first image when multiple available" do
       city = create_test_city()
+      venue = create_test_venue(city, %{})
 
-      venue =
-        create_test_venue(city, %{
-          venue_images: [
-            %{"url" => "https://example.com/first.jpg"},
-            %{"url" => "https://example.com/second.jpg"}
-          ]
-        })
+      # Create multiple cached images
+      create_cached_image(venue.id, 0, "https://cdn.example.com/first.jpg")
+      create_cached_image(venue.id, 1, "https://cdn.example.com/second.jpg")
 
       assert {:ok, url, :venue} = Venue.get_cover_image(venue)
       assert url =~ "first.jpg"
@@ -51,14 +32,11 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
 
     test "accepts CDN options" do
       city = create_test_city()
+      venue = create_test_venue(city, %{})
 
-      venue =
-        create_test_venue(city, %{
-          venue_images: [%{"url" => "https://example.com/image.jpg"}]
-        })
+      create_cached_image(venue.id, 0, "https://cdn.example.com/image.jpg")
 
       assert {:ok, url, :venue} = Venue.get_cover_image(venue, width: 800, quality: 90)
-      # In production, would check for CDN params
       assert url =~ "example.com/image.jpg"
     end
   end
@@ -70,8 +48,7 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
       # Theater venue should get historic category
       venue =
         create_test_venue(city, %{
-          metadata: %{"category" => "theater"},
-          venue_images: []
+          metadata: %{"category" => "theater"}
         })
         |> Repo.preload(:city_ref)
 
@@ -85,8 +62,7 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
 
       venue =
         create_test_venue(city, %{
-          metadata: %{"category" => "opera"},
-          venue_images: []
+          metadata: %{"category" => "opera"}
         })
         |> Repo.preload(:city_ref)
 
@@ -100,8 +76,7 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
 
       venue =
         create_test_venue(city, %{
-          metadata: %{"architectural_style" => "modern"},
-          venue_images: []
+          metadata: %{"architectural_style" => "modern"}
         })
         |> Repo.preload(:city_ref)
 
@@ -114,8 +89,7 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
 
       venue =
         create_test_venue(city, %{
-          name: "Old Town Square",
-          venue_images: []
+          name: "Old Town Square"
         })
         |> Repo.preload(:city_ref)
 
@@ -130,8 +104,7 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
       venue =
         create_test_venue(city, %{
           # This should map to a category that doesn't exist in partial gallery
-          metadata: %{"category" => "castle"},
-          venue_images: []
+          metadata: %{"category" => "castle"}
         })
         |> Repo.preload(:city_ref)
 
@@ -145,7 +118,7 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
       city = create_test_city()
 
       venue =
-        create_test_venue(city, %{venue_images: []})
+        create_test_venue(city, %{})
         |> Repo.preload(:city_ref)
 
       assert {:error, :no_image} = Venue.get_cover_image(venue)
@@ -154,7 +127,7 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
     test "returns error when city_ref not preloaded" do
       city = create_test_city()
 
-      venue = create_test_venue(city, %{venue_images: []})
+      venue = create_test_venue(city, %{})
 
       assert {:error, :no_image} = Venue.get_cover_image(venue)
     end
@@ -163,7 +136,7 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
       city = create_city_with_legacy_gallery()
 
       venue =
-        create_test_venue(city, %{venue_images: []})
+        create_test_venue(city, %{})
         |> Repo.preload(:city_ref)
 
       # Legacy format not supported by CategoryMapper
@@ -172,6 +145,22 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
   end
 
   # Helper functions
+
+  defp create_cached_image(venue_id, position, cdn_url) do
+    {:ok, cached_image} =
+      %CachedImage{}
+      |> CachedImage.changeset(%{
+        entity_type: "venue",
+        entity_id: venue_id,
+        position: position,
+        original_url: "https://original.example.com/image.jpg",
+        cdn_url: cdn_url,
+        status: "cached"
+      })
+      |> Repo.insert()
+
+    cached_image
+  end
 
   defp create_test_city do
     {:ok, country} =
@@ -289,7 +278,7 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
     default_attrs = %{
       name: "Test Venue",
       venue_type: "venue",
-      source: "test",
+      source: "user",
       latitude: 50.0619,
       longitude: 19.9368,
       city_id: city.id
