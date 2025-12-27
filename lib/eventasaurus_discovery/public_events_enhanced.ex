@@ -16,6 +16,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusApp.Images.ImageCacheService
 
   @default_limit 20
   @max_limit 500
@@ -737,15 +738,21 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         {priority, ts}
       end)
 
-    # Try to extract image from sources
+    # Try to extract image from sources, checking cache first
     source_image =
       Enum.find_value(sorted_sources, fn source ->
-        # First check the direct image_url field
-        if source.image_url do
-          source.image_url
-        else
-          # Fall back to metadata
-          extract_image_from_metadata(source.metadata)
+        # First check if we have a cached version of this source's image
+        case get_cached_source_image(source) do
+          {:cached, cdn_url} ->
+            cdn_url
+
+          :not_cached ->
+            # Fall back to original URL
+            if source.image_url do
+              source.image_url
+            else
+              extract_image_from_metadata(source.metadata)
+            end
         end
       end)
 
@@ -786,6 +793,60 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         nil
     end
   end
+
+  # Check if a source's image has been cached to R2.
+  # Returns {:cached, cdn_url} if cached, :not_cached otherwise.
+  #
+  # Also triggers lazy caching for enabled sources that haven't been cached yet.
+  # This allows gradual migration of existing images without a backfill job.
+  defp get_cached_source_image(source) do
+    case ImageCacheService.get_url("public_event_source", source.id, 0) do
+      {:cached, cdn_url} when is_binary(cdn_url) ->
+        {:cached, cdn_url}
+
+      {:fallback, _original_url} ->
+        # Image exists in cache table but not yet cached (pending/failed)
+        :not_cached
+
+      {:not_found, _} ->
+        # No cache record exists - trigger lazy caching for enabled sources
+        maybe_trigger_lazy_caching(source)
+        :not_cached
+    end
+  end
+
+  # Trigger lazy caching for images from enabled sources.
+  # This enables gradual migration of existing images.
+  defp maybe_trigger_lazy_caching(source) do
+    alias EventasaurusDiscovery.Scraping.Processors.EventImageCaching
+
+    # Only cache if source is enabled and has an image URL
+    if source.image_url && EventImageCaching.enabled?(get_source_slug(source)) do
+      source_slug = get_source_slug(source)
+
+      # Queue for caching (async, won't block render)
+      EventImageCaching.cache_event_image(
+        source.image_url,
+        source.id,
+        source_slug,
+        %{"lazy_cached" => true, "trigger" => "render"}
+      )
+    end
+
+    :ok
+  end
+
+  # Extract source slug from a PublicEventSource.
+  # Handles both preloaded and non-preloaded source associations.
+  defp get_source_slug(%{source: %{slug: slug}}) when is_binary(slug), do: slug
+  defp get_source_slug(%{source_id: source_id}) when is_integer(source_id) do
+    # If source not preloaded, look it up
+    case EventasaurusApp.Repo.get(EventasaurusDiscovery.Sources.Source, source_id) do
+      %{slug: slug} -> slug
+      _ -> nil
+    end
+  end
+  defp get_source_slug(_), do: nil
 
   # Get city fallback image from Unsplash gallery.
   #
