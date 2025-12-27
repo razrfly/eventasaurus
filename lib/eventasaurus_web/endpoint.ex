@@ -20,18 +20,25 @@ defmodule EventasaurusWeb.Endpoint do
     http_only: true
   ]
 
-  # CDN Caching: Disable CSRF check for WebSocket connections to allow HTTP caching.
+  # CDN Caching: Disable CSRF check and session requirement for WebSocket connections.
+  # This enables HTTP caching of LiveView pages by removing the session cookie dependency.
+  #
+  # Why session is removed from connect_info:
+  # - CDN caching strips Set-Cookie headers, so first-time visitors have no session cookie
+  # - Without session cookie, LiveView returns "stale" error and causes infinite reload loop
+  # - Auth is handled by Clerk (client-side), not session cookies
+  # - No LiveView code uses get_connect_info(:session) in this codebase
+  #
   # Security: check_origin is enabled in production (via runtime.exs) to prevent
   # Cross-Site WebSocket Hijacking (CSWSH) attacks. Origin validation is sufficient
   # security for WebSocket since SameSite cookie attribute doesn't apply to WS.
+  #
   # See: https://svground.fr/blog/posts/caching-liveviews-part-1/
   # See: https://github.com/razrfly/eventasaurus/issues/2970
+  # See: https://github.com/razrfly/eventasaurus/issues/2981
   socket "/live", Phoenix.LiveView.Socket,
-    websocket: [
-      check_csrf: false,
-      connect_info: [session: @session_options]
-    ],
-    longpoll: [connect_info: [session: @session_options]]
+    websocket: [check_csrf: false, connect_info: [:uri]],
+    longpoll: [connect_info: [:uri]]
 
   # Serve at "/" the static files from "priv/static" directory.
   #
