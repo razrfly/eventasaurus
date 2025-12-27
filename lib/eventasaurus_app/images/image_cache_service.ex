@@ -228,7 +228,9 @@ defmodule EventasaurusApp.Images.ImageCacheService do
       counts = ImageCacheService.get_entity_image_counts("venue", [1, 2, 3])
       # => %{1 => 3, 2 => 1}  # venue 3 has no images
   """
-  @spec get_entity_image_counts(String.t() | atom(), [integer()]) :: %{integer() => non_neg_integer()}
+  @spec get_entity_image_counts(String.t() | atom(), [integer()]) :: %{
+          integer() => non_neg_integer()
+        }
   def get_entity_image_counts(_entity_type, []), do: %{}
 
   def get_entity_image_counts(entity_type, entity_ids) when is_list(entity_ids) do

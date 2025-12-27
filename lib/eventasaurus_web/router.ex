@@ -60,6 +60,7 @@ defmodule EventasaurusWeb.Router do
       # Geocoding Cost Dashboard (dev - no auth)
       live "/geocoding", Admin.GeocodingDashboardLive
       live "/geocoding/providers", Admin.GeocodingProviderLive, :index
+
       # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
 
       # Venue Duplicate Management (dev - no auth)
@@ -183,6 +184,7 @@ defmodule EventasaurusWeb.Router do
       # Geocoding Cost Dashboard with admin authentication
       live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
       live "/geocoding/providers", EventasaurusWeb.Admin.GeocodingProviderLive, :index
+
       # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
 
       # Venue Duplicate Management with admin authentication
@@ -314,7 +316,6 @@ defmodule EventasaurusWeb.Router do
     # Always fetch live flash - LiveView requires it
     fetch_live_flash(conn, [])
   end
-
 
   pipeline :api do
     plug :accepts, ["json"]
