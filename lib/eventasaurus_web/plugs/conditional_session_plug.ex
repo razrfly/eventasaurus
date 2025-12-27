@@ -80,23 +80,29 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
         if has_auth_cookie?(conn) do
           conn
         else
-          # Mark session as readonly to prevent writes (which cause Set-Cookie headers)
+          # Mark session as readonly and register callback to strip session cookie
           # Session is still fetched for LiveView CSRF token validation
+          # The before_send callback runs AFTER Plug.Session adds the cookie (LIFO order)
+          # Note: Dev mode login is checked in CacheControlPlug (after session is fetched)
           conn
           |> assign(:readonly_session, true)
           |> assign(:cacheable_request, true)
           |> assign(:cache_ttl, ttl)
+          |> register_cookie_stripping_callback()
         end
 
       :cacheable ->
         if has_auth_cookie?(conn) do
           conn
         else
-          # Mark session as readonly to prevent writes (which cause Set-Cookie headers)
+          # Mark session as readonly and register callback to strip session cookie
           # Session is still fetched for LiveView CSRF token validation
+          # The before_send callback runs AFTER Plug.Session adds the cookie (LIFO order)
+          # Note: Dev mode login is checked in CacheControlPlug (after session is fetched)
           conn
           |> assign(:readonly_session, true)
           |> assign(:cacheable_request, true)
+          |> register_cookie_stripping_callback()
         end
 
       :not_cacheable ->
@@ -211,5 +217,57 @@ defmodule EventasaurusWeb.Plugs.ConditionalSessionPlug do
     conn = fetch_cookies(conn)
     cookie = conn.cookies["__session"]
     cookie != nil and cookie != ""
+  end
+
+  # Register a before_send callback to strip the session cookie for cacheable requests
+  # This callback is registered BEFORE fetch_session, so it runs AFTER Plug.Session's
+  # callback (due to LIFO order). This allows us to strip the cookie after it's added.
+  #
+  # Why this works:
+  # 1. ConditionalSessionPlug runs first, registers this callback
+  # 2. fetch_session runs, Plug.Session registers its callback
+  # 3. Response is sent, before_send runs in LIFO order:
+  #    - Plug.Session's callback runs FIRST (adds Set-Cookie)
+  #    - Our callback runs SECOND (strips the cookie if still cacheable)
+  #
+  # The assigns check ensures we don't strip cookies if:
+  # - User became authenticated during the request (CacheControlPlug clears assigns)
+  # - The request is no longer cacheable for any reason
+  defp register_cookie_stripping_callback(conn) do
+    register_before_send(conn, fn response_conn ->
+      if response_conn.assigns[:cacheable_request] && response_conn.assigns[:readonly_session] do
+        strip_session_cookie(response_conn)
+      else
+        response_conn
+      end
+    end)
+  end
+
+  # Strip the Phoenix session cookie from resp_cookies by removing it entirely
+  # This enables CDN caching by preventing ANY Set-Cookie header for the session
+  #
+  # IMPORTANT: We directly remove from resp_cookies map, NOT using delete_resp_cookie!
+  # delete_resp_cookie adds an "expiration" cookie (max-age=0) which still produces
+  # a Set-Cookie header. For CDN caching, we need ZERO Set-Cookie headers.
+  #
+  # The conversion from resp_cookies to set-cookie headers happens AFTER all before_send
+  # callbacks run. So at callback time, the cookie exists in resp_cookies but hasn't
+  # been converted to a header yet.
+  @session_cookie_name "_eventasaurus_key"
+
+  defp strip_session_cookie(conn) do
+    require Logger
+
+    if Map.has_key?(conn.resp_cookies, @session_cookie_name) do
+      Logger.debug(
+        "[ConditionalSession] Stripping session cookie for cacheable request: #{conn.request_path}"
+      )
+
+      # Directly remove from resp_cookies map - don't use delete_resp_cookie
+      # which would add an expiration cookie that still produces a Set-Cookie header
+      %{conn | resp_cookies: Map.delete(conn.resp_cookies, @session_cookie_name)}
+    else
+      conn
+    end
   end
 end
