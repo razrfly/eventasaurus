@@ -18,17 +18,20 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
     - `Cache-Control: private, no-store, no-cache, must-revalidate`
     - Every request goes to origin server
 
-  ## Set-Cookie Stripping
+  ## Preventing Set-Cookie Headers
 
-  For catalog routes (using the :public pipeline), this plug uses
-  `register_before_send/2` to strip any Set-Cookie headers before the response
-  is sent. This is critical because:
+  For cacheable catalog routes, this plug calls `configure_session(ignore: true)`
+  which tells Plug.Session NOT to write its session cookie. This is critical because:
 
   1. Cloudflare automatically bypasses cache when Set-Cookie is present
-  2. Phoenix may add Set-Cookie even for "readonly" sessions (CSRF tokens, etc.)
-  3. Stripping happens at the last moment, after all other plugs have run
+  2. Phoenix adds Set-Cookie via Plug.Session's `before_send` callback
+  3. Using `configure_session(ignore: true)` prevents the cookie at the source
 
-  The stripping only occurs when BOTH conditions are true:
+  Note: We cannot use `register_before_send` to strip the cookie because callbacks
+  run in LIFO order (last registered runs first). Since CacheControlPlug runs after
+  `fetch_session`, our callback would run BEFORE Session's callback adds the cookie.
+
+  The session ignoring only occurs when BOTH conditions are true:
   - `conn.assigns[:cacheable_request]` is truthy
   - `conn.assigns[:readonly_session]` is truthy
 
@@ -111,7 +114,7 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
         conn
         |> set_cacheable_headers(ttl)
-        |> strip_set_cookie_for_caching()
+        |> prevent_session_cookie()
 
       # Default anonymous - still set cache headers (may be bypassed by Set-Cookie)
       true ->
@@ -119,18 +122,36 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
     end
   end
 
-  # Register a callback to strip Set-Cookie headers before sending the response
-  # This ensures Cloudflare doesn't bypass cache due to Set-Cookie presence
-  # Only applied to routes marked as cacheable (readonly_session + cacheable_request)
-  defp strip_set_cookie_for_caching(conn) do
-    register_before_send(conn, fn conn ->
-      # Only strip if still marked as cacheable (wasn't changed during request)
-      if conn.assigns[:cacheable_request] && conn.assigns[:readonly_session] do
-        delete_resp_header(conn, "set-cookie")
-      else
-        conn
-      end
-    end)
+  # Prevent Plug.Session from adding Set-Cookie header for cacheable requests
+  # Uses configure_session(ignore: true) which tells Session's before_send callback
+  # to skip writing the cookie entirely.
+  #
+  # This is the correct approach because:
+  # 1. before_send callbacks run in LIFO order (last registered runs first)
+  # 2. Session registers its callback when fetch_session is called (early)
+  # 3. Our callback would run BEFORE Session's, so we can't strip what isn't there yet
+  # 4. configure_session(ignore: true) prevents Session from adding the cookie at all
+  defp prevent_session_cookie(conn) do
+    require Logger
+
+    cacheable = conn.assigns[:cacheable_request]
+    readonly = conn.assigns[:readonly_session]
+
+    if cacheable && readonly do
+      Logger.debug(
+        "[CacheControl] Configuring session to ignore for #{conn.request_path} " <>
+          "(preventing Set-Cookie header)"
+      )
+
+      configure_session(conn, ignore: true)
+    else
+      Logger.debug(
+        "[CacheControl] NOT ignoring session for #{conn.request_path} " <>
+          "cacheable=#{inspect(cacheable)} readonly=#{inspect(readonly)}"
+      )
+
+      conn
+    end
   end
 
   # Check if the request has a Clerk session cookie
