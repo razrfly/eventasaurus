@@ -157,10 +157,27 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
 
     # NOTE: Venue image quality stats removed in Issue #2977
     # Venue images now use cached_images table with R2/Cloudflare CDN
-    venue_stats = %{total: 0, with_images: 0, without_images: 0}
-    venue_image_sources = %{}
-    recent_enrichments_7d = 0
-    recent_enrichments_30d = 0
+    # These placeholders match the template structure but show zeros
+    # since the old ImageKit-based tracking has been deprecated
+    venue_stats = %{
+      total_venues: 0,
+      venues_with_images: 0,
+      venues_without_images: 0,
+      coverage_percentage: 0.0,
+      address_coverage_percentage: 100.0,
+      venues_missing_address: 0,
+      coordinates_coverage_percentage: 100.0,
+      venues_missing_coordinates: 0
+    }
+
+    venue_image_sources = %{
+      foursquare: 0,
+      google_places: 0,
+      multiple_sources: 0
+    }
+
+    recent_enrichments_7d = %{venues_enriched: 0, images_added: 0}
+    recent_enrichments_30d = %{venues_enriched: 0, images_added: 0}
     venues_needing_images = []
     venues_with_images = []
 

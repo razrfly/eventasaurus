@@ -202,9 +202,45 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   @doc """
   Get all cached images for an entity.
   """
+  @spec get_entity_images(String.t() | atom(), integer()) :: [CachedImage.t()]
   def get_entity_images(entity_type, entity_id) do
     CachedImage.for_entity(to_string(entity_type), entity_id)
     |> Repo.all()
+  end
+
+  @doc """
+  Batch get image counts for multiple entities of the same type.
+
+  Returns a map of entity_id => image_count for efficient N+1 prevention.
+
+  ## Parameters
+
+  - `entity_type` - Type of entity (e.g., "venue", "performer")
+  - `entity_ids` - List of entity IDs to fetch counts for
+
+  ## Returns
+
+  Map of `%{entity_id => count}` for all entities with images.
+  Missing keys indicate 0 images.
+
+  ## Example
+
+      counts = ImageCacheService.get_entity_image_counts("venue", [1, 2, 3])
+      # => %{1 => 3, 2 => 1}  # venue 3 has no images
+  """
+  @spec get_entity_image_counts(String.t() | atom(), [integer()]) :: %{integer() => non_neg_integer()}
+  def get_entity_image_counts(_entity_type, []), do: %{}
+
+  def get_entity_image_counts(entity_type, entity_ids) when is_list(entity_ids) do
+    entity_type_str = to_string(entity_type)
+
+    from(c in CachedImage,
+      where: c.entity_type == ^entity_type_str and c.entity_id in ^entity_ids,
+      group_by: c.entity_id,
+      select: {c.entity_id, count(c.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   @doc """

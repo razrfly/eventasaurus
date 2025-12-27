@@ -4,6 +4,15 @@ defmodule EventasaurusApp.Repo.Migrations.RemoveVenueImagesColumn do
   @moduledoc """
   Removes the legacy venue_images JSONB column from venues table.
 
+  ## WARNING: Data Loss
+
+  This migration permanently deletes the `venue_images` JSONB column and all
+  data it contains. Ensure that all venue images have been migrated to the
+  `cached_images` table before running this migration. The rollback will
+  recreate an empty column - **original data cannot be recovered**.
+
+  ## Background
+
   This column was used for ImageKit-based venue images. All venue images
   have been migrated to the cached_images table backed by R2 storage.
 

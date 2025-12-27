@@ -16,10 +16,13 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
      socket
      |> assign(:selected_group, nil)
      |> assign(:selected_primary, nil)
+     |> assign(:selected_group_image_counts, %{})
      |> assign(:merge_in_progress, false)
      |> assign(:page_title, "Manage Duplicate Venues")
      |> assign_async(:duplicate_groups, fn ->
-       {:ok, %{duplicate_groups: Venues.find_duplicate_groups()}}
+       groups = Venues.find_duplicate_groups()
+       image_counts = preload_venue_image_counts(groups)
+       {:ok, %{duplicate_groups: groups, image_counts: image_counts}}
      end)}
   end
 
@@ -34,11 +37,15 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
           {:noreply, put_flash(socket, :error, "Invalid group selection")}
         else
           primary_venue = List.first(group.venues)
+          # Preload image counts for selected group to avoid N+1 queries
+          venue_ids = Enum.map(group.venues, & &1.id)
+          image_counts = ImageCacheService.get_entity_image_counts("venue", venue_ids)
 
           {:noreply,
            socket
            |> assign(:selected_group, group)
-           |> assign(:selected_primary, primary_venue.id)}
+           |> assign(:selected_primary, primary_venue.id)
+           |> assign(:selected_group_image_counts, image_counts)}
         end
 
       _ ->
@@ -80,7 +87,9 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
            |> assign(:merge_in_progress, false)
            |> put_flash(:info, "Successfully merged #{length(duplicate_ids)} duplicate venues")
            |> assign_async(:duplicate_groups, fn ->
-             {:ok, %{duplicate_groups: Venues.find_duplicate_groups()}}
+             groups = Venues.find_duplicate_groups()
+             image_counts = preload_venue_image_counts(groups)
+             {:ok, %{duplicate_groups: groups, image_counts: image_counts}}
            end)}
 
         {:error, reason} ->
@@ -106,7 +115,9 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
   def handle_event("retry_load", _params, socket) do
     {:noreply,
      assign_async(socket, :duplicate_groups, fn ->
-       {:ok, %{duplicate_groups: Venues.find_duplicate_groups()}}
+       groups = Venues.find_duplicate_groups()
+       image_counts = preload_venue_image_counts(groups)
+       {:ok, %{duplicate_groups: groups, image_counts: image_counts}}
      end)}
   end
 
@@ -118,6 +129,22 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
     end
   end
 
+  # Get venue image count from preloaded map (N+1 prevention)
+  defp venue_image_count(venue, image_counts) do
+    Map.get(image_counts, venue.id, 0)
+  end
+
+  # Batch preload image counts for all venues in duplicate groups
+  defp preload_venue_image_counts(duplicate_groups) do
+    venue_ids =
+      duplicate_groups
+      |> Enum.flat_map(& &1.venues)
+      |> Enum.map(& &1.id)
+      |> Enum.uniq()
+
+    ImageCacheService.get_entity_image_counts("venue", venue_ids)
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -127,10 +154,10 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
           Manage Duplicate Venues
         </h1>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
-          <.async_result :let={duplicate_groups} assign={@duplicate_groups}>
+          <.async_result :let={%{duplicate_groups: groups}} assign={@duplicate_groups}>
             <:loading>Analyzing venues for duplicates...</:loading>
             <:failed :let={_reason}>Failed to load duplicate groups. Please try again.</:failed>
-            Found <%= length(duplicate_groups) %> groups of duplicate venues
+            Found <%= length(groups) %> groups of duplicate venues
           </.async_result>
         </p>
       </div>
@@ -168,7 +195,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
                       </div>
                       <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">
                         Provider IDs: <%= map_size(venue.provider_ids || %{}) %> |
-                        Images: <%= length(ImageCacheService.get_entity_images("venue", venue.id)) %>
+                        Images: <%= venue_image_count(venue, @selected_group_image_counts) %>
                       </div>
                     </div>
                   </label>
@@ -208,7 +235,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
       <% end %>
 
       <!-- Duplicate Groups List -->
-      <.async_result :let={duplicate_groups} assign={@duplicate_groups}>
+      <.async_result :let={%{duplicate_groups: duplicate_groups, image_counts: image_counts}} assign={@duplicate_groups}>
         <:loading>
           <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6 text-center">
             <div class="flex justify-center">
@@ -315,7 +342,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
                         </div>
                         <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">
                           Provider IDs: <%= map_size(venue.provider_ids || %{}) %> |
-                          Images: <%= length(ImageCacheService.get_entity_images("venue", venue.id)) %> |
+                          Images: <%= venue_image_count(venue, image_counts) %> |
                           Slug: <%= venue.slug %>
                         </div>
                       </div>
