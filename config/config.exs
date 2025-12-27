@@ -119,15 +119,6 @@ config :eventasaurus, :cdn,
   enabled: false,
   domain: "cdn.wombie.com"
 
-# ImageKit CDN configuration (for venue images)
-# Disabled by default in development, enabled in production
-# Test locally with: IMAGEKIT_CDN_ENABLED=true mix phx.server
-config :eventasaurus, :imagekit,
-  # Disabled in dev - set to true to test orchestrator mode
-  enabled: false,
-  id: "wombie",
-  endpoint: "https://ik.imagekit.io/wombie"
-
 # Discovery source configuration
 config :eventasaurus,
   pubquiz_enabled: true,

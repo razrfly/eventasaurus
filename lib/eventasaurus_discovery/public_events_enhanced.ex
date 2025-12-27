@@ -969,8 +969,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   # Apply CDN transformations to Unsplash images
   defp apply_cdn_transformations(url) when is_binary(url) do
-    # Use ImageKit CDN for transformations (returns original if CDN disabled)
-    Eventasaurus.ImageKit.url(url, width: 800, quality: 85)
+    # Use Cloudflare CDN for transformations (returns original if CDN disabled)
+    Eventasaurus.CDN.url(url, width: 800, quality: 85)
   end
 
   defp apply_cdn_transformations(nil), do: nil

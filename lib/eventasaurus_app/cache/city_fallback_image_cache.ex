@@ -243,7 +243,7 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
   defp get_image_url(_), do: nil
 
   defp apply_cdn_transformation(url) when is_binary(url) do
-    Eventasaurus.ImageKit.url(url, width: 800, quality: 85)
+    Eventasaurus.CDN.url(url, width: 800, quality: 85)
   end
 
   defp apply_cdn_transformation(_), do: nil

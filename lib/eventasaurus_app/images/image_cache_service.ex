@@ -50,7 +50,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   - `position` - Position/order of the image (0-based index)
   - `original_url` - URL of the original image to cache
   - `opts` - Options:
-    - `:source` - Original source identifier (e.g., "imagekit", "google_places")
+    - `:source` - Original source identifier (e.g., "google_places", "tmdb")
     - `:metadata` - Raw source data map (preserved as-is, not for parsing)
     - `:priority` - Oban job priority (default: 2)
 
