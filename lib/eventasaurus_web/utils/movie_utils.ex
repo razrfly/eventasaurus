@@ -320,16 +320,13 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   Uses MovieImageResolver to check cache first (via tmdb_id lookup),
   falling back to raw TMDB URL if not cached.
   """
-  def get_poster_url(movie_data, _size \\ "w500")
-
-  def get_poster_url(movie_data, _size) when is_map(movie_data) do
-    # Use MovieImageResolver which checks cache first
+  def get_poster_url(movie_data) when is_map(movie_data) do
     MovieImageResolver.get_poster_url(movie_data)
   rescue
     _ -> nil
   end
 
-  def get_poster_url(_, _), do: nil
+  def get_poster_url(_), do: nil
 
   @doc """
   Extract backdrop URL using TMDB image service.
@@ -337,16 +334,13 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   Uses MovieImageResolver to check cache first (via tmdb_id lookup),
   falling back to raw TMDB URL if not cached.
   """
-  def get_backdrop_url(movie_data, _size \\ "w1280")
-
-  def get_backdrop_url(movie_data, _size) when is_map(movie_data) do
-    # Use MovieImageResolver which checks cache first
+  def get_backdrop_url(movie_data) when is_map(movie_data) do
     MovieImageResolver.get_backdrop_url(movie_data)
   rescue
     _ -> nil
   end
 
-  def get_backdrop_url(_, _), do: nil
+  def get_backdrop_url(_), do: nil
 
   @doc """
   Extract movie external URLs (TMDB, IMDb) from movie data.
