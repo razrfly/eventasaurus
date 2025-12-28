@@ -19,7 +19,7 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
   use Phoenix.Component
   use Gettext, backend: EventasaurusWeb.Gettext
 
-  alias EventasaurusApp.Venues.Venue
+  alias EventasaurusApp.Images.VenueImages
 
   alias EventasaurusWeb.Components.Activity.{
     HeroCardBadge,
@@ -135,10 +135,26 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
 
   # Private helpers
 
+  # Get cover image using VenueImages with proper layered fallback:
+  # 1. R2 cached venue image → CDN transformation (our CDN)
+  # 2. City Unsplash gallery → raw Unsplash URLs (Unsplash's CDN, not ours)
+  # 3. nil → placeholder icon
   defp get_venue_cover_image(venue) do
-    case Venue.get_cover_image(venue, width: 1200, height: 630, quality: 85) do
-      {:ok, url, source} -> {url, source}
-      {:error, :no_image} -> {nil, nil}
+    city = Map.get(venue, :city_ref)
+    url = VenueImages.get_image(venue, city, width: 1200, height: 630, quality: 85)
+
+    if url do
+      # Determine source based on URL pattern
+      source =
+        cond do
+          String.contains?(url || "", "cdn.wombie.com") -> :venue
+          String.contains?(url || "", "unsplash.com") -> :city_gallery
+          true -> :unknown
+        end
+
+      {url, source}
+    else
+      {nil, nil}
     end
   end
 end

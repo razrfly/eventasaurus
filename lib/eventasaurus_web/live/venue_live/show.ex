@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
+  alias EventasaurusApp.Images.VenueImages
   alias EventasaurusDiscovery.PublicEvents
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusWeb.Components.OpenGraphComponent
@@ -560,12 +561,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
     # Build absolute canonical URL using UrlHelper to avoid double slash issues
     canonical_url = UrlHelper.build_url(canonical_path, request_uri)
 
-    # Get cover image for the social card data
-    cover_image_url =
-      case Venue.get_cover_image(venue, width: 800, height: 419, quality: 85) do
-        {:ok, url, _source} -> url
-        {:error, :no_image} -> nil
-      end
+    # Get cover image using VenueImages with proper layered fallback:
+    # 1. R2 cached venue image → CDN transformation (our CDN)
+    # 2. City Unsplash gallery → raw Unsplash URLs (Unsplash's CDN, not ours)
+    city = Map.get(venue, :city_ref)
+    cover_image_url = VenueImages.get_image(venue, city, width: 800, height: 419, quality: 85)
 
     # Build venue data for social card hash generation
     venue_data = %{
