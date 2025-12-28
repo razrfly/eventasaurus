@@ -648,34 +648,12 @@ defmodule EventasaurusWeb.CityLive.Index do
       })
 
     # Get events with geographic filtering done at database level
+    # PERF: Uses consolidated query that returns events + counts in single pass
+    # Previously this was 3 separate queries repeating the same geo filter
     {geographic_events, total_count, all_events_count, date_range_counts} =
       if lat && lng do
-        # Get the paginated events with aggregation enabled
-        # For city pages, ignore city boundaries in aggregation since geographic
-        # filtering already determines relevance. Use viewing city as canonical city.
-        events =
-          PublicEventsEnhanced.list_events_with_aggregation(
-            query_filters
-            |> Map.put(:aggregate, aggregate)
-            |> Map.put(:ignore_city_in_aggregation, true)
-            |> Map.put(:viewing_city, city)
-          )
-
-        # Get the total count without pagination
-        # IMPORTANT: Use aggregation-aware count to match the actual displayed items
-        # This ensures pagination is accurate (e.g., page 7 shows items if count says 7 pages exist)
+        # Build filters for "all events" count (without date restrictions)
         count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
-
-        total =
-          PublicEventsEnhanced.count_events_with_aggregation(
-            count_filters
-            |> Map.put(:aggregate, aggregate)
-            |> Map.put(:ignore_city_in_aggregation, true)
-            |> Map.put(:viewing_city, city)
-          )
-
-        # Get date range counts with geographic filtering, but without existing date filters
-        # This ensures date range counts are calculated from ALL events, not just the currently filtered ones
         date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
 
         # Use cached date range counts (15 min TTL) - cache key includes city slug and radius
@@ -688,14 +666,20 @@ defmodule EventasaurusWeb.CityLive.Index do
             end
           )
 
-        # Get the count of ALL events (no date filters) for the "All Events" button
-        # Use aggregation-aware count to match what users actually see when browsing
-        all_events =
-          PublicEventsEnhanced.count_events_with_aggregation(
-            date_range_count_filters
+        # CONSOLIDATED QUERY: Get events, total count, and all_events count in single pass
+        # This replaces 3 separate calls to list_events_with_aggregation + 2x count_events_with_aggregation
+        {events, total, all_events} =
+          PublicEventsEnhanced.list_events_with_aggregation_and_counts(
+            query_filters
             |> Map.put(:aggregate, aggregate)
             |> Map.put(:ignore_city_in_aggregation, true)
             |> Map.put(:viewing_city, city)
+            |> Map.put(:all_events_filters,
+              date_range_count_filters
+              |> Map.put(:aggregate, aggregate)
+              |> Map.put(:ignore_city_in_aggregation, true)
+              |> Map.put(:viewing_city, city)
+            )
           )
 
         {events, total, all_events, date_counts}
