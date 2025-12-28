@@ -298,35 +298,70 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   ## Geographic Filtering
+  #
+  # PERF: Uses subquery pattern to force GIST index usage on venues_location_gist.
+  # The index is defined as: ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography
+  # We must match this expression exactly for the index to be used.
+  #
+  # Previous approach joined venues inline, causing the query planner to choose
+  # venues_city_id_covering_idx and do a full table scan with post-filter.
+  # The subquery pattern forces the planner to use the spatial index first.
 
   defp filter_by_radius(query, nil, nil, nil), do: query
   defp filter_by_radius(query, nil, _lng, _radius), do: query
   defp filter_by_radius(query, _lat, nil, _radius), do: query
   defp filter_by_radius(query, _lat, _lng, nil), do: query
 
-  defp filter_by_radius(query, center_lat, center_lng, radius_km)
+  defp filter_by_radius(query, center_lat, center_lng, radius_km) do
+    # Convert Decimal types to float for PostGIS
+    lat = to_float(center_lat)
+    lng = to_float(center_lng)
+    radius = to_float(radius_km)
+
+    if is_number(lat) and is_number(lng) and is_number(radius) do
+      do_filter_by_radius(query, lat, lng, radius)
+    else
+      query
+    end
+  end
+
+  defp do_filter_by_radius(query, center_lat, center_lng, radius_km)
        when is_number(center_lat) and is_number(center_lng) and is_number(radius_km) do
     radius_meters = radius_km * 1000
 
+    # Subquery to find venue IDs within radius using GIST index
+    # The geography expression MUST match the index definition exactly:
+    # ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography
+    nearby_venue_ids =
+      from(v in Venue,
+        where: not is_nil(v.latitude) and not is_nil(v.longitude),
+        where:
+          fragment(
+            "ST_DWithin(
+              ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
+              ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
+              ?
+            )",
+            v.longitude,
+            v.latitude,
+            ^center_lng,
+            ^center_lat,
+            ^radius_meters
+          ),
+        select: v.id
+      )
+
+    # Join events to the pre-filtered venue IDs
     from(pe in query,
-      join: v in Venue,
-      on: pe.venue_id == v.id,
-      where: not is_nil(v.latitude) and not is_nil(v.longitude),
-      where:
-        fragment(
-          "ST_DWithin(
-          ST_MakePoint(?::float, ?::float)::geography,
-          ST_MakePoint(?::float, ?::float)::geography,
-          ?
-        )",
-          ^center_lng,
-          ^center_lat,
-          v.longitude,
-          v.latitude,
-          ^radius_meters
-        )
+      where: pe.venue_id in subquery(nearby_venue_ids)
     )
   end
+
+  # Helper to convert various numeric types to float for PostGIS
+  defp to_float(%Decimal{} = d), do: Decimal.to_float(d)
+  defp to_float(n) when is_float(n), do: n
+  defp to_float(n) when is_integer(n), do: n * 1.0
+  defp to_float(_), do: nil
 
   ## Search
 
@@ -1542,6 +1577,114 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       paginate_aggregated_results(sorted, page, page_size)
     else
       list_events(opts)
+    end
+  end
+
+  @doc """
+  List events with aggregation AND return counts in a single pass.
+
+  This consolidates what was previously 3 separate queries:
+  1. list_events_with_aggregation (fetches events)
+  2. count_events_with_aggregation (counts for pagination)
+  3. count_events_with_aggregation (counts for "all events" without date filter)
+
+  Now all three are computed from a single database fetch + in-memory aggregation.
+
+  ## Returns
+
+  `{events, total_count, all_events_count}` where:
+  - `events` - Paginated list of events/aggregated groups for current page
+  - `total_count` - Total aggregated items matching current filters (for pagination)
+  - `all_events_count` - Total aggregated items without date filters (for "All Events" button)
+
+  ## Options
+
+  Same as `list_events_with_aggregation/1`, plus:
+  - `:all_events_filters` - Filters to use for all_events_count (typically without date range)
+  """
+  def list_events_with_aggregation_and_counts(opts \\ []) do
+    if opts[:aggregate] do
+      # Extract & sanitize pagination params
+      page = max(opts[:page] || 1, 1)
+      page_size = min(opts[:page_size] || @default_limit, @max_limit)
+
+      # Fetch window sized to requested page (cap at @max_limit)
+      fetch_size = if page == 1, do: @max_limit, else: min(@max_limit, page * page_size * 3)
+
+      # Build fetch opts without DB pagination
+      opts_without_pagination =
+        opts
+        |> Map.new()
+        |> Map.drop([:page, :offset, :limit, :all_events_filters])
+        |> Map.put(:page_size, fetch_size)
+        |> then(fn opts_map ->
+          case opts_map[:viewing_city] do
+            %{id: city_id} -> Map.put(opts_map, :browsing_city_id, city_id)
+            _ -> opts_map
+          end
+        end)
+
+      # Single database query - fetch events
+      events = list_events(opts_without_pagination)
+
+      # In-memory aggregation (done once, reused for both counts)
+      aggregated = aggregate_events(events, opts)
+
+      # Total count for pagination (current filters)
+      total_count = length(aggregated)
+
+      # Apply sorting
+      sort_by = opts[:sort_by] || :starts_at
+      sort_order = opts[:sort_order] || :asc
+      sorted = sort_aggregated_results(aggregated, sort_by, sort_order)
+
+      # Apply pagination to get current page
+      paginated_events = paginate_aggregated_results(sorted, page, page_size)
+
+      # Calculate "all events" count (without date filters)
+      # If all_events_filters provided, we need a separate fetch for accurate count
+      # Otherwise, use the same aggregated count (when no date filter was applied)
+      all_events_count =
+        case opts[:all_events_filters] do
+          nil ->
+            # No separate filters, all_events = total
+            total_count
+
+          all_filters when is_map(all_filters) ->
+            # Need to fetch without date filters for accurate "all events" count
+            # This is still 1 extra query, but eliminates the third count query
+            all_fetch_opts =
+              all_filters
+              |> Map.drop([:page, :offset, :limit])
+              |> Map.put(:page_size, @max_limit)
+              |> then(fn opts_map ->
+                case opts_map[:viewing_city] do
+                  %{id: city_id} -> Map.put(opts_map, :browsing_city_id, city_id)
+                  _ -> opts_map
+                end
+              end)
+
+            all_events = list_events(all_fetch_opts)
+            all_aggregated = aggregate_events(all_events, opts)
+            length(all_aggregated)
+        end
+
+      {paginated_events, total_count, all_events_count}
+    else
+      # Non-aggregated: use simple list with count
+      events = list_events(opts)
+
+      # For non-aggregated, count via efficient SQL
+      count_opts = opts |> Map.new() |> Map.drop([:page, :page_size, :offset, :limit])
+      total_count = count_events(count_opts)
+
+      all_events_count =
+        case opts[:all_events_filters] do
+          nil -> total_count
+          all_filters -> count_events(Map.new(all_filters))
+        end
+
+      {events, total_count, all_events_count}
     end
   end
 
