@@ -32,9 +32,9 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
 
   ## Refresh Strategy
 
-  - Refreshes daily at midnight (images rotate daily)
-  - Hourly refresh for gallery changes
+  - Refreshes every 24 hours (galleries rarely change)
   - Manual refresh via `refresh/0`
+  - Only loads required columns to minimize data transfer
   """
 
   use GenServer
@@ -45,7 +45,9 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
   import Ecto.Query
 
   @table_name :city_fallback_image_cache
-  @refresh_interval :timer.hours(1)
+  # Galleries rarely change - refresh once per day instead of hourly
+  # This reduces DB queries from ~72/day to ~3/day (one per Fly.io instance)
+  @refresh_interval :timer.hours(24)
 
   # Standard categories that get pre-computed
   @categories [
@@ -175,10 +177,13 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
     start_time = System.monotonic_time(:millisecond)
 
     # Query all cities with unsplash galleries
+    # Only select columns needed: id for cache key, unsplash_gallery for image data
+    # This avoids loading: name, slug, latitude, longitude, discovery_enabled,
+    # discovery_config, alternate_names, country_id, inserted_at, updated_at
     cities =
       from(c in City,
         where: not is_nil(c.unsplash_gallery),
-        select: c
+        select: struct(c, [:id, :unsplash_gallery])
       )
       |> Repo.all(timeout: 30_000)
 
