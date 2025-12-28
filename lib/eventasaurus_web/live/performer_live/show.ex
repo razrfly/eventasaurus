@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   use EventasaurusWeb, :live_view
 
   alias Eventasaurus.SocialCards.HashGenerator
+  alias EventasaurusApp.Images.PerformerImages
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusWeb.Components.OpenGraphComponent
@@ -203,11 +204,15 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     # Build absolute canonical URL
     canonical_url = UrlHelper.build_url(canonical_path, request_uri)
 
+    # Get cached image URL for social card (prefer CDN, fallback to original)
+    image_url =
+      PerformerImages.get_url_with_fallback(performer.id, performer.image_url)
+
     # Build performer data for social card hash generation
     performer_data = %{
       name: performer.name,
       slug: performer.slug,
-      image_url: performer.image_url,
+      image_url: image_url,
       event_count: event_count,
       updated_at: performer.updated_at
     }

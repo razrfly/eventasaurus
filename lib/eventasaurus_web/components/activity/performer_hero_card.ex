@@ -22,6 +22,7 @@ defmodule EventasaurusWeb.Components.Activity.PerformerHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
+  alias EventasaurusApp.Images.PerformerImages
 
   alias EventasaurusWeb.Components.Activity.{
     HeroCardBadge,
@@ -59,26 +60,31 @@ defmodule EventasaurusWeb.Components.Activity.PerformerHeroCard do
     country_code = get_country_code(assigns.performer)
     ra_url = get_ra_url(assigns.performer)
 
+    # Get cached image URL from event sources, fallback to performer.image_url
+    image_url =
+      PerformerImages.get_url_with_fallback(assigns.performer.id, assigns.performer.image_url)
+
     assigns =
       assigns
       |> assign(:genres, genres)
       |> assign(:country, country)
       |> assign(:country_code, country_code)
       |> assign(:ra_url, ra_url)
+      |> assign(:image_url, image_url)
 
     ~H"""
     <div class={"relative rounded-xl overflow-hidden #{@class}"}>
       <!-- Background -->
-      <HeroCardBackground.background image_url={@performer.image_url} theme={:performer} />
+      <HeroCardBackground.background image_url={@image_url} theme={:performer} />
 
       <!-- Content -->
       <div class="relative p-6 md:p-8">
         <div class="flex flex-col md:flex-row gap-6">
           <!-- Performer Image -->
-          <%= if @performer.image_url do %>
+          <%= if @image_url do %>
             <div class="flex-shrink-0 self-start">
               <img
-                src={CDN.url(@performer.image_url, width: 200, height: 200, fit: "cover", quality: 90)}
+                src={CDN.url(@image_url, width: 200, height: 200, fit: "cover", quality: 90)}
                 alt={@performer.name}
                 class="w-32 md:w-40 h-32 md:h-40 object-cover rounded-lg shadow-2xl"
                 loading="lazy"
