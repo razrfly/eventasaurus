@@ -63,6 +63,9 @@ defmodule EventasaurusWeb.Router do
 
       # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
 
+      # Image Cache Dashboard (dev - no auth)
+      live "/images", Admin.ImageCacheDashboardLive
+
       # Venue Duplicate Management (dev - no auth)
       live "/venues/duplicates", Admin.VenueDuplicatesLive
 
@@ -186,6 +189,9 @@ defmodule EventasaurusWeb.Router do
       live "/geocoding/providers", EventasaurusWeb.Admin.GeocodingProviderLive, :index
 
       # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
+
+      # Image Cache Dashboard with admin authentication
+      live "/images", EventasaurusWeb.Admin.ImageCacheDashboardLive
 
       # Venue Duplicate Management with admin authentication
       live "/venues/duplicates", EventasaurusWeb.Admin.VenueDuplicatesLive
