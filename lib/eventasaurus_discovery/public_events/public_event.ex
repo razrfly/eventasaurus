@@ -9,6 +9,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
     [:title]
   end
 
+  @spec build_slug(list(String.t() | nil), Ecto.Changeset.t()) :: String.t()
   def build_slug(sources, changeset) do
     # Universal UTF-8 protection for all scrapers
     # This ensures that regardless of which scraper (Karnet, Ticketmaster, Bandsintown, etc.)
@@ -20,7 +21,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
       ["" | _] ->
         # Fallback slug if title is empty/invalid after cleaning
         # This prevents slug generation errors when UTF-8 cleaning results in empty string
-        "event-#{DateTime.utc_now() |> DateTime.to_unix()}"
+        generate_fallback_slug(changeset)
 
       _ ->
         # Get the default slug from cleaned sources
@@ -28,11 +29,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
 
         # Handle nil/empty base_slug (can happen with special Unicode like mathematical bold)
         case base_slug do
-          nil ->
-            "event-#{DateTime.utc_now() |> DateTime.to_unix()}"
-
-          "" ->
-            "event-#{DateTime.utc_now() |> DateTime.to_unix()}"
+          empty when empty in [nil, ""] ->
+            generate_fallback_slug(changeset)
 
           _ ->
             # Truncate title to 40 characters at word boundary
@@ -48,6 +46,15 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
             ensure_unique_slug(candidate_slug, changeset)
         end
     end
+  end
+
+  # Generate a fallback slug with microsecond precision to avoid collisions
+  # Also ensures uniqueness through the standard validation path
+  defp generate_fallback_slug(changeset) do
+    # Use microsecond precision to minimize collision risk for concurrent event creation
+    timestamp = DateTime.utc_now() |> DateTime.to_unix(:microsecond)
+    candidate = "event-#{timestamp}"
+    ensure_unique_slug(candidate, changeset)
   end
 
   # Truncate slug to max_length at word boundary (hyphen)
