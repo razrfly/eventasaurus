@@ -11,6 +11,8 @@ defmodule EventasaurusWeb.Components.MovieCards do
 
   import EventasaurusWeb.Components.CDNImage
 
+  alias EventasaurusApp.Images.MovieImages
+
   @doc """
   Renders a movie card for the movies index grid.
 
@@ -31,9 +33,9 @@ defmodule EventasaurusWeb.Components.MovieCards do
       <div class="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-200 overflow-hidden">
         <!-- Movie Poster -->
         <div class="aspect-[2/3] bg-gray-200 relative overflow-hidden">
-          <%= if @movie.poster_url do %>
+          <%= if poster_url = MovieImages.get_poster_url(@movie.id, @movie.poster_url) do %>
             <.cdn_img
-              src={@movie.poster_url}
+              src={poster_url}
               alt={@movie.title}
               width={300}
               height={450}

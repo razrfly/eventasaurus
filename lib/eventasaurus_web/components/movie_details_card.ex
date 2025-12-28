@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.Components.MovieDetailsCard do
 
   alias Eventasaurus.CDN
   alias Eventasaurus.Integrations.Cinegraph
+  alias EventasaurusApp.Images.MovieImages
 
   attr :movie, :map, required: true, doc: "Movie struct with title, poster_url, metadata, etc."
 
@@ -26,10 +27,10 @@ defmodule EventasaurusWeb.Components.MovieDetailsCard do
     <div class={"mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 #{@class}"}>
       <div class="flex flex-col md:flex-row gap-6">
         <!-- Movie Poster -->
-        <%= if @movie.poster_url do %>
+        <%= if poster_url = MovieImages.get_poster_url(@movie.id, @movie.poster_url) do %>
           <div class="flex-shrink-0">
             <img
-              src={CDN.url(@movie.poster_url, width: 200, height: 300, fit: "cover", quality: 90)}
+              src={CDN.url(poster_url, width: 200, height: 300, fit: "cover", quality: 90)}
               alt={"#{@movie.title} poster"}
               class="w-32 h-48 object-cover rounded-lg shadow-lg"
               loading="lazy"

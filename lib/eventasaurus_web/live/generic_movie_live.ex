@@ -28,6 +28,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
   alias EventasaurusWeb.JsonLd.MovieSchema
   alias EventasaurusWeb.Services.TmdbService
   alias Eventasaurus.CDN
+  alias EventasaurusApp.Images.MovieImages
   import Ecto.Query
 
   @impl true
@@ -420,11 +421,13 @@ defmodule EventasaurusWeb.GenericMovieLive do
   defp build_movie_open_graph(movie, cities_with_screenings) do
     base_url = EventasaurusWeb.Layouts.get_base_url()
 
-    # Get movie poster image - use actual poster_url field
+    # Get movie poster image - use cached URL with fallback to original
+    poster_url = MovieImages.get_poster_url(movie.id, movie.poster_url)
+
     image_url =
       cond do
-        movie.poster_url && movie.poster_url != "" ->
-          movie.poster_url
+        poster_url && poster_url != "" ->
+          poster_url
 
         true ->
           movie_name_encoded = URI.encode(movie.title)
