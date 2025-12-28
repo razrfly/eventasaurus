@@ -22,11 +22,20 @@ defmodule EventasaurusApp.Images.CachedImage do
   - `movie` - Movie posters and backdrops
   - `group` - Group avatars and covers
 
+  ## Image Types
+
+  The `image_type` field provides semantic discrimination:
+  - Movies: `poster`, `backdrop`, `still`, `logo`
+  - Other entities: `primary` (default)
+
+  This allows querying by meaning ("give me the poster") rather than
+  just position.
+
   ## Ordering
 
-  Images are ordered by `position` (0-based index). Position 0 is typically
-  used as the primary/hero image, but this is a display concern, not a
-  schema concern.
+  Images are ordered by `position` (0-based index) within each type.
+  For example, a movie might have poster/0, poster/1 (multiple posters)
+  and backdrop/0, backdrop/1 (multiple backdrops).
 
   ## Metadata Field
 
@@ -45,11 +54,13 @@ defmodule EventasaurusApp.Images.CachedImage do
 
   @valid_statuses ~w(pending downloading cached failed)
   @valid_entity_types ~w(venue public_event_source performer event movie group)
+  @valid_image_types ~w(primary poster backdrop still logo)
 
   schema "cached_images" do
     # Polymorphic association
     field(:entity_type, :string)
     field(:entity_id, :integer)
+    field(:image_type, :string, default: "primary")
     field(:position, :integer, default: 0)
 
     # Source tracking
@@ -84,6 +95,7 @@ defmodule EventasaurusApp.Images.CachedImage do
     |> cast(attrs, [
       :entity_type,
       :entity_id,
+      :image_type,
       :position,
       :original_url,
       :original_source,
@@ -96,11 +108,12 @@ defmodule EventasaurusApp.Images.CachedImage do
       :file_size,
       :metadata
     ])
-    |> validate_required([:entity_type, :entity_id, :position, :original_url])
+    |> validate_required([:entity_type, :entity_id, :original_url])
     |> validate_inclusion(:status, @valid_statuses)
+    |> validate_inclusion(:image_type, @valid_image_types)
     |> validate_entity_type()
     |> validate_number(:position, greater_than_or_equal_to: 0)
-    |> unique_constraint([:entity_type, :entity_id, :position])
+    |> unique_constraint([:entity_type, :entity_id, :image_type, :position])
   end
 
   @doc """
@@ -134,24 +147,38 @@ defmodule EventasaurusApp.Images.CachedImage do
   # Query helpers
 
   @doc """
-  Query for finding a cached image by entity and position.
+  Query for finding a cached image by entity, image type, and position.
   """
-  def for_entity(entity_type, entity_id, position) do
+  def for_entity(entity_type, entity_id, image_type, position) do
     from(c in __MODULE__,
       where:
         c.entity_type == ^entity_type and
           c.entity_id == ^entity_id and
+          c.image_type == ^image_type and
           c.position == ^position
     )
   end
 
   @doc """
-  Query for finding all cached images for an entity, ordered by position.
+  Query for finding all cached images of a specific type for an entity.
+  """
+  def for_entity(entity_type, entity_id, image_type) do
+    from(c in __MODULE__,
+      where:
+        c.entity_type == ^entity_type and
+          c.entity_id == ^entity_id and
+          c.image_type == ^image_type,
+      order_by: [asc: c.position]
+    )
+  end
+
+  @doc """
+  Query for finding all cached images for an entity, ordered by type then position.
   """
   def for_entity(entity_type, entity_id) do
     from(c in __MODULE__,
       where: c.entity_type == ^entity_type and c.entity_id == ^entity_id,
-      order_by: [asc: c.position]
+      order_by: [asc: c.image_type, asc: c.position]
     )
   end
 

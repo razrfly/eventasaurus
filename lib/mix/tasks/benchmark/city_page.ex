@@ -201,7 +201,10 @@ defmodule Mix.Tasks.Benchmark.CityPage do
 
     if avg_consolidated > avg_list * 1.5 do
       savings = avg_consolidated - avg_list
-      IO.puts("  ⚠️  Potential savings from P0: ~#{Float.round(savings, 0)}ms (#{Float.round(savings / avg_consolidated * 100, 0)}%)")
+
+      IO.puts(
+        "  ⚠️  Potential savings from P0: ~#{Float.round(savings, 0)}ms (#{Float.round(savings / avg_consolidated * 100, 0)}%)"
+      )
     end
 
     IO.puts("\n" <> String.duplicate("=", 70))

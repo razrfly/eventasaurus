@@ -7,16 +7,27 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
   ## Usage
 
-      # Queue an image for caching
+      # Queue an image for caching (defaults to image_type: "primary")
       ImageCacheService.cache_image("venue", 123, 0, "https://example.com/image.jpg")
+
+      # Queue with explicit image type (for movies)
+      ImageCacheService.cache_image("movie", 456, 0, poster_url, image_type: "poster")
+      ImageCacheService.cache_image("movie", 456, 0, backdrop_url, image_type: "backdrop")
 
       # Get the effective URL (cached if available, original as fallback)
       ImageCacheService.get_url("venue", 123, 0)
+      ImageCacheService.get_url("movie", 456, "poster", 0)
 
       # Bulk cache images for an entity
       ImageCacheService.cache_entity_images("venue", 123, [
         %{position: 0, url: "https://example.com/main.jpg"},
         %{position: 1, url: "https://example.com/gallery1.jpg"}
+      ])
+
+      # Bulk with image types
+      ImageCacheService.cache_entity_images("movie", 456, [
+        %{image_type: "poster", position: 0, url: poster_url},
+        %{image_type: "backdrop", position: 0, url: backdrop_url}
       ])
 
   ## Entity Types
@@ -50,6 +61,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   - `position` - Position/order of the image (0-based index)
   - `original_url` - URL of the original image to cache
   - `opts` - Options:
+    - `:image_type` - Semantic type (default: "primary", movies use "poster"/"backdrop")
     - `:source` - Original source identifier (e.g., "google_places", "tmdb")
     - `:metadata` - Raw source data map (preserved as-is, not for parsing)
     - `:priority` - Oban job priority (default: 2)
@@ -57,7 +69,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   ## Returns
 
   - `{:ok, cached_image}` - Record created and job queued
-  - `{:exists, cached_image}` - Image already exists for this entity/position
+  - `{:exists, cached_image}` - Image already exists for this entity/type/position
   - `{:skipped, :non_production}` - Skipped in non-production environment
   - `{:error, changeset}` - Failed to create record
   """
@@ -77,17 +89,19 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   end
 
   defp do_cache_image(entity_type, entity_id, position, original_url, opts) do
+    image_type = Keyword.get(opts, :image_type, "primary")
     source = Keyword.get(opts, :source)
     metadata = Keyword.get(opts, :metadata, %{})
     priority = Keyword.get(opts, :priority, 2)
 
-    # Check if we already have a record for this entity/position
-    case get_cached_image(entity_type, entity_id, position) do
+    # Check if we already have a record for this entity/type/position
+    case get_cached_image(entity_type, entity_id, image_type, position) do
       nil ->
         # Create new record
         attrs = %{
           entity_type: to_string(entity_type),
           entity_id: entity_id,
+          image_type: image_type,
           position: position,
           original_url: original_url,
           original_source: source,
@@ -142,7 +156,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   end
 
   @doc """
-  Get the effective URL for a cached image.
+  Get the effective URL for a cached image by type and position.
 
   Returns the CDN URL if the image is successfully cached,
   otherwise returns the original URL as a fallback.
@@ -151,6 +165,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
   - `entity_type` - Type of entity
   - `entity_id` - ID of the entity
+  - `image_type` - Semantic image type (e.g., "poster", "backdrop", "primary")
   - `position` - Position of the image (0-based)
 
   ## Returns
@@ -159,8 +174,8 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   - `{:fallback, original_url}` - Not cached, returns original URL
   - `{:not_found, nil}` - No record exists
   """
-  def get_url(entity_type, entity_id, position) do
-    case get_cached_image(entity_type, entity_id, position) do
+  def get_url(entity_type, entity_id, image_type, position) do
+    case get_cached_image(entity_type, entity_id, image_type, position) do
       %CachedImage{status: "cached", cdn_url: cdn_url} when is_binary(cdn_url) ->
         {:cached, cdn_url}
 
@@ -173,16 +188,30 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   end
 
   @doc """
+  Get effective URL for "primary" image type (backward compatibility).
+  """
+  def get_url(entity_type, entity_id, position) when is_integer(position) do
+    get_url(entity_type, entity_id, "primary", position)
+  end
+
+  @doc """
   Get effective URL as simple string (for use in templates).
 
   Returns CDN URL if cached, original URL if not, nil if not found.
   """
-  def get_url!(entity_type, entity_id, position) do
-    case get_url(entity_type, entity_id, position) do
+  def get_url!(entity_type, entity_id, image_type, position) do
+    case get_url(entity_type, entity_id, image_type, position) do
       {:cached, url} -> url
       {:fallback, url} -> url
       {:not_found, _} -> nil
     end
+  end
+
+  @doc """
+  Get effective URL for "primary" image type as simple string (backward compatibility).
+  """
+  def get_url!(entity_type, entity_id, position) when is_integer(position) do
+    get_url!(entity_type, entity_id, "primary", position)
   end
 
   @doc """
@@ -192,7 +221,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
   - `entity_type` - Type of entity
   - `entity_id` - ID of the entity
-  - `images` - List of maps with `:position` and `:url` keys
+  - `images` - List of maps with `:position`, `:url`, and optional `:image_type` keys
   - `opts` - Options passed to cache_image/5
 
   ## Returns
@@ -204,9 +233,12 @@ defmodule EventasaurusApp.Images.ImageCacheService do
       Enum.map(images, fn image ->
         position = image[:position] || image["position"]
         url = image[:url] || image["url"]
+        image_type = image[:image_type] || image["image_type"]
 
         if is_integer(position) && url do
-          cache_image(entity_type, entity_id, position, url, opts)
+          # Merge image_type into opts if provided
+          image_opts = if image_type, do: Keyword.put(opts, :image_type, image_type), else: opts
+          cache_image(entity_type, entity_id, position, url, image_opts)
         else
           {:error, :invalid_image_spec}
         end
@@ -262,11 +294,19 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   end
 
   @doc """
-  Get a specific cached image record by position.
+  Get a specific cached image record by type and position.
+  """
+  def get_cached_image(entity_type, entity_id, image_type, position)
+      when is_binary(image_type) and is_integer(position) do
+    CachedImage.for_entity(to_string(entity_type), entity_id, image_type, position)
+    |> Repo.one()
+  end
+
+  @doc """
+  Get a specific cached image record by position (backward compatibility, uses "primary").
   """
   def get_cached_image(entity_type, entity_id, position) when is_integer(position) do
-    CachedImage.for_entity(to_string(entity_type), entity_id, position)
-    |> Repo.one()
+    get_cached_image(entity_type, entity_id, "primary", position)
   end
 
   @doc """
@@ -377,6 +417,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
       # Entity context (visible in Oban dashboard)
       entity_type: cached_image.entity_type,
       entity_id: cached_image.entity_id,
+      image_type: cached_image.image_type,
       position: cached_image.position,
       # Source info for debugging
       original_url: truncate_url(original_url),

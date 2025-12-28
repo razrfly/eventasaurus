@@ -674,7 +674,8 @@ defmodule EventasaurusWeb.CityLive.Index do
             |> Map.put(:aggregate, aggregate)
             |> Map.put(:ignore_city_in_aggregation, true)
             |> Map.put(:viewing_city, city)
-            |> Map.put(:all_events_filters,
+            |> Map.put(
+              :all_events_filters,
               date_range_count_filters
               |> Map.put(:aggregate, aggregate)
               |> Map.put(:ignore_city_in_aggregation, true)
