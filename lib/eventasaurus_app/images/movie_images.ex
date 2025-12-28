@@ -196,5 +196,4 @@ defmodule EventasaurusApp.Images.MovieImages do
       {movie_id, Map.get(cached_urls, movie_id, fallback)}
     end)
   end
-
 end

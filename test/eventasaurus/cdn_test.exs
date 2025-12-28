@@ -148,6 +148,15 @@ defmodule Eventasaurus.CDNTest do
       assert result == cdn_url
     end
 
+    test "does not wrap Unsplash URLs (they have their own CDN)" do
+      unsplash_url = "https://images.unsplash.com/photo-1234?w=800&q=85&fit=crop"
+
+      result = CDN.url(unsplash_url, width: 1200, quality: 90)
+
+      # Unsplash URLs should be returned as-is, not wrapped in our CDN
+      assert result == unsplash_url
+    end
+
     test "handles nil URL even when CDN is enabled" do
       assert CDN.url(nil) == nil
     end
