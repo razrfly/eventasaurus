@@ -3,8 +3,8 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
   ETS-based cache for city fallback images.
 
   Pre-computes and caches fallback images for each city + category combination,
-  eliminating per-event computation. The cache stores image URLs that have already
-  been CDN-transformed.
+  eliminating per-event computation. The cache stores Unsplash image URLs with
+  Unsplash's native image parameters (not CDN-wrapped).
 
   ## Performance Impact
 
@@ -13,16 +13,22 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
   - City lookup
   - Gallery category chain lookup
   - Image selection
-  - CDN transformation
+  - URL transformation
 
   After: Simple ETS lookup: city_id + category + venue_id → cached URL
 
   ## Cache Structure
 
-  Key: {city_id, category} → list of CDN-transformed image URLs
+  Key: {city_id, category} → list of Unsplash URLs with native params
 
   The venue_id-based image selection happens at lookup time (fast in-memory),
-  while the expensive CDN transformation is pre-computed and cached.
+  while URL transformation is pre-computed and cached.
+
+  ## Why Unsplash Params Instead of CDN
+
+  Unsplash images already serve from a global CDN with optimized caching.
+  Wrapping them in our CDN is wasteful. Instead, we use Unsplash's native
+  image transformation params: `?w=800&q=85&fit=crop`
 
   ## Refresh Strategy
 
@@ -65,7 +71,7 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
   @doc """
   Get a pre-computed fallback image URL for a city + category + venue_id combination.
 
-  Returns a CDN-transformed image URL or nil if not available.
+  Returns an Unsplash image URL with native params, or nil if not available.
   The venue_id is used to select a specific image from the category (for variety).
   """
   def get_fallback_image(city_id, category, venue_id) when is_integer(city_id) do
@@ -204,12 +210,12 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
       images = get_category_images(categories, category)
 
       if length(images) > 0 do
-        # Pre-compute CDN-transformed URLs
+        # Pre-compute Unsplash URLs with native params (NOT CDN-wrapped)
         transformed_images =
           images
           |> Enum.map(fn image ->
             url = get_image_url(image)
-            if url, do: apply_cdn_transformation(url), else: nil
+            if url, do: apply_unsplash_params(url), else: nil
           end)
           |> Enum.reject(&is_nil/1)
 
@@ -242,11 +248,15 @@ defmodule EventasaurusApp.Cache.CityFallbackImageCache do
   defp get_image_url(%{url: url}) when is_binary(url), do: url
   defp get_image_url(_), do: nil
 
-  defp apply_cdn_transformation(url) when is_binary(url) do
-    Eventasaurus.CDN.url(url, width: 800, quality: 85)
+  # Apply Unsplash's native image transformation params
+  # Unsplash already serves from a global CDN - no need to wrap in ours
+  defp apply_unsplash_params(url) when is_binary(url) do
+    uri = URI.parse(url)
+    # Build URL with Unsplash's native params
+    "#{uri.scheme}://#{uri.host}#{uri.path}?w=800&q=85&fit=crop"
   end
 
-  defp apply_cdn_transformation(_), do: nil
+  defp apply_unsplash_params(_), do: nil
 
   defp select_image(images, venue_id) when is_list(images) and length(images) > 0 do
     # Combine day + venue_id for unique but stable selection per venue

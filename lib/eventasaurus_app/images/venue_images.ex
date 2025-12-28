@@ -2,10 +2,16 @@ defmodule EventasaurusApp.Images.VenueImages do
   @moduledoc """
   Get cached venue image URLs from R2 storage with city gallery fallback.
 
-  Fallback order (delegated to Venue.get_cover_image/2):
-  1. Venue's cached images from R2 (via cached_images table)
-  2. City's categorized Unsplash gallery (general category)
+  Fallback order:
+  1. Venue's cached images from R2 (via cached_images table) - uses our CDN
+  2. City's categorized Unsplash gallery (via CityFallbackImageCache) - raw Unsplash URLs
   3. nil (no image available)
+
+  ## Image Variety
+
+  When using Unsplash fallback, different venues get different images via
+  `CityFallbackImageCache.get_fallback_image(city_id, category, venue_id)`.
+  The venue_id provides variety so not all venues show the same image.
 
   ## Batch Lookups (N+1 Prevention)
 
@@ -18,7 +24,8 @@ defmodule EventasaurusApp.Images.VenueImages do
   """
 
   alias EventasaurusApp.Images.{ImageCacheService, ImageEnv}
-  alias EventasaurusApp.Venues.Venue
+  alias EventasaurusApp.Cache.CityFallbackImageCache
+  alias EventasaurusApp.Venues.CategoryMapper
 
   import Ecto.Query
   alias EventasaurusApp.Repo
@@ -27,12 +34,12 @@ defmodule EventasaurusApp.Images.VenueImages do
   @position 0
 
   @doc """
-  Get the best available image for a venue with CDN optimization.
+  Get the best available image for a venue.
 
-  Delegates to `Venue.get_cover_image/2` which handles the full fallback chain:
-  1. Cached R2 images for the venue
-  2. City's categorized Unsplash gallery (with category matching)
-  3. Returns nil if no image available
+  Fallback chain:
+  1. R2 cached venue image → CDN transformation (our CDN)
+  2. City Unsplash gallery → raw Unsplash URL with native params (no CDN wrapper)
+  3. nil → UI shows placeholder icon
 
   ## Options
 
@@ -54,28 +61,45 @@ defmodule EventasaurusApp.Images.VenueImages do
   """
   @spec get_image(map(), map(), keyword()) :: String.t() | nil
   def get_image(venue, city, opts \\ []) do
-    # Build CDN options from the provided opts
-    cdn_opts = [
-      width: Keyword.get(opts, :width, 400),
-      height: Keyword.get(opts, :height, 300),
-      quality: Keyword.get(opts, :quality, 85),
-      fit: Keyword.get(opts, :fit, "cover")
-    ]
+    venue_id = get_venue_id(venue)
 
-    # Ensure venue has city_ref for the categorized gallery lookup
-    venue_with_city = ensure_city_ref(venue, city)
+    # Layer 1: Check R2 cached venue image (uses our CDN)
+    case get_url(venue_id) do
+      url when is_binary(url) ->
+        # R2 cached images get CDN transformation
+        cdn_opts = [
+          width: Keyword.get(opts, :width, 400),
+          height: Keyword.get(opts, :height, 300),
+          quality: Keyword.get(opts, :quality, 85),
+          fit: Keyword.get(opts, :fit, "cover")
+        ]
 
-    # Delegate to Venue.get_cover_image which has the proper fallback chain
-    case Venue.get_cover_image(venue_with_city, cdn_opts) do
-      {:ok, url, _source} -> url
-      {:error, :no_image} -> nil
+        Eventasaurus.CDN.url(url, cdn_opts)
+
+      nil ->
+        # Layer 2: City Unsplash gallery fallback (raw Unsplash URLs, no CDN wrapper)
+        get_city_fallback_image(venue, city)
     end
   end
 
-  # Ensure venue has city_ref populated for Venue.get_cover_image
-  defp ensure_city_ref(%Venue{city_ref: %{id: _}} = venue, _city), do: venue
-  defp ensure_city_ref(%Venue{} = venue, city), do: %{venue | city_ref: city}
-  defp ensure_city_ref(venue, city) when is_map(venue), do: Map.put(venue, :city_ref, city)
+  # Get venue ID from various venue representations
+  defp get_venue_id(%{id: id}) when is_integer(id), do: id
+  defp get_venue_id(_), do: nil
+
+  # Get city fallback image using CityFallbackImageCache
+  # This provides variety via venue_id and returns raw Unsplash URLs
+  defp get_city_fallback_image(venue, city) do
+    city_id = get_city_id(city)
+    venue_id = get_venue_id(venue) || 0
+    category = CategoryMapper.determine_category(venue)
+
+    # Try category-specific first, then fall back to general
+    CityFallbackImageCache.get_fallback_image(city_id, category, venue_id) ||
+      CityFallbackImageCache.get_fallback_image(city_id, "general", venue_id)
+  end
+
+  defp get_city_id(%{id: id}) when is_integer(id), do: id
+  defp get_city_id(_), do: nil
 
   # ============================================================================
   # Single Venue Lookups (Cache Only)
