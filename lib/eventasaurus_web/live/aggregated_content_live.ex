@@ -181,8 +181,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
             container_type
           )
 
-        {:noreply,
-         redirect(socket, to: "/c/#{city.slug}/#{type_plural}/#{container_slug}")}
+        {:noreply, redirect(socket, to: "/c/#{city.slug}/#{type_plural}/#{container_slug}")}
 
       nil ->
         # Not a container - continue with source aggregation
@@ -228,6 +227,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         # Expanding to all cities - use multi-city route (in :catalog live_session)
         # Multi-city routes use plural slugs: /festivals/:identifier, /social/:identifier
         multi_city_slug = singular_to_plural_slug(socket.assigns.content_type_slug)
+
         "/#{multi_city_slug}/#{socket.assigns.identifier}?scope=all&city=#{socket.assigns.city.slug}"
       else
         # Collapsing to city only - use city-scoped route (in :city live_session)

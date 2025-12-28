@@ -7,6 +7,7 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
   import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Movies.Movie
+  alias EventasaurusApp.Images.ImageCacheService
 
   @doc """
   Find an existing movie by TMDB ID or create a new one.
@@ -21,11 +22,41 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
 
   @doc """
   Create a new movie record.
+  Automatically queues image caching for poster and backdrop.
   """
   def create_movie(attrs) do
-    %Movie{}
-    |> Movie.changeset(attrs)
-    |> Repo.insert()
+    result =
+      %Movie{}
+      |> Movie.changeset(attrs)
+      |> Repo.insert()
+
+    case result do
+      {:ok, movie} ->
+        cache_movie_images(movie)
+        {:ok, movie}
+
+      error ->
+        error
+    end
+  end
+
+  # Cache poster (position 0) and backdrop (position 1) images
+  defp cache_movie_images(%Movie{} = movie) do
+    if movie.poster_url && movie.poster_url != "" do
+      ImageCacheService.cache_image("movie", movie.id, 0, movie.poster_url,
+        source: "tmdb",
+        metadata: %{"tmdb_id" => movie.tmdb_id, "type" => "poster"}
+      )
+    end
+
+    if movie.backdrop_url && movie.backdrop_url != "" do
+      ImageCacheService.cache_image("movie", movie.id, 1, movie.backdrop_url,
+        source: "tmdb",
+        metadata: %{"tmdb_id" => movie.tmdb_id, "type" => "backdrop"}
+      )
+    end
+
+    :ok
   end
 
   @doc """

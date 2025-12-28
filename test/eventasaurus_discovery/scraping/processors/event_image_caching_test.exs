@@ -73,6 +73,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
 
     test "sanitizes large binary values" do
       large_binary = String.duplicate("x", 15_000)
+
       scraped_data = %{
         "title" => "Test",
         "large_field" => large_binary
@@ -163,12 +164,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
     end
 
     test "returns fallback for nil source_slug" do
-      result = EventImageCaching.cache_event_image(
-        "https://example.com/image.jpg",
-        123,
-        nil,
-        %{}
-      )
+      result =
+        EventImageCaching.cache_event_image(
+          "https://example.com/image.jpg",
+          123,
+          nil,
+          %{}
+        )
 
       assert {:fallback, "https://example.com/image.jpg"} = result
     end
@@ -177,20 +179,22 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
       image_url = "https://question-one.com/events/image.jpg"
       scraped_data = %{"title" => "Test", "venue" => "Bar"}
 
-      result = EventImageCaching.cache_event_image(
-        image_url,
-        event_source.id,
-        "question-one",
-        scraped_data
-      )
+      result =
+        EventImageCaching.cache_event_image(
+          image_url,
+          event_source.id,
+          "question-one",
+          scraped_data
+        )
 
       assert {:ok, ^image_url} = result
 
-      cached = Repo.get_by(CachedImage,
-        entity_type: "public_event_source",
-        entity_id: event_source.id,
-        position: 0
-      )
+      cached =
+        Repo.get_by(CachedImage,
+          entity_type: "public_event_source",
+          entity_id: event_source.id,
+          position: 0
+        )
 
       assert cached != nil
       assert cached.original_url == image_url
@@ -202,22 +206,24 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCachingTest do
       image_url = "https://question-one.com/events/already-cached.jpg"
       cdn_url = "https://cdn.example.com/cached-image.jpg"
 
-      {:ok, _cached} = Repo.insert(%CachedImage{
-        entity_type: "public_event_source",
-        entity_id: event_source.id,
-        position: 0,
-        original_url: image_url,
-        status: "cached",
-        cdn_url: cdn_url,
-        r2_key: "images/test.jpg"
-      })
+      {:ok, _cached} =
+        Repo.insert(%CachedImage{
+          entity_type: "public_event_source",
+          entity_id: event_source.id,
+          position: 0,
+          original_url: image_url,
+          status: "cached",
+          cdn_url: cdn_url,
+          r2_key: "images/test.jpg"
+        })
 
-      result = EventImageCaching.cache_event_image(
-        image_url,
-        event_source.id,
-        "question-one",
-        %{}
-      )
+      result =
+        EventImageCaching.cache_event_image(
+          image_url,
+          event_source.id,
+          "question-one",
+          %{}
+        )
 
       assert {:cached, ^cdn_url} = result
     end

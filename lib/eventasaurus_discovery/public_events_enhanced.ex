@@ -839,6 +839,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   # Extract source slug from a PublicEventSource.
   # Handles both preloaded and non-preloaded source associations.
   defp get_source_slug(%{source: %{slug: slug}}) when is_binary(slug), do: slug
+
   defp get_source_slug(%{source_id: source_id}) when is_integer(source_id) do
     # If source not preloaded, look it up
     case EventasaurusApp.Repo.get(EventasaurusDiscovery.Sources.Source, source_id) do
@@ -846,6 +847,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       _ -> nil
     end
   end
+
   defp get_source_slug(_), do: nil
 
   # Get city fallback image from Unsplash gallery.

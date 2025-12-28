@@ -49,9 +49,7 @@ defmodule EventasaurusApp.Workers.TriviaExportRefreshWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id}) do
-    Logger.info(
-      "[TriviaExportRefreshWorker] Starting materialized view refresh [job #{job_id}]"
-    )
+    Logger.info("[TriviaExportRefreshWorker] Starting materialized view refresh [job #{job_id}]")
 
     start_time = System.monotonic_time(:millisecond)
 

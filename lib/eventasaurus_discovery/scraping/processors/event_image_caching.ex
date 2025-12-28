@@ -37,6 +37,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
   """
   @spec priority(String.t() | nil) :: integer()
   def priority(nil), do: 2
+
   def priority(source_slug) when is_binary(source_slug) do
     if source_slug in @high_priority_sources, do: 1, else: 2
   end
@@ -103,6 +104,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
           URL: #{truncate_url(image_url)}
           Reason: #{inspect(reason)}
         """)
+
         {:fallback, image_url}
     end
   end
@@ -149,6 +151,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
   defp sanitize_value(v), do: v
 
   defp truncate_url(nil), do: nil
+
   defp truncate_url(url) when is_binary(url) do
     if String.length(url) > 80, do: String.slice(url, 0, 77) <> "...", else: url
   end

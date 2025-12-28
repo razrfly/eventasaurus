@@ -857,12 +857,20 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
       if image_url do
         # Get raw data for metadata extraction
-        raw_data = data[:raw_data] || data["raw_data"] || data[:raw_event_data] || data["raw_event_data"] || %{}
+        raw_data =
+          data[:raw_data] || data["raw_data"] || data[:raw_event_data] || data["raw_event_data"] ||
+            %{}
 
-        case EventImageCaching.cache_event_image(image_url, event_source.id, source_slug, raw_data) do
+        case EventImageCaching.cache_event_image(
+               image_url,
+               event_source.id,
+               source_slug,
+               raw_data
+             ) do
           {:cached, cdn_url} ->
             # Image already cached - update the event source with CDN URL
             Logger.info("📷 Using cached CDN URL for event source #{event_source.id}")
+
             event_source
             |> PublicEventSource.changeset(%{image_url: cdn_url})
             |> Repo.update()
