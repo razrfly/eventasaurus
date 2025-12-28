@@ -11,6 +11,18 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
   1. Queue the image for caching via ImageCacheService
   2. Extract raw metadata for debugging
   3. Return the cached URL or fall back to original
+
+  ## Multi-Image Support
+
+  Sources like Ticketmaster and Resident Advisor provide multiple images.
+  Use `cache_event_images/4` to cache multiple images with semantic types:
+
+      images = [
+        %{url: hero_url, image_type: "hero", position: 0},
+        %{url: poster_url, image_type: "poster", position: 1},
+        %{url: gallery1, image_type: "gallery", position: 2}
+      ]
+      cache_event_images(images, event_source_id, source_slug, scraped_data)
   """
 
   require Logger
@@ -19,6 +31,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
 
   # High priority sources (known failure domains like expiring URLs)
   @high_priority_sources ["question-one"]
+
+  # Valid image types for event sources
+  @valid_image_types ["hero", "poster", "gallery", "primary"]
 
   @doc """
   Check if image caching is enabled for a given source.
@@ -62,6 +77,114 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
       do_cache_image(image_url, event_source_id, source_slug, scraped_data)
     else
       {:fallback, image_url}
+    end
+  end
+
+  @doc """
+  Cache multiple event images with semantic types.
+
+  ## Parameters
+
+  - `images` - List of image specs: `[%{url: String.t(), image_type: String.t(), position: integer()}]`
+  - `event_source_id` - The public event source ID
+  - `source_slug` - Source identifier (e.g., "ticketmaster", "resident-advisor")
+  - `scraped_data` - Raw scraped data for metadata extraction
+
+  ## Image Types
+
+  - `"hero"` - Primary/hero image (16:9 preferred, largest)
+  - `"poster"` - Poster-style image (4:3 or portrait)
+  - `"gallery"` - Additional gallery images
+  - `"primary"` - Legacy single-image type
+
+  ## Returns
+
+  - `{:ok, results}` - List of cache results for each image
+  - `{:fallback, []}` - Caching disabled or no valid images
+  """
+  @spec cache_event_images(list(), integer(), String.t() | nil, map()) ::
+          {:ok, list()} | {:fallback, list()}
+  def cache_event_images([], _event_source_id, _source_slug, _scraped_data) do
+    {:fallback, []}
+  end
+
+  def cache_event_images(images, event_source_id, source_slug, scraped_data)
+      when is_list(images) do
+    if enabled?(source_slug) do
+      results =
+        images
+        |> Enum.filter(&valid_image_spec?/1)
+        |> Enum.map(fn image_spec ->
+          do_cache_typed_image(image_spec, event_source_id, source_slug, scraped_data)
+        end)
+
+      Logger.info("""
+      📷 Cached #{length(results)} images for event source #{event_source_id}:
+        Source: #{source_slug}
+        Types: #{results |> Enum.map(fn {_, spec} -> spec.image_type end) |> Enum.join(", ")}
+      """)
+
+      {:ok, results}
+    else
+      {:fallback, []}
+    end
+  end
+
+  def cache_event_images(_images, _event_source_id, _source_slug, _scraped_data) do
+    {:fallback, []}
+  end
+
+  # Validate image spec has required fields
+  defp valid_image_spec?(%{url: url, image_type: type, position: pos})
+       when is_binary(url) and is_binary(type) and is_integer(pos) do
+    url != "" and type in @valid_image_types and pos >= 0
+  end
+
+  defp valid_image_spec?(_), do: false
+
+  # Cache a single image with type
+  defp do_cache_typed_image(
+         %{url: url, image_type: image_type, position: position} = spec,
+         event_source_id,
+         source_slug,
+         scraped_data
+       ) do
+    metadata = extract_metadata(scraped_data, source_slug)
+    priority = priority(source_slug)
+
+    case ImageCacheService.cache_image(
+           "public_event_source",
+           event_source_id,
+           position,
+           url,
+           source: source_slug,
+           image_type: image_type,
+           metadata: Map.put(metadata, "image_type", image_type),
+           priority: priority
+         ) do
+      {:ok, _cached_image} ->
+        {:ok, spec}
+
+      {:exists, cached_image} ->
+        if cached_image.status == "cached" && cached_image.cdn_url do
+          {:cached, Map.put(spec, :cdn_url, cached_image.cdn_url)}
+        else
+          {:ok, spec}
+        end
+
+      {:skipped, :non_production} ->
+        {:ok, spec}
+
+      {:error, reason} ->
+        Logger.warning("""
+        📷 Failed to cache typed image:
+          Event Source ID: #{event_source_id}
+          Type: #{image_type}
+          Position: #{position}
+          Reason: #{inspect(reason)}
+        """)
+
+        {:error, spec}
     end
   end
 
