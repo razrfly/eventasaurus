@@ -26,6 +26,7 @@ defmodule EventasaurusApp.Images.CachedImage do
 
   The `image_type` field provides semantic discrimination:
   - Movies: `poster`, `backdrop`, `still`, `logo`
+  - Event sources: `hero` (16:9 primary), `gallery` (additional images)
   - Other entities: `primary` (default)
 
   This allows querying by meaning ("give me the poster") rather than
@@ -54,7 +55,8 @@ defmodule EventasaurusApp.Images.CachedImage do
 
   @valid_statuses ~w(pending downloading cached failed)
   @valid_entity_types ~w(venue public_event_source performer event movie group)
-  @valid_image_types ~w(primary poster backdrop still logo)
+  # Image types: Movies (poster, backdrop, still, logo), Event sources (hero, gallery), Default (primary)
+  @valid_image_types ~w(primary poster backdrop still logo hero gallery)
 
   schema "cached_images" do
     # Polymorphic association
