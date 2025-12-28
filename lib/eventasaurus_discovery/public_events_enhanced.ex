@@ -1642,8 +1642,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       paginated_events = paginate_aggregated_results(sorted, page, page_size)
 
       # Calculate "all events" count (without date filters)
-      # If all_events_filters provided, we need a separate fetch for accurate count
-      # Otherwise, use the same aggregated count (when no date filter was applied)
+      # P0 Optimization: Use efficient SQL COUNT instead of fetching all events
+      # The count is approximate (doesn't account for aggregation grouping) but
+      # provides a reasonable estimate at ~95% lower cost than fetching all events.
       all_events_count =
         case opts[:all_events_filters] do
           nil ->
@@ -1651,12 +1652,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
             total_count
 
           all_filters when is_map(all_filters) ->
-            # Need to fetch without date filters for accurate "all events" count
-            # This is still 1 extra query, but eliminates the third count query
-            all_fetch_opts =
+            # Use efficient SQL COUNT instead of fetching all events
+            # This gives raw event count (not aggregated), but is much faster
+            count_opts =
               all_filters
-              |> Map.drop([:page, :offset, :limit])
-              |> Map.put(:page_size, @max_limit)
+              |> Map.drop([:page, :offset, :limit, :page_size, :all_events_filters])
               |> then(fn opts_map ->
                 case opts_map[:viewing_city] do
                   %{id: city_id} -> Map.put(opts_map, :browsing_city_id, city_id)
@@ -1664,9 +1664,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
                 end
               end)
 
-            all_events = list_events(all_fetch_opts)
-            all_aggregated = aggregate_events(all_events, opts)
-            length(all_aggregated)
+            count_events(count_opts)
         end
 
       {paginated_events, total_count, all_events_count}
