@@ -24,39 +24,42 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
   Create a new movie record.
   Automatically queues image caching for poster and backdrop.
   """
+  @spec create_movie(map()) :: {:ok, Movie.t()} | {:error, Ecto.Changeset.t()}
   def create_movie(attrs) do
-    result =
-      %Movie{}
-      |> Movie.changeset(attrs)
-      |> Repo.insert()
-
-    case result do
+    case Repo.insert(Movie.changeset(%Movie{}, attrs)) do
       {:ok, movie} ->
-        cache_movie_images(movie)
+        queue_image_caching(movie)
         {:ok, movie}
 
-      error ->
-        error
+      {:error, changeset} ->
+        {:error, changeset}
     end
   end
 
-  # Cache poster (position 0) and backdrop (position 1) images
-  defp cache_movie_images(%Movie{} = movie) do
-    if movie.poster_url && movie.poster_url != "" do
-      ImageCacheService.cache_image("movie", movie.id, 0, movie.poster_url,
-        source: "tmdb",
-        metadata: %{"tmdb_id" => movie.tmdb_id, "type" => "poster"}
-      )
-    end
+  # Queue poster (position 0) and backdrop (position 1) for caching.
+  # Failures are logged but don't affect movie creation.
+  defp queue_image_caching(%Movie{} = movie) do
+    maybe_cache_image(movie, :poster_url, 0, "poster")
+    maybe_cache_image(movie, :backdrop_url, 1, "backdrop")
+  end
 
-    if movie.backdrop_url && movie.backdrop_url != "" do
-      ImageCacheService.cache_image("movie", movie.id, 1, movie.backdrop_url,
-        source: "tmdb",
-        metadata: %{"tmdb_id" => movie.tmdb_id, "type" => "backdrop"}
-      )
-    end
+  defp maybe_cache_image(movie, field, position, type) do
+    case Map.get(movie, field) do
+      url when is_binary(url) and url != "" ->
+        case ImageCacheService.cache_image("movie", movie.id, position, url,
+               source: "tmdb",
+               metadata: %{"tmdb_id" => movie.tmdb_id, "type" => type}
+             ) do
+          {:ok, _} -> :ok
+          {:exists, _} -> :ok
+          {:error, reason} ->
+            require Logger
+            Logger.warning("Failed to queue #{type} image for movie #{movie.id}: #{inspect(reason)}")
+        end
 
-    :ok
+      _ ->
+        :ok
+    end
   end
 
   @doc """

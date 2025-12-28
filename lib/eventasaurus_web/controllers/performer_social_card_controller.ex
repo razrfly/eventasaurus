@@ -9,6 +9,7 @@ defmodule EventasaurusWeb.PerformerSocialCardController do
   """
   use EventasaurusWeb.SocialCardController, type: :performer
 
+  alias EventasaurusApp.Images.PerformerImages
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
 
@@ -27,11 +28,15 @@ defmodule EventasaurusWeb.PerformerSocialCardController do
   def build_card_data(performer) do
     event_count = count_upcoming_events(performer)
 
+    # Get cached image URL (prefer CDN, fallback to original)
+    image_url =
+      PerformerImages.get_url_with_fallback(performer.id, performer.image_url)
+
     %{
       name: performer.name,
       slug: performer.slug,
       event_count: event_count,
-      image_url: performer.image_url,
+      image_url: image_url,
       updated_at: performer.updated_at
     }
   end

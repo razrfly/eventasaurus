@@ -20,6 +20,7 @@ defmodule EventasaurusWeb.Components.Activity.ConcertHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
+  alias EventasaurusApp.Images.PerformerImages
 
   alias EventasaurusWeb.Components.Activity.{
     HeroCardBackground,
@@ -53,10 +54,22 @@ defmodule EventasaurusWeb.Components.Activity.ConcertHeroCard do
     # Extract genres from performer metadata
     genres = extract_genres(assigns.performers)
 
+    # Batch fetch cached image URLs for all performers (avoids N+1)
+    performer_fallbacks =
+      Map.new(assigns.performers, fn p -> {p.id, p.image_url} end)
+
+    performer_image_urls = PerformerImages.get_urls_with_fallbacks(performer_fallbacks)
+
+    # Get headliner image URL
+    headliner_image_url =
+      if headliner, do: Map.get(performer_image_urls, headliner.id), else: nil
+
     assigns =
       assigns
       |> assign(:headliner, headliner)
+      |> assign(:headliner_image_url, headliner_image_url)
       |> assign(:supporting_acts, supporting_acts)
+      |> assign(:performer_image_urls, performer_image_urls)
       |> assign(:genres, genres)
 
     ~H"""
@@ -68,10 +81,10 @@ defmodule EventasaurusWeb.Components.Activity.ConcertHeroCard do
       <div class="relative p-6 md:p-8">
         <div class="flex flex-col md:flex-row gap-6">
           <!-- Performer Image (if headliner has one) -->
-          <%= if @headliner && @headliner.image_url do %>
+          <%= if @headliner && @headliner_image_url do %>
             <div class="flex-shrink-0 self-start">
               <img
-                src={CDN.url(@headliner.image_url, width: 200, height: 200, fit: "cover", quality: 90)}
+                src={CDN.url(@headliner_image_url, width: 200, height: 200, fit: "cover", quality: 90)}
                 alt={@headliner.name}
                 class="w-32 md:w-40 h-32 md:h-40 object-cover rounded-lg shadow-2xl"
                 loading="lazy"
@@ -175,10 +188,11 @@ defmodule EventasaurusWeb.Components.Activity.ConcertHeroCard do
             </h3>
             <div class="flex flex-wrap gap-4">
               <%= for performer <- Enum.drop(@supporting_acts, 3) do %>
+                <% performer_img = Map.get(@performer_image_urls, performer.id) %>
                 <div class="flex items-center gap-2">
-                  <%= if performer.image_url do %>
+                  <%= if performer_img do %>
                     <img
-                      src={CDN.url(performer.image_url, width: 32, height: 32, fit: "cover", quality: 80)}
+                      src={CDN.url(performer_img, width: 32, height: 32, fit: "cover", quality: 80)}
                       alt={performer.name}
                       class="w-8 h-8 rounded-full object-cover"
                     />
