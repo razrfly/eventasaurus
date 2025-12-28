@@ -26,17 +26,27 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
         # Get the default slug from cleaned sources
         base_slug = super(safe_sources, changeset)
 
-        # Truncate title to 40 characters at word boundary
-        truncated_title = truncate_title(base_slug, 40)
+        # Handle nil/empty base_slug (can happen with special Unicode like mathematical bold)
+        case base_slug do
+          nil ->
+            "event-#{DateTime.utc_now() |> DateTime.to_unix()}"
 
-        # Build deterministic suffix from venue + date (conditionally includes venue)
-        suffix = build_deterministic_suffix(changeset, truncated_title)
+          "" ->
+            "event-#{DateTime.utc_now() |> DateTime.to_unix()}"
 
-        # Combine title and suffix
-        candidate_slug = "#{truncated_title}-#{suffix}"
+          _ ->
+            # Truncate title to 40 characters at word boundary
+            truncated_title = truncate_title(base_slug, 40)
 
-        # Ensure uniqueness by checking for collisions
-        ensure_unique_slug(candidate_slug, changeset)
+            # Build deterministic suffix from venue + date (conditionally includes venue)
+            suffix = build_deterministic_suffix(changeset, truncated_title)
+
+            # Combine title and suffix
+            candidate_slug = "#{truncated_title}-#{suffix}"
+
+            # Ensure uniqueness by checking for collisions
+            ensure_unique_slug(candidate_slug, changeset)
+        end
     end
   end
 
