@@ -5,39 +5,52 @@ defmodule EventasaurusApp.Venues.VenueImageFallbackTest do
   alias EventasaurusDiscovery.Locations.{City, Country}
   alias EventasaurusApp.Repo
 
-  describe "get_cover_image/2 - venue with cached images" do
-    test "returns venue's cached image when available" do
-      city = create_test_city()
-      venue = create_test_venue(city, %{})
+  describe "get_cover_image/2 - venue with cached images (test mode - cache skipped)" do
+    # NOTE: In test/dev environments, cache lookups are skipped to prevent
+    # dev from querying production R2 buckets. These tests verify that:
+    # 1. Cache records exist in the database
+    # 2. But get_cover_image correctly falls back to other sources in test mode
+
+    test "skips cached image lookup in test mode, falls back to city gallery" do
+      city = create_city_with_categorized_gallery()
+
+      venue =
+        create_test_venue(city, %{})
+        |> EventasaurusApp.Repo.preload(:city_ref)
 
       # Create a cached image for this venue
       create_cached_image(venue.id, 0, "https://cdn.example.com/venue-image.jpg")
 
-      assert {:ok, url, :venue} = Venue.get_cover_image(venue)
-      # URL should be from CDN
-      assert url =~ "cdn.example.com/venue-image.jpg" || url =~ "cdn.wombie.com"
+      # In test mode, cache is skipped - should fall back to city gallery
+      assert {:ok, url, source} = Venue.get_cover_image(venue)
+      assert source in [:city_category, :city_general]
+      assert url =~ "unsplash.com"
     end
 
-    test "returns first image when multiple available" do
+    test "returns no_image when venue has cached images but no city fallback (test mode)" do
       city = create_test_city()
       venue = create_test_venue(city, %{})
 
-      # Create multiple cached images
+      # Create cached images - but they won't be used in test mode
       create_cached_image(venue.id, 0, "https://cdn.example.com/first.jpg")
       create_cached_image(venue.id, 1, "https://cdn.example.com/second.jpg")
 
-      assert {:ok, url, :venue} = Venue.get_cover_image(venue)
-      assert url =~ "first.jpg"
+      # In test mode, cache is skipped and city has no gallery
+      assert {:error, :no_image} = Venue.get_cover_image(venue)
     end
 
-    test "accepts CDN options" do
-      city = create_test_city()
-      venue = create_test_venue(city, %{})
+    test "CDN options are applied to fallback images (test mode)" do
+      city = create_city_with_categorized_gallery()
+
+      venue =
+        create_test_venue(city, %{})
+        |> EventasaurusApp.Repo.preload(:city_ref)
 
       create_cached_image(venue.id, 0, "https://cdn.example.com/image.jpg")
 
-      assert {:ok, url, :venue} = Venue.get_cover_image(venue, width: 800, quality: 90)
-      assert url =~ "example.com/image.jpg"
+      # In test mode, cache is skipped - options applied to city gallery image
+      assert {:ok, url, _source} = Venue.get_cover_image(venue, width: 800, quality: 90)
+      assert url =~ "unsplash.com"
     end
   end
 
