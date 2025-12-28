@@ -1588,14 +1588,17 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   2. count_events_with_aggregation (counts for pagination)
   3. count_events_with_aggregation (counts for "all events" without date filter)
 
-  Now all three are computed from a single database fetch + in-memory aggregation.
+  Now uses a single database fetch + in-memory aggregation for events/pagination,
+  and an efficient SQL COUNT for the all_events_count.
 
   ## Returns
 
   `{events, total_count, all_events_count}` where:
   - `events` - Paginated list of events/aggregated groups for current page
   - `total_count` - Total aggregated items matching current filters (for pagination)
-  - `all_events_count` - Total aggregated items without date filters (for "All Events" button)
+  - `all_events_count` - Raw event count without date filters (for "All Events" button).
+    Note: This is an approximate count (raw events, not aggregated groups) for performance.
+    The difference is typically small and acceptable for UI display purposes.
 
   ## Options
 
