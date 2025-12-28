@@ -6,10 +6,25 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   1. Venue's cached images from R2 (via cached_images table)
   2. Random image from city's Unsplash gallery (consistent per venue)
   3. Placeholder image
+
+  ## Batch Lookups (N+1 Prevention)
+
+      # Batch get cached URLs for multiple venues
+      urls = VenueImageHelper.get_venue_image_urls([venue_id1, venue_id2])
+
+      # Batch with fallbacks
+      fallbacks = %{venue1.id => venue1.image_url, venue2.id => venue2.image_url}
+      urls = VenueImageHelper.get_venue_image_urls_with_fallbacks(fallbacks)
   """
 
   alias Eventasaurus.CDN
   alias EventasaurusApp.Images.ImageCacheService
+
+  import Ecto.Query
+  alias EventasaurusApp.Repo
+  alias EventasaurusApp.Images.CachedImage
+
+  @position 0
 
   @doc """
   Get the best available image for a venue with CDN optimization.
@@ -81,6 +96,83 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   end
 
   def get_random_city_image(_venue_id, _gallery), do: nil
+
+  # ============================================================================
+  # Single Venue Lookups (Cache Only)
+  # ============================================================================
+
+  @doc """
+  Get the cached image URL for a venue.
+
+  Returns the CDN URL if the image is cached, the fallback URL otherwise,
+  or nil if neither exists.
+
+  ## Examples
+
+      iex> get_venue_url(123, "https://example.com/image.jpg")
+      "https://cdn.wombie.com/images/venue/123/0.jpg"
+
+      iex> get_venue_url(999, "https://example.com/image.jpg")
+      "https://example.com/image.jpg"  # Falls back to original
+  """
+  @spec get_venue_url(integer(), String.t() | nil) :: String.t() | nil
+  def get_venue_url(venue_id, fallback \\ nil) when is_integer(venue_id) do
+    ImageCacheService.get_url!("venue", venue_id, @position) || fallback
+  end
+
+  # ============================================================================
+  # Batch Lookups (N+1 Prevention)
+  # ============================================================================
+
+  @doc """
+  Batch get image URLs for multiple venues.
+
+  Returns a map of `%{venue_id => cdn_url}`. Venues without cached
+  images will not have entries in the map.
+
+  ## Example
+
+      iex> get_venue_urls([1, 2, 3])
+      %{1 => "https://cdn...", 2 => "https://cdn..."}  # venue 3 has no cached image
+  """
+  @spec get_venue_urls([integer()]) :: %{integer() => String.t()}
+  def get_venue_urls([]), do: %{}
+
+  def get_venue_urls(venue_ids) when is_list(venue_ids) do
+    from(c in CachedImage,
+      where: c.entity_type == "venue",
+      where: c.entity_id in ^venue_ids,
+      where: c.position == ^@position,
+      where: c.status == "cached",
+      where: not is_nil(c.cdn_url),
+      select: {c.entity_id, c.cdn_url}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
+  Batch get image URLs with fallbacks for multiple venues.
+
+  Takes a map of `%{venue_id => fallback_url}` and returns
+  `%{venue_id => effective_url}` preferring cached URLs.
+
+  ## Example
+
+      iex> fallbacks = %{1 => "https://example/1.jpg", 2 => "https://example/2.jpg"}
+      iex> get_venue_urls_with_fallbacks(fallbacks)
+      %{1 => "https://cdn.wombie.com/...", 2 => "https://example/2.jpg"}
+  """
+  @spec get_venue_urls_with_fallbacks(%{integer() => String.t() | nil}) ::
+          %{integer() => String.t() | nil}
+  def get_venue_urls_with_fallbacks(venue_fallbacks) when is_map(venue_fallbacks) do
+    venue_ids = Map.keys(venue_fallbacks)
+    cached_urls = get_venue_urls(venue_ids)
+
+    Map.new(venue_fallbacks, fn {venue_id, fallback} ->
+      {venue_id, Map.get(cached_urls, venue_id, fallback)}
+    end)
+  end
 
   # Private helpers
 
