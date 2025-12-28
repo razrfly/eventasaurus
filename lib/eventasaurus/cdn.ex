@@ -74,6 +74,8 @@ defmodule Eventasaurus.CDN do
   - CDN is disabled (development mode or CDN_FORCE_DISABLED=true)
   - URL is nil or empty
   - URL is already a CDN URL
+  - URL is from R2 storage (already Cloudflare-cached)
+  - URL is from Unsplash (they have their own CDN)
   - URL is invalid
 
   ## Examples
@@ -116,6 +118,10 @@ defmodule Eventasaurus.CDN do
 
       # Already a CDN URL - don't double-wrap
       cdn_url?(resolved_url) ->
+        resolved_url
+
+      # R2 CDN URLs - already cached via Cloudflare, don't double-wrap
+      r2_cdn_url?(resolved_url) ->
         resolved_url
 
       # Unsplash URLs already have their own global CDN - don't wrap
@@ -195,6 +201,19 @@ defmodule Eventasaurus.CDN do
   # Check if URL is already a CDN URL (avoid double-wrapping)
   defp cdn_url?(url) do
     String.contains?(url, domain()) and String.contains?(url, "/cdn-cgi/image/")
+  end
+
+  # Check if URL is from R2 CDN (already Cloudflare-cached via R2)
+  # These images are already optimized and served from Cloudflare's edge network
+  defp r2_cdn_url?(url) do
+    r2_cdn = r2_cdn_domain()
+    String.starts_with?(url, r2_cdn)
+  end
+
+  # Get configured R2 CDN domain
+  defp r2_cdn_domain do
+    r2_config = Application.get_env(:eventasaurus, :r2, [])
+    r2_config[:cdn_url] || "https://cdn2.wombie.com"
   end
 
   # Check if URL is from Unsplash (they have their own global CDN)

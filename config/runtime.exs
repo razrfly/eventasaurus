@@ -124,6 +124,13 @@ oban_queues = base_queues ++ production_queues
 
 config :eventasaurus, Oban,
   repo: oban_repo,
+  # Enable leader election so only one machine runs plugins (Cron, Reindexer, etc.)
+  # Without this, all machines compete for advisory locks and run duplicate work.
+  # See: https://hexdocs.pm/oban/Oban.Peers.Postgres.html
+  #
+  # Impact: ~50% reduction in advisory lock contention when running multiple machines.
+  # PlanetScale query insights showed 16,856 advisory lock calls competing between machines.
+  peer: Oban.Peers.Postgres,
   stage_interval: 1_000,
   queues: oban_queues,
   plugins: [
