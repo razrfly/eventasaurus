@@ -395,5 +395,4 @@ defmodule EventasaurusApp.Images.ImageCacheService do
       url
     end
   end
-
 end

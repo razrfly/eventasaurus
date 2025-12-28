@@ -199,5 +199,4 @@ defmodule EventasaurusApp.Images.VenueImages do
       venue_fallbacks
     end
   end
-
 end

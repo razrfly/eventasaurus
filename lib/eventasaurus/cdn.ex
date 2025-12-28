@@ -118,6 +118,10 @@ defmodule Eventasaurus.CDN do
       cdn_url?(resolved_url) ->
         resolved_url
 
+      # Unsplash URLs already have their own global CDN - don't wrap
+      unsplash_url?(resolved_url) ->
+        resolved_url
+
       # Invalid URL - return resolved as fallback
       not valid_url?(resolved_url) ->
         resolved_url
@@ -191,6 +195,11 @@ defmodule Eventasaurus.CDN do
   # Check if URL is already a CDN URL (avoid double-wrapping)
   defp cdn_url?(url) do
     String.contains?(url, domain()) and String.contains?(url, "/cdn-cgi/image/")
+  end
+
+  # Check if URL is from Unsplash (they have their own global CDN)
+  defp unsplash_url?(url) do
+    String.contains?(url, "unsplash.com")
   end
 
   # Basic URL validation

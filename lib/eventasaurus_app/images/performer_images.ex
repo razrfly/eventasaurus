@@ -169,7 +169,9 @@ defmodule EventasaurusApp.Images.PerformerImages do
 
   In non-production, returns fallbacks directly (no cache lookup).
   """
-  @spec get_urls_with_fallbacks(%{integer() => String.t() | nil}) :: %{integer() => String.t() | nil}
+  @spec get_urls_with_fallbacks(%{integer() => String.t() | nil}) :: %{
+          integer() => String.t() | nil
+        }
   def get_urls_with_fallbacks(performer_fallbacks) when is_map(performer_fallbacks) do
     if ImageEnv.production?() do
       performer_ids = Map.keys(performer_fallbacks)
@@ -208,5 +210,4 @@ defmodule EventasaurusApp.Images.PerformerImages do
       0
     end
   end
-
 end

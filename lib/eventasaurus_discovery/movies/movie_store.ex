@@ -50,12 +50,21 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
                source: "tmdb",
                metadata: %{"tmdb_id" => movie.tmdb_id, "type" => type}
              ) do
-          {:ok, _} -> :ok
-          {:exists, _} -> :ok
-          {:skipped, :non_production} -> :ok
+          {:ok, _} ->
+            :ok
+
+          {:exists, _} ->
+            :ok
+
+          {:skipped, :non_production} ->
+            :ok
+
           {:error, reason} ->
             require Logger
-            Logger.warning("Failed to queue #{type} image for movie #{movie.id}: #{inspect(reason)}")
+
+            Logger.warning(
+              "Failed to queue #{type} image for movie #{movie.id}: #{inspect(reason)}"
+            )
         end
 
       _ ->
