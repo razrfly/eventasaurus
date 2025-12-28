@@ -169,7 +169,11 @@ config :eventasaurus, Oban,
        # Pre-aggregates collision dashboard statistics for fast queries
        # Hourly is sufficient since dashboard caches results and data isn't time-sensitive
        # See: lib/eventasaurus_app/workers/job_execution_stats_refresh_worker.ex
-       {"30 * * * *", EventasaurusApp.Workers.JobExecutionStatsRefreshWorker}
+       {"30 * * * *", EventasaurusApp.Workers.JobExecutionStatsRefreshWorker},
+       # Image cache stats refresh daily at 6 AM UTC
+       # Populates image_cache_stats_snapshots table for the admin image cache dashboard
+       # Daily is sufficient since cached image counts don't change frequently
+       {"0 6 * * *", EventasaurusApp.Images.ComputeImageCacheStatsJob}
        # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]
