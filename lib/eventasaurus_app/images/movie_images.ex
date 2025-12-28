@@ -23,7 +23,7 @@ defmodule EventasaurusApp.Images.MovieImages do
       urls = MovieImages.get_poster_urls_with_fallbacks(fallbacks)
   """
 
-  alias EventasaurusApp.Images.ImageCacheService
+  alias EventasaurusApp.Images.{ImageCacheService, ImageEnv}
 
   @poster_position 0
   @backdrop_position 1
@@ -51,7 +51,7 @@ defmodule EventasaurusApp.Images.MovieImages do
   """
   @spec get_poster_url(integer(), String.t() | nil) :: String.t() | nil
   def get_poster_url(movie_id, fallback \\ nil) when is_integer(movie_id) do
-    if production_env?() do
+    if ImageEnv.production?() do
       ImageCacheService.get_url!("movie", movie_id, @poster_position) || fallback
     else
       # In dev/test, skip cache lookup - just use original URL
@@ -69,7 +69,7 @@ defmodule EventasaurusApp.Images.MovieImages do
   """
   @spec get_backdrop_url(integer(), String.t() | nil) :: String.t() | nil
   def get_backdrop_url(movie_id, fallback \\ nil) when is_integer(movie_id) do
-    if production_env?() do
+    if ImageEnv.production?() do
       ImageCacheService.get_url!("movie", movie_id, @backdrop_position) || fallback
     else
       fallback
@@ -95,7 +95,7 @@ defmodule EventasaurusApp.Images.MovieImages do
   def get_poster_urls([]), do: %{}
 
   def get_poster_urls(movie_ids) when is_list(movie_ids) do
-    if production_env?() do
+    if ImageEnv.production?() do
       get_urls_for_position(movie_ids, @poster_position)
     else
       # In dev/test, return empty map - fallbacks will be used
@@ -115,7 +115,7 @@ defmodule EventasaurusApp.Images.MovieImages do
   def get_backdrop_urls([]), do: %{}
 
   def get_backdrop_urls(movie_ids) when is_list(movie_ids) do
-    if production_env?() do
+    if ImageEnv.production?() do
       get_urls_for_position(movie_ids, @backdrop_position)
     else
       %{}
@@ -139,7 +139,7 @@ defmodule EventasaurusApp.Images.MovieImages do
   @spec get_poster_urls_with_fallbacks(%{integer() => String.t() | nil}) ::
           %{integer() => String.t() | nil}
   def get_poster_urls_with_fallbacks(movie_fallbacks) when is_map(movie_fallbacks) do
-    if production_env?() do
+    if ImageEnv.production?() do
       get_urls_with_fallbacks_for_position(movie_fallbacks, @poster_position)
     else
       # In dev/test, just return the fallbacks as-is
@@ -158,7 +158,7 @@ defmodule EventasaurusApp.Images.MovieImages do
   @spec get_backdrop_urls_with_fallbacks(%{integer() => String.t() | nil}) ::
           %{integer() => String.t() | nil}
   def get_backdrop_urls_with_fallbacks(movie_fallbacks) when is_map(movie_fallbacks) do
-    if production_env?() do
+    if ImageEnv.production?() do
       get_urls_with_fallbacks_for_position(movie_fallbacks, @backdrop_position)
     else
       movie_fallbacks
@@ -197,9 +197,4 @@ defmodule EventasaurusApp.Images.MovieImages do
     end)
   end
 
-  # Check if we're running in production environment.
-  # Image cache lookups only run in production - dev uses original URLs.
-  defp production_env? do
-    Application.get_env(:eventasaurus, :env) == :prod
-  end
 end

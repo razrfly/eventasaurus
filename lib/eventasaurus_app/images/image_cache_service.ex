@@ -32,7 +32,7 @@ defmodule EventasaurusApp.Images.ImageCacheService do
   require Logger
 
   alias EventasaurusApp.Repo
-  alias EventasaurusApp.Images.CachedImage
+  alias EventasaurusApp.Images.{CachedImage, ImageEnv}
   alias EventasaurusApp.Workers.ImageCacheJob
 
   import Ecto.Query
@@ -65,11 +65,11 @@ defmodule EventasaurusApp.Images.ImageCacheService do
     # In non-production environments, skip caching entirely.
     # Images will display using original URLs via the bridge modules.
     # This prevents dev/test from polluting the production R2 bucket.
-    if production_env?() do
+    if ImageEnv.production?() do
       do_cache_image(entity_type, entity_id, position, original_url, opts)
     else
       Logger.debug(
-        "ImageCacheService: Skipping cache in #{Application.get_env(:eventasaurus, :env)} - using original URLs"
+        "ImageCacheService: Skipping cache in #{Application.get_env(:eventasaurus, :environment)} - using original URLs"
       )
 
       {:skipped, :non_production}
@@ -396,10 +396,4 @@ defmodule EventasaurusApp.Images.ImageCacheService do
     end
   end
 
-  # Check if we're running in production environment.
-  # Image caching only runs in production to prevent dev/test
-  # from polluting the production R2 bucket.
-  defp production_env? do
-    Application.get_env(:eventasaurus, :env) == :prod
-  end
 end

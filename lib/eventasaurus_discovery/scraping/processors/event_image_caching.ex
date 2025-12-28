@@ -97,6 +97,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
           {:ok, image_url}
         end
 
+      {:skipped, :non_production} ->
+        # In dev/test, caching is skipped - use original URL
+        {:ok, image_url}
+
       {:error, reason} ->
         Logger.warning("""
         📷 Failed to queue image for caching:

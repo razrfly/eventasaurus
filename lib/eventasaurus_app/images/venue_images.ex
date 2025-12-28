@@ -1,6 +1,6 @@
-defmodule EventasaurusWeb.Helpers.VenueImageHelper do
+defmodule EventasaurusApp.Images.VenueImages do
   @moduledoc """
-  Helper for getting venue images with intelligent fallback strategy.
+  Get cached venue image URLs from R2 storage with city gallery fallback.
 
   Fallback order:
   1. Venue's cached images from R2 (via cached_images table)
@@ -10,15 +10,15 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   ## Batch Lookups (N+1 Prevention)
 
       # Batch get cached URLs for multiple venues
-      urls = VenueImageHelper.get_venue_image_urls([venue_id1, venue_id2])
+      urls = VenueImages.get_urls([venue_id1, venue_id2])
 
       # Batch with fallbacks
       fallbacks = %{venue1.id => venue1.image_url, venue2.id => venue2.image_url}
-      urls = VenueImageHelper.get_venue_image_urls_with_fallbacks(fallbacks)
+      urls = VenueImages.get_urls_with_fallbacks(fallbacks)
   """
 
   alias Eventasaurus.CDN
-  alias EventasaurusApp.Images.ImageCacheService
+  alias EventasaurusApp.Images.{ImageCacheService, ImageEnv}
 
   import Ecto.Query
   alias EventasaurusApp.Repo
@@ -39,16 +39,16 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   ## Examples
 
       # Grid view (400x300)
-      get_venue_image(venue, city, width: 400, height: 300, quality: 85)
+      get_image(venue, city, width: 400, height: 300, quality: 85)
 
       # List view thumbnail (192x192)
-      get_venue_image(venue, city, width: 192, height: 192, quality: 85)
+      get_image(venue, city, width: 192, height: 192, quality: 85)
 
       # Hero image (1200x600)
-      get_venue_image(venue, city, width: 1200, height: 600, quality: 90)
+      get_image(venue, city, width: 1200, height: 600, quality: 90)
   """
-  @spec get_venue_image(map(), map(), keyword()) :: String.t()
-  def get_venue_image(venue, city, opts \\ []) do
+  @spec get_image(map(), map(), keyword()) :: String.t()
+  def get_image(venue, city, opts \\ []) do
     width = Keyword.get(opts, :width, 400)
     height = Keyword.get(opts, :height, 300)
     quality = Keyword.get(opts, :quality, 85)
@@ -112,15 +112,15 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
 
   ## Examples
 
-      iex> get_venue_url(123, "https://example.com/image.jpg")
+      iex> get_url(123, "https://example.com/image.jpg")
       "https://cdn.wombie.com/images/venue/123/0.jpg"
 
-      iex> get_venue_url(999, "https://example.com/image.jpg")
+      iex> get_url(999, "https://example.com/image.jpg")
       "https://example.com/image.jpg"  # Falls back to original
   """
-  @spec get_venue_url(integer(), String.t() | nil) :: String.t() | nil
-  def get_venue_url(venue_id, fallback \\ nil) when is_integer(venue_id) do
-    if production_env?() do
+  @spec get_url(integer(), String.t() | nil) :: String.t() | nil
+  def get_url(venue_id, fallback \\ nil) when is_integer(venue_id) do
+    if ImageEnv.production?() do
       ImageCacheService.get_url!("venue", venue_id, @position) || fallback
     else
       # In dev/test, skip cache lookup - just use original URL
@@ -142,14 +142,14 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
 
   ## Example
 
-      iex> get_venue_urls([1, 2, 3])
+      iex> get_urls([1, 2, 3])
       %{1 => "https://cdn...", 2 => "https://cdn..."}  # venue 3 has no cached image
   """
-  @spec get_venue_urls([integer()]) :: %{integer() => String.t()}
-  def get_venue_urls([]), do: %{}
+  @spec get_urls([integer()]) :: %{integer() => String.t()}
+  def get_urls([]), do: %{}
 
-  def get_venue_urls(venue_ids) when is_list(venue_ids) do
-    if production_env?() do
+  def get_urls(venue_ids) when is_list(venue_ids) do
+    if ImageEnv.production?() do
       from(c in CachedImage,
         where: c.entity_type == "venue",
         where: c.entity_id in ^venue_ids,
@@ -177,15 +177,15 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   ## Example
 
       iex> fallbacks = %{1 => "https://example/1.jpg", 2 => "https://example/2.jpg"}
-      iex> get_venue_urls_with_fallbacks(fallbacks)
+      iex> get_urls_with_fallbacks(fallbacks)
       %{1 => "https://cdn.wombie.com/...", 2 => "https://example/2.jpg"}
   """
-  @spec get_venue_urls_with_fallbacks(%{integer() => String.t() | nil}) ::
+  @spec get_urls_with_fallbacks(%{integer() => String.t() | nil}) ::
           %{integer() => String.t() | nil}
-  def get_venue_urls_with_fallbacks(venue_fallbacks) when is_map(venue_fallbacks) do
-    if production_env?() do
+  def get_urls_with_fallbacks(venue_fallbacks) when is_map(venue_fallbacks) do
+    if ImageEnv.production?() do
       venue_ids = Map.keys(venue_fallbacks)
-      cached_urls = get_venue_urls(venue_ids)
+      cached_urls = get_urls(venue_ids)
 
       Map.new(venue_fallbacks, fn {venue_id, fallback} ->
         {venue_id, Map.get(cached_urls, venue_id, fallback)}
@@ -201,7 +201,7 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   # Get the primary cached image URL for a venue (position 0)
   # Returns cdn_url if cached, nil if no image or in non-production
   defp get_cached_venue_image_url(%{id: venue_id}) when is_integer(venue_id) do
-    if production_env?() do
+    if ImageEnv.production?() do
       ImageCacheService.get_url!("venue", venue_id, 0)
     else
       # In dev/test, skip cache lookup - will fall through to city gallery or placeholder
@@ -225,11 +225,5 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
       nil -> fallback
       url -> url
     end
-  end
-
-  # Check if we're running in production environment.
-  # Image cache lookups only run in production - dev uses original URLs.
-  defp production_env? do
-    Application.get_env(:eventasaurus, :env) == :prod
   end
 end
