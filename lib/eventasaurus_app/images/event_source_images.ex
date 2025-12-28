@@ -32,6 +32,9 @@ defmodule EventasaurusApp.Images.EventSourceImages do
   Returns the CDN URL if the image is cached, the fallback URL otherwise,
   or nil if neither exists.
 
+  In non-production environments, returns the fallback directly without
+  cache lookup (dev uses original URLs, no R2 caching).
+
   ## Examples
 
       iex> EventSourceImages.get_url(123, "https://example.com/image.jpg")
@@ -42,7 +45,12 @@ defmodule EventasaurusApp.Images.EventSourceImages do
   """
   @spec get_url(integer(), String.t() | nil) :: String.t() | nil
   def get_url(source_id, fallback \\ nil) when is_integer(source_id) do
-    ImageCacheService.get_url!("public_event_source", source_id, @position) || fallback
+    if production_env?() do
+      ImageCacheService.get_url!("public_event_source", source_id, @position) || fallback
+    else
+      # In dev/test, skip cache lookup - just use original URL
+      fallback
+    end
   end
 
   # ============================================================================
@@ -55,6 +63,8 @@ defmodule EventasaurusApp.Images.EventSourceImages do
   Returns a map of `%{source_id => cdn_url}`. Sources without cached
   images will not have entries in the map.
 
+  In non-production, returns empty map (uses fallbacks).
+
   ## Example
 
       iex> EventSourceImages.get_urls([1, 2, 3])
@@ -64,20 +74,25 @@ defmodule EventasaurusApp.Images.EventSourceImages do
   def get_urls([]), do: %{}
 
   def get_urls(source_ids) when is_list(source_ids) do
-    import Ecto.Query
-    alias EventasaurusApp.Repo
-    alias EventasaurusApp.Images.CachedImage
+    if production_env?() do
+      import Ecto.Query
+      alias EventasaurusApp.Repo
+      alias EventasaurusApp.Images.CachedImage
 
-    from(c in CachedImage,
-      where: c.entity_type == "public_event_source",
-      where: c.entity_id in ^source_ids,
-      where: c.position == ^@position,
-      where: c.status == "cached",
-      where: not is_nil(c.cdn_url),
-      select: {c.entity_id, c.cdn_url}
-    )
-    |> Repo.all()
-    |> Map.new()
+      from(c in CachedImage,
+        where: c.entity_type == "public_event_source",
+        where: c.entity_id in ^source_ids,
+        where: c.position == ^@position,
+        where: c.status == "cached",
+        where: not is_nil(c.cdn_url),
+        select: {c.entity_id, c.cdn_url}
+      )
+      |> Repo.all()
+      |> Map.new()
+    else
+      # In dev/test, return empty map - fallbacks will be used
+      %{}
+    end
   end
 
   @doc """
@@ -85,6 +100,8 @@ defmodule EventasaurusApp.Images.EventSourceImages do
 
   Takes a map of `%{source_id => fallback_url}` and returns
   `%{source_id => effective_url}` preferring cached URLs.
+
+  In non-production, returns fallbacks directly (no cache lookup).
 
   ## Example
 
@@ -95,11 +112,22 @@ defmodule EventasaurusApp.Images.EventSourceImages do
   @spec get_urls_with_fallbacks(%{integer() => String.t() | nil}) ::
           %{integer() => String.t() | nil}
   def get_urls_with_fallbacks(source_fallbacks) when is_map(source_fallbacks) do
-    source_ids = Map.keys(source_fallbacks)
-    cached_urls = get_urls(source_ids)
+    if production_env?() do
+      source_ids = Map.keys(source_fallbacks)
+      cached_urls = get_urls(source_ids)
 
-    Map.new(source_fallbacks, fn {source_id, fallback} ->
-      {source_id, Map.get(cached_urls, source_id, fallback)}
-    end)
+      Map.new(source_fallbacks, fn {source_id, fallback} ->
+        {source_id, Map.get(cached_urls, source_id, fallback)}
+      end)
+    else
+      # In dev/test, just return the fallbacks as-is
+      source_fallbacks
+    end
+  end
+
+  # Check if we're running in production environment.
+  # Image cache lookups only run in production - dev uses original URLs.
+  defp production_env? do
+    Application.get_env(:eventasaurus, :env) == :prod
   end
 end

@@ -107,6 +107,9 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   Returns the CDN URL if the image is cached, the fallback URL otherwise,
   or nil if neither exists.
 
+  In non-production environments, returns the fallback directly without
+  cache lookup (dev uses original URLs, no R2 caching).
+
   ## Examples
 
       iex> get_venue_url(123, "https://example.com/image.jpg")
@@ -117,7 +120,12 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   """
   @spec get_venue_url(integer(), String.t() | nil) :: String.t() | nil
   def get_venue_url(venue_id, fallback \\ nil) when is_integer(venue_id) do
-    ImageCacheService.get_url!("venue", venue_id, @position) || fallback
+    if production_env?() do
+      ImageCacheService.get_url!("venue", venue_id, @position) || fallback
+    else
+      # In dev/test, skip cache lookup - just use original URL
+      fallback
+    end
   end
 
   # ============================================================================
@@ -130,6 +138,8 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   Returns a map of `%{venue_id => cdn_url}`. Venues without cached
   images will not have entries in the map.
 
+  In non-production, returns empty map (uses fallbacks).
+
   ## Example
 
       iex> get_venue_urls([1, 2, 3])
@@ -139,16 +149,21 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   def get_venue_urls([]), do: %{}
 
   def get_venue_urls(venue_ids) when is_list(venue_ids) do
-    from(c in CachedImage,
-      where: c.entity_type == "venue",
-      where: c.entity_id in ^venue_ids,
-      where: c.position == ^@position,
-      where: c.status == "cached",
-      where: not is_nil(c.cdn_url),
-      select: {c.entity_id, c.cdn_url}
-    )
-    |> Repo.all()
-    |> Map.new()
+    if production_env?() do
+      from(c in CachedImage,
+        where: c.entity_type == "venue",
+        where: c.entity_id in ^venue_ids,
+        where: c.position == ^@position,
+        where: c.status == "cached",
+        where: not is_nil(c.cdn_url),
+        select: {c.entity_id, c.cdn_url}
+      )
+      |> Repo.all()
+      |> Map.new()
+    else
+      # In dev/test, return empty map - fallbacks will be used
+      %{}
+    end
   end
 
   @doc """
@@ -156,6 +171,8 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
 
   Takes a map of `%{venue_id => fallback_url}` and returns
   `%{venue_id => effective_url}` preferring cached URLs.
+
+  In non-production, returns fallbacks directly (no cache lookup).
 
   ## Example
 
@@ -166,20 +183,30 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   @spec get_venue_urls_with_fallbacks(%{integer() => String.t() | nil}) ::
           %{integer() => String.t() | nil}
   def get_venue_urls_with_fallbacks(venue_fallbacks) when is_map(venue_fallbacks) do
-    venue_ids = Map.keys(venue_fallbacks)
-    cached_urls = get_venue_urls(venue_ids)
+    if production_env?() do
+      venue_ids = Map.keys(venue_fallbacks)
+      cached_urls = get_venue_urls(venue_ids)
 
-    Map.new(venue_fallbacks, fn {venue_id, fallback} ->
-      {venue_id, Map.get(cached_urls, venue_id, fallback)}
-    end)
+      Map.new(venue_fallbacks, fn {venue_id, fallback} ->
+        {venue_id, Map.get(cached_urls, venue_id, fallback)}
+      end)
+    else
+      # In dev/test, just return the fallbacks as-is
+      venue_fallbacks
+    end
   end
 
   # Private helpers
 
   # Get the primary cached image URL for a venue (position 0)
-  # Returns cdn_url if cached, original_url as fallback, nil if no image
+  # Returns cdn_url if cached, nil if no image or in non-production
   defp get_cached_venue_image_url(%{id: venue_id}) when is_integer(venue_id) do
-    ImageCacheService.get_url!("venue", venue_id, 0)
+    if production_env?() do
+      ImageCacheService.get_url!("venue", venue_id, 0)
+    else
+      # In dev/test, skip cache lookup - will fall through to city gallery or placeholder
+      nil
+    end
   end
 
   defp get_cached_venue_image_url(_), do: nil
@@ -198,5 +225,11 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
       nil -> fallback
       url -> url
     end
+  end
+
+  # Check if we're running in production environment.
+  # Image cache lookups only run in production - dev uses original URLs.
+  defp production_env? do
+    Application.get_env(:eventasaurus, :env) == :prod
   end
 end

@@ -47,44 +47,58 @@ defmodule EventasaurusApp.Images.PerformerImages do
 
   Returns distinct images (by original_url) ordered by most recent first.
   Only returns successfully cached images with CDN URLs.
+
+  In non-production, returns empty list (no cache lookup).
   """
   @spec get_images(integer()) :: [CachedImage.t()]
   def get_images(performer_id) when is_integer(performer_id) do
-    from(ci in CachedImage,
-      join: pes in PublicEventSource,
-      on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
-      join: pep in PublicEventPerformer,
-      on: pep.event_id == pes.event_id,
-      where: pep.performer_id == ^performer_id,
-      where: ci.status == "cached",
-      where: not is_nil(ci.cdn_url),
-      distinct: ci.original_url,
-      order_by: [desc: ci.inserted_at],
-      select: ci
-    )
-    |> Repo.all()
+    if production_env?() do
+      from(ci in CachedImage,
+        join: pes in PublicEventSource,
+        on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
+        join: pep in PublicEventPerformer,
+        on: pep.event_id == pes.event_id,
+        where: pep.performer_id == ^performer_id,
+        where: ci.status == "cached",
+        where: not is_nil(ci.cdn_url),
+        distinct: ci.original_url,
+        order_by: [desc: ci.inserted_at],
+        select: ci
+      )
+      |> Repo.all()
+    else
+      # In dev/test, skip cache lookup - return empty list
+      []
+    end
   end
 
   @doc """
   Get the primary (most recent) cached image for a performer.
 
   Returns nil if no cached images exist.
+
+  In non-production, returns nil (no cache lookup).
   """
   @spec get_primary_image(integer()) :: CachedImage.t() | nil
   def get_primary_image(performer_id) when is_integer(performer_id) do
-    from(ci in CachedImage,
-      join: pes in PublicEventSource,
-      on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
-      join: pep in PublicEventPerformer,
-      on: pep.event_id == pes.event_id,
-      where: pep.performer_id == ^performer_id,
-      where: ci.status == "cached",
-      where: not is_nil(ci.cdn_url),
-      order_by: [desc: ci.inserted_at],
-      limit: 1,
-      select: ci
-    )
-    |> Repo.one()
+    if production_env?() do
+      from(ci in CachedImage,
+        join: pes in PublicEventSource,
+        on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
+        join: pep in PublicEventPerformer,
+        on: pep.event_id == pes.event_id,
+        where: pep.performer_id == ^performer_id,
+        where: ci.status == "cached",
+        where: not is_nil(ci.cdn_url),
+        order_by: [desc: ci.inserted_at],
+        limit: 1,
+        select: ci
+      )
+      |> Repo.one()
+    else
+      # In dev/test, skip cache lookup - return nil
+      nil
+    end
   end
 
   @doc """
@@ -118,26 +132,33 @@ defmodule EventasaurusApp.Images.PerformerImages do
   images will not have entries in the map.
 
   This is efficient for avoiding N+1 queries when displaying lists.
+
+  In non-production, returns empty map (uses fallbacks).
   """
   @spec get_urls([integer()]) :: %{integer() => String.t()}
   def get_urls([]), do: %{}
 
   def get_urls(performer_ids) when is_list(performer_ids) do
-    # Subquery to get the most recent cached image per performer
-    from(ci in CachedImage,
-      join: pes in PublicEventSource,
-      on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
-      join: pep in PublicEventPerformer,
-      on: pep.event_id == pes.event_id,
-      where: pep.performer_id in ^performer_ids,
-      where: ci.status == "cached",
-      where: not is_nil(ci.cdn_url),
-      distinct: pep.performer_id,
-      order_by: [asc: pep.performer_id, desc: ci.inserted_at],
-      select: {pep.performer_id, ci.cdn_url}
-    )
-    |> Repo.all()
-    |> Map.new()
+    if production_env?() do
+      # Subquery to get the most recent cached image per performer
+      from(ci in CachedImage,
+        join: pes in PublicEventSource,
+        on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
+        join: pep in PublicEventPerformer,
+        on: pep.event_id == pes.event_id,
+        where: pep.performer_id in ^performer_ids,
+        where: ci.status == "cached",
+        where: not is_nil(ci.cdn_url),
+        distinct: pep.performer_id,
+        order_by: [asc: pep.performer_id, desc: ci.inserted_at],
+        select: {pep.performer_id, ci.cdn_url}
+      )
+      |> Repo.all()
+      |> Map.new()
+    else
+      # In dev/test, return empty map - fallbacks will be used
+      %{}
+    end
   end
 
   @doc """
@@ -145,32 +166,52 @@ defmodule EventasaurusApp.Images.PerformerImages do
 
   Takes a map of `%{performer_id => fallback_url}` and returns
   `%{performer_id => effective_url}` preferring cached URLs.
+
+  In non-production, returns fallbacks directly (no cache lookup).
   """
   @spec get_urls_with_fallbacks(%{integer() => String.t() | nil}) :: %{integer() => String.t() | nil}
   def get_urls_with_fallbacks(performer_fallbacks) when is_map(performer_fallbacks) do
-    performer_ids = Map.keys(performer_fallbacks)
-    cached_urls = get_urls(performer_ids)
+    if production_env?() do
+      performer_ids = Map.keys(performer_fallbacks)
+      cached_urls = get_urls(performer_ids)
 
-    Map.new(performer_fallbacks, fn {performer_id, fallback} ->
-      {performer_id, Map.get(cached_urls, performer_id, fallback)}
-    end)
+      Map.new(performer_fallbacks, fn {performer_id, fallback} ->
+        {performer_id, Map.get(cached_urls, performer_id, fallback)}
+      end)
+    else
+      # In dev/test, just return the fallbacks as-is
+      performer_fallbacks
+    end
   end
 
   @doc """
   Get image count for a performer (how many distinct cached images).
+
+  In non-production, returns 0 (no cache lookup).
   """
   @spec count_images(integer()) :: non_neg_integer()
   def count_images(performer_id) when is_integer(performer_id) do
-    from(ci in CachedImage,
-      join: pes in PublicEventSource,
-      on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
-      join: pep in PublicEventPerformer,
-      on: pep.event_id == pes.event_id,
-      where: pep.performer_id == ^performer_id,
-      where: ci.status == "cached",
-      where: not is_nil(ci.cdn_url),
-      select: count(ci.id, :distinct)
-    )
-    |> Repo.one() || 0
+    if production_env?() do
+      from(ci in CachedImage,
+        join: pes in PublicEventSource,
+        on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
+        join: pep in PublicEventPerformer,
+        on: pep.event_id == pes.event_id,
+        where: pep.performer_id == ^performer_id,
+        where: ci.status == "cached",
+        where: not is_nil(ci.cdn_url),
+        select: count(ci.id, :distinct)
+      )
+      |> Repo.one() || 0
+    else
+      # In dev/test, no cached images
+      0
+    end
+  end
+
+  # Check if we're running in production environment.
+  # Image cache lookups only run in production - dev uses original URLs.
+  defp production_env? do
+    Application.get_env(:eventasaurus, :env) == :prod
   end
 end

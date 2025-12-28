@@ -56,61 +56,76 @@ oban_repo =
     EventasaurusApp.Repo
   end
 
+# Base queues that run in all environments
+base_queues = [
+  # ====================================================================
+  # QUEUE CONCURRENCY - CRITICAL: Must stay within connection pool limits!
+  # ====================================================================
+  # SessionRepo pool: 5 connections (for Oban - advisory locks, job fetching)
+  # Repo pool: 3 connections (for web requests)
+  #
+  # Total concurrent workers: 15 (down from 42)
+  # Rule: Total workers should be ~3x pool size to allow some queuing
+  # without causing 15+ second connection timeouts
+  # ====================================================================
+
+  # Email queue with limited concurrency for Resend API rate limiting
+  # Max 2 concurrent jobs to respect Resend's 2/second limit
+  emails: 2,
+  # Scraper queue for event data ingestion
+  # Reduced from 5 to 1 - scraper jobs spawn many detail jobs
+  scraper: 1,
+  # Scraper detail queue for individual event processing
+  # Reduced from 10 to 3 - these are the main DB-heavy jobs
+  scraper_detail: 3,
+  # Scraper index queue for processing index pages
+  # Reduced from 2 to 1 - index pages spawn many detail jobs
+  scraper_index: 1,
+  # Discovery queue for unified sync jobs and admin-triggered syncs
+  # Reduced from 3 to 1 - discovery jobs are orchestrators
+  discovery: 1,
+  # Unified venue queue for all venue-related jobs
+  # Kept at 1 to respect Google rate limits
+  venue: 1,
+  # Default queue for other background jobs
+  # Reduced from 10 to 2
+  default: 2,
+  # Maintenance queue for background tasks like coordinate calculation
+  # Reduced from 2 to 1
+  maintenance: 1,
+  # Reports queue for analytics, cost reports, and stats computation
+  # Reduced from 2 to 1 - stats computation is memory-intensive
+  reports: 1,
+  # Enrichment queue for performer data and Unsplash image refreshes
+  # Reduced from 3 to 1 - rate limited by external APIs anyway
+  enrichment: 1,
+  # Geocoding backfill queue for venue provider ID lookups
+  # Kept at 1 due to Foursquare 500 req/day limit
+  geocoding: 1,
+  # Analytics queue for PostHog popularity sync
+  # Kept at 1 - single daily job that batches updates
+  analytics: 1
+]
+
+# Production-only queues (image caching uploads to R2 - must not run in dev)
+production_queues =
+  if config_env() == :prod do
+    [
+      # Image cache queue for downloading external images to R2
+      # PRODUCTION ONLY: Dev uses original URLs directly, no R2 uploads
+      # Moderate concurrency to avoid hammering external servers
+      image_cache: 3
+    ]
+  else
+    []
+  end
+
+oban_queues = base_queues ++ production_queues
+
 config :eventasaurus, Oban,
   repo: oban_repo,
   stage_interval: 1_000,
-  queues: [
-    # ====================================================================
-    # QUEUE CONCURRENCY - CRITICAL: Must stay within connection pool limits!
-    # ====================================================================
-    # SessionRepo pool: 5 connections (for Oban - advisory locks, job fetching)
-    # Repo pool: 3 connections (for web requests)
-    #
-    # Total concurrent workers: 15 (down from 42)
-    # Rule: Total workers should be ~3x pool size to allow some queuing
-    # without causing 15+ second connection timeouts
-    # ====================================================================
-
-    # Email queue with limited concurrency for Resend API rate limiting
-    # Max 2 concurrent jobs to respect Resend's 2/second limit
-    emails: 2,
-    # Scraper queue for event data ingestion
-    # Reduced from 5 to 1 - scraper jobs spawn many detail jobs
-    scraper: 1,
-    # Scraper detail queue for individual event processing
-    # Reduced from 10 to 3 - these are the main DB-heavy jobs
-    scraper_detail: 3,
-    # Scraper index queue for processing index pages
-    # Reduced from 2 to 1 - index pages spawn many detail jobs
-    scraper_index: 1,
-    # Discovery queue for unified sync jobs and admin-triggered syncs
-    # Reduced from 3 to 1 - discovery jobs are orchestrators
-    discovery: 1,
-    # Unified venue queue for all venue-related jobs
-    # Kept at 1 to respect Google rate limits
-    venue: 1,
-    # Default queue for other background jobs
-    # Reduced from 10 to 2
-    default: 2,
-    # Maintenance queue for background tasks like coordinate calculation
-    # Reduced from 2 to 1
-    maintenance: 1,
-    # Reports queue for analytics, cost reports, and stats computation
-    # Reduced from 2 to 1 - stats computation is memory-intensive
-    reports: 1,
-    # Enrichment queue for performer data and Unsplash image refreshes
-    # Reduced from 3 to 1 - rate limited by external APIs anyway
-    enrichment: 1,
-    # Geocoding backfill queue for venue provider ID lookups
-    # Kept at 1 due to Foursquare 500 req/day limit
-    geocoding: 1,
-    # Analytics queue for PostHog popularity sync
-    # Kept at 1 - single daily job that batches updates
-    analytics: 1,
-    # Image cache queue for downloading external images to R2
-    # Moderate concurrency to avoid hammering external servers
-    image_cache: 3
-  ],
+  queues: oban_queues,
   plugins: [
     # Keep completed jobs for 12 hours for debugging
     # Reduced from 2 days to lower oban_jobs table row count

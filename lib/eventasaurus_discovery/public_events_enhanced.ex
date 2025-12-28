@@ -16,7 +16,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusApp.Images.ImageCacheService
+  alias EventasaurusApp.Images.EventSourceImages
 
   @default_limit 20
   @max_limit 500
@@ -797,26 +797,28 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   # Check if a source's image has been cached to R2.
   # Returns {:cached, cdn_url} if cached, :not_cached otherwise.
   #
+  # Uses EventSourceImages bridge module which handles production vs dev/test:
+  # - In production: queries cache and returns CDN URL if cached
+  # - In dev/test: skips cache lookup entirely (returns nil)
+  #
   # Also triggers lazy caching for enabled sources that haven't been cached yet.
   # This allows gradual migration of existing images without a backfill job.
   defp get_cached_source_image(source) do
-    case ImageCacheService.get_url("public_event_source", source.id, 0) do
-      {:cached, cdn_url} when is_binary(cdn_url) ->
+    # Use the bridge module which handles production vs dev/test environment
+    case EventSourceImages.get_url(source.id) do
+      cdn_url when is_binary(cdn_url) ->
         {:cached, cdn_url}
 
-      {:fallback, _original_url} ->
-        # Image exists in cache table but not yet cached (pending/failed)
-        :not_cached
-
-      {:not_found, _} ->
-        # No cache record exists - trigger lazy caching for enabled sources
-        maybe_trigger_lazy_caching(source)
+      nil ->
+        # Only trigger lazy caching in production
+        if production_env?(), do: maybe_trigger_lazy_caching(source)
         :not_cached
     end
   end
 
   # Trigger lazy caching for images from enabled sources.
   # This enables gradual migration of existing images.
+  # Only runs in production (guarded by caller).
   defp maybe_trigger_lazy_caching(source) do
     alias EventasaurusDiscovery.Scraping.Processors.EventImageCaching
 
@@ -834,6 +836,12 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     end
 
     :ok
+  end
+
+  # Check if we're running in production environment.
+  # Image cache lookups and lazy caching only run in production.
+  defp production_env? do
+    Application.get_env(:eventasaurus, :env) == :prod
   end
 
   # Extract source slug from a PublicEventSource.

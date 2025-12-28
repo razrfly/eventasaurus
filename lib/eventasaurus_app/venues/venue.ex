@@ -541,11 +541,12 @@ defmodule EventasaurusApp.Venues.Venue do
       {:error, :no_image}
   """
   def get_cover_image(%__MODULE__{} = venue, opts \\ []) do
-    alias EventasaurusApp.Images.ImageCacheService
+    alias EventasaurusWeb.Helpers.VenueImageHelper
 
     cond do
       # Priority 1: Venue's cached images from R2
-      image_url = ImageCacheService.get_url!("venue", venue.id, 0) ->
+      # Uses VenueImageHelper which handles production vs dev/test environment
+      image_url = VenueImageHelper.get_venue_url(venue.id) ->
         cdn_url = Eventasaurus.CDN.url(image_url, opts)
         {:ok, cdn_url, :venue}
 

@@ -58,9 +58,25 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
   - `{:ok, cached_image}` - Record created and job queued
   - `{:exists, cached_image}` - Image already exists for this entity/position
+  - `{:skipped, :non_production}` - Skipped in non-production environment
   - `{:error, changeset}` - Failed to create record
   """
   def cache_image(entity_type, entity_id, position, original_url, opts \\ []) do
+    # In non-production environments, skip caching entirely.
+    # Images will display using original URLs via the bridge modules.
+    # This prevents dev/test from polluting the production R2 bucket.
+    if production_env?() do
+      do_cache_image(entity_type, entity_id, position, original_url, opts)
+    else
+      Logger.debug(
+        "ImageCacheService: Skipping cache in #{Application.get_env(:eventasaurus, :env)} - using original URLs"
+      )
+
+      {:skipped, :non_production}
+    end
+  end
+
+  defp do_cache_image(entity_type, entity_id, position, original_url, opts) do
     source = Keyword.get(opts, :source)
     metadata = Keyword.get(opts, :metadata, %{})
     priority = Keyword.get(opts, :priority, 2)
@@ -378,5 +394,12 @@ defmodule EventasaurusApp.Images.ImageCacheService do
     else
       url
     end
+  end
+
+  # Check if we're running in production environment.
+  # Image caching only runs in production to prevent dev/test
+  # from polluting the production R2 bucket.
+  defp production_env? do
+    Application.get_env(:eventasaurus, :env) == :prod
   end
 end

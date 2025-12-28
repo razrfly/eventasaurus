@@ -3,10 +3,12 @@ defmodule EventasaurusApp.Images.EventSourceImagesTest do
   Tests for EventSourceImages module.
 
   Verifies that event source image URLs are correctly retrieved
-  from the cached_images table with proper fallback behavior.
+  with proper fallback behavior.
 
-  Note: We use fake entity IDs since EventSourceImages only queries
-  cached_images table - it doesn't need actual PublicEventSource records.
+  NOTE: In non-production environments (test/dev), EventSourceImages skips
+  cache lookups entirely and returns fallbacks directly. This prevents
+  dev/test from querying a cache that doesn't exist and avoids polluting
+  production R2 buckets. These tests verify that fallback behavior.
   """
   use EventasaurusApp.DataCase, async: false
 
@@ -17,7 +19,7 @@ defmodule EventasaurusApp.Images.EventSourceImagesTest do
   # Use unique integer IDs for each test to avoid collisions
   defp unique_id, do: System.unique_integer([:positive])
 
-  describe "get_url/2" do
+  describe "get_url/2 (test environment - no cache lookup)" do
     test "returns fallback when no cached image exists" do
       source_id = unique_id()
       fallback = "https://example.com/fallback.jpg"
@@ -29,7 +31,7 @@ defmodule EventasaurusApp.Images.EventSourceImagesTest do
       assert EventSourceImages.get_url(source_id) == nil
     end
 
-    test "returns CDN URL when image is cached" do
+    test "returns fallback even when image is cached (test mode skips cache)" do
       source_id = unique_id()
 
       {:ok, _cached} =
@@ -44,11 +46,11 @@ defmodule EventasaurusApp.Images.EventSourceImagesTest do
           original_source: "scraper"
         })
 
-      assert EventSourceImages.get_url(source_id, "fallback") ==
-               "https://cdn.example.com/source.jpg"
+      # In test mode, cache not queried - fallback returned
+      assert EventSourceImages.get_url(source_id, "fallback") == "fallback"
     end
 
-    test "returns original_url when image is pending" do
+    test "returns fallback when image is pending (test mode)" do
       source_id = unique_id()
 
       {:ok, _pending} =
@@ -61,12 +63,11 @@ defmodule EventasaurusApp.Images.EventSourceImagesTest do
           original_source: "scraper"
         })
 
-      # Returns the original_url from the cache record
-      assert EventSourceImages.get_url(source_id, "ignored_fallback") ==
-               "https://example.com/source.jpg"
+      # In test mode, cache not queried - fallback returned
+      assert EventSourceImages.get_url(source_id, "my_fallback") == "my_fallback"
     end
 
-    test "returns original_url when image is failed" do
+    test "returns fallback when image is failed (test mode)" do
       source_id = unique_id()
 
       {:ok, _failed} =
@@ -80,18 +81,17 @@ defmodule EventasaurusApp.Images.EventSourceImagesTest do
           original_source: "scraper"
         })
 
-      # Returns the original_url from the cache record
-      assert EventSourceImages.get_url(source_id, "ignored_fallback") ==
-               "https://example.com/source.jpg"
+      # In test mode, cache not queried - fallback returned
+      assert EventSourceImages.get_url(source_id, "my_fallback") == "my_fallback"
     end
   end
 
-  describe "get_urls/1" do
+  describe "get_urls/1 (test environment - no cache lookup)" do
     test "returns empty map for empty list" do
       assert EventSourceImages.get_urls([]) == %{}
     end
 
-    test "returns map of source_id => cdn_url" do
+    test "returns empty map in test mode (cache not queried)" do
       source1_id = unique_id()
       source2_id = unique_id()
 
@@ -119,39 +119,15 @@ defmodule EventasaurusApp.Images.EventSourceImagesTest do
           original_source: "scraper"
         })
 
+      # In test mode, cache not queried - returns empty map
       urls = EventSourceImages.get_urls([source1_id, source2_id])
-
-      assert urls[source1_id] == "https://cdn.example.com/source1.jpg"
-      assert urls[source2_id] == "https://cdn.example.com/source2.jpg"
+      assert urls == %{}
     end
 
-    test "excludes sources without cached images" do
-      source1_id = unique_id()
-      source2_id = unique_id()
-
-      # Only cache source1's image
-      {:ok, _cached} =
-        Repo.insert(%CachedImage{
-          entity_type: "public_event_source",
-          entity_id: source1_id,
-          position: 0,
-          original_url: "https://example.com/source1.jpg",
-          cdn_url: "https://cdn.example.com/source1.jpg",
-          r2_key: "images/public_event_source/source1.jpg",
-          status: "cached",
-          original_source: "scraper"
-        })
-
-      urls = EventSourceImages.get_urls([source1_id, source2_id])
-
-      assert Map.has_key?(urls, source1_id)
-      refute Map.has_key?(urls, source2_id)
-    end
-
-    test "excludes pending/failed status from batch lookup" do
+    test "pending/failed records also result in empty map (test mode)" do
       source_id = unique_id()
 
-      # Insert a pending record - should not be returned by get_urls
+      # Insert a pending record
       {:ok, _pending} =
         Repo.insert(%CachedImage{
           entity_type: "public_event_source",
@@ -162,23 +138,22 @@ defmodule EventasaurusApp.Images.EventSourceImagesTest do
           original_source: "scraper"
         })
 
+      # In test mode, returns empty map
       urls = EventSourceImages.get_urls([source_id])
-
-      # Pending records don't have cdn_url so shouldn't be included
-      refute Map.has_key?(urls, source_id)
+      assert urls == %{}
     end
   end
 
-  describe "get_urls_with_fallbacks/1" do
+  describe "get_urls_with_fallbacks/1 (test environment)" do
     test "returns empty map for empty input" do
       assert EventSourceImages.get_urls_with_fallbacks(%{}) == %{}
     end
 
-    test "uses cached URL when available, fallback otherwise" do
+    test "returns fallbacks directly in test mode" do
       source1_id = unique_id()
       source2_id = unique_id()
 
-      # Only cache source1's image
+      # Cache source1's image
       {:ok, _cached} =
         Repo.insert(%CachedImage{
           entity_type: "public_event_source",
@@ -198,9 +173,8 @@ defmodule EventasaurusApp.Images.EventSourceImagesTest do
 
       urls = EventSourceImages.get_urls_with_fallbacks(fallbacks)
 
-      # source1 uses cached URL
-      assert urls[source1_id] == "https://cdn.example.com/source1.jpg"
-      # source2 uses fallback
+      # In test mode, fallbacks are returned as-is (no cache lookup)
+      assert urls[source1_id] == "https://fallback1.jpg"
       assert urls[source2_id] == "https://fallback2.jpg"
     end
 

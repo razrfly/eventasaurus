@@ -3,7 +3,12 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
   Tests for MovieImages module.
 
   Verifies that movie poster and backdrop URLs are correctly retrieved
-  from the cached_images table with proper fallback behavior.
+  with proper fallback behavior.
+
+  NOTE: In non-production environments (test/dev), MovieImages skips
+  cache lookups entirely and returns fallbacks directly. This prevents
+  dev/test from querying a cache that doesn't exist and avoids polluting
+  production R2 buckets. These tests verify that fallback behavior.
   """
   use EventasaurusApp.DataCase, async: false
 
@@ -35,7 +40,7 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
     %{movie1: movie1, movie2: movie2}
   end
 
-  describe "get_poster_url/2" do
+  describe "get_poster_url/2 (test environment - no cache lookup)" do
     test "returns fallback when no cached image exists", %{movie1: movie} do
       fallback = "https://tmdb.org/fallback.jpg"
       assert MovieImages.get_poster_url(movie.id, fallback) == fallback
@@ -45,7 +50,10 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
       assert MovieImages.get_poster_url(movie.id) == nil
     end
 
-    test "returns CDN URL when poster is cached", %{movie1: movie} do
+    test "returns fallback even when cached image exists (test mode skips cache)", %{
+      movie1: movie
+    } do
+      # In test/dev, cache lookup is skipped - fallback is always returned
       {:ok, _cached} =
         Repo.insert(%CachedImage{
           entity_type: "movie",
@@ -58,13 +66,11 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
           original_source: "tmdb"
         })
 
-      assert MovieImages.get_poster_url(movie.id, "fallback") ==
-               "https://cdn.example.com/poster.jpg"
+      # In non-production, fallback is returned (cache not queried)
+      assert MovieImages.get_poster_url(movie.id, "fallback") == "fallback"
     end
 
-    test "returns original_url when image is pending", %{movie1: movie} do
-      # When a cached_image record exists (even pending), ImageCacheService
-      # returns its original_url as the fallback, not nil
+    test "returns fallback when image is pending (test mode)", %{movie1: movie} do
       {:ok, _pending} =
         Repo.insert(%CachedImage{
           entity_type: "movie",
@@ -75,14 +81,11 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
           original_source: "tmdb"
         })
 
-      # Returns the original_url from the cache record, not our fallback param
-      assert MovieImages.get_poster_url(movie.id, "ignored_fallback") ==
-               "https://tmdb.org/poster.jpg"
+      # In test mode, cache not queried - fallback returned
+      assert MovieImages.get_poster_url(movie.id, "my_fallback") == "my_fallback"
     end
 
-    test "returns original_url when image is failed", %{movie1: movie} do
-      # When a cached_image record exists (even failed), ImageCacheService
-      # returns its original_url as the fallback
+    test "returns fallback when image is failed (test mode)", %{movie1: movie} do
       {:ok, _failed} =
         Repo.insert(%CachedImage{
           entity_type: "movie",
@@ -94,19 +97,18 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
           original_source: "tmdb"
         })
 
-      # Returns the original_url from the cache record
-      assert MovieImages.get_poster_url(movie.id, "ignored_fallback") ==
-               "https://tmdb.org/poster.jpg"
+      # In test mode, cache not queried - fallback returned
+      assert MovieImages.get_poster_url(movie.id, "my_fallback") == "my_fallback"
     end
   end
 
-  describe "get_backdrop_url/2" do
+  describe "get_backdrop_url/2 (test environment - no cache lookup)" do
     test "returns fallback when no cached image exists", %{movie1: movie} do
       fallback = "https://tmdb.org/backdrop_fallback.jpg"
       assert MovieImages.get_backdrop_url(movie.id, fallback) == fallback
     end
 
-    test "returns CDN URL when backdrop is cached", %{movie1: movie} do
+    test "returns fallback even when backdrop is cached (test mode)", %{movie1: movie} do
       {:ok, _cached} =
         Repo.insert(%CachedImage{
           entity_type: "movie",
@@ -119,12 +121,12 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
           original_source: "tmdb"
         })
 
-      assert MovieImages.get_backdrop_url(movie.id, "fallback") ==
-               "https://cdn.example.com/backdrop.jpg"
+      # In non-production, fallback is returned
+      assert MovieImages.get_backdrop_url(movie.id, "fallback") == "fallback"
     end
 
-    test "distinguishes poster (position 0) from backdrop (position 1)", %{movie1: movie} do
-      # Cache only the poster at position 0
+    test "poster and backdrop both return fallbacks in test mode", %{movie1: movie} do
+      # Cache both poster and backdrop
       {:ok, _poster} =
         Repo.insert(%CachedImage{
           entity_type: "movie",
@@ -137,21 +139,18 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
           original_source: "tmdb"
         })
 
-      # Poster should return cached URL
-      assert MovieImages.get_poster_url(movie.id, "poster_fallback") ==
-               "https://cdn.example.com/poster.jpg"
-
-      # Backdrop should return fallback (not cached)
+      # In test mode, both return fallbacks (cache not queried)
+      assert MovieImages.get_poster_url(movie.id, "poster_fallback") == "poster_fallback"
       assert MovieImages.get_backdrop_url(movie.id, "backdrop_fallback") == "backdrop_fallback"
     end
   end
 
-  describe "get_poster_urls/1" do
+  describe "get_poster_urls/1 (test environment - no cache lookup)" do
     test "returns empty map for empty list" do
       assert MovieImages.get_poster_urls([]) == %{}
     end
 
-    test "returns map of movie_id => cdn_url", %{movie1: movie1, movie2: movie2} do
+    test "returns empty map in test mode (cache not queried)", %{movie1: movie1, movie2: movie2} do
       {:ok, _cached1} =
         Repo.insert(%CachedImage{
           entity_type: "movie",
@@ -176,35 +175,14 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
           original_source: "tmdb"
         })
 
+      # In test mode, cache not queried - returns empty map
       urls = MovieImages.get_poster_urls([movie1.id, movie2.id])
-
-      assert urls[movie1.id] == "https://cdn.example.com/poster1.jpg"
-      assert urls[movie2.id] == "https://cdn.example.com/poster2.jpg"
-    end
-
-    test "excludes movies without cached images", %{movie1: movie1, movie2: movie2} do
-      # Only cache movie1's poster
-      {:ok, _cached} =
-        Repo.insert(%CachedImage{
-          entity_type: "movie",
-          entity_id: movie1.id,
-          position: 0,
-          original_url: "https://tmdb.org/poster1.jpg",
-          cdn_url: "https://cdn.example.com/poster1.jpg",
-          r2_key: "images/movie/poster1.jpg",
-          status: "cached",
-          original_source: "tmdb"
-        })
-
-      urls = MovieImages.get_poster_urls([movie1.id, movie2.id])
-
-      assert Map.has_key?(urls, movie1.id)
-      refute Map.has_key?(urls, movie2.id)
+      assert urls == %{}
     end
   end
 
-  describe "get_backdrop_urls/1" do
-    test "returns map of movie_id => backdrop cdn_url", %{movie1: movie1} do
+  describe "get_backdrop_urls/1 (test environment - no cache lookup)" do
+    test "returns empty map in test mode", %{movie1: movie1} do
       {:ok, _cached} =
         Repo.insert(%CachedImage{
           entity_type: "movie",
@@ -217,19 +195,19 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
           original_source: "tmdb"
         })
 
+      # In test mode, cache not queried
       urls = MovieImages.get_backdrop_urls([movie1.id])
-
-      assert urls[movie1.id] == "https://cdn.example.com/backdrop1.jpg"
+      assert urls == %{}
     end
   end
 
-  describe "get_poster_urls_with_fallbacks/1" do
+  describe "get_poster_urls_with_fallbacks/1 (test environment)" do
     test "returns empty map for empty input" do
       assert MovieImages.get_poster_urls_with_fallbacks(%{}) == %{}
     end
 
-    test "uses cached URL when available, fallback otherwise", %{movie1: movie1, movie2: movie2} do
-      # Only cache movie1's poster
+    test "returns fallbacks directly in test mode", %{movie1: movie1, movie2: movie2} do
+      # Cache movie1's poster
       {:ok, _cached} =
         Repo.insert(%CachedImage{
           entity_type: "movie",
@@ -249,9 +227,8 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
 
       urls = MovieImages.get_poster_urls_with_fallbacks(fallbacks)
 
-      # movie1 uses cached URL
-      assert urls[movie1.id] == "https://cdn.example.com/poster1.jpg"
-      # movie2 uses fallback
+      # In test mode, fallbacks are returned as-is (no cache lookup)
+      assert urls[movie1.id] == "https://fallback1.jpg"
       assert urls[movie2.id] == "https://fallback2.jpg"
     end
 
@@ -264,9 +241,9 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
     end
   end
 
-  describe "get_backdrop_urls_with_fallbacks/1" do
-    test "uses cached URL when available, fallback otherwise", %{movie1: movie1, movie2: movie2} do
-      # Only cache movie1's backdrop
+  describe "get_backdrop_urls_with_fallbacks/1 (test environment)" do
+    test "returns fallbacks directly in test mode", %{movie1: movie1, movie2: movie2} do
+      # Cache movie1's backdrop
       {:ok, _cached} =
         Repo.insert(%CachedImage{
           entity_type: "movie",
@@ -286,9 +263,8 @@ defmodule EventasaurusApp.Images.MovieImagesTest do
 
       urls = MovieImages.get_backdrop_urls_with_fallbacks(fallbacks)
 
-      # movie1 uses cached URL
-      assert urls[movie1.id] == "https://cdn.example.com/backdrop1.jpg"
-      # movie2 uses fallback
+      # In test mode, fallbacks are returned as-is
+      assert urls[movie1.id] == "https://backdrop_fallback1.jpg"
       assert urls[movie2.id] == "https://backdrop_fallback2.jpg"
     end
   end
