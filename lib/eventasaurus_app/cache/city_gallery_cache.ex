@@ -17,8 +17,9 @@ defmodule EventasaurusApp.Cache.CityGalleryCache do
   ## Architecture
 
   - Loads all cities with galleries on startup (fast - one query)
-  - Refreshes every hour automatically
+  - Refreshes every 24 hours automatically (galleries rarely change)
   - Falls back to database query if cache miss
+  - Only loads required columns to minimize data transfer (~16MB → ~10KB)
   """
 
   use GenServer
@@ -29,7 +30,9 @@ defmodule EventasaurusApp.Cache.CityGalleryCache do
   import Ecto.Query
 
   @table_name :city_gallery_cache
-  @refresh_interval :timer.hours(1)
+  # Galleries rarely change - refresh once per day instead of hourly
+  # This reduces DB queries from ~72/day to ~3/day (one per Fly.io instance)
+  @refresh_interval :timer.hours(24)
 
   # Client API
 
@@ -168,10 +171,17 @@ defmodule EventasaurusApp.Cache.CityGalleryCache do
     start_time = System.monotonic_time(:millisecond)
 
     # Query all cities with unsplash galleries (one query instead of 12,740)
+    # Only select columns actually used by the cache to minimize data transfer:
+    # - id: for identity
+    # - latitude/longitude: for distance calculations in find_nearest_city
+    # - country_id: for grouping by country
+    # - unsplash_gallery: for the actual image data
+    # This avoids loading: name, slug, discovery_enabled, discovery_config,
+    # alternate_names, inserted_at, updated_at
     cities =
       from(c in City,
         where: not is_nil(c.unsplash_gallery),
-        select: c
+        select: struct(c, [:id, :latitude, :longitude, :country_id, :unsplash_gallery])
       )
       |> Repo.all(timeout: 30_000)
 
@@ -202,10 +212,11 @@ defmodule EventasaurusApp.Cache.CityGalleryCache do
   end
 
   defp query_cities_for_country(country_id) do
+    # Same column selection as load_cache for consistency
     from(c in City,
       where: c.country_id == ^country_id,
       where: not is_nil(c.unsplash_gallery),
-      select: c
+      select: struct(c, [:id, :latitude, :longitude, :country_id, :unsplash_gallery])
     )
     |> Repo.all(timeout: 30_000)
   end
