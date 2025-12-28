@@ -462,14 +462,17 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   end
 
   # Collect all available images for the event
+  # JSON-LD images should be high quality for rich snippets
+  @json_ld_image_opts [width: 1200, height: 630, quality: 85, fit: "cover"]
+
   defp collect_images(event) do
     []
     |> add_event_images(event)
     |> Enum.filter(&is_binary/1)
     |> Enum.uniq()
     |> Enum.take(5)
-    # Wrap all images with Cloudflare CDN
-    |> Enum.map(&CDN.url/1)
+    # Wrap all images with Cloudflare CDN with proper transformation parameters
+    |> Enum.map(&CDN.url(&1, @json_ld_image_opts))
   end
 
   # Extract images from event sources

@@ -74,13 +74,19 @@ defmodule EventasaurusWeb.Components.VenueCards do
       class="block bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
     >
       <div class="h-48 bg-gray-200 dark:bg-gray-700 rounded-t-lg relative overflow-hidden">
-        <img
-          src={@image_url}
-          alt={"Photo of #{@venue.name}"}
-          class="w-full h-full object-cover"
-          loading="lazy"
-          referrerpolicy="no-referrer"
-        />
+        <%= if @image_url do %>
+          <img
+            src={@image_url}
+            alt={"Photo of #{@venue.name}"}
+            class="w-full h-full object-cover"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+          />
+        <% else %>
+          <div class="w-full h-full flex items-center justify-center">
+            <.icon name="hero-building-office-2" class="h-16 w-16 text-gray-400 dark:text-gray-500" />
+          </div>
+        <% end %>
 
         <%!-- Event Count Badge - MOVED TO TOP LEFT to match city page --%>
         <%= if @events_count > 0 do %>
@@ -132,13 +138,19 @@ defmodule EventasaurusWeb.Components.VenueCards do
       class="group flex items-start gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow"
     >
       <div class="flex-shrink-0">
-        <img
-          src={@image_url}
-          alt={"Photo of #{@venue.name}"}
-          class="w-24 h-24 object-cover rounded-lg"
-          loading="lazy"
-          referrerpolicy="no-referrer"
-        />
+        <%= if @image_url do %>
+          <img
+            src={@image_url}
+            alt={"Photo of #{@venue.name}"}
+            class="w-24 h-24 object-cover rounded-lg"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+          />
+        <% else %>
+          <div class="w-24 h-24 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+            <.icon name="hero-building-office-2" class="h-10 w-10 text-gray-400 dark:text-gray-500" />
+          </div>
+        <% end %>
       </div>
 
       <div class="flex-1 min-w-0">
