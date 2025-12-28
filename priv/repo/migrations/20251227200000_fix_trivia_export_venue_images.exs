@@ -7,7 +7,10 @@ defmodule EventasaurusApp.Repo.Migrations.FixTriviaExportVenueImages do
   The previous migration (20251227162711) removed the venue_images column entirely,
   breaking Quiz Advisor which depends on this column.
 
-  This migration adds venue_images back by querying from cached_images table.
+  This migration:
+  1. Adds venue_images back by querying from cached_images table
+  2. Adds venue_image_count for optimization (avoids loading full JSONB array)
+  3. Fixes performer_id subquery with ORDER BY for deterministic results
   """
 
   @disable_ddl_transaction true
@@ -17,7 +20,7 @@ defmodule EventasaurusApp.Repo.Migrations.FixTriviaExportVenueImages do
     # Step 1: Drop the existing materialized view
     execute "DROP MATERIALIZED VIEW IF EXISTS trivia_events_export"
 
-    # Step 2: Recreate with venue_images column from cached_images
+    # Step 2: Recreate with venue_images, venue_image_count, and fixed performer_id
     execute """
     CREATE MATERIALIZED VIEW trivia_events_export AS
     SELECT
@@ -53,6 +56,7 @@ defmodule EventasaurusApp.Repo.Migrations.FixTriviaExportVenueImages do
         SELECT pep.performer_id
         FROM public_event_performers pep
         WHERE pep.event_id = pe.id
+        ORDER BY pep.inserted_at ASC
         LIMIT 1
       ) AS performer_id,
       s.id AS source_id,
@@ -86,6 +90,14 @@ defmodule EventasaurusApp.Repo.Migrations.FixTriviaExportVenueImages do
           AND ci.entity_id = v.id
           AND ci.status = 'cached'
       ) AS venue_images,
+      -- Count of venue images for optimization (avoids loading full JSONB array)
+      (
+        SELECT COUNT(*)
+        FROM public.cached_images ci
+        WHERE ci.entity_type = 'venue'
+          AND ci.entity_id = v.id
+          AND ci.status = 'cached'
+      )::integer AS venue_image_count,
       v.city_id,
       c.slug AS city_slug,
       c.name AS city_name,
@@ -172,7 +184,7 @@ defmodule EventasaurusApp.Repo.Migrations.FixTriviaExportVenueImages do
   end
 
   def down do
-    # Revert to the version without venue_images
+    # Revert to the version without venue_images (matches 20251227162711)
     execute "DROP MATERIALIZED VIEW IF EXISTS trivia_events_export"
 
     execute """
