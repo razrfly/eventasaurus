@@ -20,7 +20,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
   require Logger
   alias Eventasaurus.CDN
-  alias EventasaurusApp.Images.MovieImages
+  alias EventasaurusApp.Images.{EventSourceImages, MovieImages}
   alias EventasaurusWeb.Helpers.SourceAttribution
   alias EventasaurusWeb.JsonLd.Helpers
 
@@ -473,11 +473,12 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   end
 
   # Extract images from event sources
+  # Uses EventSourceImages for cached R2 URLs when available
   defp add_event_images(images, event) do
     if event.sources && event.sources != [] do
       # Get images from all sources, prioritizing by source priority and recency
       # Deduplicate sources first to avoid duplicate images from multiple showtimes
-      source_images =
+      deduplicated_sources =
         event.sources
         |> SourceAttribution.deduplicate_sources()
         |> Enum.sort_by(fn source ->
@@ -490,13 +491,24 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
           {priority, ts}
         end)
+
+      # Build fallback map for batch lookup: %{source_id => original_image_url}
+      source_fallbacks =
+        deduplicated_sources
+        |> Enum.filter(&(&1.id && &1.image_url))
+        |> Map.new(fn source -> {source.id, source.image_url} end)
+
+      # Batch lookup cached URLs with fallbacks to original URLs
+      cached_urls = EventSourceImages.get_urls_with_fallbacks(source_fallbacks)
+
+      source_images =
+        deduplicated_sources
         |> Enum.flat_map(fn source ->
-          [
-            # Check direct image_url field
-            source.image_url,
-            # Check metadata for images
-            extract_image_from_metadata(source.metadata)
-          ]
+          # Use cached URL if available, otherwise try metadata
+          cached_url = if source.id, do: Map.get(cached_urls, source.id), else: nil
+          metadata_image = extract_image_from_metadata(source.metadata)
+
+          [cached_url, metadata_image]
         end)
         |> Enum.reject(&is_nil/1)
 

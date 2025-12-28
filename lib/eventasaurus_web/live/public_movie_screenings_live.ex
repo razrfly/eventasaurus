@@ -16,6 +16,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusWeb.JsonLd.MovieSchema
   alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusWeb.UrlHelper
+  alias EventasaurusApp.Images.MovieImages
   import Ecto.Query
 
   @impl true
@@ -798,6 +799,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       "Watch #{movie.title} in #{city.name}. #{total_showtimes} #{pluralize_showtime(total_showtimes)} available at multiple cinemas."
 
     # Build movie data for social card hash generation
+    # Use cached URLs for consistent hash generation (matches what's displayed)
+    poster_url = MovieImages.get_poster_url(movie.id, movie.poster_url)
+    backdrop_url = MovieImages.get_backdrop_url(movie.id, movie.backdrop_url)
+
     movie_data = %{
       title: movie.title,
       slug: movie.slug,
@@ -805,8 +810,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
         name: city.name,
         slug: city.slug
       },
-      poster_url: movie.poster_url,
-      backdrop_url: movie.backdrop_url,
+      poster_url: poster_url,
+      backdrop_url: backdrop_url,
       total_showtimes: total_showtimes,
       updated_at: movie.updated_at
     }
