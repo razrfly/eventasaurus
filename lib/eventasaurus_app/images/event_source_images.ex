@@ -18,7 +18,7 @@ defmodule EventasaurusApp.Images.EventSourceImages do
       urls = EventSourceImages.get_urls_with_fallbacks(fallbacks)
   """
 
-  alias EventasaurusApp.Images.ImageCacheService
+  alias EventasaurusApp.Images.{ImageCacheService, ImageEnv}
 
   @position 0
 
@@ -45,7 +45,7 @@ defmodule EventasaurusApp.Images.EventSourceImages do
   """
   @spec get_url(integer(), String.t() | nil) :: String.t() | nil
   def get_url(source_id, fallback \\ nil) when is_integer(source_id) do
-    if production_env?() do
+    if ImageEnv.production?() do
       ImageCacheService.get_url!("public_event_source", source_id, @position) || fallback
     else
       # In dev/test, skip cache lookup - just use original URL
@@ -74,7 +74,7 @@ defmodule EventasaurusApp.Images.EventSourceImages do
   def get_urls([]), do: %{}
 
   def get_urls(source_ids) when is_list(source_ids) do
-    if production_env?() do
+    if ImageEnv.production?() do
       import Ecto.Query
       alias EventasaurusApp.Repo
       alias EventasaurusApp.Images.CachedImage
@@ -112,7 +112,7 @@ defmodule EventasaurusApp.Images.EventSourceImages do
   @spec get_urls_with_fallbacks(%{integer() => String.t() | nil}) ::
           %{integer() => String.t() | nil}
   def get_urls_with_fallbacks(source_fallbacks) when is_map(source_fallbacks) do
-    if production_env?() do
+    if ImageEnv.production?() do
       source_ids = Map.keys(source_fallbacks)
       cached_urls = get_urls(source_ids)
 
@@ -123,11 +123,5 @@ defmodule EventasaurusApp.Images.EventSourceImages do
       # In dev/test, just return the fallbacks as-is
       source_fallbacks
     end
-  end
-
-  # Check if we're running in production environment.
-  # Image cache lookups only run in production - dev uses original URLs.
-  defp production_env? do
-    Application.get_env(:eventasaurus, :env) == :prod
   end
 end

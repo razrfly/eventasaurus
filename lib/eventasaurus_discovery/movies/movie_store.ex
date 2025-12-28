@@ -52,6 +52,7 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
              ) do
           {:ok, _} -> :ok
           {:exists, _} -> :ok
+          {:skipped, :non_production} -> :ok
           {:error, reason} ->
             require Logger
             Logger.warning("Failed to queue #{type} image for movie #{movie.id}: #{inspect(reason)}")

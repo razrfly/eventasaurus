@@ -38,7 +38,7 @@ defmodule EventasaurusApp.Images.PerformerImages do
 
   import Ecto.Query
   alias EventasaurusApp.Repo
-  alias EventasaurusApp.Images.CachedImage
+  alias EventasaurusApp.Images.{CachedImage, ImageEnv}
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.PublicEvents.PublicEventPerformer
 
@@ -52,7 +52,7 @@ defmodule EventasaurusApp.Images.PerformerImages do
   """
   @spec get_images(integer()) :: [CachedImage.t()]
   def get_images(performer_id) when is_integer(performer_id) do
-    if production_env?() do
+    if ImageEnv.production?() do
       from(ci in CachedImage,
         join: pes in PublicEventSource,
         on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
@@ -81,7 +81,7 @@ defmodule EventasaurusApp.Images.PerformerImages do
   """
   @spec get_primary_image(integer()) :: CachedImage.t() | nil
   def get_primary_image(performer_id) when is_integer(performer_id) do
-    if production_env?() do
+    if ImageEnv.production?() do
       from(ci in CachedImage,
         join: pes in PublicEventSource,
         on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
@@ -139,7 +139,7 @@ defmodule EventasaurusApp.Images.PerformerImages do
   def get_urls([]), do: %{}
 
   def get_urls(performer_ids) when is_list(performer_ids) do
-    if production_env?() do
+    if ImageEnv.production?() do
       # Subquery to get the most recent cached image per performer
       from(ci in CachedImage,
         join: pes in PublicEventSource,
@@ -171,7 +171,7 @@ defmodule EventasaurusApp.Images.PerformerImages do
   """
   @spec get_urls_with_fallbacks(%{integer() => String.t() | nil}) :: %{integer() => String.t() | nil}
   def get_urls_with_fallbacks(performer_fallbacks) when is_map(performer_fallbacks) do
-    if production_env?() do
+    if ImageEnv.production?() do
       performer_ids = Map.keys(performer_fallbacks)
       cached_urls = get_urls(performer_ids)
 
@@ -191,7 +191,7 @@ defmodule EventasaurusApp.Images.PerformerImages do
   """
   @spec count_images(integer()) :: non_neg_integer()
   def count_images(performer_id) when is_integer(performer_id) do
-    if production_env?() do
+    if ImageEnv.production?() do
       from(ci in CachedImage,
         join: pes in PublicEventSource,
         on: ci.entity_type == "public_event_source" and ci.entity_id == pes.id,
@@ -209,9 +209,4 @@ defmodule EventasaurusApp.Images.PerformerImages do
     end
   end
 
-  # Check if we're running in production environment.
-  # Image cache lookups only run in production - dev uses original URLs.
-  defp production_env? do
-    Application.get_env(:eventasaurus, :env) == :prod
-  end
 end

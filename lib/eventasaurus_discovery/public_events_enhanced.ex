@@ -16,7 +16,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusApp.Images.EventSourceImages
+  alias EventasaurusApp.Images.{EventSourceImages, ImageEnv}
 
   @default_limit 20
   @max_limit 500
@@ -811,7 +811,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
       nil ->
         # Only trigger lazy caching in production
-        if production_env?(), do: maybe_trigger_lazy_caching(source)
+        if ImageEnv.production?(), do: maybe_trigger_lazy_caching(source)
         :not_cached
     end
   end
@@ -836,12 +836,6 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     end
 
     :ok
-  end
-
-  # Check if we're running in production environment.
-  # Image cache lookups and lazy caching only run in production.
-  defp production_env? do
-    Application.get_env(:eventasaurus, :env) == :prod
   end
 
   # Extract source slug from a PublicEventSource.

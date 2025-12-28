@@ -5,7 +5,7 @@ defmodule EventasaurusWeb.Components.VenueCards do
   use Phoenix.Component
   import EventasaurusWeb.CoreComponents
   use Phoenix.VerifiedRoutes, endpoint: EventasaurusWeb.Endpoint, router: EventasaurusWeb.Router
-  alias EventasaurusWeb.Helpers.VenueImageHelper
+  alias EventasaurusApp.Images.VenueImages
 
   @doc """
   Renders a grid of venue cards.
@@ -61,7 +61,7 @@ defmodule EventasaurusWeb.Components.VenueCards do
       assign(
         assigns,
         :image_url,
-        VenueImageHelper.get_venue_image(assigns.venue, assigns.city,
+        VenueImages.get_image(assigns.venue, assigns.city,
           width: 400,
           height: 300,
           quality: 85
@@ -119,7 +119,7 @@ defmodule EventasaurusWeb.Components.VenueCards do
       assign(
         assigns,
         :image_url,
-        VenueImageHelper.get_venue_image(assigns.venue, assigns.city,
+        VenueImages.get_image(assigns.venue, assigns.city,
           width: 192,
           height: 192,
           quality: 85

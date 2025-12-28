@@ -18,7 +18,7 @@ The system supports the following entity types (defined in `CachedImage` schema)
 | Entity Type | Position 0 | Position 1 | Bridge Module |
 |-------------|------------|------------|---------------|
 | `movie` | Poster | Backdrop | `MovieImages` |
-| `venue` | Primary image | - | `VenueImageHelper` |
+| `venue` | Primary image | - | `VenueImages` |
 | `public_event_source` | Event image | - | `EventImageCaching` |
 | `performer` | (virtual) | - | `PerformerImages` |
 | `event` | Event image | - | `EventImageCaching` |
