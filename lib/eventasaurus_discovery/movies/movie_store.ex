@@ -36,19 +36,21 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
     end
   end
 
-  # Queue poster (position 0) and backdrop (position 1) for caching.
+  # Queue poster and backdrop images for caching.
+  # Uses image_type to distinguish between poster and backdrop.
   # Failures are logged but don't affect movie creation.
   defp queue_image_caching(%Movie{} = movie) do
-    maybe_cache_image(movie, :poster_url, 0, "poster")
-    maybe_cache_image(movie, :backdrop_url, 1, "backdrop")
+    maybe_cache_image(movie, :poster_url, "poster")
+    maybe_cache_image(movie, :backdrop_url, "backdrop")
   end
 
-  defp maybe_cache_image(movie, field, position, type) do
+  defp maybe_cache_image(movie, field, image_type) do
     case Map.get(movie, field) do
       url when is_binary(url) and url != "" ->
-        case ImageCacheService.cache_image("movie", movie.id, position, url,
+        case ImageCacheService.cache_image("movie", movie.id, 0, url,
+               image_type: image_type,
                source: "tmdb",
-               metadata: %{"tmdb_id" => movie.tmdb_id, "type" => type}
+               metadata: %{"tmdb_id" => movie.tmdb_id, "type" => image_type}
              ) do
           {:ok, _} ->
             :ok
@@ -63,7 +65,7 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
             require Logger
 
             Logger.warning(
-              "Failed to queue #{type} image for movie #{movie.id}: #{inspect(reason)}"
+              "Failed to queue #{image_type} image for movie #{movie.id}: #{inspect(reason)}"
             )
         end
 

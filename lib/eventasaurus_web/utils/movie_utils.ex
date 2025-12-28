@@ -5,11 +5,14 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   """
 
   require Logger
-  alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
+  alias EventasaurusApp.Images.MovieImageResolver
   alias Eventasaurus.Integrations.Cinegraph
 
   @doc """
   Extract image URL from movie data, supporting both string and atom keys.
+
+  Uses MovieImageResolver to check cache first (via tmdb_id lookup),
+  falling back to raw TMDB URL if not cached.
 
   ## Examples
 
@@ -26,24 +29,9 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
       poll_option.image_url && poll_option.image_url != "" ->
         poll_option.image_url
 
-      # Then try to extract from external_data poster images
+      # Then try to extract from external_data using MovieImageResolver
       poll_option.external_data && is_map(poll_option.external_data) ->
-        case get_in(poll_option.external_data, ["media", "images", "posters"]) do
-          [first_poster | _] when is_map(first_poster) ->
-            case first_poster["file_path"] do
-              path when is_binary(path) ->
-                EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
-                  path,
-                  "w500"
-                )
-
-              _ ->
-                get_image_url(poll_option.external_data)
-            end
-
-          _ ->
-            get_image_url(poll_option.external_data)
-        end
+        MovieImageResolver.get_poster_url(poll_option.external_data)
 
       true ->
         nil
@@ -51,84 +39,41 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   end
 
   def get_image_url(movie_data) when is_map(movie_data) do
+    # Check for pre-existing URL formats first (these are already resolved URLs)
     cond do
-      # Try TMDB media.images.posters structure with string keys (admin interface) - PRIORITY
-      is_map(movie_data) && is_map(movie_data["media"]) && is_map(movie_data["media"]["images"]) &&
-        is_list(movie_data["media"]["images"]["posters"]) &&
-          length(movie_data["media"]["images"]["posters"]) > 0 ->
-        first_poster = List.first(movie_data["media"]["images"]["posters"])
-
-        if is_map(first_poster) && is_binary(first_poster["file_path"]) do
-          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
-            first_poster["file_path"],
-            "w500"
-          )
-        else
-          nil
-        end
-
-      # Try TMDB media.images.posters structure with atom keys (admin interface)
-      is_map(movie_data) && is_map(movie_data[:media]) && is_map(movie_data[:media][:images]) &&
-        is_list(movie_data[:media][:images][:posters]) &&
-          length(movie_data[:media][:images][:posters]) > 0 ->
-        first_poster = List.first(movie_data[:media][:images][:posters])
-
-        if is_map(first_poster) && is_binary(first_poster[:file_path]) do
-          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
-            first_poster[:file_path],
-            "w500"
-          )
-        else
-          nil
-        end
-
-      # Try direct string path (common)
-      is_map(movie_data) && is_binary(movie_data["poster_path"]) ->
-        EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
-          movie_data["poster_path"],
-          "w500"
-        )
-
-      # Try direct atom path
-      is_map(movie_data) && is_binary(movie_data[:poster_path]) ->
-        EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
-          movie_data[:poster_path],
-          "w500"
-        )
-
-      # Try atom keys first - nested format
-      is_map(movie_data) && is_map(movie_data[:poster_path]) && movie_data[:poster_path][:url] ->
+      # Try atom keys first - nested format with pre-resolved URL
+      is_map(movie_data[:poster_path]) && movie_data[:poster_path][:url] ->
         movie_data[:poster_path][:url]
 
-      # Try string keys - nested format
-      is_map(movie_data) && is_map(movie_data["poster_path"]) && movie_data["poster_path"]["url"] ->
+      # Try string keys - nested format with pre-resolved URL
+      is_map(movie_data["poster_path"]) && movie_data["poster_path"]["url"] ->
         movie_data["poster_path"]["url"]
 
-      # Try images array format (from rich data)
-      is_map(movie_data) && is_list(movie_data[:images]) && length(movie_data[:images]) > 0 ->
+      # Try images array format (from rich data) with pre-resolved URLs
+      is_list(movie_data[:images]) && length(movie_data[:images]) > 0 ->
         first_image = List.first(movie_data[:images])
 
         cond do
           is_map(first_image) && first_image[:url] -> first_image[:url]
           is_map(first_image) && first_image["url"] -> first_image["url"]
           is_map(first_image) && Map.get(first_image, :url) -> Map.get(first_image, :url)
-          true -> nil
+          true -> MovieImageResolver.get_poster_url(movie_data)
         end
 
-      # Try string key images array format
-      is_map(movie_data) && is_list(movie_data["images"]) && length(movie_data["images"]) > 0 ->
+      # Try string key images array format with pre-resolved URLs
+      is_list(movie_data["images"]) && length(movie_data["images"]) > 0 ->
         first_image = List.first(movie_data["images"])
 
         cond do
           is_map(first_image) && first_image[:url] -> first_image[:url]
           is_map(first_image) && first_image["url"] -> first_image["url"]
           is_map(first_image) && Map.get(first_image, :url) -> Map.get(first_image, :url)
-          true -> nil
+          true -> MovieImageResolver.get_poster_url(movie_data)
         end
 
-      # Fallback to nil if no image found
+      # Default: use MovieImageResolver which handles TMDB paths with cache
       true ->
-        nil
+        MovieImageResolver.get_poster_url(movie_data)
     end
   rescue
     _ -> nil
@@ -371,23 +316,15 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
 
   @doc """
   Extract poster URL using TMDB image service.
+
+  Uses MovieImageResolver to check cache first (via tmdb_id lookup),
+  falling back to raw TMDB URL if not cached.
   """
-  def get_poster_url(movie_data, size \\ "w500")
+  def get_poster_url(movie_data, _size \\ "w500")
 
-  def get_poster_url(movie_data, size) when is_map(movie_data) do
-    poster_path =
-      movie_data[:poster_path] ||
-        movie_data["poster_path"] ||
-        get_in(movie_data, [:metadata, :poster_path]) ||
-        get_in(movie_data, ["metadata", "poster_path"])
-
-    case poster_path do
-      path when is_binary(path) and path != "" ->
-        RichDataDisplayComponent.tmdb_image_url(path, size)
-
-      _ ->
-        nil
-    end
+  def get_poster_url(movie_data, _size) when is_map(movie_data) do
+    # Use MovieImageResolver which checks cache first
+    MovieImageResolver.get_poster_url(movie_data)
   rescue
     _ -> nil
   end
@@ -396,23 +333,15 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
 
   @doc """
   Extract backdrop URL using TMDB image service.
+
+  Uses MovieImageResolver to check cache first (via tmdb_id lookup),
+  falling back to raw TMDB URL if not cached.
   """
-  def get_backdrop_url(movie_data, size \\ "w1280")
+  def get_backdrop_url(movie_data, _size \\ "w1280")
 
-  def get_backdrop_url(movie_data, size) when is_map(movie_data) do
-    backdrop_path =
-      movie_data[:backdrop_path] ||
-        movie_data["backdrop_path"] ||
-        get_in(movie_data, [:metadata, :backdrop_path]) ||
-        get_in(movie_data, ["metadata", "backdrop_path"])
-
-    case backdrop_path do
-      path when is_binary(path) and path != "" ->
-        RichDataDisplayComponent.tmdb_image_url(path, size)
-
-      _ ->
-        nil
-    end
+  def get_backdrop_url(movie_data, _size) when is_map(movie_data) do
+    # Use MovieImageResolver which checks cache first
+    MovieImageResolver.get_backdrop_url(movie_data)
   rescue
     _ -> nil
   end
