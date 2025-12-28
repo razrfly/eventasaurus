@@ -366,6 +366,93 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
     end
   end
 
+  @doc """
+  Extract all available images for multi-image caching.
+
+  RA provides:
+  - `flyerFront` - Primary flyer image (assigned as "hero")
+  - `images` array - Additional images (assigned as "gallery")
+
+  ## Returns
+
+  List of image specs ready for EventImageCaching.cache_event_images/4:
+
+      [
+        %{url: "...", image_type: "hero", position: 0, metadata: %{...}},
+        %{url: "...", image_type: "gallery", position: 1, metadata: %{...}},
+        ...
+      ]
+  """
+  @spec extract_all_images(map(), integer()) :: list()
+  def extract_all_images(event, limit \\ 5)
+
+  def extract_all_images(event, limit) when is_map(event) do
+    specs = []
+    position = 0
+
+    # Extract flyerFront as hero (position 0)
+    {specs, position} =
+      case event["flyerFront"] do
+        url when is_binary(url) and url != "" ->
+          spec = %{
+            url: url,
+            image_type: "hero",
+            position: position,
+            metadata: %{
+              "source" => "resident_advisor",
+              "image_source" => "flyerFront",
+              "ra_event_id" => event["id"],
+              "original_url" => url,
+              "extracted_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+            }
+          }
+
+          {[spec | specs], position + 1}
+
+        _ ->
+          {specs, position}
+      end
+
+    # Extract images array as gallery
+    gallery_specs =
+      case event["images"] do
+        images when is_list(images) and length(images) > 0 ->
+          images
+          |> Enum.take(limit - position)
+          |> Enum.with_index(position)
+          |> Enum.map(fn {img, pos} ->
+            url = img["filename"] || img["url"]
+
+            if url && url != "" do
+              %{
+                url: url,
+                image_type: "gallery",
+                position: pos,
+                metadata: %{
+                  "source" => "resident_advisor",
+                  "image_source" => "images_array",
+                  "ra_event_id" => event["id"],
+                  "original_url" => url,
+                  "image_id" => img["id"],
+                  "extracted_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+                }
+              }
+            else
+              nil
+            end
+          end)
+          |> Enum.reject(&is_nil/1)
+
+        _ ->
+          []
+      end
+
+    (Enum.reverse(specs) ++ gallery_specs)
+    |> Enum.take(limit)
+  end
+
+  def extract_all_images(_, _limit), do: []
+
   defp is_featured?(event) do
     !is_nil(event["pick"])
   end

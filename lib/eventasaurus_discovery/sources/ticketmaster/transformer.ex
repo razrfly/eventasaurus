@@ -700,6 +700,119 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     |> Enum.reject(fn img -> is_nil(img.url) end)
   end
 
+  @doc """
+  Extract prioritized images for multi-image caching.
+
+  Selects the best images from Ticketmaster's image array, sorted by quality
+  and assigned semantic types for caching.
+
+  ## Image Types Assigned
+
+  - Position 0: `"hero"` - Best 16:9 image (largest width)
+  - Position 1: `"poster"` - Best 4:3 or 3:2 image
+  - Position 2-4: `"gallery"` - Next best images by quality
+
+  ## Returns
+
+  List of image specs ready for EventImageCaching.cache_event_images/4:
+
+      [
+        %{url: "...", image_type: "hero", position: 0, metadata: %{...}},
+        %{url: "...", image_type: "poster", position: 1, metadata: %{...}},
+        ...
+      ]
+  """
+  @spec extract_prioritized_images(list() | nil, integer()) :: list()
+  def extract_prioritized_images(images, limit \\ 5)
+
+  def extract_prioritized_images(nil, _limit), do: []
+  def extract_prioritized_images([], _limit), do: []
+
+  def extract_prioritized_images(images, limit) when is_list(images) do
+    # Filter out nil URLs and fallback images first
+    valid_images =
+      images
+      |> Enum.reject(fn img -> is_nil(img["url"]) || img["url"] == "" end)
+      |> Enum.reject(fn img -> img["fallback"] == true end)
+
+    # Group by ratio for selection
+    by_ratio = Enum.group_by(valid_images, fn img -> img["ratio"] end)
+
+    # Select hero (16:9, largest)
+    hero = select_best_image(by_ratio["16_9"] || by_ratio["16_10"] || [], :largest)
+
+    # Select poster (4:3 or 3:2, largest)
+    poster = select_best_image(by_ratio["4_3"] || by_ratio["3_2"] || [], :largest)
+
+    # Select remaining gallery images (sorted by quality)
+    used_urls = [hero, poster] |> Enum.reject(&is_nil/1) |> Enum.map(& &1["url"]) |> MapSet.new()
+
+    gallery =
+      valid_images
+      |> Enum.reject(fn img -> MapSet.member?(used_urls, img["url"]) end)
+      |> Enum.sort_by(fn img -> -(img["width"] || 0) end)
+      |> Enum.take(limit - 2)
+
+    # Build image specs with full metadata
+    specs = []
+
+    specs =
+      if hero do
+        [build_image_spec(hero, "hero", 0) | specs]
+      else
+        # Fall back to any large image for hero
+        fallback_hero = select_best_image(valid_images, :largest)
+
+        if fallback_hero do
+          [build_image_spec(fallback_hero, "hero", 0) | specs]
+        else
+          specs
+        end
+      end
+
+    specs =
+      if poster && poster != hero do
+        [build_image_spec(poster, "poster", 1) | specs]
+      else
+        specs
+      end
+
+    # Add gallery images
+    gallery_specs =
+      gallery
+      |> Enum.with_index(2)
+      |> Enum.map(fn {img, pos} -> build_image_spec(img, "gallery", pos) end)
+
+    (specs ++ gallery_specs)
+    |> Enum.take(limit)
+    |> Enum.sort_by(& &1.position)
+  end
+
+  # Select the best image from a list by criteria
+  defp select_best_image([], _criteria), do: nil
+
+  defp select_best_image(images, :largest) do
+    Enum.max_by(images, fn img -> (img["width"] || 0) * (img["height"] || 0) end, fn -> nil end)
+  end
+
+  # Build image spec with full metadata preserved
+  defp build_image_spec(img, image_type, position) do
+    %{
+      url: img["url"],
+      image_type: image_type,
+      position: position,
+      metadata: %{
+        "ratio" => img["ratio"],
+        "width" => img["width"],
+        "height" => img["height"],
+        "fallback" => img["fallback"],
+        "original_url" => img["url"],
+        "source" => "ticketmaster",
+        "extracted_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+      }
+    }
+  end
+
   defp extract_products(event) do
     products = get_in(event, ["products"]) || []
 

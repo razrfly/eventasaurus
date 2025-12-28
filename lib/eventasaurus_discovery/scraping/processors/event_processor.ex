@@ -842,6 +842,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   # Phase 2 Event Image Caching: Cache images for enabled sources
   # Uses source-by-source rollout controlled by EventImageCaching module
+  # Phase 2.5: Multi-image support for Ticketmaster and Resident Advisor
   defp maybe_cache_event_image({:ok, %PublicEventSource{} = event_source}, source_id, data) do
     # Look up source slug for caching decision
     source_slug =
@@ -852,39 +853,21 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     # Only proceed if image caching is enabled for this source
     if EventImageCaching.enabled?(source_slug) do
-      # Extract image URL from data
-      image_url = data[:image_url] || data["image_url"]
+      # Get raw data for metadata extraction
+      raw_data =
+        data[:raw_data] || data["raw_data"] || data[:raw_event_data] || data["raw_event_data"] ||
+          %{}
 
-      if image_url do
-        # Get raw data for metadata extraction
-        raw_data =
-          data[:raw_data] || data["raw_data"] || data[:raw_event_data] || data["raw_event_data"] ||
-            %{}
+      # Try multi-image caching first for supported sources
+      case maybe_cache_multiple_images(event_source, source_slug, raw_data) do
+        {:ok, _results} ->
+          # Multi-image caching succeeded or was attempted
+          # Return event source with primary image URL (hero or first cached)
+          {:ok, event_source}
 
-        case EventImageCaching.cache_event_image(
-               image_url,
-               event_source.id,
-               source_slug,
-               raw_data
-             ) do
-          {:cached, cdn_url} ->
-            # Image already cached - update the event source with CDN URL
-            Logger.info("📷 Using cached CDN URL for event source #{event_source.id}")
-
-            event_source
-            |> PublicEventSource.changeset(%{image_url: cdn_url})
-            |> Repo.update()
-
-          {:ok, _original_url} ->
-            # Image queued for caching - return event source as-is
-            {:ok, event_source}
-
-          {:fallback, _url} ->
-            # Caching failed - continue with original URL
-            {:ok, event_source}
-        end
-      else
-        {:ok, event_source}
+        :not_supported ->
+          # Fall back to single image caching for other sources
+          cache_single_image(event_source, source_slug, data, raw_data)
       end
     else
       {:ok, event_source}
@@ -892,6 +875,101 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp maybe_cache_event_image({:error, _} = error, _source_id, _data), do: error
+
+  # Multi-image caching for Ticketmaster and Resident Advisor
+  # Returns {:ok, results} if images were cached, :not_supported for other sources
+  defp maybe_cache_multiple_images(event_source, "ticketmaster", raw_data) do
+    alias EventasaurusDiscovery.Sources.Ticketmaster.Transformer, as: TmTransformer
+
+    # Extract images from raw Ticketmaster data
+    images = raw_data["images"] || []
+
+    if length(images) > 0 do
+      # Use Ticketmaster transformer to extract prioritized images with types
+      image_specs = TmTransformer.extract_prioritized_images(images, 5)
+
+      if length(image_specs) > 0 do
+        Logger.info("""
+        📷 Multi-image caching for Ticketmaster event source #{event_source.id}:
+          Found #{length(images)} raw images, selected #{length(image_specs)} for caching
+        """)
+
+        EventImageCaching.cache_event_images(
+          image_specs,
+          event_source.id,
+          "ticketmaster",
+          raw_data
+        )
+      else
+        :not_supported
+      end
+    else
+      :not_supported
+    end
+  end
+
+  defp maybe_cache_multiple_images(event_source, "resident-advisor", raw_data) do
+    alias EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer, as: RaTransformer
+
+    # RA stores event data in nested structure, extract it
+    event_data = raw_data["event"] || raw_data
+
+    # Use RA transformer to extract all images with types
+    image_specs = RaTransformer.extract_all_images(event_data, 5)
+
+    if length(image_specs) > 0 do
+      Logger.info("""
+      📷 Multi-image caching for Resident Advisor event source #{event_source.id}:
+        Found #{length(image_specs)} images for caching
+      """)
+
+      EventImageCaching.cache_event_images(
+        image_specs,
+        event_source.id,
+        "resident-advisor",
+        raw_data
+      )
+    else
+      :not_supported
+    end
+  end
+
+  # Other sources don't support multi-image yet
+  defp maybe_cache_multiple_images(_event_source, _source_slug, _raw_data) do
+    :not_supported
+  end
+
+  # Single image caching for sources that don't support multi-image
+  defp cache_single_image(event_source, source_slug, data, raw_data) do
+    image_url = data[:image_url] || data["image_url"]
+
+    if image_url do
+      case EventImageCaching.cache_event_image(
+             image_url,
+             event_source.id,
+             source_slug,
+             raw_data
+           ) do
+        {:cached, cdn_url} ->
+          # Image already cached - update the event source with CDN URL
+          Logger.info("📷 Using cached CDN URL for event source #{event_source.id}")
+
+          event_source
+          |> PublicEventSource.changeset(%{image_url: cdn_url})
+          |> Repo.update()
+
+        {:ok, _original_url} ->
+          # Image queued for caching - return event source as-is
+          {:ok, event_source}
+
+        {:fallback, _url} ->
+          # Caching failed - continue with original URL
+          {:ok, event_source}
+      end
+    else
+      {:ok, event_source}
+    end
+  end
 
   defp process_performers(_event, %{performer_names: []}), do: {:ok, []}
 
