@@ -9,6 +9,7 @@ defmodule EventasaurusApp.Venues.Venue.Slug do
     [:name]
   end
 
+  @spec build_slug(list(String.t() | nil), Ecto.Changeset.t()) :: String.t()
   def build_slug(sources, changeset) do
     # Universal UTF-8 protection for venue slugs
     # This handles the same issues as PublicEvent slugs
@@ -18,19 +19,35 @@ defmodule EventasaurusApp.Venues.Venue.Slug do
     case safe_sources do
       ["" | _] ->
         # Fallback slug if name is empty/invalid after cleaning
-        "venue-#{DateTime.utc_now() |> DateTime.to_unix()}"
+        generate_fallback_slug(changeset)
 
       _ ->
         # Get the base slug from cleaned sources
         base_slug = super(safe_sources, changeset)
 
-        # Ensure uniqueness using progressive disambiguation
-        ensure_unique_slug(base_slug, changeset)
+        # Handle nil/empty base_slug (can happen with special Unicode)
+        case base_slug do
+          empty when empty in [nil, ""] ->
+            generate_fallback_slug(changeset)
+
+          _ ->
+            # Ensure uniqueness using progressive disambiguation
+            ensure_unique_slug(base_slug, changeset)
+        end
     end
   end
 
+  # Generate a fallback slug with microsecond precision to avoid collisions
+  # Also ensures uniqueness through the standard validation path
+  defp generate_fallback_slug(changeset) do
+    # Use microsecond precision to minimize collision risk for concurrent venue creation
+    timestamp = DateTime.utc_now() |> DateTime.to_unix(:microsecond)
+    candidate = "venue-#{timestamp}"
+    ensure_unique_slug(candidate, changeset)
+  end
+
   # Ensure slug is unique using progressive disambiguation
-  # Strategy: name -> name-city -> name-timestamp
+  # Strategy: name -> name-city -> name-timestamp (with microsecond precision)
   defp ensure_unique_slug(base_slug, changeset) do
     existing_id = Ecto.Changeset.get_field(changeset, :id)
 
@@ -47,8 +64,9 @@ defmodule EventasaurusApp.Venues.Venue.Slug do
         if !slug_exists?(slug_with_city, existing_id) do
           slug_with_city
         else
-          # Fallback: name + timestamp
-          "#{base_slug}-#{System.system_time(:second)}"
+          # Fallback: name + timestamp (microsecond precision to avoid collisions)
+          timestamp = DateTime.utc_now() |> DateTime.to_unix(:microsecond)
+          "#{base_slug}-#{timestamp}"
         end
     end
   end
