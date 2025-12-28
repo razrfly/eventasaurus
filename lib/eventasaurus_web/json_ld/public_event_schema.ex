@@ -20,6 +20,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
   require Logger
   alias Eventasaurus.CDN
+  alias EventasaurusApp.Images.MovieImages
   alias EventasaurusWeb.Helpers.SourceAttribution
   alias EventasaurusWeb.JsonLd.Helpers
 
@@ -700,15 +701,31 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   end
 
   # Add movie poster image (required by Google)
+  # Uses cached R2 URL when available, falling back to original TMDB URL
   defp maybe_add_movie_image(work, movie) do
+    # Get cached URLs with fallback to original
+    poster_url =
+      if is_integer(movie.id) do
+        MovieImages.get_poster_url(movie.id, movie.poster_url)
+      else
+        movie.poster_url
+      end
+
+    backdrop_url =
+      if is_integer(movie.id) do
+        MovieImages.get_backdrop_url(movie.id, movie.backdrop_url)
+      else
+        movie.backdrop_url
+      end
+
     cond do
       # Use poster_url from movie if available
-      movie.poster_url && movie.poster_url != "" ->
-        Map.put(work, "image", CDN.url(movie.poster_url))
+      poster_url && poster_url != "" ->
+        Map.put(work, "image", CDN.url(poster_url))
 
       # Fallback to backdrop if no poster
-      movie.backdrop_url && movie.backdrop_url != "" ->
-        Map.put(work, "image", CDN.url(movie.backdrop_url))
+      backdrop_url && backdrop_url != "" ->
+        Map.put(work, "image", CDN.url(backdrop_url))
 
       true ->
         work

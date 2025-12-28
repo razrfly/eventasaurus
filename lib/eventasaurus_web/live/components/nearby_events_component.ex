@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   require Logger
 
   alias Eventasaurus.CDN
+  alias EventasaurusApp.Images.MovieImages
 
   def render(assigns) do
     ~H"""
@@ -328,10 +329,13 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   defp get_movie_image(event) do
     case event.movies do
       [movie | _] when not is_nil(movie) ->
-        # Prefer backdrop, fall back to poster
+        # Prefer backdrop, fall back to poster - use cached URLs with fallback to original
+        backdrop = MovieImages.get_backdrop_url(movie.id, movie.backdrop_url)
+        poster = MovieImages.get_poster_url(movie.id, movie.poster_url)
+
         cond do
-          is_binary(movie.backdrop_url) and movie.backdrop_url != "" -> movie.backdrop_url
-          is_binary(movie.poster_url) and movie.poster_url != "" -> movie.poster_url
+          is_binary(backdrop) and backdrop != "" -> backdrop
+          is_binary(poster) and poster != "" -> poster
           true -> nil
         end
 

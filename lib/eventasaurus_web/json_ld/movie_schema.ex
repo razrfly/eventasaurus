@@ -16,6 +16,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   """
 
   alias EventasaurusWeb.JsonLd.Helpers
+  alias EventasaurusApp.Images.MovieImages
 
   @doc """
   Generates JSON-LD structured data for a movie aggregation page.
@@ -336,11 +337,20 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
 
   # Get the movie image URL from available sources
   # Shared logic used by add_image, maybe_add_screening_image, and build_work_presented
+  # Uses cached R2 URL when available, falling back to original TMDB URL
   defp get_movie_image_url(movie) do
-    cond do
-      # Direct poster_url field (stored in DB from TMDB)
-      is_binary(movie.poster_url) && movie.poster_url != "" ->
+    # Try cached poster URL first (with original as fallback)
+    cached_url =
+      if is_integer(movie.id) do
+        MovieImages.get_poster_url(movie.id, movie.poster_url)
+      else
         movie.poster_url
+      end
+
+    cond do
+      # Cached or direct poster_url
+      is_binary(cached_url) && cached_url != "" ->
+        cached_url
 
       # TMDb poster path in metadata (fallback)
       movie.metadata && is_binary(movie.metadata["poster_path"]) &&

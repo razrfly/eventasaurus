@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.Components.MovieHeroCard do
 
   alias Eventasaurus.CDN
   alias Eventasaurus.Integrations.Cinegraph
+  alias EventasaurusApp.Images.MovieImages
 
   attr :movie, :map, required: true, doc: "Movie struct with title, poster_url, metadata, etc."
 
@@ -32,10 +33,10 @@ defmodule EventasaurusWeb.Components.MovieHeroCard do
     ~H"""
     <div class={"relative rounded-xl overflow-hidden mb-8 #{@class}"}>
       <!-- Backdrop Image with Gradient Overlay -->
-      <%= if @movie.backdrop_url do %>
+      <%= if backdrop_url = MovieImages.get_backdrop_url(@movie.id, @movie.backdrop_url) do %>
         <div class="absolute inset-0">
           <img
-            src={CDN.url(@movie.backdrop_url, width: 1200, quality: 85)}
+            src={CDN.url(backdrop_url, width: 1200, quality: 85)}
             alt=""
             class="w-full h-full object-cover"
             aria-hidden="true"
@@ -49,10 +50,10 @@ defmodule EventasaurusWeb.Components.MovieHeroCard do
       <!-- Content -->
       <div class="relative p-6 md:p-8 flex flex-col md:flex-row gap-6">
         <!-- Movie Poster -->
-        <%= if @movie.poster_url do %>
+        <%= if poster_url = MovieImages.get_poster_url(@movie.id, @movie.poster_url) do %>
           <div class="flex-shrink-0 self-start">
             <img
-              src={CDN.url(@movie.poster_url, width: 200, height: 300, fit: "cover", quality: 90)}
+              src={CDN.url(poster_url, width: 200, height: 300, fit: "cover", quality: 90)}
               alt={"#{@movie.title} poster"}
               class="w-32 md:w-40 h-48 md:h-60 object-cover rounded-lg shadow-2xl"
               loading="lazy"

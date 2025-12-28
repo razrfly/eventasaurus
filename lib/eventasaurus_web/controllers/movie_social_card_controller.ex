@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.MovieSocialCardController do
 
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.Movies.MovieStore
+  alias EventasaurusApp.Images.MovieImages
 
   import EventasaurusWeb.SocialCardView, only: [sanitize_movie: 1, render_movie_card_svg: 1]
 
@@ -36,6 +37,10 @@ defmodule EventasaurusWeb.MovieSocialCardController do
     # Count total showtimes for this movie in this city
     total_showtimes = MovieStore.count_showtimes_in_city(movie.id, city.id)
 
+    # Use cached image URLs with fallback to original
+    poster_url = MovieImages.get_poster_url(movie.id, movie.poster_url)
+    backdrop_url = MovieImages.get_backdrop_url(movie.id, movie.backdrop_url)
+
     %{
       title: movie.title,
       slug: movie.slug,
@@ -43,8 +48,8 @@ defmodule EventasaurusWeb.MovieSocialCardController do
         name: city.name,
         slug: city.slug
       },
-      poster_url: movie.poster_url,
-      backdrop_url: movie.backdrop_url,
+      poster_url: poster_url,
+      backdrop_url: backdrop_url,
       release_date: movie.release_date,
       runtime: movie.runtime,
       overview: movie.overview,

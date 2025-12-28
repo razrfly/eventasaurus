@@ -14,6 +14,8 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
   import EventasaurusWeb.Components.IndividualEmailInput
 
+  alias EventasaurusApp.Images.MovieImages
+
   attr :id, :string, required: true
   attr :show, :boolean, default: false
   attr :public_event, :map, default: nil
@@ -93,9 +95,9 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                 <!-- Movie Context Banner -->
                 <div class="flex-shrink-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-t-lg">
                   <div class="flex items-center gap-4">
-                    <%= if @movie.poster_url do %>
+                    <%= if poster_url = MovieImages.get_poster_url(@movie.id, @movie.poster_url) do %>
                       <img
-                        src={@movie.poster_url}
+                        src={poster_url}
                         alt={"#{@movie.title} poster"}
                         class="w-12 h-12 rounded object-cover flex-shrink-0"
                       />
