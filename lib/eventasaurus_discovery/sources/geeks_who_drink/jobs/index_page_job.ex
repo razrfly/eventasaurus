@@ -104,36 +104,32 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexPageJob do
             {:ok, %{venues_found: length(venues), jobs_scheduled: scheduled_count}}
           end
 
+        # Use standard categories for ErrorCategories.categorize_error/1
+        # See docs/error-handling-guide.md for category definitions
         {:error, %HTTPoison.Error{reason: :timeout}} = error ->
           Logger.error("❌ Network timeout fetching venues from map API")
-          MetricsTracker.record_failure(job, "Network timeout", external_id)
+          MetricsTracker.record_failure(job, :network_error, external_id)
           error
 
-        {:error, %HTTPoison.Error{reason: reason}} = error ->
-          Logger.error("❌ Network error fetching venues: #{inspect(reason)}")
-          MetricsTracker.record_failure(job, "Network error: #{inspect(reason)}", external_id)
+        {:error, %HTTPoison.Error{reason: _reason}} = error ->
+          Logger.error("❌ Network error fetching venues")
+          MetricsTracker.record_failure(job, :network_error, external_id)
           error
 
-        {:error, reason} = error ->
-          Logger.error("❌ Failed to fetch venues from map API: #{inspect(reason)}")
-          MetricsTracker.record_failure(job, "Fetch failed: #{inspect(reason)}", external_id)
+        {:error, _reason} = error ->
+          Logger.error("❌ Failed to fetch venues from map API")
+          MetricsTracker.record_failure(job, :network_error, external_id)
           error
 
         {:ok, response} ->
           Logger.error("❌ Unexpected response format from map API: #{inspect(response)}")
-          MetricsTracker.record_failure(job, "Unexpected response format", external_id)
+          MetricsTracker.record_failure(job, :parsing_error, external_id)
           {:error, :unexpected_response_format}
       end
     else
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch fresh nonce: #{inspect(reason)}")
-
-        MetricsTracker.record_failure(
-          job,
-          "Failed to fetch nonce: #{inspect(reason)}",
-          external_id
-        )
-
+        MetricsTracker.record_failure(job, :authentication_error, external_id)
         error
     end
   end

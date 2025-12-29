@@ -57,7 +57,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
         "No city_name configured for cinema-city source. Configure via Admin > Discovery > City Config."
 
       Logger.error("❌ #{error_msg}")
-      MetricsTracker.record_failure(job, error_msg, external_id)
+      # Use standard category for ErrorCategories.categorize_error/1
+      # See docs/error-handling-guide.md for category definitions
+      MetricsTracker.record_failure(job, :validation_error, external_id)
       {:error, :city_name_not_configured}
     else
       perform_sync(job, source_id, city_name, days_ahead, force, external_id)
@@ -121,11 +123,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch cinema list: #{inspect(reason)}")
 
-        MetricsTracker.record_failure(
-          job,
-          "Failed to fetch cinema list: #{inspect(reason)}",
-          external_id
-        )
+        # Use standard category for ErrorCategories.categorize_error/1
+        # See docs/error-handling-guide.md for category definitions
+        MetricsTracker.record_failure(job, :network_error, external_id)
 
         error
     end

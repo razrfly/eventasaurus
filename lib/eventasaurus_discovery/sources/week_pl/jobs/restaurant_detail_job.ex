@@ -61,6 +61,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
     result = fetch_and_process(args, source_id, meta)
 
     # Track success/failure based on processing outcome
+    # Error messages use standard categories for ErrorCategories.categorize_error/1
+    # See docs/error-handling-guide.md for category definitions
     case result do
       {:ok, %{"status" => "matched", "items_processed" => items}} when items > 0 ->
         MetricsTracker.record_success(job, external_id)
@@ -71,17 +73,12 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         result
 
       {:ok, %{"status" => "no_restaurant"}} ->
-        MetricsTracker.record_failure(job, "Restaurant not found in Apollo state", external_id)
+        MetricsTracker.record_failure(job, :venue_error, external_id)
         result
 
       {:ok, %{"status" => "matched", "items_processed" => 0}} ->
         # Silent failure - found restaurant but created 0 events
-        MetricsTracker.record_failure(
-          job,
-          "Silent failure: Found restaurant but created 0 events",
-          external_id
-        )
-
+        MetricsTracker.record_failure(job, :data_quality_error, external_id)
         result
 
       # Transient errors - allow Oban to retry (don't track metrics yet)
@@ -98,12 +95,12 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         error
 
       {:error, reason} = error ->
-        MetricsTracker.record_failure(job, "Processing failed: #{inspect(reason)}", external_id)
+        MetricsTracker.record_failure(job, reason, external_id)
         error
 
       unknown ->
         Logger.warning("[WeekPl.DetailJob] Unknown result status: #{inspect(unknown)}")
-        MetricsTracker.record_failure(job, "Unknown result status", external_id)
+        MetricsTracker.record_failure(job, :uncategorized_error, external_id)
         {:ok, unknown}
     end
   end
