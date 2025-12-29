@@ -299,17 +299,26 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
   end
 
   # Get badge class for error category
+  # Categories: 12 standard + 1 fallback (uncategorized_error)
   defp error_category_badge_class(error_category) do
     case error_category do
       "validation_error" -> "bg-red-100 text-red-800"
+      "parsing_error" -> "bg-rose-100 text-rose-800"
+      "data_quality_error" -> "bg-amber-100 text-amber-800"
+      "data_integrity_error" -> "bg-orange-100 text-orange-800"
+      "dependency_error" -> "bg-sky-100 text-sky-800"
       "network_error" -> "bg-yellow-100 text-yellow-800"
+      "rate_limit_error" -> "bg-lime-100 text-lime-800"
+      "authentication_error" -> "bg-fuchsia-100 text-fuchsia-800"
       "geocoding_error" -> "bg-blue-100 text-blue-800"
       "venue_error" -> "bg-purple-100 text-purple-800"
       "performer_error" -> "bg-pink-100 text-pink-800"
+      "tmdb_error" -> "bg-indigo-100 text-indigo-800"
+      "uncategorized_error" -> "bg-gray-100 text-gray-800"
+      # Legacy categories (for historical data)
+      "unknown_error" -> "bg-gray-100 text-gray-800"
       "category_error" -> "bg-indigo-100 text-indigo-800"
       "duplicate_error" -> "bg-orange-100 text-orange-800"
-      "data_quality_error" -> "bg-amber-100 text-amber-800"
-      "unknown_error" -> "bg-gray-100 text-gray-800"
       _ -> "bg-gray-100 text-gray-800"
     end
   end
@@ -978,8 +987,26 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                 <option value="validation_error" selected={@error_category_filter == "validation_error"}>
                   Validation Error
                 </option>
+                <option value="parsing_error" selected={@error_category_filter == "parsing_error"}>
+                  Parsing Error
+                </option>
+                <option value="data_quality_error" selected={@error_category_filter == "data_quality_error"}>
+                  Data Quality Error
+                </option>
+                <option value="data_integrity_error" selected={@error_category_filter == "data_integrity_error"}>
+                  Data Integrity Error
+                </option>
+                <option value="dependency_error" selected={@error_category_filter == "dependency_error"}>
+                  Dependency Error
+                </option>
                 <option value="network_error" selected={@error_category_filter == "network_error"}>
                   Network Error
+                </option>
+                <option value="rate_limit_error" selected={@error_category_filter == "rate_limit_error"}>
+                  Rate Limit Error
+                </option>
+                <option value="authentication_error" selected={@error_category_filter == "authentication_error"}>
+                  Authentication Error
                 </option>
                 <option value="geocoding_error" selected={@error_category_filter == "geocoding_error"}>
                   Geocoding Error
@@ -990,17 +1017,11 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                 <option value="performer_error" selected={@error_category_filter == "performer_error"}>
                   Performer Error
                 </option>
-                <option value="category_error" selected={@error_category_filter == "category_error"}>
-                  Category Error
+                <option value="tmdb_error" selected={@error_category_filter == "tmdb_error"}>
+                  TMDB Error
                 </option>
-                <option value="duplicate_error" selected={@error_category_filter == "duplicate_error"}>
-                  Duplicate Error
-                </option>
-                <option value="data_quality_error" selected={@error_category_filter == "data_quality_error"}>
-                  Data Quality Error
-                </option>
-                <option value="unknown_error" selected={@error_category_filter == "unknown_error"}>
-                  Unknown Error
+                <option value="uncategorized_error" selected={@error_category_filter == "uncategorized_error"}>
+                  Uncategorized Error
                 </option>
               </select>
             </div>

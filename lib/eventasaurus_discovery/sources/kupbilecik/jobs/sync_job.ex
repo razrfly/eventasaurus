@@ -99,10 +99,12 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob do
     end
   end
 
-  # Error categorization for MetricsTracker (per coding guidelines)
+  # Error categorization for MetricsTracker
+  # Uses 12 standard categories + 1 fallback (uncategorized_error)
+  # See docs/error-handling-guide.md for category definitions
   defp categorize_error({:network_error, _}), do: :network_error
   defp categorize_error({:http_error, _}), do: :network_error
-  defp categorize_error(_), do: :unknown_error
+  defp categorize_error(_), do: :uncategorized_error
 
   # Private functions
 
