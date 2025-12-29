@@ -440,8 +440,10 @@ defmodule EventasaurusWeb.Router do
   end
 
   # LiveView session for authenticated routes
+  # IMPORTANT: The session option must pass dev mode and user id keys for AuthHooks to work
   live_session :authenticated,
-    on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}],
+    session: {__MODULE__, :extract_auth_session, []} do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
@@ -480,7 +482,8 @@ defmodule EventasaurusWeb.Router do
 
   # Protected LiveView routes that require authentication
   live_session :authenticated_orders,
-    on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}],
+    session: {__MODULE__, :extract_auth_session, []} do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
@@ -506,7 +509,8 @@ defmodule EventasaurusWeb.Router do
 
   # Protected event management LiveView (require authentication)
   live_session :event_management,
-    on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}],
+    session: {__MODULE__, :extract_auth_session, []} do
     scope "/events", EventasaurusWeb do
       pipe_through :browser
 
@@ -903,5 +907,16 @@ defmodule EventasaurusWeb.Router do
     pipe_through [:secure_api, :api_authenticated]
 
     get "/stats/source/:source_slug", SourceStatsController, :show
+  end
+
+  # Helper function to extract auth-related session keys for LiveView
+  # This is required because LiveView's socket doesn't automatically receive all session data.
+  # Only keys explicitly passed via this function are available in on_mount hooks.
+  @doc false
+  def extract_auth_session(conn) do
+    %{
+      "current_user_id" => Plug.Conn.get_session(conn, "current_user_id"),
+      "dev_mode_login" => Plug.Conn.get_session(conn, "dev_mode_login")
+    }
   end
 end
