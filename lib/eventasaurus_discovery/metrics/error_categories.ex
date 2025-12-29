@@ -214,6 +214,9 @@ defmodule EventasaurusDiscovery.Metrics.ErrorCategories do
 
   def categorize_error(%DBConnection.ConnectionError{}), do: :network_error
 
+  # Oban.PerformError - unwrap and categorize the inner reason
+  def categorize_error(%Oban.PerformError{reason: reason}), do: categorize_error(reason)
+
   # Generic exception handler - extract message and categorize
   def categorize_error(%{__exception__: true} = exception) do
     categorize_error(Exception.message(exception))
