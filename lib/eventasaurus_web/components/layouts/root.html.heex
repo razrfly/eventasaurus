@@ -176,10 +176,8 @@
     <!-- Plausible Analytics - Privacy-friendly, no cookies -->
     <% plausible_script_url = System.get_env("PLAUSIBLE_SCRIPT_URL") %>
     <%= if plausible_script_url do %>
-      <script async src={plausible_script_url}></script>
-      <script>
-        window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) };
-      </script>
+      <script>window.plausible = window.plausible || {o: {autoCapturePageviews: true}};</script>
+      <script defer src={plausible_script_url}></script>
     <% end %>
 
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
