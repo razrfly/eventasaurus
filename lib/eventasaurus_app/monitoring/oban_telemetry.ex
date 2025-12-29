@@ -38,6 +38,8 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
 
   require Logger
 
+  alias EventasaurusDiscovery.Metrics.ErrorCategories
+
   @doc """
   Attaches telemetry handlers for Oban events.
 
@@ -285,6 +287,26 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
     results =
       if cancel_reason do
         Map.put(results, "cancel_reason", cancel_reason)
+      else
+        results
+      end
+
+    # Categorize errors for exceptions that bypass MetricsTracker.record_failure()
+    # This ensures ALL failures get categorized, not just those that explicitly call record_failure
+    # Only add if error_category is not already set (from job.meta via MetricsTracker)
+    results =
+      if state in [:failure, :discard] and not Map.has_key?(results, "error_category") do
+        # Extract the exception reason from metadata
+        exception_reason = Map.get(metadata, :reason)
+
+        category =
+          if exception_reason do
+            ErrorCategories.categorize_error(exception_reason) |> to_string()
+          else
+            "uncategorized_error"
+          end
+
+        Map.put(results, "error_category", category)
       else
         results
       end

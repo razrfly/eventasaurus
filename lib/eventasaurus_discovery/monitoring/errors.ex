@@ -22,17 +22,11 @@ defmodule EventasaurusDiscovery.Monitoring.Errors do
   alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
   import Ecto.Query
 
-  @source_patterns %{
-    "cinema_city" => "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%",
-    "repertuary" => "EventasaurusDiscovery.Sources.Repertuary.Jobs.%",
-    "karnet" => "EventasaurusDiscovery.Sources.Karnet.Jobs.%",
-    "week_pl" => "EventasaurusDiscovery.Sources.WeekPl.Jobs.%",
-    "bandsintown" => "EventasaurusDiscovery.Sources.Bandsintown.Jobs.%",
-    "resident_advisor" => "EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.%",
-    "sortiraparis" => "EventasaurusDiscovery.Sources.Sortiraparis.Jobs.%",
-    "inquizition" => "EventasaurusDiscovery.Sources.Inquizition.Jobs.%",
-    "waw4free" => "EventasaurusDiscovery.Sources.Waw4Free.Jobs.%"
-  }
+  # Legacy patterns kept for reference - patterns are now generated dynamically
+  # @source_patterns %{
+  #   "cinema_city" => "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%",
+  #   ...
+  # }
 
   @doc """
   Analyzes errors for a given source over a time period.
@@ -167,12 +161,22 @@ defmodule EventasaurusDiscovery.Monitoring.Errors do
 
   # Private helpers
 
-  defp get_source_pattern(source) do
-    case Map.fetch(@source_patterns, source) do
-      {:ok, pattern} -> {:ok, pattern}
-      :error -> {:error, :unknown_source}
-    end
+  # Dynamically generate worker pattern from source name
+  # e.g., "cinema_city" -> "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%"
+  #       "pubquiz" -> "EventasaurusDiscovery.Sources.Pubquiz.Jobs.%"
+  defp get_source_pattern(source) when is_binary(source) do
+    # Convert snake_case source name to PascalCase module name
+    module_name =
+      source
+      |> String.split("_")
+      |> Enum.map(&String.capitalize/1)
+      |> Enum.join("")
+
+    pattern = "EventasaurusDiscovery.Sources.#{module_name}.Jobs.%"
+    {:ok, pattern}
   end
+
+  defp get_source_pattern(_), do: {:error, :invalid_source}
 
   defp analyze_errors(failures, total_executions, hours, source, limit) do
     total_failures = length(failures)

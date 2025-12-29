@@ -19,22 +19,52 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   alias EventasaurusDiscovery.Monitoring.Health
   alias EventasaurusDiscovery.Monitoring.Errors
 
-  @sources ~w(cinema_city repertuary karnet week_pl bandsintown resident_advisor sortiraparis inquizition waw4free)
-
   @impl true
   def mount(_params, _session, socket) do
+    # Dynamically discover sources from job execution data
+    sources = discover_sources()
+
     socket =
       socket
       |> assign(:page_title, "Scraper Monitoring")
       |> assign(:time_range, 24)
       |> assign(:selected_source, nil)
       |> assign(:loading, true)
-      |> assign(:sources, @sources)
+      |> assign(:sources, sources)
       |> load_dashboard_data()
       |> assign(:loading, false)
 
     {:ok, socket}
   end
+
+  # Discover sources dynamically from worker names in job execution summaries
+  defp discover_sources do
+    import Ecto.Query
+
+    query =
+      from(j in EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary,
+        where: j.attempted_at > ago(7, "day"),
+        select: j.worker,
+        distinct: true
+      )
+
+    EventasaurusApp.Repo.all(query)
+    |> Enum.map(&extract_source_from_worker/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  # Extract source name from worker module name
+  # e.g., "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob" -> "cinema_city"
+  defp extract_source_from_worker(worker) when is_binary(worker) do
+    case Regex.run(~r/Sources\.(\w+)\.Jobs/, worker) do
+      [_, source] -> Macro.underscore(source)
+      _ -> nil
+    end
+  end
+
+  defp extract_source_from_worker(_), do: nil
 
   @impl true
   def handle_event("change_time_range", %{"time_range" => time_range}, socket) do
@@ -84,12 +114,13 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   defp load_dashboard_data(socket) do
     hours = socket.assigns.time_range
     selected_source = socket.assigns.selected_source
+    sources = socket.assigns.sources
 
     sources_to_check =
       if selected_source do
         [selected_source]
       else
-        @sources
+        sources
       end
 
     # Load health data for all sources in parallel
@@ -243,7 +274,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="min-h-screen">
       <div class="max-w-7xl mx-auto px-4 py-6">
         <!-- Header -->
         <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">

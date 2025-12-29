@@ -26,17 +26,7 @@ defmodule EventasaurusDiscovery.Monitoring.Chain do
   alias EventasaurusDiscovery.JobExecutionSummaries.Lineage
   import Ecto.Query
 
-  @source_patterns %{
-    "cinema_city" => "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
-    "repertuary" => "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob",
-    "karnet" => "EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob",
-    "week_pl" => "EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob",
-    "bandsintown" => "EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob",
-    "resident_advisor" => "EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob",
-    "sortiraparis" => "EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob",
-    "inquizition" => "EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob",
-    "waw4free" => "EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob"
-  }
+  # Legacy patterns - patterns are now generated dynamically in get_sync_worker/1
 
   @doc """
   Analyzes the execution chain for a specific job ID.
@@ -195,12 +185,20 @@ defmodule EventasaurusDiscovery.Monitoring.Chain do
 
   # Private helpers
 
-  defp get_sync_worker(source) do
-    case Map.fetch(@source_patterns, source) do
-      {:ok, worker} -> {:ok, worker}
-      :error -> {:error, :unknown_source}
-    end
+  # Dynamically generate SyncJob worker name from source name
+  # e.g., "cinema_city" -> "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob"
+  defp get_sync_worker(source) when is_binary(source) do
+    module_name =
+      source
+      |> String.split("_")
+      |> Enum.map(&String.capitalize/1)
+      |> Enum.join("")
+
+    worker = "EventasaurusDiscovery.Sources.#{module_name}.Jobs.SyncJob"
+    {:ok, worker}
   end
+
+  defp get_sync_worker(_), do: {:error, :invalid_source}
 
   defp build_tree_node(job) do
     # Get all descendants

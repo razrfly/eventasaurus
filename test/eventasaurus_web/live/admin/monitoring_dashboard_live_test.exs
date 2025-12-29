@@ -15,19 +15,36 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLiveTest do
       assert html =~ "Top Errors"
     end
 
-    test "displays all sources in the table", %{conn: conn} do
+    test "displays sources table structure", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/admin/monitoring")
 
-      # Check that all 9 sources are listed
+      # Verify the table structure exists (sources are loaded dynamically from job data)
+      assert html =~ "Sources Health"
+      # When no job execution data exists, the table should show empty state
+      # The table headers should still be present
+      assert html =~ "Source"
+      assert html =~ "Health"
+    end
+
+    test "displays sources dynamically from job execution data", %{conn: conn} do
+      # Insert a job execution summary to test dynamic source discovery
+      {:ok, _summary} =
+        EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary.record_execution(%{
+          job_id: 1,
+          worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
+          queue: "discovery",
+          state: "completed",
+          args: %{},
+          results: %{},
+          attempted_at: DateTime.utc_now(),
+          completed_at: DateTime.utc_now(),
+          duration_ms: 1000
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/admin/monitoring")
+
+      # The dynamically discovered source should appear
       assert html =~ "Cinema City"
-      assert html =~ "Repertuary"
-      assert html =~ "Karnet"
-      assert html =~ "Week Pl"
-      assert html =~ "Bandsintown"
-      assert html =~ "Resident Advisor"
-      assert html =~ "Sortiraparis"
-      assert html =~ "Inquizition"
-      assert html =~ "Waw4free"
     end
 
     test "time range filter updates data", %{conn: conn} do
