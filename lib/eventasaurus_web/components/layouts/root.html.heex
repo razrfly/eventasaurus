@@ -673,10 +673,7 @@
           const consent = { analytics: true, cookies: true, essential: true };
           localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
 
-          // Trigger analytics consent events (both generic and legacy)
-          window.dispatchEvent(new CustomEvent('analytics:privacy-consent', {
-            detail: { consent }
-          }));
+          // Trigger PostHog consent event
           window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
             detail: { consent }
           }));
@@ -689,10 +686,7 @@
           const consent = { analytics: false, cookies: false, essential: true };
           localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
 
-          // Trigger analytics consent events (both generic and legacy)
-          window.dispatchEvent(new CustomEvent('analytics:privacy-consent', {
-            detail: { consent }
-          }));
+          // Trigger PostHog consent event
           window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
             detail: { consent }
           }));
