@@ -59,7 +59,9 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
         Logger.error("City not found: #{inspect(city_id)} (tried lookup by name: Warszawa)")
         # Use standard category for ErrorCategories.categorize_error/1
         # See docs/error-handling-guide.md for category definitions
-        MetricsTracker.record_failure(job, :data_integrity_error, external_id)
+        # Note: Missing city config is a validation error (missing required data),
+        # not a data integrity error (DB constraint violations)
+        MetricsTracker.record_failure(job, :validation_error, external_id)
         {:error, :city_not_found}
 
       city ->

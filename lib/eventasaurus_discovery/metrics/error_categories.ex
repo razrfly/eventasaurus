@@ -88,6 +88,24 @@ defmodule EventasaurusDiscovery.Metrics.ErrorCategories do
   """
 
   # ============================================================================
+  # IDENTITY MATCHING - Category atoms passed directly
+  # When callers already know the category, pass it through unchanged
+  # ============================================================================
+  def categorize_error(:validation_error), do: :validation_error
+  def categorize_error(:parsing_error), do: :parsing_error
+  def categorize_error(:data_quality_error), do: :data_quality_error
+  def categorize_error(:data_integrity_error), do: :data_integrity_error
+  def categorize_error(:dependency_error), do: :dependency_error
+  def categorize_error(:network_error), do: :network_error
+  def categorize_error(:rate_limit_error), do: :rate_limit_error
+  def categorize_error(:authentication_error), do: :authentication_error
+  def categorize_error(:geocoding_error), do: :geocoding_error
+  def categorize_error(:venue_error), do: :venue_error
+  def categorize_error(:performer_error), do: :performer_error
+  def categorize_error(:tmdb_error), do: :tmdb_error
+  def categorize_error(:uncategorized_error), do: :uncategorized_error
+
+  # ============================================================================
   # ATOM PATTERN MATCHING
   # These handle the common case where jobs return {:error, :some_atom}
   # ============================================================================
