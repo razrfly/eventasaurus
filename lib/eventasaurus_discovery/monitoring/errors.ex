@@ -245,12 +245,31 @@ defmodule EventasaurusDiscovery.Monitoring.Errors do
   end
 
   defp get_recommendation(category) do
+    # 12 standard categories + 1 fallback (uncategorized_error)
     case category do
+      "validation_error" ->
+        "Add upstream validation before processing"
+
+      "parsing_error" ->
+        "Review HTML/JSON structure changes, add fallback parsing strategies"
+
+      "data_quality_error" ->
+        "Add data quality checks and handle site structure changes"
+
+      "data_integrity_error" ->
+        "Review database constraints and transaction handling"
+
+      "dependency_error" ->
+        "Add dependency health checks and graceful waiting/retry logic"
+
       "network_error" ->
         "Consider implementing retry logic with exponential backoff"
 
-      "validation_error" ->
-        "Add upstream validation before processing"
+      "rate_limit_error" ->
+        "Implement request throttling and respect rate limit headers"
+
+      "authentication_error" ->
+        "Verify API credentials and token refresh logic"
 
       "geocoding_error" ->
         "Implement fallback geocoding providers"
@@ -261,11 +280,18 @@ defmodule EventasaurusDiscovery.Monitoring.Errors do
       "performer_error" ->
         "Enhance performer/artist matching logic"
 
+      "tmdb_error" ->
+        "Check TMDB API quotas and implement caching for movie lookups"
+
+      "uncategorized_error" ->
+        "Review error logs and add specific error handling"
+
+      # Legacy categories (for historical data compatibility)
+      "unknown_error" ->
+        "Review error logs and add specific error handling"
+
       "category_error" ->
         "Review and expand event categorization rules"
-
-      "data_quality_error" ->
-        "Add data quality checks and handle site structure changes"
 
       "duplicate_error" ->
         "Fine-tune deduplication logic"

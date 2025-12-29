@@ -211,17 +211,26 @@ defmodule EventasaurusWeb.Admin.ErrorTrendsLive do
   defp format_duration(_), do: "N/A"
 
   # Get error category badge class
+  # Categories: 12 standard + 1 fallback (uncategorized_error)
   defp error_category_badge_class(error_category) do
     case error_category do
       "validation_error" -> "bg-red-100 text-red-800"
+      "parsing_error" -> "bg-rose-100 text-rose-800"
+      "data_quality_error" -> "bg-amber-100 text-amber-800"
+      "data_integrity_error" -> "bg-orange-100 text-orange-800"
+      "dependency_error" -> "bg-sky-100 text-sky-800"
       "network_error" -> "bg-yellow-100 text-yellow-800"
+      "rate_limit_error" -> "bg-lime-100 text-lime-800"
+      "authentication_error" -> "bg-fuchsia-100 text-fuchsia-800"
       "geocoding_error" -> "bg-blue-100 text-blue-800"
       "venue_error" -> "bg-purple-100 text-purple-800"
       "performer_error" -> "bg-pink-100 text-pink-800"
+      "tmdb_error" -> "bg-indigo-100 text-indigo-800"
+      "uncategorized_error" -> "bg-gray-100 text-gray-800"
+      # Legacy categories (for historical data)
+      "unknown_error" -> "bg-gray-100 text-gray-800"
       "category_error" -> "bg-indigo-100 text-indigo-800"
       "duplicate_error" -> "bg-orange-100 text-orange-800"
-      "data_quality_error" -> "bg-amber-100 text-amber-800"
-      "unknown_error" -> "bg-gray-100 text-gray-800"
       _ -> "bg-gray-100 text-gray-800"
     end
   end

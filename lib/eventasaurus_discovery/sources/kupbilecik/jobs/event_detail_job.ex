@@ -108,17 +108,19 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.EventDetailJob do
     end
   end
 
-  # Error categorization for MetricsTracker (per coding guidelines)
+  # Error categorization for MetricsTracker
+  # Uses 12 standard categories + 1 fallback (uncategorized_error)
+  # See docs/error-handling-guide.md for category definitions
   defp categorize_error(:not_found), do: :network_error
   defp categorize_error(:max_retries_exceeded), do: :network_error
   defp categorize_error(:expired), do: :validation_error
   defp categorize_error(:title_not_found), do: :validation_error
   defp categorize_error(:date_not_found), do: :validation_error
-  defp categorize_error(:source_not_found), do: :unknown_error
-  defp categorize_error({:extraction_error, _}), do: :data_quality_error
+  defp categorize_error(:source_not_found), do: :data_integrity_error
+  defp categorize_error({:extraction_error, _}), do: :parsing_error
   defp categorize_error({:http_error, _}), do: :network_error
   defp categorize_error({:network_error, _}), do: :network_error
-  defp categorize_error(_), do: :unknown_error
+  defp categorize_error(_), do: :uncategorized_error
 
   # Private functions
 
