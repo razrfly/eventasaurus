@@ -57,7 +57,9 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
     case city do
       nil ->
         Logger.error("City not found: #{inspect(city_id)} (tried lookup by name: Warszawa)")
-        MetricsTracker.record_failure(job, "City not found: #{inspect(city_id)}", external_id)
+        # Use standard category for ErrorCategories.categorize_error/1
+        # See docs/error-handling-guide.md for category definitions
+        MetricsTracker.record_failure(job, :data_integrity_error, external_id)
         {:error, :city_not_found}
 
       city ->

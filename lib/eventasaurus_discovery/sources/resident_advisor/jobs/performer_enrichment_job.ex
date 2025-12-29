@@ -56,7 +56,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichment
     case PerformerStore.get_performer(performer_id) do
       nil ->
         Logger.warning("Performer #{performer_id} not found, skipping enrichment")
-        MetricsTracker.record_failure(job, "Performer not found: #{performer_id}", external_id)
+        # Use standard category for ErrorCategories.categorize_error/1
+        # See docs/error-handling-guide.md for category definitions
+        MetricsTracker.record_failure(job, :performer_error, external_id)
         :ok
 
       performer ->
@@ -65,12 +67,10 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichment
             MetricsTracker.record_success(job, external_id)
             :ok
 
-          {:error, reason} = error ->
-            MetricsTracker.record_failure(
-              job,
-              "Enrichment failed: #{inspect(reason)}",
-              external_id
-            )
+          {:error, _reason} = error ->
+            # Use standard category for ErrorCategories.categorize_error/1
+            # See docs/error-handling-guide.md for category definitions
+            MetricsTracker.record_failure(job, :performer_error, external_id)
 
             error
         end

@@ -2,7 +2,7 @@
 
 **Version**: 1.0
 **Status**: Active
-**Last Updated**: 2025-01-29
+**Last Updated**: 2025-12-29
 
 ---
 
@@ -23,7 +23,7 @@ This guide defines the standard error handling patterns for all Eventasaurus scr
 
 1. [Error Categories](#1-error-categories)
 2. [Structured Error Returns](#2-structured-error-returns)
-3. [MetricsTracker Integration](#3-metricsTracker-integration)
+3. [MetricsTracker Integration](#3-metricstracker-integration)
 4. [Error Message Formatting](#4-error-message-formatting)
 5. [Common Patterns by Job Type](#5-common-patterns-by-job-type)
 6. [Debugging Unknown Errors](#6-debugging-unknown-errors)
@@ -284,7 +284,7 @@ For cases where you want to be explicit about the category:
 {:error, {:network_error, "HTTP 429: Rate limit exceeded"}}
 ```
 
-**Note**: MetricsTracker needs to handle this tuple format. See [MetricsTracker Integration](#3-metricsTracker-integration).
+**Note**: MetricsTracker needs to handle this tuple format. See [MetricsTracker Integration](#3-metricstracker-integration).
 
 ---
 
@@ -797,4 +797,4 @@ None of the above?
 
 ---
 
-*Last updated: 2025-01-29*
+*Last updated: 2025-12-29*

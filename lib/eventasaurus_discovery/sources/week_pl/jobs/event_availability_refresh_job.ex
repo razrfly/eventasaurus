@@ -57,49 +57,46 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
     case Repo.get(PublicEvent, event_id) do
       nil ->
         Logger.error("[WeekPl.RefreshJob] Event #{event_id} not found")
-        MetricsTracker.record_failure(job, "Event not found", external_id)
+        MetricsTracker.record_failure(job, :data_integrity_error, external_id)
         {:error, :event_not_found}
 
       event ->
         result = refresh_event_availability(event, args)
 
         # Track success/failure based on result
+        # Error messages use trigger words for ErrorCategories.categorize_error/1
+        # See docs/error-handling-guide.md for category definitions
         case result do
           {:ok, _} ->
             MetricsTracker.record_success(job, external_id)
             result
 
           {:error, :event_not_found} ->
-            MetricsTracker.record_failure(job, "Event not found", external_id)
+            MetricsTracker.record_failure(job, :data_integrity_error, external_id)
             result
 
           {:error, :source_not_found} ->
-            MetricsTracker.record_failure(job, "week_pl source not found for event", external_id)
+            MetricsTracker.record_failure(job, :data_integrity_error, external_id)
             result
 
           {:error, :restaurant_not_found} ->
-            MetricsTracker.record_failure(job, "Restaurant not found in API", external_id)
+            MetricsTracker.record_failure(job, :venue_error, external_id)
             result
 
           {:error, :missing_restaurant_data} ->
-            MetricsTracker.record_failure(
-              job,
-              "Missing restaurant_id or restaurant_slug",
-              external_id
-            )
-
+            MetricsTracker.record_failure(job, :validation_error, external_id)
             result
 
           {:error, :invalid_api_response} ->
-            MetricsTracker.record_failure(job, "Invalid API response structure", external_id)
+            MetricsTracker.record_failure(job, :parsing_error, external_id)
             result
 
           {:error, :update_failed} ->
-            MetricsTracker.record_failure(job, "Failed to update source metadata", external_id)
+            MetricsTracker.record_failure(job, :data_integrity_error, external_id)
             result
 
           {:error, reason} ->
-            MetricsTracker.record_failure(job, "Refresh failed: #{inspect(reason)}", external_id)
+            MetricsTracker.record_failure(job, reason, external_id)
             result
         end
     end

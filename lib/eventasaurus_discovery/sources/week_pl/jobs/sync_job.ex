@@ -156,11 +156,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
       else
         Logger.error("❌ [WeekPl.SyncJob] Failed to queue #{length(failed)} region jobs")
 
-        MetricsTracker.record_failure(
-          job,
-          "Failed to queue #{length(failed)}/#{length(results)} region jobs",
-          external_id
-        )
+        # Use standard category for ErrorCategories.categorize_error/1
+        # See docs/error-handling-guide.md for category definitions
+        MetricsTracker.record_failure(job, :dependency_error, external_id)
 
         {:error, "Failed to queue some region jobs"}
       end
