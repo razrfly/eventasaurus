@@ -172,7 +172,16 @@
         window.POSTHOG_API_KEY = null;
       </script>
     <% end %>
-    
+
+    <!-- Plausible Analytics - Privacy-friendly, no cookies -->
+    <% plausible_script_url = System.get_env("PLAUSIBLE_SCRIPT_URL") %>
+    <%= if plausible_script_url do %>
+      <script async src={plausible_script_url}></script>
+      <script>
+        window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) };
+      </script>
+    <% end %>
+
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
 
@@ -663,25 +672,31 @@
         acceptBtn.addEventListener('click', function() {
           const consent = { analytics: true, cookies: true, essential: true };
           localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
-          
-          // Trigger PostHog consent event
+
+          // Trigger analytics consent events (both generic and legacy)
+          window.dispatchEvent(new CustomEvent('analytics:privacy-consent', {
+            detail: { consent }
+          }));
           window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
             detail: { consent }
           }));
-          
+
           hideBanner();
         });
-        
+
         // Handle decline button
         declineBtn.addEventListener('click', function() {
           const consent = { analytics: false, cookies: false, essential: true };
           localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
-          
-          // Trigger PostHog consent event
+
+          // Trigger analytics consent events (both generic and legacy)
+          window.dispatchEvent(new CustomEvent('analytics:privacy-consent', {
+            detail: { consent }
+          }));
           window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
             detail: { consent }
           }));
-          
+
           hideBanner();
         });
         
