@@ -10,6 +10,7 @@ import { SpotifySearch } from "./spotify_search";
 // Import modular components
 import { initializeClipboard } from "./utils/clipboard";
 import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
+import { plausibleManager, initPlausibleClient } from "./analytics/plausible-manager";
 import { initClerkClient, ClerkAuthHandler, signOut as clerkSignOut, openSignIn as clerkOpenSignIn, openSignUp as clerkOpenSignUp } from "./auth/clerk-manager";
 import ClerkAuthUI from "./hooks/clerk-auth-ui";
 import FormHooks from "./hooks/forms";
@@ -115,8 +116,9 @@ window.addEventListener("phx:track_event", (e) => {
   }
 });
 
-// Expose PostHog manager for debugging and external use
+// Expose analytics managers for debugging and external use
 window.posthogManager = posthogManager;
+window.plausibleManager = plausibleManager;
 
 // CSV download handler for admin dashboards
 window.addEventListener("phx:download_csv", (e) => {
@@ -178,9 +180,10 @@ window.openSignUp = function(options = {}) {
 
 // Initialize components on page load
 document.addEventListener("DOMContentLoaded", function() {
-  // Initialize PostHog analytics with privacy checks
+  // Initialize analytics with privacy checks
   posthogManager.showPrivacyBanner();
   posthogManager.init();
+  plausibleManager.init();
 
   // Initialize Clerk authentication
   console.log('Initializing Clerk authentication...');
