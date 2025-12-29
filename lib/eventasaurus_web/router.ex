@@ -54,6 +54,9 @@ defmodule EventasaurusWeb.Router do
       # Error Trends & Analysis (dev - no auth)
       live "/error-trends", Admin.ErrorTrendsLive
 
+      # Unified Monitoring Dashboard (Phase 4 - Issue #3055)
+      live "/monitoring", Admin.MonitoringDashboardLive
+
       # Category Analysis (dev - no auth)
       live "/discovery/category-analysis/:source_slug", Admin.CategoryAnalysisLive, :show
 
