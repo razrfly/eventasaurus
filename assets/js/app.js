@@ -20,6 +20,7 @@ import MediaHooks from "./hooks/media-external-apis";
 import PlacesHooks from "./hooks/places-search/index";
 import DragDropHooks from "./hooks/poll-drag-drop";
 import { ChartHook } from "./hooks/chart_hook";
+import { HealthTrendChart } from "./hooks/health_trend_chart";
 import VenuesMap from "./hooks/venues-map";
 import MapboxVenuesMap from "./hooks/mapbox-venues-map";
 import CountdownHooks from "./hooks/countdown-timer";
@@ -67,6 +68,7 @@ const ModularHooks = {
   AuthHandler: ClerkAuthHandler, // Active auth handler (Clerk)
   ClerkAuthUI, // Client-side auth UI hydration for CDN-cached pages
   ChartHook, // Chart.js hook for Phase 6
+  HealthTrendChart, // Specialized Chart.js hook for monitoring dashboard health trend
   VenuesMap, // Interactive Google Maps for venues page
   MapboxVenuesMap // Interactive Mapbox map for venues page
 };
