@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   - Error category breakdown with recommendations
   - Source and time range filtering
   - Action items for degraded workers
+  - 7-day sparkline trends with trend indicators (Phase 4.1)
 
   Target: < 500ms load time using existing optimized queries.
   """
@@ -18,6 +19,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
 
   alias EventasaurusDiscovery.Monitoring.Health
   alias EventasaurusDiscovery.Monitoring.Errors
+  alias EventasaurusWeb.Components.Sparkline
 
   @impl true
   def mount(_params, _session, socket) do
@@ -183,9 +185,13 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     # Collect top errors with recommendations
     top_errors = collect_top_errors(error_results)
 
+    # Load 7-day trend data for sparklines (always 168 hours for consistency)
+    {:ok, trend_results} = Health.trends_for_sources(sources_to_check, hours: 168)
+
     socket
     |> assign(:health_results, health_results)
     |> assign(:error_results, error_results)
+    |> assign(:trend_results, trend_results)
     |> assign(:overall_score, overall_score)
     |> assign(:meeting_slo_count, meeting_slo_count)
     |> assign(:at_risk_count, at_risk_count)
@@ -407,6 +413,9 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                         Source
                       </th>
+                      <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        7d Trend
+                      </th>
                       <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                         Success
                       </th>
@@ -421,9 +430,20 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                   <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                     <%= for source <- @sources do %>
                       <% result = Map.get(@health_results, source) %>
+                      <% trend = Map.get(@trend_results, source) %>
                       <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td class="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
                           <%= format_source_name(source) %>
+                        </td>
+                        <td class="px-4 py-2 text-center">
+                          <div class="flex items-center justify-center gap-1">
+                            <%= if trend do %>
+                              <%= Phoenix.HTML.raw(Sparkline.render(trend.data_points)) %>
+                              <%= Phoenix.HTML.raw(Sparkline.trend_arrow(trend.trend_direction)) %>
+                            <% else %>
+                              <span class="text-gray-400 text-xs">--</span>
+                            <% end %>
+                          </div>
                         </td>
                         <%= case result do %>
                           <% {:ok, health, _score, _degraded} -> %>

@@ -152,7 +152,157 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
     Enum.take(health.recent_failures, limit)
   end
 
+  @doc """
+  Fetches 7-day hourly trend data for sparklines.
+
+  Returns a list of hourly aggregates with success counts for visualization.
+  Each data point represents one hour, with the most recent hour last.
+
+  ## Options
+
+    * `:hours` - Number of hours to look back (default: 168 = 7 days)
+
+  ## Examples
+
+      {:ok, trend} = Health.trend_data("cinema_city")
+      # => %{
+      #   source: "cinema_city",
+      #   hours: 168,
+      #   data_points: [%{hour: ~U[2024-01-01 00:00:00Z], success_rate: 95.5, total: 20}, ...]
+      #   trend_direction: :improving  # :improving | :stable | :degrading
+      # }
+  """
+  def trend_data(source, opts \\ []) do
+    hours = Keyword.get(opts, :hours, 168)
+
+    case get_source_pattern(source) do
+      {:ok, worker_pattern} ->
+        from_time = DateTime.add(DateTime.utc_now(), -hours, :hour)
+        to_time = DateTime.utc_now()
+
+        data_points = fetch_hourly_aggregates(worker_pattern, from_time, to_time)
+        trend_direction = calculate_trend_direction(data_points)
+
+        {:ok,
+         %{
+           source: source,
+           hours: hours,
+           data_points: data_points,
+           trend_direction: trend_direction
+         }}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @doc """
+  Fetches trend data for multiple sources in parallel.
+
+  Returns a map of source -> trend data for efficient batch loading.
+
+  ## Examples
+
+      {:ok, trends} = Health.trends_for_sources(["cinema_city", "kino_krakow"])
+      # => %{"cinema_city" => %{...}, "kino_krakow" => %{...}}
+  """
+  def trends_for_sources(sources, opts \\ []) when is_list(sources) do
+    results =
+      sources
+      |> Task.async_stream(
+        fn source ->
+          case trend_data(source, opts) do
+            {:ok, data} -> {source, data}
+            {:error, _} -> {source, nil}
+          end
+        end,
+        timeout: 10_000,
+        max_concurrency: 4
+      )
+      |> Enum.map(fn
+        {:ok, result} -> result
+        {:exit, _} -> {nil, nil}
+      end)
+      |> Enum.reject(fn {source, _} -> is_nil(source) end)
+      |> Map.new()
+
+    {:ok, results}
+  end
+
   # Private helpers
+
+  defp fetch_hourly_aggregates(worker_pattern, from_time, to_time) do
+    # Query to aggregate executions by hour
+    query =
+      from(j in JobExecutionSummary,
+        where: like(j.worker, ^worker_pattern),
+        where: j.attempted_at >= ^from_time and j.attempted_at <= ^to_time,
+        group_by: fragment("date_trunc('hour', ?)", j.attempted_at),
+        order_by: [asc: fragment("date_trunc('hour', ?)", j.attempted_at)],
+        select: %{
+          hour: fragment("date_trunc('hour', ?)", j.attempted_at),
+          total: count(j.id),
+          completed: count(fragment("CASE WHEN ? = 'completed' THEN 1 END", j.state))
+        }
+      )
+
+    Repo.replica().all(query)
+    |> Enum.map(fn row ->
+      success_rate =
+        if row.total > 0 do
+          row.completed / row.total * 100
+        else
+          100.0
+        end
+
+      %{
+        hour: row.hour,
+        total: row.total,
+        completed: row.completed,
+        success_rate: Float.round(success_rate, 1)
+      }
+    end)
+  end
+
+  defp calculate_trend_direction(data_points) when length(data_points) < 24 do
+    :stable
+  end
+
+  defp calculate_trend_direction(data_points) do
+    # Compare last 24 hours vs previous 24 hours
+    recent_points = Enum.take(data_points, -24)
+    older_points = data_points |> Enum.drop(-24) |> Enum.take(-24)
+
+    if Enum.empty?(older_points) or Enum.empty?(recent_points) do
+      :stable
+    else
+      recent_avg = average_success_rate(recent_points)
+      older_avg = average_success_rate(older_points)
+
+      cond do
+        recent_avg - older_avg > 3.0 -> :improving
+        older_avg - recent_avg > 3.0 -> :degrading
+        true -> :stable
+      end
+    end
+  end
+
+  defp average_success_rate([]), do: 100.0
+
+  defp average_success_rate(points) do
+    total_weight = points |> Enum.map(& &1.total) |> Enum.sum()
+
+    if total_weight > 0 do
+      weighted_sum =
+        points
+        |> Enum.map(fn p -> p.success_rate * p.total end)
+        |> Enum.sum()
+
+      weighted_sum / total_weight
+    else
+      100.0
+    end
+  end
 
   # Dynamically generate worker pattern from source name
   # e.g., "cinema_city" -> "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%"
