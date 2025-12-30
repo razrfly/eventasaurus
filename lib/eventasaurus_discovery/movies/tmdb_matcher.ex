@@ -100,15 +100,80 @@ defmodule EventasaurusDiscovery.Movies.TmdbMatcher do
 
   @doc """
   Find or create movie in our database from TMDB ID.
+
+  ## Options
+
+  - `:matched_by_provider` - Provider that matched this movie (e.g., "tmdb", "omdb", "imdb", "now_playing")
+  - `:imdb_id` - IMDB ID if available from the provider (e.g., "tt0172495")
+
+  These are stored in dedicated columns for efficient querying and analytics.
   """
-  def find_or_create_movie(tmdb_id) do
-    case MovieStore.find_or_create_by_tmdb_id(tmdb_id) do
+  def find_or_create_movie(tmdb_id, opts \\ []) do
+    # Extract provider tracking info from opts
+    provider_attrs = build_provider_attrs(opts)
+
+    case MovieStore.find_or_create_by_tmdb_id(tmdb_id, provider_attrs) do
       {:ok, movie} ->
-        {:ok, movie}
+        # If movie already existed but doesn't have provider info, update it
+        maybe_update_provider_info(movie, provider_attrs)
 
       {:error, _} ->
-        # If movie doesn't exist, fetch from TMDB and create
-        create_from_tmdb(tmdb_id)
+        # If movie doesn't exist, fetch from TMDB and create with provider info
+        create_from_tmdb(tmdb_id, provider_attrs)
+    end
+  end
+
+  # Build provider attributes map from options
+  defp build_provider_attrs(opts) do
+    attrs = %{}
+
+    attrs =
+      if provider = Keyword.get(opts, :matched_by_provider) do
+        Map.put(attrs, :matched_by_provider, provider)
+      else
+        attrs
+      end
+
+    if imdb_id = Keyword.get(opts, :imdb_id) do
+      Map.put(attrs, :imdb_id, imdb_id)
+    else
+      attrs
+    end
+  end
+
+  # Update existing movie with provider info if it's missing
+  defp maybe_update_provider_info(movie, provider_attrs) when map_size(provider_attrs) == 0 do
+    {:ok, movie}
+  end
+
+  defp maybe_update_provider_info(movie, provider_attrs) do
+    # Only update if the movie doesn't already have this info
+    updates =
+      Enum.reduce(provider_attrs, %{}, fn {key, value}, acc ->
+        current_value = Map.get(movie, key)
+
+        if is_nil(current_value) or current_value == "" do
+          Map.put(acc, key, value)
+        else
+          acc
+        end
+      end)
+
+    if map_size(updates) > 0 do
+      # Add matched_at if we're setting matched_by_provider
+      updates =
+        if Map.has_key?(updates, :matched_by_provider) and is_nil(movie.matched_at) do
+          Map.put(updates, :matched_at, DateTime.utc_now())
+        else
+          updates
+        end
+
+      case MovieStore.update_movie(movie, updates) do
+        {:ok, updated_movie} -> {:ok, updated_movie}
+        {:error, _} -> {:ok, movie}
+      end
+    else
+      {:ok, movie}
     end
   end
 
@@ -240,9 +305,12 @@ defmodule EventasaurusDiscovery.Movies.TmdbMatcher do
     |> String.trim()
   end
 
-  # Create movie from TMDB data
-  defp create_from_tmdb(tmdb_id) do
+  # Create movie from TMDB data with provider tracking
+  defp create_from_tmdb(tmdb_id, provider_attrs) do
     with {:ok, details} <- TmdbService.get_movie_details(tmdb_id) do
+      # Extract IMDB ID from TMDB details if available
+      imdb_id = details[:imdb_id] || details["imdb_id"]
+
       attrs = %{
         tmdb_id: tmdb_id,
         title: details[:title],
@@ -260,7 +328,43 @@ defmodule EventasaurusDiscovery.Movies.TmdbMatcher do
         }
       }
 
+      # Add provider tracking attrs
+      attrs =
+        attrs
+        |> maybe_add_imdb_id(imdb_id, provider_attrs)
+        |> maybe_add_provider(provider_attrs)
+        |> maybe_add_matched_at(provider_attrs)
+
       MovieStore.create_movie(attrs)
+    end
+  end
+
+  # Add IMDB ID - prefer from provider_attrs, fallback to TMDB details
+  defp maybe_add_imdb_id(attrs, tmdb_imdb_id, provider_attrs) do
+    imdb_id = Map.get(provider_attrs, :imdb_id) || tmdb_imdb_id
+
+    if imdb_id && imdb_id != "" do
+      Map.put(attrs, :imdb_id, imdb_id)
+    else
+      attrs
+    end
+  end
+
+  # Add matched_by_provider from provider_attrs
+  defp maybe_add_provider(attrs, provider_attrs) do
+    if provider = Map.get(provider_attrs, :matched_by_provider) do
+      Map.put(attrs, :matched_by_provider, provider)
+    else
+      attrs
+    end
+  end
+
+  # Add matched_at timestamp if provider is set
+  defp maybe_add_matched_at(attrs, _provider_attrs) do
+    if Map.has_key?(attrs, :matched_by_provider) do
+      Map.put(attrs, :matched_at, DateTime.utc_now())
+    else
+      attrs
     end
   end
 

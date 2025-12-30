@@ -175,7 +175,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
     week_failures = get_failures_by_category(week_start, now)
 
     # Calculate averages (7-day total / 7)
-    categories = ["movie_not_ready", "duplicate_movie_error", "no_results", "api_timeout", "unknown"]
+    categories = ["movie_not_ready", "duplicate_movie_error", "no_results", "low_confidence", "api_timeout", "unknown"]
 
     Enum.map(categories, fn category ->
       today_count = Map.get(today_failures, category, 0)
@@ -230,8 +230,14 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         "duplicate_movie_error"
 
       String.contains?(msg, "no results") or String.contains?(msg, "not found") or
-          String.contains?(msg, "No movie found") ->
+          String.contains?(msg, "No movie found") or String.contains?(msg, "tmdb_no_results") ->
         "no_results"
+
+      String.contains?(msg, "needs_review") or String.contains?(msg, "tmdb_needs_review") ->
+        "low_confidence"
+
+      String.contains?(msg, "low_confidence") or String.contains?(msg, "tmdb_low_confidence") ->
+        "low_confidence"
 
       String.contains?(msg, "timeout") or String.contains?(msg, "HTTPoison") or
           String.contains?(msg, "connection") ->
@@ -260,6 +266,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   defp format_category_label("movie_not_ready"), do: "Movie Not Ready"
   defp format_category_label("duplicate_movie_error"), do: "Duplicate Error"
   defp format_category_label("no_results"), do: "No Results"
+  defp format_category_label("low_confidence"), do: "Low Confidence"
   defp format_category_label("api_timeout"), do: "API Timeout"
   defp format_category_label("unknown"), do: "Unknown"
   defp format_category_label(other), do: Phoenix.Naming.humanize(other)
@@ -267,6 +274,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   defp category_color("movie_not_ready"), do: "#f59e0b"
   defp category_color("duplicate_movie_error"), do: "#ef4444"
   defp category_color("no_results"), do: "#8b5cf6"
+  defp category_color("low_confidence"), do: "#ec4899"
   defp category_color("api_timeout"), do: "#3b82f6"
   defp category_color("unknown"), do: "#6b7280"
   defp category_color(_), do: "#6b7280"
