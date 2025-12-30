@@ -23,9 +23,12 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
       }
 
       case MovieLookupService.lookup(query) do
-        {:ok, tmdb_id, confidence} ->
+        {:ok, tmdb_id, confidence, provider, extra} ->
           # High confidence match found
-          IO.puts("Found TMDB ID: \#{tmdb_id} with \#{confidence * 100}% confidence")
+          # provider is "tmdb", "omdb", or "imdb"
+          # extra contains %{imdb_id: "tt..."} if available
+          IO.puts("Found TMDB ID: \#{tmdb_id} via \#{provider} with \#{confidence * 100}% confidence")
+          IO.puts("IMDB ID: \#{extra[:imdb_id]}")
 
         {:needs_review, candidates} ->
           # Multiple possible matches need manual review
