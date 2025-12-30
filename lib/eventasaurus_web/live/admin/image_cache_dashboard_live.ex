@@ -97,7 +97,10 @@ defmodule EventasaurusWeb.Admin.ImageCacheDashboardLive do
         |> assign(:by_image_type, stats[:by_image_type] || stats["by_image_type"] || [])
         |> assign(:recent_activity, stats[:recent_activity] || stats["recent_activity"] || [])
         |> assign(:recent_failures, stats[:recent_failures] || stats["recent_failures"] || [])
-        |> assign(:failure_breakdown, stats[:failure_breakdown] || stats["failure_breakdown"] || [])
+        |> assign(
+          :failure_breakdown,
+          stats[:failure_breakdown] || stats["failure_breakdown"] || []
+        )
         |> assign(:last_updated, snapshot.computed_at)
         |> assign(:is_stale, is_stale)
         |> assign(:error, nil)
