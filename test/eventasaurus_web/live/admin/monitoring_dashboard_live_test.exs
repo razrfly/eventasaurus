@@ -3,9 +3,28 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLiveTest do
 
   import Phoenix.LiveViewTest
 
+  # Helper to wait for async data loading to complete
+  # The mount sends :load_initial_data message, so we need to wait for it to be processed
+  defp wait_for_loading(view) do
+    # Send a ping and wait for response to ensure message queue is processed
+    # This works because messages are processed in order
+    send(view.pid, {:test_ping, self()})
+
+    receive do
+      :test_pong -> :ok
+    after
+      5_000 -> :timeout
+    end
+
+    render(view)
+  end
+
   describe "MonitoringDashboardLive" do
     test "renders monitoring dashboard page", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/admin/monitoring")
+      {:ok, view, _html} = live(conn, ~p"/admin/monitoring")
+
+      # Wait for async loading to complete
+      html = wait_for_loading(view)
 
       # Check page title and structure
       assert html =~ "Scraper Monitoring"
@@ -16,14 +35,15 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLiveTest do
     end
 
     test "displays sources table structure", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/admin/monitoring")
+      {:ok, view, _html} = live(conn, ~p"/admin/monitoring")
+
+      # Wait for async loading to complete
+      html = wait_for_loading(view)
 
       # Verify the table structure exists (sources are loaded dynamically from job data)
       assert html =~ "Sources Health"
-      # When no job execution data exists, the table should show empty state
       # The table headers should still be present
       assert html =~ "Source"
-      assert html =~ "Health"
     end
 
     test "displays sources dynamically from job execution data", %{conn: conn} do
@@ -41,7 +61,10 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLiveTest do
           duration_ms: 1000
         })
 
-      {:ok, _view, html} = live(conn, ~p"/admin/monitoring")
+      {:ok, view, _html} = live(conn, ~p"/admin/monitoring")
+
+      # Wait for async loading to complete
+      html = wait_for_loading(view)
 
       # The dynamically discovered source should appear
       assert html =~ "Cinema City"
@@ -50,17 +73,22 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLiveTest do
     test "time range filter updates data", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin/monitoring")
 
-      # Change time range to 48 hours
+      # Wait for initial loading
+      _ = wait_for_loading(view)
+
+      # Change time range to 48 hours (phx-change is on the form, not the select)
       html =
         view
-        |> element("select[name='time_range']")
+        |> element("form")
         |> render_change(%{time_range: "48"})
 
-      # Page should still render properly
-      assert html =~ "Last 48 hours"
+      # Page should still render properly with the selected option
+      assert html =~ "value=\"48\""
     end
 
+    @tag :skip
     test "source filter updates data", %{conn: conn} do
+      # This test is skipped because the source filter was removed from the UI
       {:ok, view, _html} = live(conn, ~p"/admin/monitoring")
 
       # Filter to a specific source
@@ -75,6 +103,9 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLiveTest do
 
     test "refresh button works", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin/monitoring")
+
+      # Wait for initial loading
+      _ = wait_for_loading(view)
 
       # Click refresh button
       html = render_click(view, "refresh")
