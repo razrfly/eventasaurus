@@ -51,26 +51,74 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("confirm_match", %{"id" => id}, socket) do
+    case MatchingStats.confirm_movie_match(String.to_integer(id)) do
+      {:ok, _movie} ->
+        socket =
+          socket
+          |> put_flash(:info, "Movie match confirmed!")
+          |> load_data()
+
+        {:noreply, socket}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to confirm movie match")}
+    end
+  end
+
+  @impl true
+  def handle_event("reject_match", %{"id" => id}, socket) do
+    case MatchingStats.reject_movie_match(String.to_integer(id)) do
+      {:ok, _movie} ->
+        socket =
+          socket
+          |> put_flash(:info, "Movie marked for re-matching")
+          |> load_data()
+
+        {:noreply, socket}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to reject movie match")}
+    end
+  end
+
+  # Max concurrency reduced to 2 to avoid exhausting the connection pool
+  # (replica pool is only 5 connections, matching MonitoringDashboardLive pattern)
+  @max_concurrency 2
+  @task_timeout 15_000
+
   defp load_data(socket) do
     hours = time_range_to_hours(socket.assigns.time_range)
 
-    # Load all data in parallel for performance
-    tasks = [
-      Task.async(fn -> {:overview, MatchingStats.get_overview_stats(hours)} end),
-      Task.async(fn -> {:providers, MatchingStats.get_provider_stats(hours)} end),
-      Task.async(fn -> {:confidence, MatchingStats.get_confidence_distribution(hours)} end),
-      Task.async(fn -> {:failures, MatchingStats.get_recent_failures(20)} end),
-      Task.async(fn -> {:needs_review, MatchingStats.get_movies_needing_review(20)} end),
-      Task.async(fn -> {:recent_matches, MatchingStats.get_recent_matches(10)} end),
-      Task.async(fn -> {:hourly, MatchingStats.get_hourly_counts(min(hours, 48))} end),
-      Task.async(fn -> {:total_movies, MatchingStats.get_total_movie_count()} end),
-      Task.async(fn -> {:duplicates, MatchingStats.get_duplicate_film_id_count()} end)
+    # Load all data with controlled concurrency to avoid connection pool exhaustion
+    data_loaders = [
+      {:overview, fn -> MatchingStats.get_overview_stats(hours) end},
+      {:providers, fn -> MatchingStats.get_provider_stats(hours) end},
+      {:confidence, fn -> MatchingStats.get_confidence_distribution(hours) end},
+      {:failures, fn -> MatchingStats.get_recent_failures(20) end},
+      {:failure_analysis, fn -> MatchingStats.get_failure_analysis(hours) end},
+      {:needs_review, fn -> MatchingStats.get_movies_needing_review(20) end},
+      {:recent_matches, fn -> MatchingStats.get_recent_matches(10) end},
+      {:hourly, fn -> MatchingStats.get_hourly_counts(min(hours, 48)) end},
+      {:total_movies, fn -> MatchingStats.get_total_movie_count() end},
+      {:duplicates, fn -> MatchingStats.get_duplicate_film_id_count() end}
     ]
 
     results =
-      tasks
-      |> Task.await_many(15_000)
-      |> Enum.into(%{})
+      data_loaders
+      |> Task.async_stream(
+        fn {key, loader} -> {key, loader.()} end,
+        max_concurrency: @max_concurrency,
+        timeout: @task_timeout,
+        on_timeout: :kill_task
+      )
+      |> Enum.map(fn
+        {:ok, {key, value}} -> {key, value}
+        {:exit, _reason} -> {nil, nil}
+      end)
+      |> Enum.reject(fn {key, _} -> is_nil(key) end)
+      |> Map.new()
 
     socket
     |> assign(:loading, false)
@@ -78,6 +126,7 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     |> assign(:providers, results[:providers])
     |> assign(:confidence_distribution, results[:confidence])
     |> assign(:failures, results[:failures])
+    |> assign(:failure_analysis, results[:failure_analysis])
     |> assign(:needs_review, results[:needs_review])
     |> assign(:recent_matches, results[:recent_matches])
     |> assign(:hourly_counts, results[:hourly])
@@ -187,24 +236,50 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <!-- Recent Failures -->
+            <!-- Failure Analysis Panel -->
             <div class="bg-gray-800 rounded-lg p-6">
               <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
                 <span class="text-red-400">●</span>
-                Recent Failures
-                <span class="text-sm font-normal text-gray-400">({length(@failures)})</span>
+                Failure Analysis
+                <span class="text-sm font-normal text-gray-400">(7-day trend)</span>
               </h2>
-              <div class="space-y-3 max-h-96 overflow-y-auto">
-                <%= if Enum.empty?(@failures) do %>
+
+              <!-- Header Row -->
+              <div class="grid grid-cols-4 gap-2 text-xs text-gray-400 mb-2 px-2">
+                <div>Category</div>
+                <div class="text-right">Today</div>
+                <div class="text-right">7d Avg</div>
+                <div class="text-right">Trend</div>
+              </div>
+
+              <div class="space-y-2">
+                <%= if Enum.all?(@failure_analysis, fn a -> a.today == 0 and a.week_avg == 0 end) do %>
                   <div class="text-gray-400 text-center py-8">
-                    No failures in this period 🎉
+                    No failures to analyze 🎉
                   </div>
                 <% else %>
-                  <%= for failure <- @failures do %>
-                    <.failure_row failure={failure} />
+                  <%= for analysis <- @failure_analysis do %>
+                    <.failure_analysis_row analysis={analysis} />
                   <% end %>
                 <% end %>
               </div>
+
+              <!-- Recent Failures Expandable -->
+              <%= if length(@failures) > 0 do %>
+                <div class="mt-4 pt-4 border-t border-gray-700">
+                  <details class="group">
+                    <summary class="cursor-pointer text-sm text-gray-400 hover:text-white flex items-center gap-2">
+                      <span class="group-open:rotate-90 transition-transform">▶</span>
+                      Recent Failures ({length(@failures)})
+                    </summary>
+                    <div class="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                      <%= for failure <- Enum.take(@failures, 5) do %>
+                        <.failure_row failure={failure} />
+                      <% end %>
+                    </div>
+                  </details>
+                </div>
+              <% end %>
             </div>
 
             <!-- Movies Needing Review -->
@@ -341,7 +416,8 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
   end
 
   defp confidence_chart(assigns) do
-    buckets = ["95-100%", "90-95%", "85-90%", "80-85%", "70-80%", "<70%"]
+    # 5 buckets per Issue #3083 spec: ≥95%, 85-94%, 70-84%, 50-69%, <50%
+    buckets = ["≥95%", "85-94%", "70-84%", "50-69%", "<50%"]
     max_count = assigns.distribution |> Map.values() |> Enum.max(fn -> 1 end)
     assigns = assign(assigns, :buckets, buckets) |> assign(:max_count, max_count)
 
@@ -351,7 +427,7 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
         <% count = Map.get(@distribution, bucket, 0) %>
         <% width = if @max_count > 0, do: count / @max_count * 100, else: 0 %>
         <div class="flex items-center gap-2">
-          <div class="w-20 text-xs text-gray-400">{bucket}</div>
+          <div class="w-16 text-xs text-gray-400">{bucket}</div>
           <div class="flex-1 bg-gray-700 rounded-full h-4 overflow-hidden">
             <div
               class={"h-full rounded-full #{confidence_bar_color(bucket)}"}
@@ -385,6 +461,58 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     </div>
     """
   end
+
+  defp failure_analysis_row(assigns) do
+    ~H"""
+    <div class="grid grid-cols-4 gap-2 items-center py-2 px-2 rounded hover:bg-gray-700/50 transition-colors">
+      <!-- Category with color indicator -->
+      <div class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full" style={"background-color: #{@analysis.color}"}></div>
+        <span class="text-sm truncate" title={@analysis.label}>{@analysis.label}</span>
+      </div>
+
+      <!-- Today count -->
+      <div class="text-right text-sm font-medium">
+        {@analysis.today}
+      </div>
+
+      <!-- 7-day average -->
+      <div class="text-right text-sm text-gray-400">
+        {format_avg(@analysis.week_avg)}
+      </div>
+
+      <!-- Trend indicator -->
+      <div class="text-right">
+        <.trend_indicator trend={@analysis.trend} pct={@analysis.trend_pct} />
+      </div>
+    </div>
+    """
+  end
+
+  defp trend_indicator(assigns) do
+    {arrow, color} =
+      case assigns.trend do
+        :up -> {"↑", "text-red-400"}
+        :down -> {"↓", "text-green-400"}
+        :stable -> {"→", "text-gray-400"}
+      end
+
+    assigns = assign(assigns, :arrow, arrow) |> assign(:color, color)
+
+    ~H"""
+    <span class={"text-sm font-medium #{@color}"} title={"#{@pct}% vs 7d avg"}>
+      {@arrow}
+      <span class="text-xs ml-0.5">
+        <%= if @pct > 0 do %>
+          {trunc(@pct)}%
+        <% end %>
+      </span>
+    </span>
+    """
+  end
+
+  defp format_avg(avg) when avg == 0.0, do: "0"
+  defp format_avg(avg), do: :erlang.float_to_binary(avg, decimals: 1)
 
   defp failure_row(assigns) do
     ~H"""
@@ -439,6 +567,29 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
           </span>
         <% end %>
       </div>
+      <div class="mt-3 flex items-center gap-2 border-t border-gray-600 pt-3">
+        <button
+          phx-click="confirm_match"
+          phx-value-id={@movie.id}
+          class="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-sm rounded transition-colors"
+        >
+          ✓ Confirm
+        </button>
+        <button
+          phx-click="reject_match"
+          phx-value-id={@movie.id}
+          class="px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-sm rounded transition-colors"
+        >
+          ✗ Reject
+        </button>
+        <a
+          href={"https://www.themoviedb.org/search?query=#{URI.encode(@movie.title || "")}"}
+          target="_blank"
+          class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded transition-colors"
+        >
+          Search TMDB
+        </a>
+      </div>
     </div>
     """
   end
@@ -484,7 +635,13 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
   defp format_relative_time(nil), do: "-"
 
-  defp format_relative_time(dt) do
+  defp format_relative_time(%NaiveDateTime{} = ndt) do
+    # Convert NaiveDateTime to DateTime (assuming UTC)
+    {:ok, dt} = DateTime.from_naive(ndt, "Etc/UTC")
+    format_relative_time(dt)
+  end
+
+  defp format_relative_time(%DateTime{} = dt) do
     diff = DateTime.diff(DateTime.utc_now(), dt, :second)
 
     cond do
@@ -504,12 +661,13 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
   defp success_rate_color(rate) when rate >= 60, do: "#eab308"
   defp success_rate_color(_), do: "#ef4444"
 
-  defp confidence_bar_color("95-100%"), do: "bg-green-500"
-  defp confidence_bar_color("90-95%"), do: "bg-green-400"
-  defp confidence_bar_color("85-90%"), do: "bg-blue-500"
-  defp confidence_bar_color("80-85%"), do: "bg-blue-400"
-  defp confidence_bar_color("70-80%"), do: "bg-yellow-500"
-  defp confidence_bar_color(_), do: "bg-red-500"
+  # 5 buckets per Issue #3083 spec
+  defp confidence_bar_color("≥95%"), do: "bg-green-500"
+  defp confidence_bar_color("85-94%"), do: "bg-blue-500"
+  defp confidence_bar_color("70-84%"), do: "bg-yellow-500"
+  defp confidence_bar_color("50-69%"), do: "bg-orange-500"
+  defp confidence_bar_color("<50%"), do: "bg-red-500"
+  defp confidence_bar_color(_), do: "bg-gray-500"
 
   defp provider_badge_class("tmdb"), do: "bg-blue-500/20 text-blue-400"
   defp provider_badge_class("omdb"), do: "bg-yellow-500/20 text-yellow-400"
