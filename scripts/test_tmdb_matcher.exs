@@ -127,20 +127,21 @@ defmodule TmdbMatcherTest do
     IO.puts("")
 
     case TmdbMatcher.match_movie(movie_data) do
-      {:ok, tmdb_id, confidence} ->
+      {:ok, tmdb_id, confidence, provider} ->
         IO.puts("✅ MATCHED!")
         IO.puts("  TMDB ID: #{tmdb_id}")
         IO.puts("  Confidence: #{Float.round(confidence * 100, 1)}%")
+        IO.puts("  Provider: #{provider}")
 
         # Get movie title for verification
         case TmdbMatcher.find_or_create_movie(tmdb_id) do
           {:ok, matched_movie} ->
             IO.puts("  Movie: #{matched_movie.title}")
-            {:matched, %{tmdb_id: tmdb_id, confidence: confidence, title: matched_movie.title}}
+            {:matched, %{tmdb_id: tmdb_id, confidence: confidence, title: matched_movie.title, provider: provider}}
 
           {:error, reason} ->
             IO.puts("  ⚠️  Could not fetch movie details: #{inspect(reason)}")
-            {:matched, %{tmdb_id: tmdb_id, confidence: confidence}}
+            {:matched, %{tmdb_id: tmdb_id, confidence: confidence, provider: provider}}
         end
 
       {:needs_review, _movie_data, candidates} ->

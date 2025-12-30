@@ -36,10 +36,11 @@ case HTTPoison.get(url, headers, timeout: Config.timeout()) do
     IO.puts("\n🔍 Attempting TMDB match...")
 
     case TmdbMatcher.match_movie(movie_data) do
-      {:ok, tmdb_id, confidence} ->
+      {:ok, tmdb_id, confidence, provider} ->
         IO.puts("✅ SUCCESS! Matched with high confidence")
         IO.puts("   TMDB ID: #{tmdb_id}")
         IO.puts("   Confidence: #{Float.round(confidence * 100, 1)}%")
+        IO.puts("   Provider: #{provider}")
 
         # Fetch movie details to verify
         case TmdbMatcher.find_or_create_movie(tmdb_id) do

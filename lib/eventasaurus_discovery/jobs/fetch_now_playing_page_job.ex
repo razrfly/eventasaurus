@@ -60,12 +60,14 @@ defmodule EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob do
 
   alias EventasaurusWeb.Services.TmdbService
   alias EventasaurusDiscovery.Movies.TmdbMatcher
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     region = args["region"]
     page = args["page"]
     coordinator_job_id = args["coordinator_job_id"]
+    external_id = "now_playing_page_#{region}_#{page}_#{Date.utc_today()}"
 
     Logger.info(
       "📄 Fetching now playing page #{page} for #{region} (coordinator: #{coordinator_job_id})"
@@ -95,6 +97,13 @@ defmodule EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob do
           "✅ Synced #{synced_count}/#{length(movies)} movies from page #{page} for #{region}"
         )
 
+        MetricsTracker.record_success(job, external_id, %{
+          page: page,
+          region: region,
+          movies_synced: synced_count,
+          movies_found: length(movies)
+        })
+
         {:ok, %{page: page, region: region, movies_synced: synced_count}}
 
       {:error, reason} ->
@@ -110,11 +119,23 @@ defmodule EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob do
             "❌ Page #{page} failed: Rate limit exceeded (coordinator: #{coordinator_job_id})"
           )
 
+          MetricsTracker.record_failure(job, :rate_limited, external_id, %{
+            page: page,
+            region: region,
+            error_category: :rate_limited
+          })
+
           {:error, :rate_limited}
         else
           Logger.error(
             "❌ Page #{page} failed: #{inspect(reason)} (coordinator: #{coordinator_job_id})"
           )
+
+          MetricsTracker.record_failure(job, reason, external_id, %{
+            page: page,
+            region: region,
+            error_category: :api_error
+          })
 
           {:error, reason}
         end

@@ -58,7 +58,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
     # Match to TMDB
     result =
       case TmdbMatcher.match_movie(movie_data) do
-        {:ok, tmdb_id, confidence} when confidence >= 0.50 ->
+        {:ok, tmdb_id, confidence, provider} when confidence >= 0.50 ->
           # Lowered from 0.60 to 0.50 to capture more valid matches
           # Match types:
           # - High confidence (≥70%): Standard match
@@ -75,15 +75,16 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
             {:ok, movie} ->
               # Enhanced logging with more details for analysis
               Logger.info("""
-              ✅ Auto-matched (#{match_type}): #{movie.title}
+              ✅ Auto-matched (#{match_type}) via #{provider}: #{movie.title}
                  Polish title: #{polish_title}
                  Confidence: #{trunc(confidence * 100)}%
                  TMDB ID: #{tmdb_id}
                  Cinema City ID: #{cinema_city_film_id}
+                 Provider: #{provider}
               """)
 
-              # Store Cinema City film_id in movie metadata for later lookups
-              store_cinema_city_film_id(movie, cinema_city_film_id, source_id)
+              # Store Cinema City film_id and provider in movie metadata for later lookups
+              store_cinema_city_film_id(movie, cinema_city_film_id, source_id, provider)
 
               {:ok,
                %{
@@ -93,7 +94,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
                  cinema_city_film_id: cinema_city_film_id,
                  tmdb_id: tmdb_id,
                  match_type: match_type,
-                 polish_title: polish_title
+                 polish_title: polish_title,
+                 matched_by_provider: provider
                }}
 
             {:error, reason} ->
@@ -243,11 +245,11 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
   # @doc false - Internal function, public for testing only
   def extract_original_title(_polish_title, _language_info), do: nil
 
-  # Store Cinema City film_id in movie metadata for later database lookups
+  # Store Cinema City film_id and matched_by_provider in movie metadata for later database lookups
   # IMPORTANT: Only store if the movie doesn't already have a DIFFERENT cinema_city_film_id
   # This prevents data corruption when the same TMDB movie is incorrectly matched
   # to multiple Cinema City films
-  defp store_cinema_city_film_id(movie, cinema_city_film_id, source_id) do
+  defp store_cinema_city_film_id(movie, cinema_city_film_id, source_id, provider \\ nil) do
     current_metadata = movie.metadata || %{}
     existing_film_id = Map.get(current_metadata, "cinema_city_film_id")
 
@@ -281,11 +283,12 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
           current_metadata
           |> Map.put("cinema_city_film_id", cinema_city_film_id)
           |> Map.put("cinema_city_source_id", source_id)
+          |> maybe_put_provider(provider)
 
         case MovieStore.update_movie(movie, %{metadata: updated_metadata}) do
           {:ok, _updated_movie} ->
             Logger.debug(
-              "💾 Stored Cinema City film_id in movie metadata: #{cinema_city_film_id} -> #{movie.id}"
+              "💾 Stored Cinema City film_id in movie metadata: #{cinema_city_film_id} -> #{movie.id} (provider: #{provider || "unknown"})"
             )
 
             :ok
@@ -297,6 +300,17 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
 
             :error
         end
+    end
+  end
+
+  # Only add matched_by_provider if not already set (preserve original match provider)
+  defp maybe_put_provider(metadata, nil), do: metadata
+
+  defp maybe_put_provider(metadata, provider) do
+    if Map.has_key?(metadata, "matched_by_provider") do
+      metadata
+    else
+      Map.put(metadata, "matched_by_provider", provider)
     end
   end
 end

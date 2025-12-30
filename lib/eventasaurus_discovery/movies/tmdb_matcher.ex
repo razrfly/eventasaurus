@@ -54,9 +54,18 @@ defmodule EventasaurusDiscovery.Movies.TmdbMatcher do
 
   ## Returns
 
-  - `{:ok, tmdb_id, confidence}` - High confidence match
+  - `{:ok, tmdb_id, confidence, provider}` - High confidence match with provider name
   - `{:needs_review, movie_data, candidates}` - Low confidence, manual review needed
   - `{:error, reason}` - No match found or error
+
+  The `provider` field indicates which provider found the match:
+  - `"tmdb"` - TMDB (free, primary)
+  - `"omdb"` - OMDb (paid, secondary)
+  - `"imdb"` - IMDB via Zyte (paid, tertiary)
+  - `"now_playing"` - Matched against pre-synced Now Playing database
+
+  Note: This function returns a 4-tuple for backward compatibility.
+  For access to extra data like imdb_id, use MovieLookupService.lookup/2 directly.
   """
   def match_movie(movie_data) do
     # Validate we have at least one title
@@ -64,8 +73,9 @@ defmodule EventasaurusDiscovery.Movies.TmdbMatcher do
       {:ok, _title} ->
         # Delegate to MovieLookupService
         case MovieLookupService.lookup(movie_data) do
-          {:ok, tmdb_id, confidence} ->
-            {:ok, tmdb_id, confidence}
+          {:ok, tmdb_id, confidence, provider, _extra} ->
+            # Return 4-tuple for backward compatibility
+            {:ok, tmdb_id, confidence, provider}
 
           {:needs_review, candidates} ->
             # Convert to legacy format for backward compatibility
@@ -125,7 +135,7 @@ defmodule EventasaurusDiscovery.Movies.TmdbMatcher do
           "✨ Matched via Now Playing database: #{tmdb_id} (#{trunc(confidence * 100)}%)"
         )
 
-        {:ok, tmdb_id, confidence}
+        {:ok, tmdb_id, confidence, "now_playing"}
 
       _ ->
         {:error, :no_results}

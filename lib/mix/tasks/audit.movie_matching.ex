@@ -44,6 +44,7 @@ defmodule Mix.Tasks.Audit.MovieMatching do
   @shortdoc "Audit movie matching success rates"
 
   @impl Mix.Task
+  @spec run([binary()]) :: :ok
   def run(args) do
     Mix.Task.run("app.start")
 
