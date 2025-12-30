@@ -34,8 +34,21 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
       |> assign(:time_range, 24)
       |> assign(:loading, true)
       |> assign(:sources, sources)
-      |> load_dashboard_data()
-      |> assign(:loading, false)
+      |> assign(:health_results, %{})
+      |> assign(:error_results, %{})
+      |> assign(:trend_results, %{})
+      |> assign(:scheduler_health, %{sources: [], total_alerts: 0})
+      |> assign(:coverage_data, %{sources: [], total_alerts: 0})
+      |> assign(:overall_score, 0.0)
+      |> assign(:meeting_slo_count, 0)
+      |> assign(:at_risk_count, 0)
+      |> assign(:total_executions, 0)
+      |> assign(:total_failures, 0)
+      |> assign(:action_items, [])
+      |> assign(:top_errors, [])
+
+    # Load data asynchronously to avoid blocking mount and exhausting connection pool
+    send(self(), :load_initial_data)
 
     {:ok, socket}
   end
@@ -95,6 +108,16 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   end
 
   @impl true
+  def handle_info(:load_initial_data, socket) do
+    socket =
+      socket
+      |> load_dashboard_data()
+      |> assign(:loading, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info(:refresh_data, socket) do
     socket =
       socket
@@ -104,7 +127,20 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     {:noreply, socket}
   end
 
+  # Test helper - allows tests to wait for async loading to complete
+  # by sending a ping and waiting for pong (messages are processed in order)
+  @impl true
+  def handle_info({:test_ping, pid}, socket) do
+    send(pid, :test_pong)
+    {:noreply, socket}
+  end
+
   # Data loading
+
+  # Max concurrency reduced to 2 to avoid exhausting the connection pool (replica pool is only 5 connections)
+  # Running health + error + trend streams with 4 concurrent each would require 12+ connections
+  @max_concurrency 2
+  @task_timeout 15_000
 
   defp load_dashboard_data(socket) do
     hours = socket.assigns.time_range
@@ -113,7 +149,8 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     # Always check all sources
     sources_to_check = sources
 
-    # Load health data for all sources in parallel
+    # Load health data for all sources with reduced concurrency
+    # Using sequential streams (one at a time) to avoid connection pool exhaustion
     health_results =
       sources_to_check
       |> Task.async_stream(
@@ -128,8 +165,9 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
               {source, {:error, reason}}
           end
         end,
-        timeout: 10_000,
-        max_concurrency: 4
+        timeout: @task_timeout,
+        max_concurrency: @max_concurrency,
+        on_timeout: :kill_task
       )
       |> Enum.map(fn
         {:ok, result} -> result
@@ -138,7 +176,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
       |> Enum.reject(fn {source, _} -> is_nil(source) end)
       |> Map.new()
 
-    # Load error analysis for sources
+    # Load error analysis for sources - runs AFTER health to avoid concurrent pool exhaustion
     error_results =
       sources_to_check
       |> Task.async_stream(
@@ -153,8 +191,9 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
               {source, {:error, reason}}
           end
         end,
-        timeout: 10_000,
-        max_concurrency: 4
+        timeout: @task_timeout,
+        max_concurrency: @max_concurrency,
+        on_timeout: :kill_task
       )
       |> Enum.map(fn
         {:ok, result} -> result

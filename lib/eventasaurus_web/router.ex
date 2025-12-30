@@ -53,6 +53,9 @@ defmodule EventasaurusWeb.Router do
       live "/monitoring", Admin.MonitoringDashboardLive
       live "/monitoring/sources/:source_key", Admin.SourceDetailLive
 
+      # Movie Matching Dashboard (Issue #3067 - Epic #3077 Phase 3)
+      live "/movie-matching", Admin.MovieMatchingLive
+
       # Deprecated route redirects (Issue #3048 Phase 3)
       get "/scraper-logs", Admin.RedirectController, :to_monitoring
       get "/error-trends", Admin.RedirectController, :to_monitoring
@@ -163,6 +166,9 @@ defmodule EventasaurusWeb.Router do
       # Replaces deprecated /scraper-logs and /error-trends
       live "/monitoring", EventasaurusWeb.Admin.MonitoringDashboardLive
       live "/monitoring/sources/:source_key", EventasaurusWeb.Admin.SourceDetailLive
+
+      # Movie Matching Dashboard (Issue #3067 - Epic #3077 Phase 3)
+      live "/movie-matching", EventasaurusWeb.Admin.MovieMatchingLive
 
       # Deprecated route redirects (Issue #3048 Phase 3)
       get "/scraper-logs", EventasaurusWeb.Admin.RedirectController, :to_monitoring

@@ -304,6 +304,8 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
   @spec trends_for_sources([String.t()], keyword()) ::
           {:ok, %{String.t() => trend_data_result() | nil}}
   def trends_for_sources(sources, opts \\ []) when is_list(sources) do
+    # Reduced concurrency to avoid exhausting database connection pool
+    # The default pool size in production is only 5 for replica connections
     results =
       sources
       |> Task.async_stream(
@@ -313,8 +315,9 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
             {:error, _} -> {source, nil}
           end
         end,
-        timeout: 10_000,
-        max_concurrency: 4
+        timeout: 15_000,
+        max_concurrency: 2,
+        on_timeout: :kill_task
       )
       |> Enum.map(fn
         {:ok, result} -> result
@@ -379,7 +382,8 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
     baseline_end = DateTime.add(now, -baseline_offset_days, :day)
     baseline_start = DateTime.add(baseline_end, -hours, :hour)
 
-    # Fetch comparison data for all sources in parallel
+    # Fetch comparison data for all sources with reduced concurrency
+    # to avoid exhausting database connection pool
     comparisons =
       sources
       |> Task.async_stream(
@@ -387,7 +391,8 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
           compare_source_periods(source, current_start, current_end, baseline_start, baseline_end)
         end,
         timeout: 15_000,
-        max_concurrency: 4
+        max_concurrency: 2,
+        on_timeout: :kill_task
       )
       |> Enum.map(fn
         {:ok, result} -> result
