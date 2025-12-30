@@ -318,7 +318,9 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
     )
     |> Repo.all()
     |> Enum.map(fn movie ->
-      confidence = get_in(movie.metadata || %{}, ["match_confidence"]) || 0.0
+      # Default to 0.8 for consistency with get_recent_matches
+      # Movies without explicit match_confidence are assumed to be high-confidence TMDB matches
+      confidence = get_in(movie.metadata || %{}, ["match_confidence"]) || 0.8
 
       issues =
         []
