@@ -21,7 +21,6 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   alias EventasaurusDiscovery.Monitoring.Errors
   alias EventasaurusDiscovery.Monitoring.Scheduler
   alias EventasaurusDiscovery.Monitoring.Coverage
-  alias EventasaurusDiscovery.Monitoring.Chain
   alias EventasaurusWeb.Components.Sparkline
 
   @impl true
@@ -114,6 +113,11 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("navigate_to_source", %{"source" => source}, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/admin/monitoring/sources/#{source}")}
+  end
+
   # Data loading
 
   defp load_dashboard_data(socket) do
@@ -191,35 +195,18 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     # Load 7-day trend data for sparklines (always 168 hours for consistency)
     {:ok, trend_results} = Health.trends_for_sources(sources_to_check, hours: 168)
 
-    # Load 7-day health history for the chart (always 168 hours)
-    {:ok, health_history} = Health.health_history(hours: 168)
-
-    # Format chart data for Chart.js
-    chart_data = format_chart_data(health_history)
-
-    # Load baseline comparison (current vs 7 days ago)
-    {:ok, baseline_comparison} =
-      Health.baseline_comparison(hours: hours, sources: sources_to_check)
-
-    # Load scheduler health (SyncJob execution tracking)
+    # Load scheduler health (SyncJob execution tracking) - needed for status indicators
     {:ok, scheduler_health} = Scheduler.check(days: 7)
 
-    # Load date coverage (event coverage for next 7 days)
+    # Load date coverage (event coverage for next 7 days) - needed for status indicators
     {:ok, coverage_data} = Coverage.check(days: 7)
-
-    # Load recent job chains for chain-enabled sources (Phase 4.5)
-    job_chains = load_job_chains(sources_to_check)
 
     socket
     |> assign(:health_results, health_results)
     |> assign(:error_results, error_results)
     |> assign(:trend_results, trend_results)
-    |> assign(:health_history, health_history)
-    |> assign(:chart_data, chart_data)
-    |> assign(:baseline_comparison, baseline_comparison)
     |> assign(:scheduler_health, scheduler_health)
     |> assign(:coverage_data, coverage_data)
-    |> assign(:job_chains, job_chains)
     |> assign(:overall_score, overall_score)
     |> assign(:meeting_slo_count, meeting_slo_count)
     |> assign(:at_risk_count, at_risk_count)
@@ -303,31 +290,6 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     |> Enum.take(10)
   end
 
-  # Load recent job chains for sources that support chain analysis (Phase 4.5)
-  defp load_job_chains(sources) do
-    # Only load chains for sources known to have hierarchical job structures
-    chain_sources = ["cinema_city", "repertuary"]
-
-    sources
-    |> Enum.filter(&(&1 in chain_sources))
-    |> Enum.map(fn source ->
-      case Chain.recent_chains(source, limit: 3) do
-        {:ok, chains} ->
-          chains_with_stats =
-            Enum.map(chains, fn chain ->
-              stats = Chain.statistics(chain)
-              %{chain: chain, stats: stats, source: source}
-            end)
-
-          {source, chains_with_stats}
-
-        {:error, _} ->
-          {source, []}
-      end
-    end)
-    |> Map.new()
-  end
-
   # Template
 
   @impl true
@@ -400,38 +362,15 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         <% else %>
-          <!-- Health Trend Chart -->
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
-            <div class="flex items-center justify-between mb-4">
-              <div>
-                <h2 class="text-lg font-medium text-gray-900 dark:text-white">Health Score Trend</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400">7-day performance vs SLO target (95%)</p>
-              </div>
-              <div class="flex items-center gap-4">
-                <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  <span class="text-sm text-gray-600 dark:text-gray-400">Health Score</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <div class="w-3 h-0.5 bg-red-500 border-dashed border-t-2 border-red-500"></div>
-                  <span class="text-sm text-gray-600 dark:text-gray-400">SLO Target</span>
-                </div>
-                <div class={"text-2xl font-bold #{health_score_color(@overall_score)}"}>
-                  <%= @overall_score %>%
-                </div>
+          <!-- Summary Cards (4 cards - Health Score, SLO Compliance, Executions, Failures) -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <!-- Health Score -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Health Score</div>
+              <div class={"text-3xl font-bold mt-1 #{health_score_color(@overall_score)}"}>
+                <%= @overall_score %>%
               </div>
             </div>
-            <div class="h-64">
-              <canvas
-                id="health-trend-chart"
-                phx-hook="HealthTrendChart"
-                data-chart-data={Jason.encode!(@chart_data)}
-              ></canvas>
-            </div>
-          </div>
-
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
             <!-- SLO Status -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
@@ -495,16 +434,29 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                       <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                         P95
                       </th>
+                      <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" title="Scheduler Health">
+                        Sched
+                      </th>
+                      <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" title="Date Coverage">
+                        Cov
+                      </th>
                       <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                         SLO
                       </th>
+                      <th class="w-8"></th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                     <%= for source <- @sources do %>
                       <% result = Map.get(@health_results, source) %>
                       <% trend = Map.get(@trend_results, source) %>
-                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <% scheduler_status = get_scheduler_status(source, @scheduler_health) %>
+                      <% coverage_status = get_coverage_status(source, @coverage_data) %>
+                      <tr
+                        phx-click="navigate_to_source"
+                        phx-value-source={source}
+                        class="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors group"
+                      >
                         <td class="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
                           <%= format_source_name(source) %>
                         </td>
@@ -527,6 +479,12 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                               <%= format_duration(health.p95_duration) %>
                             </td>
                             <td class="px-4 py-2 text-center">
+                              <%= Phoenix.HTML.raw(render_status_indicator(scheduler_status)) %>
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                              <%= Phoenix.HTML.raw(render_status_indicator(coverage_status)) %>
+                            </td>
+                            <td class="px-4 py-2 text-center">
                               <%= if health.meeting_slos do %>
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                                   OK
@@ -538,18 +496,50 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                               <% end %>
                             </td>
                           <% {:error, :no_executions} -> %>
-                            <td colspan="3" class="px-4 py-2 text-sm text-gray-400 text-center">
+                            <td colspan="2" class="px-4 py-2 text-sm text-gray-400 text-center">
                               No data
                             </td>
+                            <td class="px-4 py-2 text-center">
+                              <%= Phoenix.HTML.raw(render_status_indicator(scheduler_status)) %>
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                              <%= Phoenix.HTML.raw(render_status_indicator(coverage_status)) %>
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                              <span class="text-gray-400">-</span>
+                            </td>
                           <% {:error, _} -> %>
-                            <td colspan="3" class="px-4 py-2 text-sm text-red-500 text-center">
-                              Error loading
+                            <td colspan="2" class="px-4 py-2 text-sm text-red-500 text-center">
+                              Error
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                              <%= Phoenix.HTML.raw(render_status_indicator(scheduler_status)) %>
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                              <%= Phoenix.HTML.raw(render_status_indicator(coverage_status)) %>
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                              <span class="text-gray-400">-</span>
                             </td>
                           <% nil -> %>
-                            <td colspan="3" class="px-4 py-2 text-sm text-gray-400 text-center">
+                            <td colspan="2" class="px-4 py-2 text-sm text-gray-400 text-center">
                               --
                             </td>
+                            <td class="px-4 py-2 text-center">
+                              <%= Phoenix.HTML.raw(render_status_indicator(scheduler_status)) %>
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                              <%= Phoenix.HTML.raw(render_status_indicator(coverage_status)) %>
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                              <span class="text-gray-400">-</span>
+                            </td>
                         <% end %>
+                        <td class="px-2 py-2 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                          </svg>
+                        </td>
                       </tr>
                     <% end %>
                   </tbody>
@@ -595,371 +585,32 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
             </div>
           </div>
 
-          <!-- Baseline Comparison (Phase 4.3) -->
-          <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-              <h2 class="text-lg font-medium text-gray-900 dark:text-white">
-                Baseline Comparison
-                <span class="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
-                  vs <%= @baseline_comparison.baseline_offset_days %> days ago
-                </span>
-              </h2>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Comparing <%= format_time_range(@time_range) %> performance against baseline
-              </p>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead class="bg-gray-50 dark:bg-gray-900">
-                  <tr>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Source
-                    </th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Current
-                    </th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Baseline
-                    </th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Change
-                    </th>
-                    <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                  <%= for comp <- @baseline_comparison.comparisons do %>
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td class="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
-                        <%= format_source_name(comp.source) %>
-                      </td>
-                      <td class="px-4 py-2 text-sm text-right">
-                        <%= if comp.current.success_rate do %>
-                          <span class={success_rate_color(comp.current.success_rate)}>
-                            <%= comp.current.success_rate %>%
-                          </span>
-                          <span class="text-gray-400 text-xs ml-1">
-                            (<%= comp.current.total %>)
-                          </span>
-                        <% else %>
-                          <span class="text-gray-400">--</span>
-                        <% end %>
-                      </td>
-                      <td class="px-4 py-2 text-sm text-right">
-                        <%= if comp.baseline.success_rate do %>
-                          <span class="text-gray-600 dark:text-gray-400">
-                            <%= comp.baseline.success_rate %>%
-                          </span>
-                          <span class="text-gray-400 text-xs ml-1">
-                            (<%= comp.baseline.total %>)
-                          </span>
-                        <% else %>
-                          <span class="text-gray-400">--</span>
-                        <% end %>
-                      </td>
-                      <td class="px-4 py-2 text-sm text-right">
-                        <%= if comp.changes.success_rate do %>
-                          <span class={change_color(comp.changes.success_rate)}>
-                            <%= format_change(comp.changes.success_rate) %>
-                          </span>
-                        <% else %>
-                          <span class="text-gray-400">--</span>
-                        <% end %>
-                      </td>
-                      <td class="px-4 py-2 text-center">
-                        <%= render_comparison_status(comp.status) %>
-                      </td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Scheduler Health (Phase 4.4) -->
-          <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h2 class="text-lg font-medium text-gray-900 dark:text-white">
-                    Scheduler Health
-                  </h2>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    SyncJob execution status for the last 7 days
-                  </p>
-                </div>
-                <%= if @scheduler_health.total_alerts > 0 do %>
-                  <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                    <%= @scheduler_health.total_alerts %> alerts
-                  </span>
-                <% else %>
-                  <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                    All OK
-                  </span>
-                <% end %>
-              </div>
-            </div>
-            <div class="p-4">
-              <%= for source <- @scheduler_health.sources do %>
-                <div class="mb-4 last:mb-0">
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-medium text-gray-900 dark:text-white">
-                      <%= source.display_name %>
-                    </span>
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                      <%= source.successful %>/<%= source.total_executions %> successful
-                      (<%= Float.round(source.success_rate, 1) %>%)
-                    </span>
-                  </div>
-                  <!-- Day-by-day grid -->
-                  <div class="grid grid-cols-7 gap-1">
-                    <%= for day <- source.days do %>
-                      <div
-                        class={"rounded p-2 text-center #{scheduler_day_color(day.status)}"}
-                        title={"#{day.date}: #{day.status}#{if day.jobs_spawned, do: ", #{day.jobs_spawned} jobs", else: ""}#{if day.error_message, do: " - #{day.error_message}", else: ""}"}
-                      >
-                        <div class="text-xs font-medium">
-                          <%= Calendar.strftime(day.date, "%a") %>
-                        </div>
-                        <div class="text-lg">
-                          <%= scheduler_status_icon(day.status) %>
-                        </div>
-                        <div class="text-xs opacity-75">
-                          <%= Calendar.strftime(day.date, "%d") %>
-                        </div>
-                      </div>
-                    <% end %>
-                  </div>
-                  <!-- Alerts for this source -->
-                  <%= if not Enum.empty?(source.alerts) do %>
-                    <div class="mt-2 space-y-1">
-                      <%= for alert <- source.alerts do %>
-                        <div class={"text-xs px-2 py-1 rounded #{scheduler_alert_color(alert.type)}"}>
-                          <%= alert.message %>
-                        </div>
-                      <% end %>
-                    </div>
-                  <% end %>
-                </div>
-              <% end %>
-            </div>
-          </div>
-
-          <!-- Date Coverage Heatmap (Phase 4.4) -->
-          <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h2 class="text-lg font-medium text-gray-900 dark:text-white">
-                    Date Coverage
-                  </h2>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Event coverage for the next 7 days
-                  </p>
-                </div>
-                <%= if @coverage_data.total_alerts > 0 do %>
-                  <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                    <%= @coverage_data.total_alerts %> gaps
-                  </span>
-                <% else %>
-                  <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                    Full coverage
-                  </span>
-                <% end %>
-              </div>
-            </div>
-            <div class="p-4">
-              <%= for source <- @coverage_data.sources do %>
-                <div class="mb-4 last:mb-0">
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-medium text-gray-900 dark:text-white">
-                      <%= source.display_name %>
-                    </span>
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                      <%= source.total_events %> events across <%= source.days_with_events %> days
-                      (avg: <%= source.avg_events_per_day %>/day)
-                    </span>
-                  </div>
-                  <!-- Day-by-day heatmap -->
-                  <div class="grid grid-cols-7 gap-1">
-                    <%= for day <- source.days do %>
-                      <div
-                        class={"rounded p-2 text-center #{coverage_day_color(day.status, day.coverage_pct)}"}
-                        title={"#{day.date}: #{day.event_count} events (expected: #{day.expected}, #{day.coverage_pct}% coverage)"}
-                      >
-                        <div class="text-xs font-medium">
-                          <%= day.day_name %>
-                        </div>
-                        <div class="text-lg font-bold">
-                          <%= day.event_count %>
-                        </div>
-                        <div class="text-xs opacity-75">
-                          <%= day.coverage_pct %>%
-                        </div>
-                      </div>
-                    <% end %>
-                  </div>
-                  <!-- Alerts for this source -->
-                  <%= if not Enum.empty?(source.alerts) do %>
-                    <div class="mt-2 space-y-1">
-                      <%= for alert <- source.alerts do %>
-                        <div class={"text-xs px-2 py-1 rounded #{coverage_alert_color(alert.type)}"}>
-                          <%= alert.message %>
-                        </div>
-                      <% end %>
-                    </div>
-                  <% end %>
-                </div>
-              <% end %>
-            </div>
-          </div>
-
-          <!-- Job Chain Visualization (Phase 4.5) -->
-          <%= if map_size(@job_chains) > 0 do %>
-            <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-              <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <h2 class="text-lg font-medium text-gray-900 dark:text-white">
-                      Job Chains
-                    </h2>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Recent execution chains with cascade failure detection
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div class="p-4 space-y-6">
-                <%= for {source, chains} <- @job_chains do %>
-                  <%= if not Enum.empty?(chains) do %>
-                    <div>
-                      <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">
-                        <%= format_source_name(source) %>
-                      </h3>
-                      <div class="space-y-4">
-                        <%= for chain_data <- chains do %>
-                          <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                            <!-- Chain Header -->
-                            <div class="px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
-                              <div class="flex items-center gap-3">
-                                <span class={"inline-flex items-center px-2 py-0.5 rounded text-xs font-medium #{chain_status_color(chain_data.stats)}"}>
-                                  <%= chain_status_label(chain_data.stats) %>
-                                </span>
-                                <span class="text-sm text-gray-600 dark:text-gray-400">
-                                  <%= format_chain_datetime(chain_data.chain.attempted_at) %>
-                                </span>
-                              </div>
-                              <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                                <span>
-                                  <span class="font-medium text-gray-700 dark:text-gray-300"><%= chain_data.stats.total %></span> jobs
-                                </span>
-                                <span class="text-green-600 dark:text-green-400">
-                                  <span class="font-medium"><%= chain_data.stats.completed %></span> ✓
-                                </span>
-                                <%= if chain_data.stats.failed > 0 do %>
-                                  <span class="text-red-600 dark:text-red-400">
-                                    <span class="font-medium"><%= chain_data.stats.failed %></span> ✗
-                                  </span>
-                                <% end %>
-                                <span class={"font-medium #{chain_success_rate_color(chain_data.stats.success_rate)}"}>
-                                  <%= Float.round(chain_data.stats.success_rate, 1) %>%
-                                </span>
-                              </div>
-                            </div>
-                            <!-- Chain Tree -->
-                            <div class="px-4 py-3">
-                              <%= render_chain_tree(chain_data.chain, 0) %>
-                            </div>
-                            <!-- Cascade Failures -->
-                            <%= if not Enum.empty?(chain_data.stats.cascade_failures) do %>
-                              <div class="px-4 py-2 bg-red-50 dark:bg-red-900/20 border-t border-red-100 dark:border-red-900">
-                                <div class="text-xs font-medium text-red-800 dark:text-red-200 mb-1">
-                                  ⚠️ Cascade Failures Detected
-                                </div>
-                                <div class="space-y-1">
-                                  <%= for cascade <- chain_data.stats.cascade_failures do %>
-                                    <div class="text-xs text-red-700 dark:text-red-300">
-                                      <span class="font-mono"><%= cascade.worker %></span>
-                                      failed (<%= cascade.error_category || "unknown" %>)
-                                      → blocked <span class="font-medium"><%= cascade.prevented_count %></span> downstream jobs
-                                    </div>
-                                  <% end %>
-                                </div>
-                              </div>
-                            <% end %>
-                          </div>
-                        <% end %>
-                      </div>
-                    </div>
-                  <% end %>
-                <% end %>
-              </div>
-            </div>
-          <% end %>
-
-          <!-- Action Items -->
+          <!-- Action Items Summary (condensed) -->
           <%= if not Enum.empty?(@action_items) do %>
-            <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-              <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                <h2 class="text-lg font-medium text-gray-900 dark:text-white">
-                  Action Items
-                  <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+            <% critical_count = Enum.count(@action_items, &(&1.success_rate < 50)) %>
+            <% warning_count = Enum.count(@action_items, &(&1.success_rate < 80 and &1.success_rate >= 50)) %>
+            <% worst_item = Enum.min_by(@action_items, & &1.success_rate) %>
+            <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg shadow px-4 py-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <span class="text-yellow-600 dark:text-yellow-400">⚠</span>
+                  <span class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                     <%= length(@action_items) %> degraded workers
                   </span>
-                </h2>
-              </div>
-              <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead class="bg-gray-50 dark:bg-gray-900">
-                    <tr>
-                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Source
-                      </th>
-                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Worker
-                      </th>
-                      <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Success Rate
-                      </th>
-                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                    <%= for item <- @action_items do %>
-                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td class="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
-                          <%= format_source_name(item.source) %>
-                        </td>
-                        <td class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">
-                          <%= item.worker %>
-                        </td>
-                        <td class={"px-4 py-2 text-sm text-right #{success_rate_color(item.success_rate)}"}>
-                          <%= item.success_rate %>%
-                        </td>
-                        <td class="px-4 py-2">
-                          <%= cond do %>
-                            <% item.success_rate < 50 -> %>
-                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                Critical
-                              </span>
-                            <% item.success_rate < 80 -> %>
-                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
-                                Warning
-                              </span>
-                            <% true -> %>
-                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                                Degraded
-                              </span>
-                          <% end %>
-                        </td>
-                      </tr>
-                    <% end %>
-                  </tbody>
-                </table>
+                  <%= if critical_count > 0 do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                      <%= critical_count %> critical
+                    </span>
+                  <% end %>
+                  <%= if warning_count > 0 do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                      <%= warning_count %> warning
+                    </span>
+                  <% end %>
+                </div>
+                <span class="text-xs text-yellow-700 dark:text-yellow-300">
+                  Worst: <%= format_source_name(worst_item.source) %> / <%= worst_item.worker %> (<%= worst_item.success_rate %>%)
+                </span>
               </div>
             </div>
           <% end %>
@@ -1005,37 +656,68 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   defp p95_color(ms) when ms <= 5000, do: "text-yellow-600 dark:text-yellow-400"
   defp p95_color(_), do: "text-red-600 dark:text-red-400"
 
-  # Format health history data for Chart.js
-  defp format_chart_data(health_history) do
-    slo_target = health_history.slo_target
+  # Get scheduler status for a source from scheduler_health data
+  # Returns {:ok, status} | :not_monitored
+  defp get_scheduler_status(source, scheduler_health) do
+    case Enum.find(scheduler_health.sources, &(&1.source == source)) do
+      nil ->
+        :not_monitored
 
-    # Create an array of SLO target values (same length as data points)
-    slo_data = List.duplicate(slo_target, length(health_history.data_points))
+      source_data ->
+        cond do
+          source_data.has_recent_execution && Enum.empty?(source_data.alerts) ->
+            {:ok, :healthy}
 
-    %{
-      "labels" => health_history.labels,
-      "datasets" => [
-        %{
-          "label" => "Health Score (%)",
-          "data" => health_history.data_points,
-          "borderColor" => "#3b82f6",
-          "backgroundColor" => "rgba(59, 130, 246, 0.1)",
-          "fill" => true,
-          "tension" => 0.3,
-          "pointRadius" => 0,
-          "pointHoverRadius" => 4
-        },
-        %{
-          "label" => "SLO Target (95%)",
-          "data" => slo_data,
-          "borderColor" => "#ef4444",
-          "borderDash" => [5, 5],
-          "borderWidth" => 2,
-          "pointRadius" => 0,
-          "fill" => false
-        }
-      ]
-    }
+          source_data.has_recent_execution ->
+            {:ok, :warning}
+
+          true ->
+            {:ok, :critical}
+        end
+    end
+  end
+
+  # Get coverage status for a source from coverage_data
+  # Returns {:ok, status} | :not_monitored
+  defp get_coverage_status(source, coverage_data) do
+    case Enum.find(coverage_data.sources, &(&1.source == source)) do
+      nil ->
+        :not_monitored
+
+      source_data ->
+        critical_alerts =
+          Enum.count(source_data.alerts, fn a ->
+            a.type in [:missing_near, :critical_gaps, :source_not_found]
+          end)
+
+        cond do
+          Enum.empty?(source_data.alerts) ->
+            {:ok, :healthy}
+
+          critical_alerts > 0 ->
+            {:ok, :critical}
+
+          true ->
+            {:ok, :warning}
+        end
+    end
+  end
+
+  # Render compact status indicator (✓/⚠/✗/-)
+  defp render_status_indicator(:not_monitored) do
+    ~s(<span class="text-gray-400 dark:text-gray-500" title="Not monitored">-</span>)
+  end
+
+  defp render_status_indicator({:ok, :healthy}) do
+    ~s(<span class="text-green-500 dark:text-green-400" title="Healthy">✓</span>)
+  end
+
+  defp render_status_indicator({:ok, :warning}) do
+    ~s(<span class="text-yellow-500 dark:text-yellow-400" title="Warning">⚠</span>)
+  end
+
+  defp render_status_indicator({:ok, :critical}) do
+    ~s(<span class="text-red-500 dark:text-red-400" title="Critical">✗</span>)
   end
 
   defp error_category_color(category) do
@@ -1071,270 +753,4 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
         "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
     end
   end
-
-  # Baseline comparison helpers
-
-  defp format_time_range(1), do: "last hour"
-  defp format_time_range(6), do: "last 6 hours"
-  defp format_time_range(24), do: "last 24 hours"
-  defp format_time_range(48), do: "last 48 hours"
-  defp format_time_range(168), do: "last 7 days"
-  defp format_time_range(hours), do: "last #{hours} hours"
-
-  defp change_color(change) when change > 2.0, do: "text-green-600 dark:text-green-400"
-  defp change_color(change) when change > 0, do: "text-green-500 dark:text-green-500"
-  defp change_color(change) when change > -2.0, do: "text-gray-600 dark:text-gray-400"
-  defp change_color(change) when change > -5.0, do: "text-yellow-600 dark:text-yellow-400"
-  defp change_color(_), do: "text-red-600 dark:text-red-400"
-
-  defp format_change(change) when change > 0, do: "+#{change}%"
-  defp format_change(change), do: "#{change}%"
-
-  defp render_comparison_status(:ok) do
-    Phoenix.HTML.raw("""
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-      OK
-    </span>
-    """)
-  end
-
-  defp render_comparison_status(:warning) do
-    Phoenix.HTML.raw("""
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-      Warning
-    </span>
-    """)
-  end
-
-  defp render_comparison_status(:alert) do
-    Phoenix.HTML.raw("""
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-      Alert
-    </span>
-    """)
-  end
-
-  defp render_comparison_status(:no_data) do
-    Phoenix.HTML.raw("""
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
-      No Data
-    </span>
-    """)
-  end
-
-  defp render_comparison_status(:no_baseline) do
-    Phoenix.HTML.raw("""
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
-      No Baseline
-    </span>
-    """)
-  end
-
-  defp render_comparison_status(:no_current) do
-    Phoenix.HTML.raw("""
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
-      No Current
-    </span>
-    """)
-  end
-
-  defp render_comparison_status(_) do
-    Phoenix.HTML.raw("""
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
-      --
-    </span>
-    """)
-  end
-
-  # Scheduler Health helpers (Phase 4.4)
-
-  defp scheduler_day_color(:ok),
-    do: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
-
-  defp scheduler_day_color(:failure),
-    do: "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
-
-  defp scheduler_day_color(:missing),
-    do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-
-  defp scheduler_day_color(_), do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-
-  defp scheduler_status_icon(:ok), do: "✓"
-  defp scheduler_status_icon(:failure), do: "✗"
-  defp scheduler_status_icon(:missing), do: "−"
-  defp scheduler_status_icon(_), do: "?"
-
-  defp scheduler_alert_color(:missing),
-    do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-
-  defp scheduler_alert_color(:failure),
-    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-
-  defp scheduler_alert_color(:stale),
-    do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-
-  defp scheduler_alert_color(:no_executions),
-    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-
-  defp scheduler_alert_color(_),
-    do: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
-
-  # Date Coverage helpers (Phase 4.4)
-
-  defp coverage_day_color(:ok, pct) when pct >= 100,
-    do: "bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100"
-
-  defp coverage_day_color(:ok, _pct),
-    do: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
-
-  defp coverage_day_color(:fair, _pct),
-    do: "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200"
-
-  defp coverage_day_color(:low, _pct),
-    do: "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200"
-
-  defp coverage_day_color(:missing, _pct),
-    do: "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
-
-  defp coverage_day_color(_, _),
-    do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-
-  defp coverage_alert_color(:missing_near),
-    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-
-  defp coverage_alert_color(:missing_far),
-    do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-
-  defp coverage_alert_color(:low_near),
-    do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-
-  defp coverage_alert_color(:critical_gaps),
-    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-
-  defp coverage_alert_color(:source_not_found),
-    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-
-  defp coverage_alert_color(_),
-    do: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
-
-  # Job Chain helpers (Phase 4.5)
-
-  defp chain_status_color(%{failed: 0}),
-    do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-
-  defp chain_status_color(%{success_rate: rate}) when rate >= 90,
-    do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-
-  defp chain_status_color(%{success_rate: rate}) when rate >= 70,
-    do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-
-  defp chain_status_color(_), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-
-  defp chain_status_label(%{failed: 0}), do: "Success"
-  defp chain_status_label(%{success_rate: rate}) when rate >= 90, do: "Success"
-  defp chain_status_label(%{success_rate: rate}) when rate >= 70, do: "Partial"
-  defp chain_status_label(_), do: "Failed"
-
-  defp chain_success_rate_color(rate) when rate >= 95, do: "text-green-600 dark:text-green-400"
-  defp chain_success_rate_color(rate) when rate >= 80, do: "text-yellow-600 dark:text-yellow-400"
-  defp chain_success_rate_color(_), do: "text-red-600 dark:text-red-400"
-
-  defp format_chain_datetime(datetime) do
-    Calendar.strftime(datetime, "%b %d, %H:%M")
-  end
-
-  # Render job chain tree recursively
-  defp render_chain_tree(node, depth) do
-    worker_name = extract_worker_name(node.worker)
-    status_icon = chain_node_icon(node.state)
-    status_color = chain_node_color(node.state)
-    indent = depth * 20
-
-    has_children = not Enum.empty?(node.children)
-    children_count = length(node.children)
-
-    Phoenix.HTML.raw("""
-    <div class="font-mono text-xs">
-      <div class="flex items-center gap-2 py-0.5" style="padding-left: #{indent}px">
-        #{if depth > 0 do
-      "<span class=\"text-gray-400 dark:text-gray-600\">├─→</span>"
-    else
-      ""
-    end}
-        <span class="#{status_color}">#{status_icon}</span>
-        <span class="text-gray-700 dark:text-gray-300">#{worker_name}</span>
-        #{if has_children do
-      "<span class=\"text-gray-400 dark:text-gray-500\">(#{children_count})</span>"
-    else
-      ""
-    end}
-        #{render_chain_node_details(node)}
-      </div>
-      #{render_children_trees(node.children, depth + 1)}
-    </div>
-    """)
-  end
-
-  defp render_children_trees(children, depth) do
-    children
-    |> Enum.map(fn child -> render_chain_tree(child, depth) end)
-    |> Enum.map(&Phoenix.HTML.safe_to_string/1)
-    |> Enum.join("")
-  end
-
-  defp render_chain_node_details(node) do
-    details = []
-
-    # Add duration if available
-    details =
-      case get_in(node.results, ["duration_ms"]) || node[:duration_ms] do
-        nil -> details
-        ms when is_number(ms) -> details ++ ["#{ms}ms"]
-        _ -> details
-      end
-
-    # Add error category if failed
-    details =
-      if node.state in ["discarded", "cancelled"] do
-        case get_in(node.results, ["error_category"]) do
-          nil ->
-            details
-
-          cat ->
-            # Escape error category to prevent XSS
-            escaped_cat = Phoenix.HTML.html_escape(cat) |> Phoenix.HTML.safe_to_string()
-            details ++ ["<span class=\"text-red-500\">#{escaped_cat}</span>"]
-        end
-      else
-        details
-      end
-
-    if Enum.empty?(details) do
-      ""
-    else
-      "<span class=\"text-gray-400 dark:text-gray-500 ml-2\">#{Enum.join(details, " · ")}</span>"
-    end
-  end
-
-  defp extract_worker_name(worker) when is_binary(worker) do
-    worker
-    |> String.split(".")
-    |> List.last()
-  end
-
-  defp extract_worker_name(_), do: "Unknown"
-
-  defp chain_node_icon("completed"), do: "✓"
-  defp chain_node_icon("discarded"), do: "✗"
-  defp chain_node_icon("cancelled"), do: "⊘"
-  defp chain_node_icon("executing"), do: "◐"
-  defp chain_node_icon("available"), do: "○"
-  defp chain_node_icon("scheduled"), do: "◔"
-  defp chain_node_icon(_), do: "?"
-
-  defp chain_node_color("completed"), do: "text-green-600 dark:text-green-400"
-  defp chain_node_color("discarded"), do: "text-red-600 dark:text-red-400"
-  defp chain_node_color("cancelled"), do: "text-orange-600 dark:text-orange-400"
-  defp chain_node_color("executing"), do: "text-blue-600 dark:text-blue-400"
-  defp chain_node_color(_), do: "text-gray-500 dark:text-gray-400"
 end
