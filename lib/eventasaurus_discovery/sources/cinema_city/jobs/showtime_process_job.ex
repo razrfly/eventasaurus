@@ -11,13 +11,28 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
   - Cinema data comes from CinemaDateJob args
   - Event data comes directly from API (no HTML scraping)
 
+  ## Movie Dependency Handling
+
+  This job depends on MovieDetailJob completing first to create the movie record.
+  Instead of using `{:error, :movie_not_ready}` which would consume retry attempts,
+  we use Oban's `{:snooze, seconds}` pattern:
+
+  - If movie isn't ready yet: `{:snooze, 30}` - reschedules without consuming an attempt
+  - If MovieDetailJob failed (discarded): `{:cancel, :movie_not_matched}` - skip showtime
+  - If movie is found: process normally
+
+  This prevents the "retryable" state accumulation and preserves max_attempts
+  for actual errors (network issues, database problems, etc.).
+
   If the movie was not successfully matched in MovieDetailJob, the showtime
   is skipped (not an error).
   """
 
   use Oban.Worker,
     queue: :scraper,
-    max_attempts: 3,
+    # Increased max_attempts since snooze doesn't count as an attempt
+    # but we want resilience for actual errors
+    max_attempts: 5,
     unique: [
       period: 300,
       # Prevent duplicate jobs for the same showtime within 5 minutes
@@ -79,15 +94,29 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
         MetricsTracker.record_success(job, external_id)
         result
 
+      {:snooze, seconds} = snooze_result ->
+        # Snooze doesn't count as an attempt - just waiting for MovieDetailJob
+        # Don't record this as success or failure in metrics
+        # The job will be rescheduled and try again
+        Logger.debug("🔄 Snoozing showtime job for #{seconds}s (waiting for movie)")
+        snooze_result
+
       {:error, reason} ->
         MetricsTracker.record_failure(job, reason, external_id)
         result
 
       _other ->
-        # Pass through any other return types unchanged
+        # Pass through any other return types unchanged (e.g., {:cancel, reason})
         result
     end
   end
+
+  # Snooze delay when waiting for MovieDetailJob to complete (30 seconds)
+  # This is much better than {:error, :movie_not_ready} because:
+  # 1. Snooze doesn't count as an attempt (preserves max_attempts for real errors)
+  # 2. Job stays in 'scheduled' state, not 'retryable' (cleaner metrics)
+  # 3. Controlled, predictable delay between checks
+  @snooze_delay_seconds 30
 
   defp process_showtime(showtime, source_id, film, cinema_city_film_id, cinema_data) do
     Logger.debug("🎫 Processing showtime: #{film["polish_title"]} at #{cinema_data["name"]}")
@@ -108,12 +137,16 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
             {:ok, :skipped}
 
           :not_found_or_pending ->
-            # MovieDetailJob hasn't completed yet - retry
-            Logger.warning(
-              "⏳ Movie not found in database yet, will retry: #{film["polish_title"]}"
+            # MovieDetailJob hasn't completed yet - use snooze to wait
+            # Snooze is better than {:error, :movie_not_ready} because:
+            # - Doesn't count as an attempt (preserves retries for real errors)
+            # - Job goes to 'scheduled' state, not 'retryable'
+            # - Cleaner metrics and more predictable behavior
+            Logger.info(
+              "⏳ Movie not ready yet, snoozing #{@snooze_delay_seconds}s: #{film["polish_title"]}"
             )
 
-            {:error, :movie_not_ready}
+            {:snooze, @snooze_delay_seconds}
         end
     end
   end
