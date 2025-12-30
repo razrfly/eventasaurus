@@ -198,7 +198,8 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     chart_data = format_chart_data(health_history)
 
     # Load baseline comparison (current vs 7 days ago)
-    {:ok, baseline_comparison} = Health.baseline_comparison(hours: hours, sources: sources_to_check)
+    {:ok, baseline_comparison} =
+      Health.baseline_comparison(hours: hours, sources: sources_to_check)
 
     # Load scheduler health (SyncJob execution tracking)
     {:ok, scheduler_health} = Scheduler.check(days: 7)
@@ -1147,9 +1148,15 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
 
   # Scheduler Health helpers (Phase 4.4)
 
-  defp scheduler_day_color(:ok), do: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
-  defp scheduler_day_color(:failure), do: "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
-  defp scheduler_day_color(:missing), do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+  defp scheduler_day_color(:ok),
+    do: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
+
+  defp scheduler_day_color(:failure),
+    do: "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
+
+  defp scheduler_day_color(:missing),
+    do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+
   defp scheduler_day_color(_), do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
 
   defp scheduler_status_icon(:ok), do: "✓"
@@ -1157,33 +1164,70 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   defp scheduler_status_icon(:missing), do: "−"
   defp scheduler_status_icon(_), do: "?"
 
-  defp scheduler_alert_color(:missing), do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-  defp scheduler_alert_color(:failure), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-  defp scheduler_alert_color(:stale), do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-  defp scheduler_alert_color(:no_executions), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-  defp scheduler_alert_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+  defp scheduler_alert_color(:missing),
+    do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+
+  defp scheduler_alert_color(:failure),
+    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+
+  defp scheduler_alert_color(:stale),
+    do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+
+  defp scheduler_alert_color(:no_executions),
+    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+
+  defp scheduler_alert_color(_),
+    do: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
 
   # Date Coverage helpers (Phase 4.4)
 
-  defp coverage_day_color(:ok, pct) when pct >= 100, do: "bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100"
-  defp coverage_day_color(:ok, _pct), do: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
-  defp coverage_day_color(:fair, _pct), do: "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200"
-  defp coverage_day_color(:low, _pct), do: "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200"
-  defp coverage_day_color(:missing, _pct), do: "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
-  defp coverage_day_color(_, _), do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+  defp coverage_day_color(:ok, pct) when pct >= 100,
+    do: "bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100"
 
-  defp coverage_alert_color(:missing_near), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-  defp coverage_alert_color(:missing_far), do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-  defp coverage_alert_color(:low_near), do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-  defp coverage_alert_color(:critical_gaps), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-  defp coverage_alert_color(:source_not_found), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-  defp coverage_alert_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+  defp coverage_day_color(:ok, _pct),
+    do: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
+
+  defp coverage_day_color(:fair, _pct),
+    do: "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200"
+
+  defp coverage_day_color(:low, _pct),
+    do: "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200"
+
+  defp coverage_day_color(:missing, _pct),
+    do: "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
+
+  defp coverage_day_color(_, _),
+    do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+
+  defp coverage_alert_color(:missing_near),
+    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+
+  defp coverage_alert_color(:missing_far),
+    do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+
+  defp coverage_alert_color(:low_near),
+    do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+
+  defp coverage_alert_color(:critical_gaps),
+    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+
+  defp coverage_alert_color(:source_not_found),
+    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+
+  defp coverage_alert_color(_),
+    do: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
 
   # Job Chain helpers (Phase 4.5)
 
-  defp chain_status_color(%{failed: 0}), do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-  defp chain_status_color(%{success_rate: rate}) when rate >= 90, do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-  defp chain_status_color(%{success_rate: rate}) when rate >= 70, do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+  defp chain_status_color(%{failed: 0}),
+    do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+
+  defp chain_status_color(%{success_rate: rate}) when rate >= 90,
+    do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+
+  defp chain_status_color(%{success_rate: rate}) when rate >= 70,
+    do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+
   defp chain_status_color(_), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
 
   defp chain_status_label(%{failed: 0}), do: "Success"
@@ -1213,17 +1257,17 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     <div class="font-mono text-xs">
       <div class="flex items-center gap-2 py-0.5" style="padding-left: #{indent}px">
         #{if depth > 0 do
-          "<span class=\"text-gray-400 dark:text-gray-600\">├─→</span>"
-        else
-          ""
-        end}
+      "<span class=\"text-gray-400 dark:text-gray-600\">├─→</span>"
+    else
+      ""
+    end}
         <span class="#{status_color}">#{status_icon}</span>
         <span class="text-gray-700 dark:text-gray-300">#{worker_name}</span>
         #{if has_children do
-          "<span class=\"text-gray-400 dark:text-gray-500\">(#{children_count})</span>"
-        else
-          ""
-        end}
+      "<span class=\"text-gray-400 dark:text-gray-500\">(#{children_count})</span>"
+    else
+      ""
+    end}
         #{render_chain_node_details(node)}
       </div>
       #{render_children_trees(node.children, depth + 1)}
