@@ -188,10 +188,22 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     # Load 7-day trend data for sparklines (always 168 hours for consistency)
     {:ok, trend_results} = Health.trends_for_sources(sources_to_check, hours: 168)
 
+    # Load 7-day health history for the chart (always 168 hours)
+    {:ok, health_history} = Health.health_history(hours: 168)
+
+    # Format chart data for Chart.js
+    chart_data = format_chart_data(health_history)
+
+    # Load baseline comparison (current vs 7 days ago)
+    {:ok, baseline_comparison} = Health.baseline_comparison(hours: hours, sources: sources_to_check)
+
     socket
     |> assign(:health_results, health_results)
     |> assign(:error_results, error_results)
     |> assign(:trend_results, trend_results)
+    |> assign(:health_history, health_history)
+    |> assign(:chart_data, chart_data)
+    |> assign(:baseline_comparison, baseline_comparison)
     |> assign(:overall_score, overall_score)
     |> assign(:meeting_slo_count, meeting_slo_count)
     |> assign(:at_risk_count, at_risk_count)
@@ -347,18 +359,38 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         <% else %>
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <!-- Overall Health Score -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-              <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Health Score</div>
-              <div class={"text-3xl font-bold mt-1 #{health_score_color(@overall_score)}"}>
-                <%= @overall_score %>%
+          <!-- Health Trend Chart -->
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h2 class="text-lg font-medium text-gray-900 dark:text-white">Health Score Trend</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400">7-day performance vs SLO target (95%)</p>
               </div>
-              <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                Last <%= @time_range %> hours
+              <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <span class="text-sm text-gray-600 dark:text-gray-400">Health Score</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-0.5 bg-red-500 border-dashed border-t-2 border-red-500"></div>
+                  <span class="text-sm text-gray-600 dark:text-gray-400">SLO Target</span>
+                </div>
+                <div class={"text-2xl font-bold #{health_score_color(@overall_score)}"}>
+                  <%= @overall_score %>%
+                </div>
               </div>
             </div>
+            <div class="h-64">
+              <canvas
+                id="health-trend-chart"
+                phx-hook="HealthTrendChart"
+                data-chart-data={Jason.encode!(@chart_data)}
+              ></canvas>
+            </div>
+          </div>
+
+          <!-- Summary Cards -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
             <!-- SLO Status -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
@@ -522,6 +554,89 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
             </div>
           </div>
 
+          <!-- Baseline Comparison (Phase 4.3) -->
+          <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+              <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+                Baseline Comparison
+                <span class="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
+                  vs <%= @baseline_comparison.baseline_offset_days %> days ago
+                </span>
+              </h2>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Comparing <%= format_time_range(@time_range) %> performance against baseline
+              </p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-900">
+                  <tr>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      Source
+                    </th>
+                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      Current
+                    </th>
+                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      Baseline
+                    </th>
+                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      Change
+                    </th>
+                    <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                  <%= for comp <- @baseline_comparison.comparisons do %>
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td class="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                        <%= format_source_name(comp.source) %>
+                      </td>
+                      <td class="px-4 py-2 text-sm text-right">
+                        <%= if comp.current.success_rate do %>
+                          <span class={success_rate_color(comp.current.success_rate)}>
+                            <%= comp.current.success_rate %>%
+                          </span>
+                          <span class="text-gray-400 text-xs ml-1">
+                            (<%= comp.current.total %>)
+                          </span>
+                        <% else %>
+                          <span class="text-gray-400">--</span>
+                        <% end %>
+                      </td>
+                      <td class="px-4 py-2 text-sm text-right">
+                        <%= if comp.baseline.success_rate do %>
+                          <span class="text-gray-600 dark:text-gray-400">
+                            <%= comp.baseline.success_rate %>%
+                          </span>
+                          <span class="text-gray-400 text-xs ml-1">
+                            (<%= comp.baseline.total %>)
+                          </span>
+                        <% else %>
+                          <span class="text-gray-400">--</span>
+                        <% end %>
+                      </td>
+                      <td class="px-4 py-2 text-sm text-right">
+                        <%= if comp.changes.success_rate do %>
+                          <span class={change_color(comp.changes.success_rate)}>
+                            <%= format_change(comp.changes.success_rate) %>
+                          </span>
+                        <% else %>
+                          <span class="text-gray-400">--</span>
+                        <% end %>
+                      </td>
+                      <td class="px-4 py-2 text-center">
+                        <%= render_comparison_status(comp.status) %>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <!-- Action Items -->
           <%= if not Enum.empty?(@action_items) do %>
             <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
@@ -628,6 +743,39 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   defp p95_color(ms) when ms <= 5000, do: "text-yellow-600 dark:text-yellow-400"
   defp p95_color(_), do: "text-red-600 dark:text-red-400"
 
+  # Format health history data for Chart.js
+  defp format_chart_data(health_history) do
+    slo_target = health_history.slo_target
+
+    # Create an array of SLO target values (same length as data points)
+    slo_data = List.duplicate(slo_target, length(health_history.data_points))
+
+    %{
+      "labels" => health_history.labels,
+      "datasets" => [
+        %{
+          "label" => "Health Score (%)",
+          "data" => health_history.data_points,
+          "borderColor" => "#3b82f6",
+          "backgroundColor" => "rgba(59, 130, 246, 0.1)",
+          "fill" => true,
+          "tension" => 0.3,
+          "pointRadius" => 0,
+          "pointHoverRadius" => 4
+        },
+        %{
+          "label" => "SLO Target (95%)",
+          "data" => slo_data,
+          "borderColor" => "#ef4444",
+          "borderDash" => [5, 5],
+          "borderWidth" => 2,
+          "pointRadius" => 0,
+          "fill" => false
+        }
+      ]
+    }
+  end
+
   defp error_category_color(category) do
     case category do
       "network_error" ->
@@ -660,5 +808,79 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
       _ ->
         "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
     end
+  end
+
+  # Baseline comparison helpers
+
+  defp format_time_range(1), do: "last hour"
+  defp format_time_range(6), do: "last 6 hours"
+  defp format_time_range(24), do: "last 24 hours"
+  defp format_time_range(48), do: "last 48 hours"
+  defp format_time_range(168), do: "last 7 days"
+  defp format_time_range(hours), do: "last #{hours} hours"
+
+  defp change_color(change) when change > 2.0, do: "text-green-600 dark:text-green-400"
+  defp change_color(change) when change > 0, do: "text-green-500 dark:text-green-500"
+  defp change_color(change) when change > -2.0, do: "text-gray-600 dark:text-gray-400"
+  defp change_color(change) when change > -5.0, do: "text-yellow-600 dark:text-yellow-400"
+  defp change_color(_), do: "text-red-600 dark:text-red-400"
+
+  defp format_change(change) when change > 0, do: "+#{change}%"
+  defp format_change(change), do: "#{change}%"
+
+  defp render_comparison_status(:ok) do
+    Phoenix.HTML.raw("""
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+      OK
+    </span>
+    """)
+  end
+
+  defp render_comparison_status(:warning) do
+    Phoenix.HTML.raw("""
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+      Warning
+    </span>
+    """)
+  end
+
+  defp render_comparison_status(:alert) do
+    Phoenix.HTML.raw("""
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+      Alert
+    </span>
+    """)
+  end
+
+  defp render_comparison_status(:no_data) do
+    Phoenix.HTML.raw("""
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
+      No Data
+    </span>
+    """)
+  end
+
+  defp render_comparison_status(:no_baseline) do
+    Phoenix.HTML.raw("""
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
+      No Baseline
+    </span>
+    """)
+  end
+
+  defp render_comparison_status(:no_current) do
+    Phoenix.HTML.raw("""
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
+      No Current
+    </span>
+    """)
+  end
+
+  defp render_comparison_status(_) do
+    Phoenix.HTML.raw("""
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
+      --
+    </span>
+    """)
   end
 end

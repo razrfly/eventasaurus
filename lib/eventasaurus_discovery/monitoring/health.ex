@@ -197,6 +197,81 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
   end
 
   @doc """
+  Fetches overall health history for chart visualization.
+
+  Aggregates hourly health data across all sources into a single timeline
+  suitable for Chart.js rendering.
+
+  ## Options
+
+    * `:hours` - Number of hours to look back (default: 168 = 7 days)
+    * `:sources` - List of sources to include (default: all)
+
+  ## Examples
+
+      {:ok, history} = Health.health_history(hours: 168)
+      # => %{
+      #   labels: ["Dec 22 00:00", "Dec 22 01:00", ...],
+      #   data_points: [95.2, 94.8, 96.1, ...],
+      #   slo_target: 95.0
+      # }
+  """
+  def health_history(opts \\ []) do
+    hours = Keyword.get(opts, :hours, 168)
+    from_time = DateTime.add(DateTime.utc_now(), -hours, :hour)
+    to_time = DateTime.utc_now()
+
+    # Query to aggregate all job executions by hour across all sources
+    query =
+      from(j in JobExecutionSummary,
+        where: j.attempted_at >= ^from_time and j.attempted_at <= ^to_time,
+        group_by: fragment("date_trunc('hour', ?)", j.attempted_at),
+        order_by: [asc: fragment("date_trunc('hour', ?)", j.attempted_at)],
+        select: %{
+          hour: fragment("date_trunc('hour', ?)", j.attempted_at),
+          total: count(j.id),
+          completed: count(fragment("CASE WHEN ? = 'completed' THEN 1 END", j.state))
+        }
+      )
+
+    data_points =
+      Repo.replica().all(query)
+      |> Enum.map(fn row ->
+        success_rate =
+          if row.total > 0 do
+            row.completed / row.total * 100
+          else
+            100.0
+          end
+
+        %{
+          hour: row.hour,
+          total: row.total,
+          completed: row.completed,
+          success_rate: Float.round(success_rate, 1)
+        }
+      end)
+
+    # Format for Chart.js
+    labels =
+      data_points
+      |> Enum.map(fn point ->
+        Calendar.strftime(point.hour, "%b %d %H:%M")
+      end)
+
+    values = Enum.map(data_points, & &1.success_rate)
+
+    {:ok,
+     %{
+       labels: labels,
+       data_points: values,
+       raw_data: data_points,
+       slo_target: @slo_success_rate,
+       hours: hours
+     }}
+  end
+
+  @doc """
   Fetches trend data for multiple sources in parallel.
 
   Returns a map of source -> trend data for efficient batch loading.
@@ -227,6 +302,189 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
       |> Map.new()
 
     {:ok, results}
+  end
+
+  @doc """
+  Compares current performance against a baseline period (default: 7 days ago).
+
+  For each source, calculates current vs baseline metrics and identifies
+  any significant regressions.
+
+  ## Options
+
+    * `:hours` - Current period duration in hours (default: 24)
+    * `:baseline_offset_days` - How many days ago to compare against (default: 7)
+    * `:sources` - List of sources to compare (default: all known sources)
+
+  ## Examples
+
+      {:ok, comparisons} = Health.baseline_comparison(hours: 24)
+      # => [
+      #   %{
+      #     source: "cinema_city",
+      #     current: %{success_rate: 95.2, avg_duration: 1200.0, ...},
+      #     baseline: %{success_rate: 94.0, avg_duration: 1350.0, ...},
+      #     changes: %{success_rate: 1.2, avg_duration: -150.0, ...},
+      #     status: :ok | :warning | :alert
+      #   },
+      #   ...
+      # ]
+  """
+  def baseline_comparison(opts \\ []) do
+    hours = Keyword.get(opts, :hours, 24)
+    baseline_offset_days = Keyword.get(opts, :baseline_offset_days, 7)
+
+    sources =
+      Keyword.get(opts, :sources, [
+        "cinema_city",
+        "kino_krakow",
+        "karnet",
+        "week_pl",
+        "bandsintown",
+        "resident_advisor",
+        "inquizition",
+        "waw4free",
+        "pubquiz",
+        "repertuary"
+      ])
+
+    # Calculate time windows
+    now = DateTime.utc_now()
+    current_start = DateTime.add(now, -hours, :hour)
+    current_end = now
+
+    baseline_end = DateTime.add(now, -baseline_offset_days, :day)
+    baseline_start = DateTime.add(baseline_end, -hours, :hour)
+
+    # Fetch comparison data for all sources in parallel
+    comparisons =
+      sources
+      |> Task.async_stream(
+        fn source ->
+          compare_source_periods(source, current_start, current_end, baseline_start, baseline_end)
+        end,
+        timeout: 15_000,
+        max_concurrency: 4
+      )
+      |> Enum.map(fn
+        {:ok, result} -> result
+        {:exit, _} -> nil
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.sort_by(fn comp -> comp.source end)
+
+    {:ok,
+     %{
+       comparisons: comparisons,
+       current_period: %{start: current_start, end: current_end},
+       baseline_period: %{start: baseline_start, end: baseline_end},
+       baseline_offset_days: baseline_offset_days
+     }}
+  end
+
+  defp compare_source_periods(source, current_start, current_end, baseline_start, baseline_end) do
+    case get_source_pattern(source) do
+      {:ok, worker_pattern} ->
+        # Fetch current period executions
+        current_executions = fetch_executions(worker_pattern, current_start, current_end, 500)
+
+        # Fetch baseline period executions
+        baseline_executions = fetch_executions(worker_pattern, baseline_start, baseline_end, 500)
+
+        # Calculate metrics for both periods
+        current_metrics = calculate_period_metrics(current_executions)
+        baseline_metrics = calculate_period_metrics(baseline_executions)
+
+        # Calculate changes
+        changes = calculate_changes(current_metrics, baseline_metrics)
+
+        # Determine status based on regressions
+        status = determine_comparison_status(changes, current_metrics, baseline_metrics)
+
+        %{
+          source: source,
+          current: current_metrics,
+          baseline: baseline_metrics,
+          changes: changes,
+          status: status,
+          has_current_data: length(current_executions) > 0,
+          has_baseline_data: length(baseline_executions) > 0
+        }
+
+      {:error, _} ->
+        nil
+    end
+  end
+
+  defp calculate_period_metrics([]), do: %{success_rate: nil, avg_duration: nil, p95_duration: nil, total: 0}
+
+  defp calculate_period_metrics(executions) do
+    total = length(executions)
+    completed = Enum.count(executions, &(&1.state == "completed"))
+    success_rate = completed / total * 100
+
+    durations =
+      executions
+      |> Enum.map(& &1.duration_ms)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.sort()
+
+    avg_duration = if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
+    p95_duration = percentile(durations, 0.95)
+
+    %{
+      success_rate: Float.round(success_rate, 1),
+      avg_duration: Float.round(avg_duration * 1.0, 1),
+      p95_duration: Float.round(p95_duration * 1.0, 1),
+      total: total,
+      completed: completed
+    }
+  end
+
+  defp calculate_changes(current, baseline) do
+    cond do
+      is_nil(current.success_rate) or is_nil(baseline.success_rate) ->
+        %{success_rate: nil, avg_duration: nil, p95_duration: nil}
+
+      true ->
+        %{
+          success_rate: Float.round(current.success_rate - baseline.success_rate, 1),
+          avg_duration: Float.round(current.avg_duration - baseline.avg_duration, 1),
+          p95_duration: Float.round(current.p95_duration - baseline.p95_duration, 1)
+        }
+    end
+  end
+
+  defp determine_comparison_status(changes, current, baseline) do
+    cond do
+      # No data for comparison
+      is_nil(changes.success_rate) ->
+        :no_data
+
+      # No baseline data to compare against
+      baseline.total == 0 ->
+        :no_baseline
+
+      # No current data
+      current.total == 0 ->
+        :no_current
+
+      # Significant regression in success rate (> 5% drop)
+      changes.success_rate < -5.0 ->
+        :alert
+
+      # Current success rate below SLO (95%)
+      current.success_rate < @slo_success_rate ->
+        :alert
+
+      # Moderate regression (> 2% drop) or P95 significantly worse
+      changes.success_rate < -2.0 or changes.p95_duration > 500 ->
+        :warning
+
+      # Performance improved or stable
+      true ->
+        :ok
+    end
   end
 
   # Private helpers
