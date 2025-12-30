@@ -76,7 +76,10 @@ defmodule EventasaurusDiscovery.Metrics.ErrorCategoriesTest do
   describe "string pattern matching" do
     test "validation errors from strings" do
       assert ErrorCategories.categorize_error("Event title is required") == :validation_error
-      assert ErrorCategories.categorize_error("Missing required field: venue") == :validation_error
+
+      assert ErrorCategories.categorize_error("Missing required field: venue") ==
+               :validation_error
+
       assert ErrorCategories.categorize_error("Invalid date format") == :validation_error
     end
 

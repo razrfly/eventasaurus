@@ -24,7 +24,8 @@ defmodule EventasaurusDiscovery.Monitoring.Coverage do
   import Ecto.Query
 
   @typedoc "Alert severity type"
-  @type alert_type :: :missing_near | :missing_far | :low_near | :critical_gaps | :source_not_found
+  @type alert_type ::
+          :missing_near | :missing_far | :low_near | :critical_gaps | :source_not_found
 
   @typedoc "Individual alert"
   @type alert :: %{

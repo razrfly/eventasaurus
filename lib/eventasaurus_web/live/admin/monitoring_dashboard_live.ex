@@ -9,7 +9,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
   - Health overview with overall score
   - SLO compliance status per source
   - Error category breakdown with recommendations
-  - Source and time range filtering
+  - Time range filtering
   - Action items for degraded workers
   - 7-day sparkline trends with trend indicators (Phase 4.1)
 
@@ -32,7 +32,6 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
       socket
       |> assign(:page_title, "Scraper Monitoring")
       |> assign(:time_range, 24)
-      |> assign(:selected_source, nil)
       |> assign(:loading, true)
       |> assign(:sources, sources)
       |> load_dashboard_data()
@@ -78,59 +77,41 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
         _ -> 24
       end
 
-    socket =
-      socket
-      |> assign(:time_range, time_range_hours)
-      |> assign(:loading, true)
-      |> load_dashboard_data()
-      |> assign(:loading, false)
+    # Use async pattern so loading state is visible to user
+    send(self(), :refresh_data)
 
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("select_source", %{"source" => source}, socket) do
-    selected_source = if source == "all", do: nil, else: source
-
-    socket =
-      socket
-      |> assign(:selected_source, selected_source)
-      |> assign(:loading, true)
-      |> load_dashboard_data()
-      |> assign(:loading, false)
-
-    {:noreply, socket}
+    {:noreply, socket |> assign(:time_range, time_range_hours) |> assign(:loading, true)}
   end
 
   @impl true
   def handle_event("refresh", _params, socket) do
+    # Use async pattern so loading state is visible to user
+    send(self(), :refresh_data)
+    {:noreply, assign(socket, :loading, true)}
+  end
+
+  def handle_event("navigate_to_source", %{"source" => source}, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/admin/monitoring/sources/#{source}")}
+  end
+
+  @impl true
+  def handle_info(:refresh_data, socket) do
     socket =
       socket
-      |> assign(:loading, true)
       |> load_dashboard_data()
       |> assign(:loading, false)
 
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("navigate_to_source", %{"source" => source}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/admin/monitoring/sources/#{source}")}
   end
 
   # Data loading
 
   defp load_dashboard_data(socket) do
     hours = socket.assigns.time_range
-    selected_source = socket.assigns.selected_source
     sources = socket.assigns.sources
 
-    sources_to_check =
-      if selected_source do
-        [selected_source]
-      else
-        sources
-      end
+    # Always check all sources
+    sources_to_check = sources
 
     # Load health data for all sources in parallel
     health_results =
@@ -196,10 +177,18 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     {:ok, trend_results} = Health.trends_for_sources(sources_to_check, hours: 168)
 
     # Load scheduler health (SyncJob execution tracking) - needed for status indicators
-    {:ok, scheduler_health} = Scheduler.check(days: 7)
+    scheduler_health =
+      case Scheduler.check(days: 7) do
+        {:ok, data} -> data
+        {:error, _} -> %{sources: [], total_alerts: 0}
+      end
 
     # Load date coverage (event coverage for next 7 days) - needed for status indicators
-    {:ok, coverage_data} = Coverage.check(days: 7)
+    coverage_data =
+      case Coverage.check(days: 7) do
+        {:ok, data} -> data
+        {:error, _} -> %{sources: [], total_alerts: 0}
+      end
 
     socket
     |> assign(:health_results, health_results)
@@ -307,35 +296,23 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
           </div>
 
           <div class="flex items-center gap-4 mt-4 md:mt-0">
-            <!-- Source Filter -->
-            <select
-              phx-change="select_source"
-              name="source"
-              class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white text-sm"
-            >
-              <option value="all" selected={is_nil(@selected_source)}>All Sources</option>
-              <%= for source <- @sources do %>
-                <option value={source} selected={@selected_source == source}>
-                  <%= format_source_name(source) %>
-                </option>
-              <% end %>
-            </select>
-
             <!-- Time Range Filter -->
-            <select
-              phx-change="change_time_range"
-              name="time_range"
-              class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white text-sm"
-            >
-              <option value="1" selected={@time_range == 1}>Last 1 hour</option>
-              <option value="6" selected={@time_range == 6}>Last 6 hours</option>
-              <option value="24" selected={@time_range == 24}>Last 24 hours</option>
-              <option value="48" selected={@time_range == 48}>Last 48 hours</option>
-              <option value="168" selected={@time_range == 168}>Last 7 days</option>
-            </select>
+            <form phx-change="change_time_range">
+              <select
+                name="time_range"
+                class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white text-sm"
+              >
+                <option value="1" selected={@time_range == 1}>Last 1 hour</option>
+                <option value="6" selected={@time_range == 6}>Last 6 hours</option>
+                <option value="24" selected={@time_range == 24}>Last 24 hours</option>
+                <option value="48" selected={@time_range == 48}>Last 48 hours</option>
+                <option value="168" selected={@time_range == 168}>Last 7 days</option>
+              </select>
+            </form>
 
             <!-- Refresh Button -->
             <button
+              type="button"
               phx-click="refresh"
               class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
             >

@@ -55,7 +55,10 @@ defmodule EventasaurusApp.Images.ComputeImageCacheStatsJob do
           :ok
 
         {:error, changeset} ->
-          Logger.error("❌ Failed to save image cache stats snapshot: #{inspect(changeset.errors)}")
+          Logger.error(
+            "❌ Failed to save image cache stats snapshot: #{inspect(changeset.errors)}"
+          )
+
           {:error, "Failed to save snapshot"}
       end
     rescue

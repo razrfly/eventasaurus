@@ -101,8 +101,14 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
 
   @impl true
   def handle_event("select_execution", %{"id" => id}, socket) do
-    execution = Enum.find(socket.assigns.recent_executions, &(&1.id == String.to_integer(id)))
-    {:noreply, assign(socket, :selected_execution, execution)}
+    case safe_to_integer(id) do
+      {:ok, int_id} ->
+        execution = Enum.find(socket.assigns.recent_executions, &(&1.id == int_id))
+        {:noreply, assign(socket, :selected_execution, execution)}
+
+      :error ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -112,18 +118,33 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
 
   @impl true
   def handle_event("toggle_sync_run", %{"id" => id}, socket) do
-    sync_run_id = String.to_integer(id)
-    expanded = socket.assigns.expanded_sync_runs
+    case safe_to_integer(id) do
+      {:ok, sync_run_id} ->
+        expanded = socket.assigns.expanded_sync_runs
 
-    new_expanded =
-      if MapSet.member?(expanded, sync_run_id) do
-        MapSet.delete(expanded, sync_run_id)
-      else
-        MapSet.put(expanded, sync_run_id)
-      end
+        new_expanded =
+          if MapSet.member?(expanded, sync_run_id) do
+            MapSet.delete(expanded, sync_run_id)
+          else
+            MapSet.put(expanded, sync_run_id)
+          end
 
-    {:noreply, assign(socket, :expanded_sync_runs, new_expanded)}
+        {:noreply, assign(socket, :expanded_sync_runs, new_expanded)}
+
+      :error ->
+        {:noreply, socket}
+    end
   end
+
+  defp safe_to_integer(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {int, ""} -> {:ok, int}
+      _ -> :error
+    end
+  end
+
+  defp safe_to_integer(int) when is_integer(int), do: {:ok, int}
+  defp safe_to_integer(_), do: :error
 
   # Data loading
 
