@@ -145,23 +145,23 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-900 text-white p-6">
+    <div class="min-h-screen p-6">
       <div class="max-w-7xl mx-auto">
         <!-- Header -->
         <div class="flex justify-between items-center mb-8">
           <div>
-            <h1 class="text-3xl font-bold">Movie Matching Dashboard</h1>
-            <p class="text-gray-400 mt-1">Provider analytics and match visibility</p>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Movie Matching Dashboard</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1">Provider analytics and match visibility</p>
           </div>
 
           <div class="flex items-center gap-4">
             <!-- Time Range Selector -->
-            <div class="flex bg-gray-800 rounded-lg p-1">
+            <div class="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
               <%= for range <- ["1h", "6h", "24h", "7d", "30d"] do %>
                 <button
                   phx-click="change_time_range"
                   phx-value-range={range}
-                  class={"px-3 py-1 rounded text-sm transition-colors #{if @time_range == range, do: "bg-blue-600 text-white", else: "text-gray-400 hover:text-white"}"}
+                  class={"px-3 py-1 rounded text-sm transition-colors #{if @time_range == range, do: "bg-blue-600 text-white", else: "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"}"}
                 >
                   {range}
                 </button>
@@ -169,7 +169,7 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
             </div>
 
             <!-- Last Updated -->
-            <div class="text-sm text-gray-400">
+            <div class="text-sm text-gray-500 dark:text-gray-400">
               Updated: {format_time(@last_updated)}
             </div>
           </div>
@@ -210,8 +210,8 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             <!-- Provider Breakdown -->
-            <div class="bg-gray-800 rounded-lg p-6">
-              <h2 class="text-lg font-semibold mb-4">Provider Breakdown</h2>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Provider Breakdown</h2>
               <div class="space-y-4">
                 <%= for provider <- @providers do %>
                   <.provider_row provider={provider} />
@@ -220,32 +220,32 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
             </div>
 
             <!-- Confidence Distribution -->
-            <div class="bg-gray-800 rounded-lg p-6">
-              <h2 class="text-lg font-semibold mb-4">Confidence Distribution</h2>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Confidence Distribution</h2>
               <.confidence_chart distribution={@confidence_distribution} />
             </div>
 
             <!-- Activity Sparkline -->
-            <div class="bg-gray-800 rounded-lg p-6">
-              <h2 class="text-lg font-semibold mb-4">Match Activity</h2>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Match Activity</h2>
               <.sparkline_chart counts={@hourly_counts} />
-              <div class="mt-4 text-sm text-gray-400">
-                <span class="font-medium text-white">{sum_counts(@hourly_counts)}</span> matches in period
+              <div class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                <span class="font-medium text-gray-900 dark:text-white">{sum_counts(@hourly_counts)}</span> matches in period
               </div>
             </div>
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <!-- Failure Analysis Panel -->
-            <div class="bg-gray-800 rounded-lg p-6">
-              <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <span class="text-red-400">●</span>
                 Failure Analysis
-                <span class="text-sm font-normal text-gray-400">(7-day trend)</span>
+                <span class="text-sm font-normal text-gray-500 dark:text-gray-400">(7-day trend)</span>
               </h2>
 
               <!-- Header Row -->
-              <div class="grid grid-cols-4 gap-2 text-xs text-gray-400 mb-2 px-2">
+              <div class="grid grid-cols-4 gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2 px-2">
                 <div>Category</div>
                 <div class="text-right">Today</div>
                 <div class="text-right">7d Avg</div>
@@ -254,7 +254,7 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
               <div class="space-y-2">
                 <%= if Enum.all?(@failure_analysis, fn a -> a.today == 0 and a.week_avg == 0 end) do %>
-                  <div class="text-gray-400 text-center py-8">
+                  <div class="text-gray-500 dark:text-gray-400 text-center py-8">
                     No failures to analyze 🎉
                   </div>
                 <% else %>
@@ -266,9 +266,9 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
               <!-- Recent Failures Expandable -->
               <%= if length(@failures) > 0 do %>
-                <div class="mt-4 pt-4 border-t border-gray-700">
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <details class="group">
-                    <summary class="cursor-pointer text-sm text-gray-400 hover:text-white flex items-center gap-2">
+                    <summary class="cursor-pointer text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center gap-2">
                       <span class="group-open:rotate-90 transition-transform">▶</span>
                       Recent Failures ({length(@failures)})
                     </summary>
@@ -283,15 +283,15 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
             </div>
 
             <!-- Movies Needing Review -->
-            <div class="bg-gray-800 rounded-lg p-6">
-              <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <span class="text-yellow-400">●</span>
                 Needs Review
-                <span class="text-sm font-normal text-gray-400">({length(@needs_review)})</span>
+                <span class="text-sm font-normal text-gray-500 dark:text-gray-400">({length(@needs_review)})</span>
               </h2>
               <div class="space-y-3 max-h-96 overflow-y-auto">
                 <%= if Enum.empty?(@needs_review) do %>
-                  <div class="text-gray-400 text-center py-8">
+                  <div class="text-gray-500 dark:text-gray-400 text-center py-8">
                     All movies look good! ✓
                   </div>
                 <% else %>
@@ -304,14 +304,14 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
           </div>
 
           <!-- Recent Matches Activity Feed -->
-          <div class="bg-gray-800 rounded-lg p-6">
-            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <span class="text-green-400">●</span>
               Recent Matches
             </h2>
             <div class="overflow-x-auto">
               <table class="w-full">
-                <thead class="text-left text-gray-400 text-sm">
+                <thead class="text-left text-gray-500 dark:text-gray-400 text-sm">
                   <tr>
                     <th class="pb-3 pr-4">Movie</th>
                     <th class="pb-3 pr-4">Source Title</th>
@@ -323,20 +323,20 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
                 </thead>
                 <tbody class="text-sm">
                   <%= for match <- @recent_matches do %>
-                    <tr class="border-t border-gray-700">
+                    <tr class="border-t border-gray-200 dark:border-gray-700">
                       <td class="py-3 pr-4">
                         <div class="flex items-center gap-3">
                           <%= if match.poster_url do %>
                             <img src={match.poster_url} class="w-8 h-12 rounded object-cover" alt="" />
                           <% else %>
-                            <div class="w-8 h-12 rounded bg-gray-700 flex items-center justify-center">
+                            <div class="w-8 h-12 rounded bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                               <span class="text-gray-500 text-xs">?</span>
                             </div>
                           <% end %>
-                          <span class="font-medium">{match.title}</span>
+                          <span class="font-medium text-gray-900 dark:text-white">{match.title}</span>
                         </div>
                       </td>
-                      <td class="py-3 pr-4 text-gray-400">
+                      <td class="py-3 pr-4 text-gray-500 dark:text-gray-400">
                         {match.source_title || "-"}
                       </td>
                       <td class="py-3 pr-4">
@@ -356,7 +356,7 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
                       <td class="py-3 pr-4">
                         <.confidence_badge confidence={match.confidence} />
                       </td>
-                      <td class="py-3 text-gray-400">
+                      <td class="py-3 text-gray-500 dark:text-gray-400">
                         {format_relative_time(match.inserted_at)}
                       </td>
                     </tr>
@@ -375,21 +375,21 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
   defp summary_card(assigns) do
     color_classes = %{
-      "blue" => "border-blue-500 bg-blue-500/10",
-      "green" => "border-green-500 bg-green-500/10",
-      "red" => "border-red-500 bg-red-500/10",
-      "yellow" => "border-yellow-500 bg-yellow-500/10",
-      "purple" => "border-purple-500 bg-purple-500/10"
+      "blue" => "border-blue-500 bg-blue-50 dark:bg-blue-500/10",
+      "green" => "border-green-500 bg-green-50 dark:bg-green-500/10",
+      "red" => "border-red-500 bg-red-50 dark:bg-red-500/10",
+      "yellow" => "border-yellow-500 bg-yellow-50 dark:bg-yellow-500/10",
+      "purple" => "border-purple-500 bg-purple-50 dark:bg-purple-500/10"
     }
 
     assigns =
       assign(assigns, :color_class, Map.get(color_classes, assigns.color, color_classes["blue"]))
 
     ~H"""
-    <div class={"rounded-lg p-6 border-l-4 #{@color_class}"}>
-      <div class="text-sm text-gray-400">{@title}</div>
-      <div class="text-3xl font-bold mt-1">{format_number(@value)}</div>
-      <div class="text-sm text-gray-400 mt-1">{@subtitle}</div>
+    <div class={"rounded-lg p-6 border-l-4 shadow #{@color_class}"}>
+      <div class="text-sm text-gray-500 dark:text-gray-400">{@title}</div>
+      <div class="text-3xl font-bold text-gray-900 dark:text-white mt-1">{format_number(@value)}</div>
+      <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">{@subtitle}</div>
     </div>
     """
   end
@@ -399,13 +399,13 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     <div class="flex items-center justify-between py-2">
       <div class="flex items-center gap-3">
         <div class="w-3 h-3 rounded-full" style={"background-color: #{@provider.color}"}></div>
-        <span class="font-medium">{@provider.name}</span>
+        <span class="font-medium text-gray-900 dark:text-white">{@provider.name}</span>
       </div>
       <div class="flex items-center gap-4">
         <div class="text-sm">
-          <span class="text-green-400">{@provider.successes}</span>
-          <span class="text-gray-500">/</span>
-          <span class="text-red-400">{@provider.failures}</span>
+          <span class="text-green-600 dark:text-green-400">{@provider.successes}</span>
+          <span class="text-gray-400 dark:text-gray-500">/</span>
+          <span class="text-red-600 dark:text-red-400">{@provider.failures}</span>
         </div>
         <div class="text-sm font-medium" style={"color: #{success_rate_color(@provider.success_rate)}"}>
           {format_rate(@provider.success_rate)}%
@@ -427,15 +427,15 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
         <% count = Map.get(@distribution, bucket, 0) %>
         <% width = if @max_count > 0, do: count / @max_count * 100, else: 0 %>
         <div class="flex items-center gap-2">
-          <div class="w-16 text-xs text-gray-400">{bucket}</div>
-          <div class="flex-1 bg-gray-700 rounded-full h-4 overflow-hidden">
+          <div class="w-16 text-xs text-gray-500 dark:text-gray-400">{bucket}</div>
+          <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
             <div
               class={"h-full rounded-full #{confidence_bar_color(bucket)}"}
               style={"width: #{width}%"}
             >
             </div>
           </div>
-          <div class="w-8 text-xs text-right text-gray-400">{count}</div>
+          <div class="w-8 text-xs text-right text-gray-500 dark:text-gray-400">{count}</div>
         </div>
       <% end %>
     </div>
@@ -464,20 +464,20 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
   defp failure_analysis_row(assigns) do
     ~H"""
-    <div class="grid grid-cols-4 gap-2 items-center py-2 px-2 rounded hover:bg-gray-700/50 transition-colors">
+    <div class="grid grid-cols-4 gap-2 items-center py-2 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
       <!-- Category with color indicator -->
       <div class="flex items-center gap-2">
         <div class="w-2 h-2 rounded-full" style={"background-color: #{@analysis.color}"}></div>
-        <span class="text-sm truncate" title={@analysis.label}>{@analysis.label}</span>
+        <span class="text-sm text-gray-900 dark:text-white truncate" title={@analysis.label}>{@analysis.label}</span>
       </div>
 
       <!-- Today count -->
-      <div class="text-right text-sm font-medium">
+      <div class="text-right text-sm font-medium text-gray-900 dark:text-white">
         {@analysis.today}
       </div>
 
       <!-- 7-day average -->
-      <div class="text-right text-sm text-gray-400">
+      <div class="text-right text-sm text-gray-500 dark:text-gray-400">
         {format_avg(@analysis.week_avg)}
       </div>
 
@@ -492,9 +492,9 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
   defp trend_indicator(assigns) do
     {arrow, color} =
       case assigns.trend do
-        :up -> {"↑", "text-red-400"}
-        :down -> {"↓", "text-green-400"}
-        :stable -> {"→", "text-gray-400"}
+        :up -> {"↑", "text-red-500 dark:text-red-400"}
+        :down -> {"↓", "text-green-500 dark:text-green-400"}
+        :stable -> {"→", "text-gray-500 dark:text-gray-400"}
       end
 
     assigns = assign(assigns, :arrow, arrow) |> assign(:color, color)
@@ -516,17 +516,17 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
   defp failure_row(assigns) do
     ~H"""
-    <div class="bg-gray-700/50 rounded-lg p-3">
+    <div class="bg-gray-100 dark:bg-gray-700/50 rounded-lg p-3">
       <div class="flex justify-between items-start">
         <div>
-          <div class="font-medium">{@failure.polish_title}</div>
+          <div class="font-medium text-gray-900 dark:text-white">{@failure.polish_title}</div>
           <%= if @failure.original_title do %>
-            <div class="text-sm text-gray-400">{@failure.original_title}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">{@failure.original_title}</div>
           <% end %>
         </div>
         <span class="text-xs text-gray-500">{format_relative_time(@failure.discarded_at)}</span>
       </div>
-      <div class="mt-2 text-sm text-red-400 font-mono truncate">
+      <div class="mt-2 text-sm text-red-600 dark:text-red-400 font-mono truncate">
         {truncate_error(@failure.error)}
       </div>
       <div class="mt-1 text-xs text-gray-500">
@@ -538,22 +538,22 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
   defp review_row(assigns) do
     ~H"""
-    <div class="bg-gray-700/50 rounded-lg p-3">
+    <div class="bg-gray-100 dark:bg-gray-700/50 rounded-lg p-3">
       <div class="flex justify-between items-start">
         <div class="flex items-center gap-3">
           <%= if @movie.poster_url do %>
             <img src={@movie.poster_url} class="w-10 h-14 rounded object-cover" alt="" />
           <% else %>
-            <div class="w-10 h-14 rounded bg-gray-600 flex items-center justify-center">
-              <span class="text-gray-400 text-xs">?</span>
+            <div class="w-10 h-14 rounded bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+              <span class="text-gray-500 dark:text-gray-400 text-xs">?</span>
             </div>
           <% end %>
           <div>
-            <div class="font-medium">{@movie.title}</div>
+            <div class="font-medium text-gray-900 dark:text-white">{@movie.title}</div>
             <a
               href={"https://www.themoviedb.org/movie/#{@movie.tmdb_id}"}
               target="_blank"
-              class="text-sm text-blue-400 hover:underline"
+              class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
             >
               TMDB #{@movie.tmdb_id}
             </a>
@@ -562,12 +562,12 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
       </div>
       <div class="mt-2 flex flex-wrap gap-2">
         <%= for issue <- @movie.issues do %>
-          <span class="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs">
+          <span class="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded text-xs">
             {issue}
           </span>
         <% end %>
       </div>
-      <div class="mt-3 flex items-center gap-2 border-t border-gray-600 pt-3">
+      <div class="mt-3 flex items-center gap-2 border-t border-gray-200 dark:border-gray-600 pt-3">
         <button
           phx-click="confirm_match"
           phx-value-id={@movie.id}
@@ -585,7 +585,7 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
         <a
           href={"https://www.themoviedb.org/search?query=#{URI.encode(@movie.title || "")}"}
           target="_blank"
-          class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded transition-colors"
+          class="px-3 py-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-white text-sm rounded transition-colors"
         >
           Search TMDB
         </a>
@@ -669,10 +669,10 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
   defp confidence_bar_color("<50%"), do: "bg-red-500"
   defp confidence_bar_color(_), do: "bg-gray-500"
 
-  defp provider_badge_class("tmdb"), do: "bg-blue-500/20 text-blue-400"
-  defp provider_badge_class("omdb"), do: "bg-yellow-500/20 text-yellow-400"
-  defp provider_badge_class("imdb"), do: "bg-amber-500/20 text-amber-400"
-  defp provider_badge_class(_), do: "bg-gray-500/20 text-gray-400"
+  defp provider_badge_class("tmdb"), do: "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400"
+  defp provider_badge_class("omdb"), do: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400"
+  defp provider_badge_class("imdb"), do: "bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400"
+  defp provider_badge_class(_), do: "bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400"
 
   defp truncate_error(nil), do: "Unknown error"
 
