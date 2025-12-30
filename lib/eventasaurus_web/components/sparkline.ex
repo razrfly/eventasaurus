@@ -1,9 +1,10 @@
 defmodule EventasaurusWeb.Components.Sparkline do
   @moduledoc """
-  Server-side SVG sparkline generation using Contex.
+  Server-side SVG sparkline generation.
 
   Generates compact sparkline visualizations for trend data in the monitoring dashboard.
-  Each sparkline shows success rate over time (7 days by default).
+  Each sparkline shows success rate over time (7 days by default). The SVG is generated
+  manually with path elements for the line and gradient fill area.
 
   ## Usage
 
@@ -15,6 +16,12 @@ defmodule EventasaurusWeb.Components.Sparkline do
       # With custom dimensions
       svg = Sparkline.render(trend_data.data_points, width: 100, height: 24)
   """
+
+  @typedoc "Data point with success rate for sparkline rendering"
+  @type data_point :: %{success_rate: float()} | map()
+
+  @typedoc "Trend direction for arrow indicator"
+  @type trend_direction :: :improving | :stable | :degrading
 
   @default_width 80
   @default_height 20
@@ -39,6 +46,7 @@ defmodule EventasaurusWeb.Components.Sparkline do
       iex> Sparkline.render([%{success_rate: 95.0}, %{success_rate: 97.0}, %{success_rate: 96.0}])
       "<svg ...>...</svg>"
   """
+  @spec render([data_point()] | any(), keyword()) :: String.t()
   def render(data_points, opts \\ [])
 
   def render([], _opts), do: empty_sparkline()
@@ -46,6 +54,8 @@ defmodule EventasaurusWeb.Components.Sparkline do
   def render(data_points, opts) when is_list(data_points) do
     width = Keyword.get(opts, :width, @default_width)
     height = Keyword.get(opts, :height, @default_height)
+    # Generate unique ID for this sparkline instance to avoid duplicate ID warnings
+    unique_id = Keyword.get(opts, :id, generate_unique_id())
 
     # Extract success rates, defaulting to 100 for missing data
     values =
@@ -59,7 +69,7 @@ defmodule EventasaurusWeb.Components.Sparkline do
     color = Keyword.get(opts, :color, color_for_rate(avg_rate))
 
     # Build the sparkline SVG
-    build_sparkline_svg(values, width, height, color)
+    build_sparkline_svg(values, width, height, color, unique_id)
   end
 
   def render(_, _opts), do: empty_sparkline()
@@ -75,6 +85,7 @@ defmodule EventasaurusWeb.Components.Sparkline do
 
   An HTML string with the appropriate arrow and color.
   """
+  @spec trend_arrow(trend_direction() | any()) :: String.t()
   def trend_arrow(:improving) do
     ~s(<span class="text-green-500 dark:text-green-400 font-bold" title="Improving">↑</span>)
   end
@@ -97,11 +108,14 @@ defmodule EventasaurusWeb.Components.Sparkline do
     </svg>)
   end
 
-  defp color_for_rate(rate) when rate >= 95, do: "#22c55e"  # green-500
-  defp color_for_rate(rate) when rate >= 80, do: "#eab308"  # yellow-500
-  defp color_for_rate(_rate), do: "#ef4444"  # red-500
+  # green-500
+  defp color_for_rate(rate) when rate >= 95, do: "#22c55e"
+  # yellow-500
+  defp color_for_rate(rate) when rate >= 80, do: "#eab308"
+  # red-500
+  defp color_for_rate(_rate), do: "#ef4444"
 
-  defp build_sparkline_svg(values, width, height, color) do
+  defp build_sparkline_svg(values, width, height, color, unique_id) do
     n = length(values)
 
     if n < 2 do
@@ -135,15 +149,18 @@ defmodule EventasaurusWeb.Components.Sparkline do
       # Build filled area (for gradient effect)
       area_d = build_area_path(points, width, height)
 
+      # Use unique gradient ID to avoid duplicate ID warnings in DOM
+      gradient_id = "sparkline-gradient-#{unique_id}"
+
       """
       <svg width="#{width}" height="#{height}" viewBox="0 0 #{width} #{height}" class="sparkline">
         <defs>
-          <linearGradient id="sparkline-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <linearGradient id="#{gradient_id}" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" style="stop-color:#{color};stop-opacity:0.3" />
             <stop offset="100%" style="stop-color:#{color};stop-opacity:0.05" />
           </linearGradient>
         </defs>
-        <path d="#{area_d}" fill="url(#sparkline-gradient)" />
+        <path d="#{area_d}" fill="url(##{gradient_id})" />
         <path d="#{path_d}" fill="none" stroke="#{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
       """
@@ -198,4 +215,9 @@ defmodule EventasaurusWeb.Components.Sparkline do
 
   defp format_coord(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
   defp format_coord(n), do: to_string(n)
+
+  # Generate a unique ID for each sparkline instance
+  defp generate_unique_id do
+    :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+  end
 end

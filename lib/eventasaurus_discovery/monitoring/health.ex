@@ -152,6 +152,24 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
     Enum.take(health.recent_failures, limit)
   end
 
+  @typedoc "Trend data point with hourly aggregates"
+  @type trend_data_point :: %{
+          hour: DateTime.t(),
+          success_rate: float(),
+          total: non_neg_integer()
+        }
+
+  @typedoc "Trend direction indicator"
+  @type trend_direction :: :improving | :stable | :degrading
+
+  @typedoc "Trend data result"
+  @type trend_data_result :: %{
+          source: String.t(),
+          hours: pos_integer(),
+          data_points: [trend_data_point()],
+          trend_direction: trend_direction()
+        }
+
   @doc """
   Fetches 7-day hourly trend data for sparklines.
 
@@ -172,6 +190,7 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
       #   trend_direction: :improving  # :improving | :stable | :degrading
       # }
   """
+  @spec trend_data(String.t(), keyword()) :: {:ok, trend_data_result()} | {:error, atom()}
   def trend_data(source, opts \\ []) do
     hours = Keyword.get(opts, :hours, 168)
 
@@ -216,6 +235,7 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
       #   slo_target: 95.0
       # }
   """
+  @spec health_history(keyword()) :: {:ok, map()}
   def health_history(opts \\ []) do
     hours = Keyword.get(opts, :hours, 168)
     from_time = DateTime.add(DateTime.utc_now(), -hours, :hour)
@@ -281,6 +301,8 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
       {:ok, trends} = Health.trends_for_sources(["cinema_city", "kino_krakow"])
       # => %{"cinema_city" => %{...}, "kino_krakow" => %{...}}
   """
+  @spec trends_for_sources([String.t()], keyword()) ::
+          {:ok, %{String.t() => trend_data_result() | nil}}
   def trends_for_sources(sources, opts \\ []) when is_list(sources) do
     results =
       sources
@@ -330,6 +352,7 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
       #   ...
       # ]
   """
+  @spec baseline_comparison(keyword()) :: {:ok, map()}
   def baseline_comparison(opts \\ []) do
     hours = Keyword.get(opts, :hours, 24)
     baseline_offset_days = Keyword.get(opts, :baseline_offset_days, 7)
@@ -416,7 +439,8 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
     end
   end
 
-  defp calculate_period_metrics([]), do: %{success_rate: nil, avg_duration: nil, p95_duration: nil, total: 0}
+  defp calculate_period_metrics([]),
+    do: %{success_rate: nil, avg_duration: nil, p95_duration: nil, total: 0}
 
   defp calculate_period_metrics(executions) do
     total = length(executions)
