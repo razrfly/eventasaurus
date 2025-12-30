@@ -124,6 +124,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   Get confidence distribution of matched movies.
 
   Returns counts by confidence buckets for visualization.
+  Buckets: ≥95%, 85-94%, 70-84%, 50-69%, <50%
   """
   def get_confidence_distribution(hours \\ 168) do
     since = hours_ago(hours)
@@ -137,7 +138,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
       )
       |> Repo.all()
 
-    # Group by confidence buckets
+    # Group by confidence buckets (5 buckets per Issue #3083 spec)
     # Default to 0.8 (80%) if not explicitly stored
     movies
     |> Enum.map(fn metadata ->
@@ -145,17 +146,130 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
     end)
     |> Enum.group_by(fn confidence ->
       cond do
-        confidence >= 0.95 -> "95-100%"
-        confidence >= 0.90 -> "90-95%"
-        confidence >= 0.85 -> "85-90%"
-        confidence >= 0.80 -> "80-85%"
-        confidence >= 0.70 -> "70-80%"
-        true -> "<70%"
+        confidence >= 0.95 -> "≥95%"
+        confidence >= 0.85 -> "85-94%"
+        confidence >= 0.70 -> "70-84%"
+        confidence >= 0.50 -> "50-69%"
+        true -> "<50%"
       end
     end)
     |> Enum.map(fn {bucket, items} -> {bucket, length(items)} end)
     |> Enum.into(%{})
   end
+
+  @doc """
+  Get failure analysis with 7-day trend comparison.
+
+  Returns error breakdown by category with today vs 7-day average comparison.
+  Categories: movie_not_ready, duplicate_movie_error, no_results, api_timeout, unknown
+  """
+  def get_failure_analysis(hours \\ 24) do
+    now = DateTime.utc_now()
+    today_start = hours_ago(hours)
+    week_start = hours_ago(168)  # 7 days
+
+    # Get today's failures by error category
+    today_failures = get_failures_by_category(today_start, now)
+
+    # Get 7-day failures for average calculation
+    week_failures = get_failures_by_category(week_start, now)
+
+    # Calculate averages (7-day total / 7)
+    categories = ["movie_not_ready", "duplicate_movie_error", "no_results", "api_timeout", "unknown"]
+
+    Enum.map(categories, fn category ->
+      today_count = Map.get(today_failures, category, 0)
+      week_count = Map.get(week_failures, category, 0)
+      week_avg = Float.round(week_count / 7, 1)
+
+      # Calculate trend: compare today to 7-day average
+      {trend, trend_pct} = calculate_trend(today_count, week_avg)
+
+      %{
+        category: category,
+        label: format_category_label(category),
+        today: today_count,
+        week_avg: week_avg,
+        trend: trend,
+        trend_pct: trend_pct,
+        color: category_color(category)
+      }
+    end)
+    |> Enum.sort_by(& &1.today, :desc)
+  end
+
+  defp get_failures_by_category(from_time, to_time) do
+    from(j in "oban_jobs",
+      where: j.worker == "EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob",
+      where: j.state == "discarded",
+      where: j.discarded_at >= ^from_time and j.discarded_at <= ^to_time,
+      select: j.errors
+    )
+    |> Repo.all()
+    |> Enum.map(&categorize_error/1)
+    |> Enum.frequencies()
+  end
+
+  defp categorize_error(errors) when is_list(errors) do
+    # Get the last error message from Oban's error array
+    case errors do
+      [%{"error" => error} | _] -> categorize_error_message(error)
+      [%{"message" => msg} | _] -> categorize_error_message(msg)
+      _ -> "unknown"
+    end
+  end
+
+  defp categorize_error(_), do: "unknown"
+
+  defp categorize_error_message(msg) when is_binary(msg) do
+    cond do
+      String.contains?(msg, "movie_not_ready") or String.contains?(msg, "snooze") ->
+        "movie_not_ready"
+
+      String.contains?(msg, "duplicate") or String.contains?(msg, "already exists") ->
+        "duplicate_movie_error"
+
+      String.contains?(msg, "no results") or String.contains?(msg, "not found") or
+          String.contains?(msg, "No movie found") ->
+        "no_results"
+
+      String.contains?(msg, "timeout") or String.contains?(msg, "HTTPoison") or
+          String.contains?(msg, "connection") ->
+        "api_timeout"
+
+      true ->
+        "unknown"
+    end
+  end
+
+  defp categorize_error_message(_), do: "unknown"
+
+  defp calculate_trend(today, avg) when avg == 0 and today == 0, do: {:stable, 0.0}
+  defp calculate_trend(_today, avg) when avg == 0, do: {:up, 100.0}
+
+  defp calculate_trend(today, avg) do
+    diff_pct = Float.round((today - avg) / avg * 100, 1)
+
+    cond do
+      diff_pct > 20 -> {:up, diff_pct}
+      diff_pct < -20 -> {:down, abs(diff_pct)}
+      true -> {:stable, abs(diff_pct)}
+    end
+  end
+
+  defp format_category_label("movie_not_ready"), do: "Movie Not Ready"
+  defp format_category_label("duplicate_movie_error"), do: "Duplicate Error"
+  defp format_category_label("no_results"), do: "No Results"
+  defp format_category_label("api_timeout"), do: "API Timeout"
+  defp format_category_label("unknown"), do: "Unknown"
+  defp format_category_label(other), do: Phoenix.Naming.humanize(other)
+
+  defp category_color("movie_not_ready"), do: "#f59e0b"
+  defp category_color("duplicate_movie_error"), do: "#ef4444"
+  defp category_color("no_results"), do: "#8b5cf6"
+  defp category_color("api_timeout"), do: "#3b82f6"
+  defp category_color("unknown"), do: "#6b7280"
+  defp category_color(_), do: "#6b7280"
 
   @doc """
   Get recent match failures for analysis.
@@ -298,6 +412,53 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
       select: count()
     )
     |> Repo.one() || 0
+  end
+
+  @doc """
+  Confirm a movie match as correct (mark as reviewed).
+
+  Updates the movie's metadata to indicate it has been manually reviewed.
+  """
+  def confirm_movie_match(movie_id) do
+    case Repo.get(Movie, movie_id) do
+      nil ->
+        {:error, :not_found}
+
+      movie ->
+        updated_metadata =
+          (movie.metadata || %{})
+          |> Map.put("reviewed", true)
+          |> Map.put("reviewed_at", DateTime.utc_now() |> DateTime.to_iso8601())
+          |> Map.put("match_confidence", 1.0)
+
+        movie
+        |> Ecto.Changeset.change(metadata: updated_metadata)
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Reject a movie match (remove cinema_city_film_id for re-matching).
+
+  This clears the cinema_city_film_id from metadata so the next scraper run
+  will attempt to re-match this movie with potentially better data.
+  """
+  def reject_movie_match(movie_id) do
+    case Repo.get(Movie, movie_id) do
+      nil ->
+        {:error, :not_found}
+
+      movie ->
+        updated_metadata =
+          (movie.metadata || %{})
+          |> Map.delete("cinema_city_film_id")
+          |> Map.put("rejected_at", DateTime.utc_now() |> DateTime.to_iso8601())
+          |> Map.put("needs_rematch", true)
+
+        movie
+        |> Ecto.Changeset.change(metadata: updated_metadata)
+        |> Repo.update()
+    end
   end
 
   # Private helpers

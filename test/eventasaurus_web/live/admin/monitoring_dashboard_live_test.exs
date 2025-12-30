@@ -10,13 +10,14 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLiveTest do
     # This works because messages are processed in order
     send(view.pid, {:test_ping, self()})
 
-    receive do
-      :test_pong -> :ok
-    after
-      5_000 -> :timeout
+    case receive do
+           :test_pong -> :ok
+         after
+           5_000 -> :timeout
+         end do
+      :ok -> render(view)
+      :timeout -> raise "Timeout waiting for async data loading to complete"
     end
-
-    render(view)
   end
 
   describe "MonitoringDashboardLive" do
