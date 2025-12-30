@@ -30,7 +30,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   alias EventasaurusApp.{Repo, Monitoring, Venues}
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventPerformer, PublicEventSource}
   alias EventasaurusDiscovery.Categories.Category
-  alias EventasaurusDiscovery.ScraperProcessingLogs.ScraperProcessingLog
+  alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
   alias EventasaurusDiscovery.Admin.DiscoveryStatsCollector
   alias EventasaurusDiscovery.Monitoring.Collisions
   alias EventasaurusDiscovery.Locations.CityHierarchy
@@ -211,6 +211,9 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   @doc """
   Get count of recent scraper errors (last 24 hours).
   Cached for 2 minutes.
+
+  Note: Updated in Issue #3048 Phase 3 to use job_execution_summaries
+  instead of the deprecated scraper_processing_logs table.
   """
   def get_recent_scraper_errors do
     Cachex.fetch(@cache_name, :recent_scraper_errors, fn ->
@@ -218,10 +221,10 @@ defmodule EventasaurusApp.Cache.DashboardStats do
 
       count =
         Repo.replica().one(
-          from(log in ScraperProcessingLog,
-            where: log.status == :error,
-            where: log.processed_at >= ^twenty_four_hours_ago,
-            select: count(log.id)
+          from(j in JobExecutionSummary,
+            where: j.state in ["discarded", "cancelled"],
+            where: j.attempted_at >= ^twenty_four_hours_ago,
+            select: count(j.id)
           )
         ) || 0
 
