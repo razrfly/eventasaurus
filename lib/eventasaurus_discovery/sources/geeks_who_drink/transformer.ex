@@ -397,9 +397,12 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     # Parse day and time from time_text for enhanced description
     day_info = parse_day_from_time_text(venue_data[:time_text])
 
+    # Get timezone from venue_data (VenueDetailJob provides this)
+    timezone = venue_data[:timezone] || venue_data["timezone"]
+
     time_info =
       parse_time_from_time_text(venue_data[:time_text]) ||
-        parse_time_from_starts_at(venue_data[:starts_at])
+        parse_time_from_starts_at(venue_data[:starts_at], timezone)
 
     # Build base description with schedule if available
     base_description =
@@ -456,16 +459,34 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   defp parse_time_from_time_text(_), do: nil
 
   # Parse time from starts_at DateTime (fallback)
-  defp parse_time_from_starts_at(%DateTime{} = dt) do
-    dt
+  # IMPORTANT: Must convert UTC to local timezone before extracting time
+  # See Issue #3022 - without timezone conversion, UTC times like 04:00 are displayed
+  # instead of local times like 8:00 PM
+  defp parse_time_from_starts_at(%DateTime{} = dt, timezone) when is_binary(timezone) do
+    # Convert UTC DateTime to local timezone before extracting time
+    local_dt = DateTime.shift_zone!(dt, timezone)
+
+    local_dt
     |> DateTime.to_time()
     |> Calendar.strftime("%I:%M%p")
     |> String.downcase()
-    # "7:00pm" -> "7pm"
+    # "07:00pm" -> "7pm", "08:00pm" -> "8pm"
+    |> String.replace(~r/^0/, "")
     |> String.replace(~r/:00/, "")
+  rescue
+    # If timezone conversion fails, log and return nil
+    error ->
+      Logger.warning("Failed to convert time to timezone #{timezone}: #{inspect(error)}")
+      nil
   end
 
-  defp parse_time_from_starts_at(_), do: nil
+  defp parse_time_from_starts_at(%DateTime{} = _dt, nil) do
+    # No timezone available - can't safely convert
+    Logger.warning("Cannot format time from starts_at: no timezone provided")
+    nil
+  end
+
+  defp parse_time_from_starts_at(_, _), do: nil
 
   # Parse pricing information from fee_text
   # Returns {is_free, min_price}

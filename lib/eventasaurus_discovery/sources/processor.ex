@@ -246,11 +246,9 @@ defmodule EventasaurusDiscovery.Sources.Processor do
   end
 
   # Use ErrorCategories for comprehensive error categorization
-  # Convert string result to atom for internal aggregation use
+  # ErrorCategories.categorize_error/1 already returns an atom
   defp categorize_error(reason) do
-    reason
-    |> ErrorCategories.categorize_error()
-    |> String.to_atom()
+    ErrorCategories.categorize_error(reason)
   end
 
   @doc """
