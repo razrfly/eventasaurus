@@ -1253,8 +1253,13 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     details =
       if node.state in ["discarded", "cancelled"] do
         case get_in(node.results, ["error_category"]) do
-          nil -> details
-          cat -> details ++ ["<span class=\"text-red-500\">#{cat}</span>"]
+          nil ->
+            details
+
+          cat ->
+            # Escape error category to prevent XSS
+            escaped_cat = Phoenix.HTML.html_escape(cat) |> Phoenix.HTML.safe_to_string()
+            details ++ ["<span class=\"text-red-500\">#{escaped_cat}</span>"]
         end
       else
         details
