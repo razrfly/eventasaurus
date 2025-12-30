@@ -10,8 +10,7 @@ defmodule EventasaurusDiscovery.Sources.Processor do
 
   alias EventasaurusDiscovery.Scraping.Processors.{EventProcessor, VenueProcessor}
   alias EventasaurusDiscovery.Performers.PerformerStore
-  alias EventasaurusDiscovery.ScraperProcessingLogs
-  alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Metrics.ErrorCategories
 
   @doc """
   Process a list of events from any source.
@@ -128,131 +127,39 @@ defmodule EventasaurusDiscovery.Sources.Processor do
       event_data[:venue] || event_data["venue"] ||
         event_data[:venue_data] || event_data["venue_data"]
 
-    # Extract metadata for logging (limited to avoid PII exposure)
-    metadata = %{
-      "entity_type" => "event",
-      "entity_name" => event_data[:title] || event_data["title"],
-      "external_id" => event_data[:external_id] || event_data["external_id"],
-      "venue_name" => get_venue_name(venue_data),
-      "city_name" => get_city_name(venue_data),
-      "city_id" => nil,
-      "phase" => "processing"
-    }
+    # Note: Job execution logging is now handled via Oban telemetry
+    # (see EventasaurusDiscovery.Metrics.MetricsTracker)
+    # The ScraperProcessingLogs module was removed in Issue #3048 Phase 3
 
-    job_id = get_oban_job_id()
-
-    result =
-      with {:ok, venue} <- process_venue(venue_data, source, scraper_name),
-           {:ok, performers} <-
-             process_performers(event_data[:performers] || event_data["performers"] || [], source),
-           {:ok, event} <- process_event(event_data, source, venue, performers) do
-        # Update metadata with city_id after successful venue processing
-        updated_metadata = Map.put(metadata, "city_id", venue.city_id)
-        {:ok, event, updated_metadata}
-      else
-        {:error, reason} = error when is_binary(reason) ->
-          # Check if this is a GPS coordinate error that should fail the job
-          # More robust matching for GPS-related errors
-          if String.contains?(String.downcase(reason), "gps coordinates") or
-               String.contains?(String.downcase(reason), "latitude") or
-               String.contains?(String.downcase(reason), "longitude") do
-            Logger.error("🚫 Critical venue error - Missing GPS coordinates")
-            # Log limited event data to avoid PII exposure
-            event_summary = Map.take(event_data, [:external_id, :title])
-            Logger.debug("Event summary: #{inspect(event_summary)}")
-            # Return a special error tuple that indicates job should be discarded
-            {:error, {:discard, reason}}
-          else
-            Logger.error("Failed to process event: #{String.slice(reason, 0, 200)}")
-            error
-          end
-
-        {:error, reason} = error ->
-          Logger.error("Failed to process event: #{inspect(reason)}")
-          Logger.debug("Event data: #{inspect(event_data)}")
-          error
-      end
-
-    # Log the outcome (normalize source for logging)
-    source_for_logging = normalize_source_for_logging(source)
-
-    case result do
-      {:ok, event, updated_metadata} ->
-        if source_for_logging do
-          ScraperProcessingLogs.log_success(source_for_logging, job_id, updated_metadata)
+    with {:ok, venue} <- process_venue(venue_data, source, scraper_name),
+         {:ok, performers} <-
+           process_performers(event_data[:performers] || event_data["performers"] || [], source),
+         {:ok, event} <- process_event(event_data, source, venue, performers) do
+      {:ok, event}
+    else
+      {:error, reason} when is_binary(reason) ->
+        # Check if this is a GPS coordinate error that should fail the job
+        # More robust matching for GPS-related errors
+        if String.contains?(String.downcase(reason), "gps coordinates") or
+             String.contains?(String.downcase(reason), "latitude") or
+             String.contains?(String.downcase(reason), "longitude") do
+          Logger.error("🚫 Critical venue error - Missing GPS coordinates")
+          # Log limited event data to avoid PII exposure
+          event_summary = Map.take(event_data, [:external_id, :title])
+          Logger.debug("Event summary: #{inspect(event_summary)}")
+          # Return a special error tuple that indicates job should be discarded
+          {:error, {:discard, reason}}
+        else
+          Logger.error("Failed to process event: #{String.slice(reason, 0, 200)}")
+          {:error, reason}
         end
 
-        {:ok, event}
-
-      {:error, _reason} = error ->
-        # Extract the actual error reason from error tuples
-        error_reason =
-          case error do
-            {:error, {:discard, reason}} -> reason
-            {:error, reason} -> reason
-          end
-
-        if source_for_logging do
-          ScraperProcessingLogs.log_failure(source_for_logging, job_id, error_reason, metadata)
-        end
-
-        result
+      {:error, reason} = error ->
+        Logger.error("Failed to process event: #{inspect(reason)}")
+        Logger.debug("Event data: #{inspect(event_data)}")
+        error
     end
   end
-
-  # Normalize source parameter to struct for logging
-  # source can be: Source struct, integer (source_id), or string (source_name)
-  defp normalize_source_for_logging(source) when is_struct(source) do
-    # Already a struct, use as-is
-    source
-  end
-
-  defp normalize_source_for_logging(source_id) when is_integer(source_id) do
-    # Query the source by ID
-    case Repo.get(EventasaurusDiscovery.Sources.Source, source_id) do
-      nil ->
-        Logger.warning("Cannot log: Source ID #{source_id} not found")
-        nil
-
-      source ->
-        source
-    end
-  end
-
-  defp normalize_source_for_logging(source_name) when is_binary(source_name) do
-    # Query the source by name
-    case Repo.get_by(EventasaurusDiscovery.Sources.Source, name: source_name) do
-      nil ->
-        Logger.warning("Cannot log: Source '#{source_name}' not found")
-        nil
-
-      source ->
-        source
-    end
-  end
-
-  defp normalize_source_for_logging(_source) do
-    Logger.warning("Cannot log: Unknown source type")
-    nil
-  end
-
-  # Helper to safely extract venue name from venue data
-  defp get_venue_name(nil), do: nil
-
-  defp get_venue_name(venue_data) when is_map(venue_data) do
-    venue_data[:name] || venue_data["name"]
-  end
-
-  defp get_venue_name(_), do: nil
-
-  # Helper to safely extract city name from venue data
-  defp get_city_name(nil), do: nil
-
-  defp get_city_name(venue_data) when is_map(venue_data) do
-    venue_data[:city] || venue_data["city"]
-  end
-
-  defp get_city_name(_), do: nil
 
   defp process_venue(nil, _source, _scraper_name) do
     {:error, :venue_required}
@@ -338,11 +245,11 @@ defmodule EventasaurusDiscovery.Sources.Processor do
     EventProcessor.process_event(event_with_performers, source_id, source_priority)
   end
 
-  # Delegate to ScraperProcessingLogs for comprehensive error categorization
+  # Use ErrorCategories for comprehensive error categorization
   # Convert string result to atom for internal aggregation use
   defp categorize_error(reason) do
     reason
-    |> ScraperProcessingLogs.categorize_error()
+    |> ErrorCategories.categorize_error()
     |> String.to_atom()
   end
 

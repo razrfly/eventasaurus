@@ -43,19 +43,18 @@ defmodule EventasaurusWeb.Router do
       live "/discovery/stats/source/:source_slug", Admin.DiscoveryStatsLive.SourceDetail, :show
       live "/discovery/stats/city/:city_slug", Admin.DiscoveryStatsLive.CityDetail, :show
 
-      # Scraper Processing Logs (dev - no auth)
-      live "/scraper-logs", Admin.ScraperLogsLive
-
       # Job Execution Monitor (dev - no auth)
       live "/job-executions", Admin.JobExecutionMonitorLive
       live "/job-executions/sources/:source_slug", Admin.SourcePipelineMonitorLive
       live "/job-executions/:worker", Admin.JobTypeMonitorLive
 
-      # Error Trends & Analysis (dev - no auth)
-      live "/error-trends", Admin.ErrorTrendsLive
-
-      # Unified Monitoring Dashboard (Phase 4 - Issue #3055)
+      # Unified Monitoring Dashboard (Issue #3048)
+      # Replaces deprecated /scraper-logs and /error-trends
       live "/monitoring", Admin.MonitoringDashboardLive
+
+      # Deprecated route redirects (Issue #3048 Phase 3)
+      get "/scraper-logs", Admin.RedirectController, :to_monitoring
+      get "/error-trends", Admin.RedirectController, :to_monitoring
 
       # Category Analysis (dev - no auth)
       live "/discovery/category-analysis/:source_slug", Admin.CategoryAnalysisLive, :show
@@ -154,16 +153,18 @@ defmodule EventasaurusWeb.Router do
       # Oban Web UI with admin authentication
       oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
 
-      # Scraper Processing Logs with admin authentication
-      live "/scraper-logs", EventasaurusWeb.Admin.ScraperLogsLive
-
       # Job Execution Monitor with admin authentication
       live "/job-executions", EventasaurusWeb.Admin.JobExecutionMonitorLive
       live "/job-executions/sources/:source_slug", EventasaurusWeb.Admin.SourcePipelineMonitorLive
       live "/job-executions/:worker", EventasaurusWeb.Admin.JobTypeMonitorLive
 
-      # Error Trends & Analysis with admin authentication
-      live "/error-trends", EventasaurusWeb.Admin.ErrorTrendsLive
+      # Unified Monitoring Dashboard (Issue #3048)
+      # Replaces deprecated /scraper-logs and /error-trends
+      live "/monitoring", EventasaurusWeb.Admin.MonitoringDashboardLive
+
+      # Deprecated route redirects (Issue #3048 Phase 3)
+      get "/scraper-logs", EventasaurusWeb.Admin.RedirectController, :to_monitoring
+      get "/error-trends", EventasaurusWeb.Admin.RedirectController, :to_monitoring
 
       # Sitemap Statistics with admin authentication
       live "/sitemap", EventasaurusWeb.Admin.SitemapLive

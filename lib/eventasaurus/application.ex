@@ -149,96 +149,13 @@ defmodule Eventasaurus.Application do
   # Attach telemetry handlers for comprehensive monitoring
   defp attach_oban_telemetry do
     # Attach comprehensive telemetry for all job events (start, stop, exception)
+    # This handles all job execution tracking via MetricsTracker
     EventasaurusApp.Monitoring.ObanTelemetry.attach()
 
     # Attach HTTP client telemetry for request monitoring
     EventasaurusDiscovery.Http.Telemetry.attach()
 
-    # Also attach scraper-specific telemetry for backward compatibility
-    :telemetry.attach(
-      "oban-job-exception-logger",
-      [:oban, :job, :exception],
-      &handle_oban_exception/4,
-      nil
-    )
-  end
-
-  # Handle Oban job exceptions and log to scraper_processing_logs
-  defp handle_oban_exception(_event_name, _measurements, metadata, _config) do
-    %{job: job, reason: reason, stacktrace: _stacktrace} = metadata
-
-    # Only log scraper jobs (jobs with source_id in args)
-    if is_scraper_job?(job) do
-      log_job_failure(job, reason)
-    end
-  end
-
-  # Check if this is a scraper job by looking for source_id in args
-  defp is_scraper_job?(%Oban.Job{args: args}) do
-    Map.has_key?(args, "source_id")
-  end
-
-  # Log job-level failure to scraper_processing_logs
-  defp log_job_failure(%Oban.Job{id: job_id, args: args, worker: worker}, reason) do
-    source_id = args["source_id"]
-
-    # Get source struct from database
-    case EventasaurusApp.Repo.get(EventasaurusDiscovery.Sources.Source, source_id) do
-      nil ->
-        Logger.warning(
-          "Cannot log job failure: Source ID #{source_id} not found (Job: #{worker})"
-        )
-
-      source ->
-        # Extract metadata from job args for context
-        metadata = extract_job_metadata(args, worker)
-
-        # Add phase information to distinguish scraping vs processing failures
-        metadata_with_phase = Map.put(metadata, "phase", "scraping")
-
-        # Log the failure with error handling
-        case EventasaurusDiscovery.ScraperProcessingLogs.log_failure(
-               source,
-               job_id,
-               reason,
-               metadata_with_phase
-             ) do
-          {:ok, _log} ->
-            Logger.info(
-              "📝 Logged job-level failure for #{source.name} (Job ID: #{job_id}, Phase: scraping)"
-            )
-
-          {:error, changeset} ->
-            Logger.error(
-              "Failed to persist job-level failure for #{source.name} (Job ID: #{job_id}): #{inspect(changeset.errors)}"
-            )
-        end
-    end
-  rescue
-    error ->
-      Logger.error("Failed to log Oban job failure: #{inspect(error)}")
-  end
-
-  # Extract relevant metadata from job args for logging context
-  defp extract_job_metadata(args, worker) do
-    metadata = %{
-      "entity_type" => "job",
-      "worker" => worker
-    }
-
-    # Add context-specific fields based on what's available in args
-    metadata
-    |> add_if_present(args, "venue_url", "venue_url")
-    |> add_if_present(args, "venue_title", "venue_title")
-    |> add_if_present(args, "city_id", "city_id")
-    |> add_if_present(args, "event_url", "event_url")
-    |> add_if_present(args, "external_id", "external_id")
-  end
-
-  defp add_if_present(metadata, args, key, metadata_key) do
-    case Map.get(args, key) do
-      nil -> metadata
-      value -> Map.put(metadata, metadata_key, value)
-    end
+    # Note: The legacy scraper-specific telemetry handler was removed in Issue #3048 Phase 3
+    # All job execution logging is now handled by ObanTelemetry and MetricsTracker
   end
 end

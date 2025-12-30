@@ -264,6 +264,20 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
 
   defp extract_keys(_), do: []
 
+  # Handle structs (DateTime, NaiveDateTime, etc.) - convert to ISO8601 string
+  # Must come before the generic is_map clause since structs are maps
+  defp sanitize_for_storage(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp sanitize_for_storage(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_iso8601(ndt)
+  defp sanitize_for_storage(%Date{} = d), do: Date.to_iso8601(d)
+  defp sanitize_for_storage(%Time{} = t), do: Time.to_iso8601(t)
+
+  # Handle other structs by converting to a plain map first
+  defp sanitize_for_storage(%{__struct__: _} = struct) do
+    struct
+    |> Map.from_struct()
+    |> sanitize_for_storage()
+  end
+
   defp sanitize_for_storage(data) when is_map(data) do
     data
     |> Enum.reject(fn {_k, v} -> is_binary(v) && byte_size(v) > 10_000 end)
@@ -273,6 +287,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventImageCaching do
 
   defp sanitize_for_storage(data), do: data
 
+  # Handle structs in nested values too
+  defp sanitize_value(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp sanitize_value(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_iso8601(ndt)
+  defp sanitize_value(%Date{} = d), do: Date.to_iso8601(d)
+  defp sanitize_value(%Time{} = t), do: Time.to_iso8601(t)
+  defp sanitize_value(%{__struct__: _} = struct), do: sanitize_for_storage(struct)
   defp sanitize_value(v) when is_map(v), do: sanitize_for_storage(v)
   defp sanitize_value(v) when is_list(v), do: Enum.map(v, &sanitize_value/1)
   defp sanitize_value(v), do: v

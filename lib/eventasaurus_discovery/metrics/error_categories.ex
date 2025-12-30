@@ -179,6 +179,7 @@ defmodule EventasaurusDiscovery.Metrics.ErrorCategories do
   def categorize_error(:performer_not_found), do: :performer_error
   def categorize_error(:artist_not_found), do: :performer_error
   def categorize_error(:performer_matching_failed), do: :performer_error
+  def categorize_error(:performer_ambiguous), do: :performer_error
 
   # Geocoding errors
   def categorize_error(:geocoding_failed), do: :geocoding_error
