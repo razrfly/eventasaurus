@@ -168,7 +168,10 @@ defmodule Eventasaurus.MixProject do
 
       # SSL certificate store for PlanetScale and other TLS connections
       # Must be explicit (not transitive) to ensure availability in releases
-      {:castore, "~> 1.0"}
+      {:castore, "~> 1.0"},
+
+      # Server-side SVG chart generation (sparklines for monitoring dashboard)
+      {:contex, "~> 0.5"}
     ]
   end
 
