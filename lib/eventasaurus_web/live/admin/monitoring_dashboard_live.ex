@@ -19,6 +19,9 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
 
   alias EventasaurusDiscovery.Monitoring.Health
   alias EventasaurusDiscovery.Monitoring.Errors
+  alias EventasaurusDiscovery.Monitoring.Scheduler
+  alias EventasaurusDiscovery.Monitoring.Coverage
+  alias EventasaurusDiscovery.Monitoring.Chain
   alias EventasaurusWeb.Components.Sparkline
 
   @impl true
@@ -197,6 +200,15 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     # Load baseline comparison (current vs 7 days ago)
     {:ok, baseline_comparison} = Health.baseline_comparison(hours: hours, sources: sources_to_check)
 
+    # Load scheduler health (SyncJob execution tracking)
+    {:ok, scheduler_health} = Scheduler.check(days: 7)
+
+    # Load date coverage (event coverage for next 7 days)
+    {:ok, coverage_data} = Coverage.check(days: 7)
+
+    # Load recent job chains for chain-enabled sources (Phase 4.5)
+    job_chains = load_job_chains(sources_to_check)
+
     socket
     |> assign(:health_results, health_results)
     |> assign(:error_results, error_results)
@@ -204,6 +216,9 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     |> assign(:health_history, health_history)
     |> assign(:chart_data, chart_data)
     |> assign(:baseline_comparison, baseline_comparison)
+    |> assign(:scheduler_health, scheduler_health)
+    |> assign(:coverage_data, coverage_data)
+    |> assign(:job_chains, job_chains)
     |> assign(:overall_score, overall_score)
     |> assign(:meeting_slo_count, meeting_slo_count)
     |> assign(:at_risk_count, at_risk_count)
@@ -285,6 +300,31 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     end)
     |> Enum.sort_by(fn item -> -item.count end)
     |> Enum.take(10)
+  end
+
+  # Load recent job chains for sources that support chain analysis (Phase 4.5)
+  defp load_job_chains(sources) do
+    # Only load chains for sources known to have hierarchical job structures
+    chain_sources = ["cinema_city", "repertuary"]
+
+    sources
+    |> Enum.filter(&(&1 in chain_sources))
+    |> Enum.map(fn source ->
+      case Chain.recent_chains(source, limit: 3) do
+        {:ok, chains} ->
+          chains_with_stats =
+            Enum.map(chains, fn chain ->
+              stats = Chain.statistics(chain)
+              %{chain: chain, stats: stats, source: source}
+            end)
+
+          {source, chains_with_stats}
+
+        {:error, _} ->
+          {source, []}
+      end
+    end)
+    |> Map.new()
   end
 
   # Template
@@ -637,6 +677,227 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
             </div>
           </div>
 
+          <!-- Scheduler Health (Phase 4.4) -->
+          <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+                    Scheduler Health
+                  </h2>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    SyncJob execution status for the last 7 days
+                  </p>
+                </div>
+                <%= if @scheduler_health.total_alerts > 0 do %>
+                  <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                    <%= @scheduler_health.total_alerts %> alerts
+                  </span>
+                <% else %>
+                  <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                    All OK
+                  </span>
+                <% end %>
+              </div>
+            </div>
+            <div class="p-4">
+              <%= for source <- @scheduler_health.sources do %>
+                <div class="mb-4 last:mb-0">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                      <%= source.display_name %>
+                    </span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                      <%= source.successful %>/<%= source.total_executions %> successful
+                      (<%= Float.round(source.success_rate, 1) %>%)
+                    </span>
+                  </div>
+                  <!-- Day-by-day grid -->
+                  <div class="grid grid-cols-7 gap-1">
+                    <%= for day <- source.days do %>
+                      <div
+                        class={"rounded p-2 text-center #{scheduler_day_color(day.status)}"}
+                        title={"#{day.date}: #{day.status}#{if day.jobs_spawned, do: ", #{day.jobs_spawned} jobs", else: ""}#{if day.error_message, do: " - #{day.error_message}", else: ""}"}
+                      >
+                        <div class="text-xs font-medium">
+                          <%= Calendar.strftime(day.date, "%a") %>
+                        </div>
+                        <div class="text-lg">
+                          <%= scheduler_status_icon(day.status) %>
+                        </div>
+                        <div class="text-xs opacity-75">
+                          <%= Calendar.strftime(day.date, "%d") %>
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                  <!-- Alerts for this source -->
+                  <%= if not Enum.empty?(source.alerts) do %>
+                    <div class="mt-2 space-y-1">
+                      <%= for alert <- source.alerts do %>
+                        <div class={"text-xs px-2 py-1 rounded #{scheduler_alert_color(alert.type)}"}>
+                          <%= alert.message %>
+                        </div>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          </div>
+
+          <!-- Date Coverage Heatmap (Phase 4.4) -->
+          <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+                    Date Coverage
+                  </h2>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Event coverage for the next 7 days
+                  </p>
+                </div>
+                <%= if @coverage_data.total_alerts > 0 do %>
+                  <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                    <%= @coverage_data.total_alerts %> gaps
+                  </span>
+                <% else %>
+                  <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                    Full coverage
+                  </span>
+                <% end %>
+              </div>
+            </div>
+            <div class="p-4">
+              <%= for source <- @coverage_data.sources do %>
+                <div class="mb-4 last:mb-0">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                      <%= source.display_name %>
+                    </span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                      <%= source.total_events %> events across <%= source.days_with_events %> days
+                      (avg: <%= source.avg_events_per_day %>/day)
+                    </span>
+                  </div>
+                  <!-- Day-by-day heatmap -->
+                  <div class="grid grid-cols-7 gap-1">
+                    <%= for day <- source.days do %>
+                      <div
+                        class={"rounded p-2 text-center #{coverage_day_color(day.status, day.coverage_pct)}"}
+                        title={"#{day.date}: #{day.event_count} events (expected: #{day.expected}, #{day.coverage_pct}% coverage)"}
+                      >
+                        <div class="text-xs font-medium">
+                          <%= day.day_name %>
+                        </div>
+                        <div class="text-lg font-bold">
+                          <%= day.event_count %>
+                        </div>
+                        <div class="text-xs opacity-75">
+                          <%= day.coverage_pct %>%
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                  <!-- Alerts for this source -->
+                  <%= if not Enum.empty?(source.alerts) do %>
+                    <div class="mt-2 space-y-1">
+                      <%= for alert <- source.alerts do %>
+                        <div class={"text-xs px-2 py-1 rounded #{coverage_alert_color(alert.type)}"}>
+                          <%= alert.message %>
+                        </div>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          </div>
+
+          <!-- Job Chain Visualization (Phase 4.5) -->
+          <%= if map_size(@job_chains) > 0 do %>
+            <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+              <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+                      Job Chains
+                    </h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Recent execution chains with cascade failure detection
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="p-4 space-y-6">
+                <%= for {source, chains} <- @job_chains do %>
+                  <%= if not Enum.empty?(chains) do %>
+                    <div>
+                      <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                        <%= format_source_name(source) %>
+                      </h3>
+                      <div class="space-y-4">
+                        <%= for chain_data <- chains do %>
+                          <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                            <!-- Chain Header -->
+                            <div class="px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
+                              <div class="flex items-center gap-3">
+                                <span class={"inline-flex items-center px-2 py-0.5 rounded text-xs font-medium #{chain_status_color(chain_data.stats)}"}>
+                                  <%= chain_status_label(chain_data.stats) %>
+                                </span>
+                                <span class="text-sm text-gray-600 dark:text-gray-400">
+                                  <%= format_chain_datetime(chain_data.chain.attempted_at) %>
+                                </span>
+                              </div>
+                              <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                                <span>
+                                  <span class="font-medium text-gray-700 dark:text-gray-300"><%= chain_data.stats.total %></span> jobs
+                                </span>
+                                <span class="text-green-600 dark:text-green-400">
+                                  <span class="font-medium"><%= chain_data.stats.completed %></span> ✓
+                                </span>
+                                <%= if chain_data.stats.failed > 0 do %>
+                                  <span class="text-red-600 dark:text-red-400">
+                                    <span class="font-medium"><%= chain_data.stats.failed %></span> ✗
+                                  </span>
+                                <% end %>
+                                <span class={"font-medium #{chain_success_rate_color(chain_data.stats.success_rate)}"}>
+                                  <%= Float.round(chain_data.stats.success_rate, 1) %>%
+                                </span>
+                              </div>
+                            </div>
+                            <!-- Chain Tree -->
+                            <div class="px-4 py-3">
+                              <%= render_chain_tree(chain_data.chain, 0) %>
+                            </div>
+                            <!-- Cascade Failures -->
+                            <%= if not Enum.empty?(chain_data.stats.cascade_failures) do %>
+                              <div class="px-4 py-2 bg-red-50 dark:bg-red-900/20 border-t border-red-100 dark:border-red-900">
+                                <div class="text-xs font-medium text-red-800 dark:text-red-200 mb-1">
+                                  ⚠️ Cascade Failures Detected
+                                </div>
+                                <div class="space-y-1">
+                                  <%= for cascade <- chain_data.stats.cascade_failures do %>
+                                    <div class="text-xs text-red-700 dark:text-red-300">
+                                      <span class="font-mono"><%= cascade.worker %></span>
+                                      failed (<%= cascade.error_category || "unknown" %>)
+                                      → blocked <span class="font-medium"><%= cascade.prevented_count %></span> downstream jobs
+                                    </div>
+                                  <% end %>
+                                </div>
+                              </div>
+                            <% end %>
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+
           <!-- Action Items -->
           <%= if not Enum.empty?(@action_items) do %>
             <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow">
@@ -883,4 +1144,148 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     </span>
     """)
   end
+
+  # Scheduler Health helpers (Phase 4.4)
+
+  defp scheduler_day_color(:ok), do: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
+  defp scheduler_day_color(:failure), do: "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
+  defp scheduler_day_color(:missing), do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+  defp scheduler_day_color(_), do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+
+  defp scheduler_status_icon(:ok), do: "✓"
+  defp scheduler_status_icon(:failure), do: "✗"
+  defp scheduler_status_icon(:missing), do: "−"
+  defp scheduler_status_icon(_), do: "?"
+
+  defp scheduler_alert_color(:missing), do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+  defp scheduler_alert_color(:failure), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+  defp scheduler_alert_color(:stale), do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+  defp scheduler_alert_color(:no_executions), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+  defp scheduler_alert_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+
+  # Date Coverage helpers (Phase 4.4)
+
+  defp coverage_day_color(:ok, pct) when pct >= 100, do: "bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100"
+  defp coverage_day_color(:ok, _pct), do: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
+  defp coverage_day_color(:fair, _pct), do: "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200"
+  defp coverage_day_color(:low, _pct), do: "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200"
+  defp coverage_day_color(:missing, _pct), do: "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
+  defp coverage_day_color(_, _), do: "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+
+  defp coverage_alert_color(:missing_near), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+  defp coverage_alert_color(:missing_far), do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+  defp coverage_alert_color(:low_near), do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+  defp coverage_alert_color(:critical_gaps), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+  defp coverage_alert_color(:source_not_found), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+  defp coverage_alert_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+
+  # Job Chain helpers (Phase 4.5)
+
+  defp chain_status_color(%{failed: 0}), do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+  defp chain_status_color(%{success_rate: rate}) when rate >= 90, do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+  defp chain_status_color(%{success_rate: rate}) when rate >= 70, do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+  defp chain_status_color(_), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+
+  defp chain_status_label(%{failed: 0}), do: "Success"
+  defp chain_status_label(%{success_rate: rate}) when rate >= 90, do: "Success"
+  defp chain_status_label(%{success_rate: rate}) when rate >= 70, do: "Partial"
+  defp chain_status_label(_), do: "Failed"
+
+  defp chain_success_rate_color(rate) when rate >= 95, do: "text-green-600 dark:text-green-400"
+  defp chain_success_rate_color(rate) when rate >= 80, do: "text-yellow-600 dark:text-yellow-400"
+  defp chain_success_rate_color(_), do: "text-red-600 dark:text-red-400"
+
+  defp format_chain_datetime(datetime) do
+    Calendar.strftime(datetime, "%b %d, %H:%M")
+  end
+
+  # Render job chain tree recursively
+  defp render_chain_tree(node, depth) do
+    worker_name = extract_worker_name(node.worker)
+    status_icon = chain_node_icon(node.state)
+    status_color = chain_node_color(node.state)
+    indent = depth * 20
+
+    has_children = not Enum.empty?(node.children)
+    children_count = length(node.children)
+
+    Phoenix.HTML.raw("""
+    <div class="font-mono text-xs">
+      <div class="flex items-center gap-2 py-0.5" style="padding-left: #{indent}px">
+        #{if depth > 0 do
+          "<span class=\"text-gray-400 dark:text-gray-600\">├─→</span>"
+        else
+          ""
+        end}
+        <span class="#{status_color}">#{status_icon}</span>
+        <span class="text-gray-700 dark:text-gray-300">#{worker_name}</span>
+        #{if has_children do
+          "<span class=\"text-gray-400 dark:text-gray-500\">(#{children_count})</span>"
+        else
+          ""
+        end}
+        #{render_chain_node_details(node)}
+      </div>
+      #{render_children_trees(node.children, depth + 1)}
+    </div>
+    """)
+  end
+
+  defp render_children_trees(children, depth) do
+    children
+    |> Enum.map(fn child -> render_chain_tree(child, depth) end)
+    |> Enum.map(&Phoenix.HTML.safe_to_string/1)
+    |> Enum.join("")
+  end
+
+  defp render_chain_node_details(node) do
+    details = []
+
+    # Add duration if available
+    details =
+      case get_in(node.results, ["duration_ms"]) || node[:duration_ms] do
+        nil -> details
+        ms when is_number(ms) -> details ++ ["#{ms}ms"]
+        _ -> details
+      end
+
+    # Add error category if failed
+    details =
+      if node.state in ["discarded", "cancelled"] do
+        case get_in(node.results, ["error_category"]) do
+          nil -> details
+          cat -> details ++ ["<span class=\"text-red-500\">#{cat}</span>"]
+        end
+      else
+        details
+      end
+
+    if Enum.empty?(details) do
+      ""
+    else
+      "<span class=\"text-gray-400 dark:text-gray-500 ml-2\">#{Enum.join(details, " · ")}</span>"
+    end
+  end
+
+  defp extract_worker_name(worker) when is_binary(worker) do
+    worker
+    |> String.split(".")
+    |> List.last()
+  end
+
+  defp extract_worker_name(_), do: "Unknown"
+
+  defp chain_node_icon("completed"), do: "✓"
+  defp chain_node_icon("discarded"), do: "✗"
+  defp chain_node_icon("cancelled"), do: "⊘"
+  defp chain_node_icon("executing"), do: "◐"
+  defp chain_node_icon("available"), do: "○"
+  defp chain_node_icon("scheduled"), do: "◔"
+  defp chain_node_icon(_), do: "?"
+
+  defp chain_node_color("completed"), do: "text-green-600 dark:text-green-400"
+  defp chain_node_color("discarded"), do: "text-red-600 dark:text-red-400"
+  defp chain_node_color("cancelled"), do: "text-orange-600 dark:text-orange-400"
+  defp chain_node_color("executing"), do: "text-blue-600 dark:text-blue-400"
+  defp chain_node_color(_), do: "text-gray-500 dark:text-gray-400"
 end
