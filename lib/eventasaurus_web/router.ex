@@ -51,6 +51,7 @@ defmodule EventasaurusWeb.Router do
       # Unified Monitoring Dashboard (Issue #3048)
       # Replaces deprecated /scraper-logs and /error-trends
       live "/monitoring", Admin.MonitoringDashboardLive
+      live "/monitoring/sources/:source_key", Admin.SourceDetailLive
 
       # Deprecated route redirects (Issue #3048 Phase 3)
       get "/scraper-logs", Admin.RedirectController, :to_monitoring
@@ -161,6 +162,7 @@ defmodule EventasaurusWeb.Router do
       # Unified Monitoring Dashboard (Issue #3048)
       # Replaces deprecated /scraper-logs and /error-trends
       live "/monitoring", EventasaurusWeb.Admin.MonitoringDashboardLive
+      live "/monitoring/sources/:source_key", EventasaurusWeb.Admin.SourceDetailLive
 
       # Deprecated route redirects (Issue #3048 Phase 3)
       get "/scraper-logs", EventasaurusWeb.Admin.RedirectController, :to_monitoring
