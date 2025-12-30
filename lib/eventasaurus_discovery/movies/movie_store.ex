@@ -12,11 +12,32 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
   @doc """
   Find an existing movie by TMDB ID or create a new one.
   This prevents duplicate movie entries for the same TMDB movie.
+
+  ## Attrs
+
+  - `:matched_by_provider` - Provider that matched this movie (e.g., "tmdb", "omdb", "imdb").
+    Stored as a dedicated column for efficient querying.
+  - `:imdb_id` - IMDB ID if available from OMDB/IMDB providers (e.g., "tt0172495").
+    Stored as a dedicated column with unique constraint.
   """
   def find_or_create_by_tmdb_id(tmdb_id, attrs \\ %{}) when is_integer(tmdb_id) do
     case Repo.get_by(Movie, tmdb_id: tmdb_id) do
-      nil -> create_movie(Map.put(attrs, :tmdb_id, tmdb_id))
-      movie -> {:ok, movie}
+      nil ->
+        # Add matched_at timestamp when creating with a provider
+        attrs_with_timestamp = maybe_add_matched_at(attrs)
+        create_movie(Map.put(attrs_with_timestamp, :tmdb_id, tmdb_id))
+
+      movie ->
+        {:ok, movie}
+    end
+  end
+
+  # Add matched_at timestamp if matched_by_provider is present
+  defp maybe_add_matched_at(attrs) do
+    if Map.has_key?(attrs, :matched_by_provider) && attrs[:matched_by_provider] do
+      Map.put_new(attrs, :matched_at, DateTime.utc_now())
+    else
+      attrs
     end
   end
 

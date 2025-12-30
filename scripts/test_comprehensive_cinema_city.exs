@@ -160,11 +160,12 @@ defmodule ComprehensiveCinemaCityTest do
     duration = System.monotonic_time(:millisecond) - start_time
 
     case result do
-      {:ok, tmdb_id, confidence} ->
+      {:ok, tmdb_id, confidence, provider} ->
         IO.puts("✅ MATCHED!")
         IO.puts("  TMDB ID: #{tmdb_id}")
         IO.puts("  Confidence: #{Float.round(confidence * 100, 1)}%")
         IO.puts("  Duration: #{duration}ms")
+        IO.puts("  Provider: #{provider}")
 
         # Get movie title for verification
         case TmdbMatcher.find_or_create_movie(tmdb_id) do
@@ -177,6 +178,7 @@ defmodule ComprehensiveCinemaCityTest do
                polish_title: movie.polish_title,
                tmdb_id: tmdb_id,
                tmdb_title: matched_movie.title,
+               provider: provider,
                confidence: confidence,
                extracted_title: extracted_title,
                duration_ms: duration,

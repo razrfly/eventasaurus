@@ -112,19 +112,19 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
 
     # Match to TMDB
     case TmdbMatcher.match_movie(movie_data) do
-      {:ok, tmdb_id, confidence} when confidence >= 0.60 ->
+      {:ok, tmdb_id, confidence, provider} when confidence >= 0.60 ->
         # High confidence match (≥70%) or Now Playing fallback match (60-70%) - auto-accept
         match_type = if confidence >= 0.70, do: "standard", else: "now_playing_fallback"
 
         case TmdbMatcher.find_or_create_movie(tmdb_id) do
           {:ok, movie} ->
             Logger.info(
-              "✅ Auto-matched (#{match_type}): #{movie.title} (#{trunc(confidence * 100)}% confidence)"
+              "✅ Auto-matched (#{match_type}) via #{provider}: #{movie.title} (#{trunc(confidence * 100)}% confidence)"
             )
 
-            # Store Repertuary.pl slug in movie metadata for later lookups
+            # Store Repertuary.pl slug and provider in movie metadata for later lookups
             # Using generic key since slugs are consistent across all cities
-            store_repertuary_slug(movie, movie_slug)
+            store_repertuary_slug(movie, movie_slug, provider)
 
             # Return standardized metadata structure for job tracking (Phase 3.1)
             {:ok,
@@ -140,7 +140,8 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
                "confidence" => confidence,
                "movie_id" => movie.id,
                "tmdb_id" => tmdb_id,
-               "match_type" => match_type
+               "match_type" => match_type,
+               "matched_by_provider" => provider
              }}
 
           {:error, reason} ->
@@ -205,15 +206,23 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
     end
   end
 
-  # Store Repertuary.pl slug in movie metadata for later database lookups
+  # Store Repertuary.pl slug and matched_by_provider in movie metadata for later database lookups
   # Using generic "repertuary_slug" key since movie slugs are consistent across all cities
-  defp store_repertuary_slug(movie, movie_slug) do
-    # Add repertuary_slug to movie metadata
-    updated_metadata = Map.put(movie.metadata || %{}, "repertuary_slug", movie_slug)
+  defp store_repertuary_slug(movie, movie_slug, provider \\ nil) do
+    # Add repertuary_slug and optionally provider to movie metadata
+    current_metadata = movie.metadata || %{}
+
+    updated_metadata =
+      current_metadata
+      |> Map.put("repertuary_slug", movie_slug)
+      |> maybe_put_provider(provider)
 
     case EventasaurusDiscovery.Movies.MovieStore.update_movie(movie, %{metadata: updated_metadata}) do
       {:ok, _updated_movie} ->
-        Logger.debug("💾 Stored Repertuary slug in movie metadata: #{movie_slug} -> #{movie.id}")
+        Logger.debug(
+          "💾 Stored Repertuary slug in movie metadata: #{movie_slug} -> #{movie.id} (provider: #{provider || "unknown"})"
+        )
+
         :ok
 
       {:error, changeset} ->
@@ -222,6 +231,17 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
         )
 
         :error
+    end
+  end
+
+  # Only add matched_by_provider if not already set (preserve original match provider)
+  defp maybe_put_provider(metadata, nil), do: metadata
+
+  defp maybe_put_provider(metadata, provider) do
+    if Map.has_key?(metadata, "matched_by_provider") do
+      metadata
+    else
+      Map.put(metadata, "matched_by_provider", provider)
     end
   end
 end

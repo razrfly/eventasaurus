@@ -80,6 +80,7 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
   require Logger
 
   alias EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   # TMDB API Rate Limits (as of 2024-2025):
   # - 50 requests/second (max)
@@ -93,10 +94,11 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
   @page_stagger_seconds 3
 
   @impl Oban.Worker
-  def perform(%Oban.Job{id: coordinator_job_id, args: args}) do
+  def perform(%Oban.Job{id: coordinator_job_id, args: args} = job) do
     region = normalize_region(args["region"] || args[:region])
     pages = coerce_pages(args["pages"] || args[:pages])
     stagger = args["stagger_seconds"] || @page_stagger_seconds
+    external_id = "now_playing_sync_#{region}_#{Date.utc_today()}"
 
     Logger.info("""
     🎬 Coordinator starting: spawning #{pages} page fetch jobs for #{region}
@@ -149,6 +151,13 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
 
     Each page will fetch and sync movies independently with automatic retry on failure.
     """)
+
+    # Record success with MetricsTracker
+    MetricsTracker.record_success(job, external_id, %{
+      pages_spawned: pages,
+      region: region,
+      stagger_seconds: stagger
+    })
 
     {:ok,
      %{

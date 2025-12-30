@@ -107,6 +107,14 @@ defmodule EventasaurusDiscovery.Movies.Movie do
     field(:runtime, :integer)
     field(:metadata, :map, default: %{})
 
+    # External IDs from different providers
+    field(:imdb_id, :string)
+
+    # Provider tracking - which service successfully matched this movie
+    # Values: "tmdb", "omdb", "imdb", "now_playing"
+    field(:matched_by_provider, :string)
+    field(:matched_at, :utc_datetime)
+
     # Virtual field for convenient access to TMDb metadata nested in metadata map
     field(:tmdb_metadata, :map, virtual: true)
 
@@ -137,13 +145,17 @@ defmodule EventasaurusDiscovery.Movies.Movie do
       :backdrop_url,
       :release_date,
       :runtime,
-      :metadata
+      :metadata,
+      :imdb_id,
+      :matched_by_provider,
+      :matched_at
     ])
     |> validate_required([:tmdb_id, :title])
     |> sanitize_utf8()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:tmdb_id)
     |> unique_constraint(:slug)
+    |> unique_constraint(:imdb_id)
   end
 
   # Normalize attrs to handle edge cases like list-wrapped tmdb_id

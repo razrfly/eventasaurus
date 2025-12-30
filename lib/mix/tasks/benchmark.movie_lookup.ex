@@ -167,11 +167,13 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
 
     outcome =
       case result do
-        {:ok, tmdb_id, confidence} ->
+        {:ok, tmdb_id, confidence, provider, extra} ->
           %{
             status: :success,
             tmdb_id: tmdb_id,
             confidence: confidence,
+            provider: provider,
+            imdb_id: extra[:imdb_id],
             duration: duration
           }
 
@@ -221,7 +223,8 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
     details =
       case outcome.status do
         :success ->
-          "TMDB #{outcome.tmdb_id} (#{trunc(outcome.confidence * 100)}%)"
+          imdb_suffix = if outcome.imdb_id, do: ", IMDB: #{outcome.imdb_id}", else: ""
+          "TMDB #{outcome.tmdb_id} (#{trunc(outcome.confidence * 100)}% via #{outcome.provider}#{imdb_suffix})"
 
         :needs_review ->
           "#{outcome.candidates} candidates (top: #{trunc(outcome.top_confidence * 100)}%)"

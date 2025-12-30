@@ -92,9 +92,17 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
 
   ## Returns
 
-  - `{:ok, tmdb_id, confidence}` - High confidence match
+  - `{:ok, tmdb_id, confidence, provider, extra}` - High confidence match with provider name and extra data
   - `{:needs_review, candidates}` - Matches need manual review
   - `{:error, reason}` - Lookup failed
+
+  The `provider` field indicates which provider found the match:
+  - `"tmdb"` - TMDB (free, primary)
+  - `"omdb"` - OMDb (paid, secondary)
+  - `"imdb"` - IMDB via Zyte (paid, tertiary)
+
+  The `extra` map contains additional data from the match:
+  - `:imdb_id` - IMDB ID if available (e.g., "tt0172495")
   """
   def lookup(query, opts \\ []) do
     start_time = System.monotonic_time(:millisecond)
@@ -143,10 +151,16 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
   """
   def find_or_create_movie(query, opts \\ []) do
     case lookup(query, opts) do
-      {:ok, tmdb_id, confidence} ->
-        Logger.info("📀 Creating/finding movie for TMDB #{tmdb_id} (#{trunc(confidence * 100)}%)")
+      {:ok, tmdb_id, confidence, provider, extra} ->
+        Logger.info(
+          "📀 Creating/finding movie for TMDB #{tmdb_id} (#{trunc(confidence * 100)}% via #{provider})"
+        )
 
-        case MovieStore.find_or_create_by_tmdb_id(tmdb_id) do
+        # Pass provider and imdb_id to MovieStore to store in dedicated columns
+        attrs = %{matched_by_provider: provider}
+        attrs = if extra[:imdb_id], do: Map.put(attrs, :imdb_id, extra[:imdb_id]), else: attrs
+
+        case MovieStore.find_or_create_by_tmdb_id(tmdb_id, attrs) do
           {:ok, movie} -> {:ok, movie}
           {:error, reason} -> {:error, {:database_error, reason}}
         end
@@ -258,6 +272,7 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
   - "3D" suffix
   - Year suffixes at end of title
   """
+  @spec normalize_query_for_search(map()) :: map()
   def normalize_query_for_search(query) do
     normalized_polish = normalize_title_for_search(query[:polish_title])
     normalized_original = normalize_title_for_search(query[:original_title])
@@ -328,7 +343,9 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
   defp validate_tmdb_id(tmdb_id) do
     case TmdbProvider.get_details(tmdb_id) do
       {:ok, _details} ->
-        {:ok, tmdb_id, 1.0}
+        # Direct TMDB ID validation counts as TMDB provider match
+        # No imdb_id available from direct validation
+        {:ok, tmdb_id, 1.0, "tmdb", %{imdb_id: nil}}
 
       {:error, _reason} ->
         {:error, :invalid_tmdb_id}
@@ -354,10 +371,14 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
       [best | _rest] = all ->
         confidence = best[:confidence] || 0.0
         tmdb_id = best[:tmdb_id] || best[:id]
+        # Extract provider from the best match (providers add :provider to results)
+        provider = best[:provider] || "unknown"
+        # Extract extra data like imdb_id (OMDb/IMDB providers include this)
+        extra = %{imdb_id: best[:imdb_id]}
 
         cond do
           confidence >= confidence_threshold ->
-            {:ok, tmdb_id, confidence}
+            {:ok, tmdb_id, confidence, provider, extra}
 
           confidence >= review_threshold ->
             {:needs_review, all}
@@ -493,9 +514,11 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
     title = query[:polish_title] || query[:original_title] || query[:title] || "unknown"
 
     case result do
-      {:ok, tmdb_id, confidence} ->
+      {:ok, tmdb_id, confidence, provider, extra} ->
+        imdb_suffix = if extra[:imdb_id], do: ", IMDB: #{extra[:imdb_id]}", else: ""
+
         Logger.info(
-          "🎬 MovieLookup: \"#{title}\" → TMDB #{tmdb_id} (#{trunc(confidence * 100)}%) in #{duration}ms"
+          "🎬 MovieLookup: \"#{title}\" → TMDB #{tmdb_id} (#{trunc(confidence * 100)}% via #{provider}#{imdb_suffix}) in #{duration}ms"
         )
 
       {:needs_review, candidates} ->
