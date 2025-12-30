@@ -173,7 +173,10 @@ config :eventasaurus, Oban,
        # Image cache stats refresh daily at 6 AM UTC
        # Populates image_cache_stats_snapshots table for the admin image cache dashboard
        # Daily is sufficient since cached image counts don't change frequently
-       {"0 6 * * *", EventasaurusApp.Images.ComputeImageCacheStatsJob}
+       {"0 6 * * *", EventasaurusApp.Images.ComputeImageCacheStatsJob},
+       # TMDB Now Playing movies sync daily at 7 AM UTC
+       # Pre-populates movie database with currently playing movies in Poland
+       {"0 7 * * *", EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob, args: %{region: "PL", pages: 10}}
        # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]

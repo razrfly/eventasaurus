@@ -241,8 +241,88 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
     if query[:tmdb_id] do
       validate_tmdb_id(query[:tmdb_id])
     else
-      search_providers(query, opts)
+      # Normalize query titles before searching to improve match rates
+      normalized_query = normalize_query_for_search(query)
+      search_providers(normalized_query, opts)
     end
+  end
+
+  @doc """
+  Normalize query titles for better matching.
+
+  Strips language/dubbing suffixes that prevent TMDB matches:
+  - "ukraiński dubbing" (Ukrainian dubbing)
+  - "dubbing" suffix
+  - "napisy polskie" (Polish subtitles)
+  - "wersja polska" (Polish version)
+  - "3D" suffix
+  - Year suffixes at end of title
+  """
+  def normalize_query_for_search(query) do
+    normalized_polish = normalize_title_for_search(query[:polish_title])
+    normalized_original = normalize_title_for_search(query[:original_title])
+    normalized_title = normalize_title_for_search(query[:title])
+
+    # Log normalization for debugging
+    if normalized_polish != query[:polish_title] do
+      Logger.info("🔄 Title normalized: \"#{query[:polish_title]}\" → \"#{normalized_polish}\"")
+    end
+
+    query
+    |> Map.put(:polish_title, normalized_polish)
+    |> Map.put(:original_title, normalized_original)
+    |> Map.put(:title, normalized_title)
+    # Keep original titles for reference
+    |> Map.put(:original_polish_title, query[:polish_title])
+    |> Map.put(:original_original_title, query[:original_title])
+  end
+
+  defp normalize_title_for_search(nil), do: nil
+  defp normalize_title_for_search(""), do: ""
+
+  defp normalize_title_for_search(title) when is_binary(title) do
+    title
+    # Remove Ukrainian dubbing suffix (most common issue)
+    |> String.replace(~r/\s+ukraiński\s+dubbing$/i, "")
+    |> String.replace(~r/\s+ukrainian\s+dubbing$/i, "")
+    # Remove generic dubbing suffix
+    |> String.replace(~r/\s+dubbing$/i, "")
+    # Remove Polish subtitles suffix
+    |> String.replace(~r/\s+napisy\s+polskie$/i, "")
+    |> String.replace(~r/\s+polish\s+subtitles$/i, "")
+    # Remove Polish version suffix
+    |> String.replace(~r/\s+wersja\s+polska$/i, "")
+    # Remove 3D suffix (can interfere with matching)
+    |> String.replace(~r/\s+3D$/i, "")
+    # Remove 2D suffix as well
+    |> String.replace(~r/\s+2D$/i, "")
+    # Remove year suffix at end (e.g., "Movie Title 2024")
+    |> String.replace(~r/\s+\(\d{4}\)$/, "")
+    # Remove "Kolekcja" (Collection) prefix
+    |> String.replace(~r/^Kolekcja\s+/i, "")
+    # "w kinie:" (in cinema) → space
+    |> String.replace(~r/\s+w\s+kinie:\s+/i, " ")
+    # Remove Polish exclamations like "górą!"
+    |> String.replace(~r/\s+górą!$/i, "")
+    # Remove screening format indicators (IMAX, Dolby, etc.)
+    |> String.replace(~r/\s+IMAX$/i, "")
+    |> String.replace(~r/\s+Dolby(\s+Atmos)?$/i, "")
+    |> String.replace(~r/\s+4DX$/i, "")
+    |> String.replace(~r/\s+ScreenX$/i, "")
+    # Remove Polish screening type suffixes (NAP = napisy, KNT, DKF, PKF)
+    |> String.replace(~r/\s+[-–]\s*(NAP|KNT|DKF|PKF)\s*$/i, "")
+    |> String.replace(~r/\s+(NAP|KNT|DKF|PKF)\s*$/i, "")
+    # Remove "i inne opowieści" (and other stories) - helps with compilation titles
+    |> String.replace(~r/:\s+[Śś]więta\s+i\s+inne\s+opowie[śs]ci$/i, "")
+    |> String.replace(~r/\s+i\s+inne\s+opowie[śs]ci$/i, "")
+    # Remove "Święta z" (Christmas with) prefix - helps find the main film
+    |> String.replace(~r/^[Śś]więta\s+z\s+/i, "")
+    # Remove season/episode indicators
+    |> String.replace(~r/\s+[-–]\s*sezon\s+\d+$/i, "")
+    |> String.replace(~r/\s+s\d+e\d+$/i, "")
+    # Clean up extra whitespace
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
   end
 
   defp validate_tmdb_id(tmdb_id) do
