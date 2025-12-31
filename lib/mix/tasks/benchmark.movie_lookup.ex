@@ -224,6 +224,7 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
       case outcome.status do
         :success ->
           imdb_suffix = if outcome.imdb_id, do: ", IMDB: #{outcome.imdb_id}", else: ""
+
           "TMDB #{outcome.tmdb_id} (#{trunc(outcome.confidence * 100)}% via #{outcome.provider}#{imdb_suffix})"
 
         :needs_review ->

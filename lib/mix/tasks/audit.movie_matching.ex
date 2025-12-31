@@ -92,9 +92,16 @@ defmodule Mix.Tasks.Audit.MovieMatching do
     gap = target - match_rate
 
     if match_rate >= target do
-      IO.puts(IO.ANSI.green() <> "✅ Target achieved! Match rate: #{match_rate}% (target: #{target}%)" <> IO.ANSI.reset())
+      IO.puts(
+        IO.ANSI.green() <>
+          "✅ Target achieved! Match rate: #{match_rate}% (target: #{target}%)" <> IO.ANSI.reset()
+      )
     else
-      IO.puts(IO.ANSI.yellow() <> "📊 Current match rate: #{match_rate}% (target: #{target}%, gap: #{Float.round(gap, 1)}%)" <> IO.ANSI.reset())
+      IO.puts(
+        IO.ANSI.yellow() <>
+          "📊 Current match rate: #{match_rate}% (target: #{target}%, gap: #{Float.round(gap, 1)}%)" <>
+          IO.ANSI.reset()
+      )
     end
 
     # Recommendations
@@ -125,18 +132,30 @@ defmodule Mix.Tasks.Audit.MovieMatching do
 
     result = Repo.query!(query, [from_time])
 
-    Enum.reduce(result.rows, %{completed: 0, discarded: 0, cancelled: 0, retryable: 0, available: 0, executing: 0, scheduled: 0}, fn [state, count], acc ->
-      case state do
-        "completed" -> %{acc | completed: count}
-        "discarded" -> %{acc | discarded: count}
-        "cancelled" -> %{acc | cancelled: count}
-        "retryable" -> %{acc | retryable: count}
-        "available" -> %{acc | available: count}
-        "executing" -> %{acc | executing: count}
-        "scheduled" -> %{acc | scheduled: count}
-        _ -> acc
+    Enum.reduce(
+      result.rows,
+      %{
+        completed: 0,
+        discarded: 0,
+        cancelled: 0,
+        retryable: 0,
+        available: 0,
+        executing: 0,
+        scheduled: 0
+      },
+      fn [state, count], acc ->
+        case state do
+          "completed" -> %{acc | completed: count}
+          "discarded" -> %{acc | discarded: count}
+          "cancelled" -> %{acc | cancelled: count}
+          "retryable" -> %{acc | retryable: count}
+          "available" -> %{acc | available: count}
+          "executing" -> %{acc | executing: count}
+          "scheduled" -> %{acc | scheduled: count}
+          _ -> acc
+        end
       end
-    end)
+    )
   end
 
   defp display_matching_stats(stats) do
@@ -151,7 +170,9 @@ defmodule Mix.Tasks.Audit.MovieMatching do
     IO.puts("  #{IO.ANSI.yellow()}Cancelled:#{IO.ANSI.reset()}  #{stats.cancelled}")
 
     if in_progress > 0 do
-      IO.puts("  In Progress: #{in_progress} (available: #{stats.available}, executing: #{stats.executing}, scheduled: #{stats.scheduled}, retryable: #{stats.retryable})")
+      IO.puts(
+        "  In Progress: #{in_progress} (available: #{stats.available}, executing: #{stats.executing}, scheduled: #{stats.scheduled}, retryable: #{stats.retryable})"
+      )
     end
 
     IO.puts("  #{IO.ANSI.cyan()}Total:#{IO.ANSI.reset()}      #{total}")
@@ -195,6 +216,7 @@ defmodule Mix.Tasks.Audit.MovieMatching do
   end
 
   defp parse_errors(nil), do: nil
+
   defp parse_errors(errors_str) when is_binary(errors_str) do
     case Jason.decode(errors_str) do
       {:ok, errors} when is_list(errors) ->
@@ -203,7 +225,9 @@ defmodule Mix.Tasks.Audit.MovieMatching do
           %{"error" => error} -> extract_error_reason(error)
           _ -> "Unknown"
         end
-      _ -> "Parse error"
+
+      _ ->
+        "Parse error"
     end
   end
 
@@ -216,6 +240,7 @@ defmodule Mix.Tasks.Audit.MovieMatching do
       true -> String.slice(error, 0, 50)
     end
   end
+
   defp extract_error_reason(_), do: "Unknown"
 
   defp display_failed_movies(failed_movies, verbose) do
@@ -241,7 +266,8 @@ defmodule Mix.Tasks.Audit.MovieMatching do
         IO.puts("    Reason: #{error}")
       end)
 
-      remaining = length(Map.keys(grouped)) - (if verbose, do: 50, else: 10)
+      remaining = length(Map.keys(grouped)) - if verbose, do: 50, else: 10
+
       if remaining > 0 do
         IO.puts("  ... and #{remaining} more (use --verbose to see all)")
       end
@@ -286,16 +312,25 @@ defmodule Mix.Tasks.Audit.MovieMatching do
     else
       total_cancelled = Enum.reduce(cancelled, 0, fn m, acc -> acc + m.cancelled_count end)
 
-      IO.puts(IO.ANSI.yellow() <> "⚠️  Cancelled Showtimes by Movie (#{total_cancelled} total)" <> IO.ANSI.reset())
+      IO.puts(
+        IO.ANSI.yellow() <>
+          "⚠️  Cancelled Showtimes by Movie (#{total_cancelled} total)" <> IO.ANSI.reset()
+      )
+
       IO.puts(String.duplicate("─", 70))
 
       Enum.each(cancelled, fn movie ->
         title = movie.polish_title || "Unknown"
-        IO.puts("  #{IO.ANSI.red()}#{movie.cancelled_count}#{IO.ANSI.reset()} showtimes - #{title}")
+
+        IO.puts(
+          "  #{IO.ANSI.red()}#{movie.cancelled_count}#{IO.ANSI.reset()} showtimes - #{title}"
+        )
+
         IO.puts("    Film ID: #{movie.film_id}")
 
         # Analyze title for common patterns
         patterns = analyze_title_patterns(title)
+
         if patterns != [] do
           IO.puts("    #{IO.ANSI.cyan()}Patterns: #{Enum.join(patterns, ", ")}#{IO.ANSI.reset()}")
         end
@@ -308,32 +343,37 @@ defmodule Mix.Tasks.Audit.MovieMatching do
   defp analyze_title_patterns(title) when is_binary(title) do
     patterns = []
 
-    patterns = if String.contains?(String.downcase(title), "ukraiński dubbing") do
-      ["Ukrainian dubbing suffix" | patterns]
-    else
-      patterns
-    end
+    patterns =
+      if String.contains?(String.downcase(title), "ukraiński dubbing") do
+        ["Ukrainian dubbing suffix" | patterns]
+      else
+        patterns
+      end
 
-    patterns = if String.contains?(String.downcase(title), "dubbing") do
-      ["Dubbing variant" | patterns]
-    else
-      patterns
-    end
+    patterns =
+      if String.contains?(String.downcase(title), "dubbing") do
+        ["Dubbing variant" | patterns]
+      else
+        patterns
+      end
 
-    patterns = if String.contains?(String.downcase(title), "napisy") do
-      ["Subtitles variant" | patterns]
-    else
-      patterns
-    end
+    patterns =
+      if String.contains?(String.downcase(title), "napisy") do
+        ["Subtitles variant" | patterns]
+      else
+        patterns
+      end
 
-    patterns = if String.match?(title, ~r/\d{4}$/) do
-      ["Year suffix" | patterns]
-    else
-      patterns
-    end
+    patterns =
+      if String.match?(title, ~r/\d{4}$/) do
+        ["Year suffix" | patterns]
+      else
+        patterns
+      end
 
     patterns
   end
+
   defp analyze_title_patterns(_), do: []
 
   defp display_provider_status do
@@ -341,18 +381,34 @@ defmodule Mix.Tasks.Audit.MovieMatching do
     IO.puts(String.duplicate("─", 70))
 
     # Check TMDB
-    tmdb_key = System.get_env("TMDB_API_KEY") || Application.get_env(:eventasaurus_web, :tmdb_api_key)
+    tmdb_key =
+      System.get_env("TMDB_API_KEY") || Application.get_env(:eventasaurus_web, :tmdb_api_key)
+
     tmdb_status = if tmdb_key && tmdb_key != "", do: "✅ Configured", else: "❌ Missing"
     IO.puts("  TMDB:  #{tmdb_status}")
 
     # Check OMDb
-    omdb_key = System.get_env("OMDB_API_KEY") || Application.get_env(:eventasaurus_discovery, :omdb_api_key)
-    omdb_status = if omdb_key && omdb_key != "", do: "✅ Configured", else: "⚠️  Not configured (fallback disabled)"
+    omdb_key =
+      System.get_env("OMDB_API_KEY") ||
+        Application.get_env(:eventasaurus_discovery, :omdb_api_key)
+
+    omdb_status =
+      if omdb_key && omdb_key != "",
+        do: "✅ Configured",
+        else: "⚠️  Not configured (fallback disabled)"
+
     IO.puts("  OMDb:  #{omdb_status}")
 
     # Check Zyte (for IMDB fallback)
-    zyte_key = System.get_env("ZYTE_API_KEY") || Application.get_env(:eventasaurus_discovery, :zyte_api_key)
-    zyte_status = if zyte_key && zyte_key != "", do: "✅ Configured", else: "⚠️  Not configured (IMDB fallback disabled)"
+    zyte_key =
+      System.get_env("ZYTE_API_KEY") ||
+        Application.get_env(:eventasaurus_discovery, :zyte_api_key)
+
+    zyte_status =
+      if zyte_key && zyte_key != "",
+        do: "✅ Configured",
+        else: "⚠️  Not configured (IMDB fallback disabled)"
+
     IO.puts("  Zyte:  #{zyte_status}")
 
     IO.puts("")
@@ -372,59 +428,74 @@ defmodule Mix.Tasks.Audit.MovieMatching do
     recommendations = []
 
     # Check for Ukrainian dubbing pattern
-    ukrainian_movies = Enum.filter(cancelled_showtimes, fn m ->
-      String.contains?(String.downcase(m.polish_title || ""), "ukraiński dubbing")
-    end)
+    ukrainian_movies =
+      Enum.filter(cancelled_showtimes, fn m ->
+        String.contains?(String.downcase(m.polish_title || ""), "ukraiński dubbing")
+      end)
 
-    recommendations = if length(ukrainian_movies) > 0 do
-      total = Enum.reduce(ukrainian_movies, 0, fn m, acc -> acc + m.cancelled_count end)
-      ["Add title normalization to strip 'ukraiński dubbing' suffix (#{total} showtimes affected)" | recommendations]
-    else
-      recommendations
-    end
+    recommendations =
+      if length(ukrainian_movies) > 0 do
+        total = Enum.reduce(ukrainian_movies, 0, fn m, acc -> acc + m.cancelled_count end)
+
+        [
+          "Add title normalization to strip 'ukraiński dubbing' suffix (#{total} showtimes affected)"
+          | recommendations
+        ]
+      else
+        recommendations
+      end
 
     # Check for dubbing variants
-    dubbing_movies = Enum.filter(cancelled_showtimes, fn m ->
-      title = String.downcase(m.polish_title || "")
-      String.contains?(title, "dubbing") && !String.contains?(title, "ukraiński")
-    end)
+    dubbing_movies =
+      Enum.filter(cancelled_showtimes, fn m ->
+        title = String.downcase(m.polish_title || "")
+        String.contains?(title, "dubbing") && !String.contains?(title, "ukraiński")
+      end)
 
-    recommendations = if length(dubbing_movies) > 0 do
-      ["Strip generic 'dubbing' suffix from titles before search" | recommendations]
-    else
-      recommendations
-    end
+    recommendations =
+      if length(dubbing_movies) > 0 do
+        ["Strip generic 'dubbing' suffix from titles before search" | recommendations]
+      else
+        recommendations
+      end
 
     # Check match rate
-    recommendations = if match_rate < 95.0 do
-      gap = 95.0 - match_rate
-      ["Improve match rate by #{Float.round(gap, 1)}% to reach 95% target" | recommendations]
-    else
-      recommendations
-    end
+    recommendations =
+      if match_rate < 95.0 do
+        gap = 95.0 - match_rate
+        ["Improve match rate by #{Float.round(gap, 1)}% to reach 95% target" | recommendations]
+      else
+        recommendations
+      end
 
     # Check provider config
     omdb_key = System.get_env("OMDB_API_KEY")
     zyte_key = System.get_env("ZYTE_API_KEY")
 
-    recommendations = if is_nil(omdb_key) do
-      ["Configure OMDB_API_KEY for English title fallback" | recommendations]
-    else
-      recommendations
-    end
+    recommendations =
+      if is_nil(omdb_key) do
+        ["Configure OMDB_API_KEY for English title fallback" | recommendations]
+      else
+        recommendations
+      end
 
-    recommendations = if is_nil(zyte_key) do
-      ["Configure ZYTE_API_KEY for IMDB web fallback with Polish AKA data" | recommendations]
-    else
-      recommendations
-    end
+    recommendations =
+      if is_nil(zyte_key) do
+        ["Configure ZYTE_API_KEY for IMDB web fallback with Polish AKA data" | recommendations]
+      else
+        recommendations
+      end
 
     # Check for new/upcoming movies
-    recommendations = if length(failed_movies) > 0 do
-      ["Check if failed movies exist in TMDB (may be too new or regional releases)" | recommendations]
-    else
-      recommendations
-    end
+    recommendations =
+      if length(failed_movies) > 0 do
+        [
+          "Check if failed movies exist in TMDB (may be too new or regional releases)"
+          | recommendations
+        ]
+      else
+        recommendations
+      end
 
     if Enum.empty?(recommendations) do
       IO.puts("  ✅ No immediate actions needed. Match rate is at target!")
@@ -441,17 +512,20 @@ defmodule Mix.Tasks.Audit.MovieMatching do
       IO.puts("No failed matches to retry.")
     else
       # Group by film_id to dedupe
-      film_ids = failed_movies
-      |> Enum.map(& &1.film_id)
-      |> Enum.uniq()
+      film_ids =
+        failed_movies
+        |> Enum.map(& &1.film_id)
+        |> Enum.uniq()
 
       if apply do
-        IO.puts(IO.ANSI.yellow() <> "🔄 Retrying #{length(film_ids)} failed movies..." <> IO.ANSI.reset())
+        IO.puts(
+          IO.ANSI.yellow() <> "🔄 Retrying #{length(film_ids)} failed movies..." <> IO.ANSI.reset()
+        )
 
         # Delete old failed jobs and re-insert
         Enum.each(film_ids, fn film_id ->
           # Find the original job to get film_data
-          movie = Enum.find(failed_movies, & &1.film_id == film_id)
+          movie = Enum.find(failed_movies, &(&1.film_id == film_id))
 
           if movie do
             # Delete old failed job
@@ -461,6 +535,7 @@ defmodule Mix.Tasks.Audit.MovieMatching do
               AND args->>'cinema_city_film_id' = $1
               AND state IN ('discarded', 'cancelled')
             """
+
             Repo.query!(delete_query, [film_id])
 
             # Re-insert job
@@ -486,14 +561,20 @@ defmodule Mix.Tasks.Audit.MovieMatching do
         end)
 
         IO.puts("")
-        IO.puts("Done! Jobs queued for retry. Run `mix monitor.jobs list --source cinema_city` to monitor.")
+
+        IO.puts(
+          "Done! Jobs queued for retry. Run `mix monitor.jobs list --source cinema_city` to monitor."
+        )
       else
-        IO.puts(IO.ANSI.cyan() <> "🔍 Dry run - would retry #{length(film_ids)} movies:" <> IO.ANSI.reset())
+        IO.puts(
+          IO.ANSI.cyan() <>
+            "🔍 Dry run - would retry #{length(film_ids)} movies:" <> IO.ANSI.reset()
+        )
 
         Enum.take(film_ids, 10)
         |> Enum.each(fn film_id ->
-          movie = Enum.find(failed_movies, & &1.film_id == film_id)
-          title = movie && (movie.polish_title || movie.original_title) || "Unknown"
+          movie = Enum.find(failed_movies, &(&1.film_id == film_id))
+          title = (movie && (movie.polish_title || movie.original_title)) || "Unknown"
           IO.puts("  • #{film_id}: #{title}")
         end)
 
