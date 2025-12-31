@@ -51,37 +51,6 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     {:noreply, socket}
   end
 
-  @impl true
-  def handle_event("confirm_match", %{"id" => id}, socket) do
-    case MatchingStats.confirm_movie_match(String.to_integer(id)) do
-      {:ok, _movie} ->
-        socket =
-          socket
-          |> put_flash(:info, "Movie match confirmed!")
-          |> load_data()
-
-        {:noreply, socket}
-
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to confirm movie match")}
-    end
-  end
-
-  @impl true
-  def handle_event("reject_match", %{"id" => id}, socket) do
-    case MatchingStats.reject_movie_match(String.to_integer(id)) do
-      {:ok, _movie} ->
-        socket =
-          socket
-          |> put_flash(:info, "Movie marked for re-matching")
-          |> load_data()
-
-        {:noreply, socket}
-
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to reject movie match")}
-    end
-  end
 
   # Max concurrency reduced to 2 to avoid exhausting the connection pool
   # (replica pool is only 5 connections, matching MonitoringDashboardLive pattern)
@@ -98,11 +67,13 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
       {:confidence, fn -> MatchingStats.get_confidence_distribution(hours) end},
       {:failures, fn -> MatchingStats.get_recent_failures(20) end},
       {:failure_analysis, fn -> MatchingStats.get_failure_analysis(hours) end},
-      {:needs_review, fn -> MatchingStats.get_movies_needing_review(20) end},
       {:recent_matches, fn -> MatchingStats.get_recent_matches(10) end},
       {:hourly, fn -> MatchingStats.get_hourly_counts(min(hours, 48)) end},
       {:total_movies, fn -> MatchingStats.get_total_movie_count() end},
-      {:duplicates, fn -> MatchingStats.get_duplicate_film_id_count() end}
+      {:duplicates, fn -> MatchingStats.get_duplicate_film_id_count() end},
+      # New: Unmatched movies blocking showtimes
+      {:unmatched_movies, fn -> MatchingStats.get_unmatched_movies_blocking_showtimes(hours) end},
+      {:showtime_impact, fn -> MatchingStats.get_showtime_impact_metrics(hours) end}
     ]
 
     results =
@@ -127,11 +98,12 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     |> assign(:confidence_distribution, results[:confidence])
     |> assign(:failures, results[:failures])
     |> assign(:failure_analysis, results[:failure_analysis])
-    |> assign(:needs_review, results[:needs_review])
     |> assign(:recent_matches, results[:recent_matches])
     |> assign(:hourly_counts, results[:hourly])
     |> assign(:total_movies, results[:total_movies])
     |> assign(:duplicate_count, results[:duplicates])
+    |> assign(:unmatched_movies, results[:unmatched_movies] || [])
+    |> assign(:showtime_impact, results[:showtime_impact] || %{})
     |> assign(:last_updated, DateTime.utc_now())
   end
 
@@ -282,21 +254,42 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
               <% end %>
             </div>
 
-            <!-- Movies Needing Review -->
+            <!-- Unmatched Movies Blocking Showtimes -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <span class="text-yellow-400">●</span>
-                Needs Review
-                <span class="text-sm font-normal text-gray-500 dark:text-gray-400">({length(@needs_review)})</span>
+                <span class="text-orange-500">●</span>
+                Unmatched Movies
+                <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
+                  ({length(@unmatched_movies)} blocking {@showtime_impact[:total_blocked_showtimes] || 0} showtimes)
+                </span>
               </h2>
-              <div class="space-y-3 max-h-96 overflow-y-auto">
-                <%= if Enum.empty?(@needs_review) do %>
+
+              <!-- Impact Summary -->
+              <%= if map_size(@showtime_impact) > 0 do %>
+                <div class="grid grid-cols-2 gap-3 mb-4 p-3 bg-orange-50 dark:bg-orange-500/10 rounded-lg">
+                  <div class="text-center">
+                    <div class="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                      {@showtime_impact[:total_blocked_showtimes] || 0}
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Blocked Showtimes</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                      {format_rate(@showtime_impact[:showtime_loss_rate] || 0)}%
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Loss Rate</div>
+                  </div>
+                </div>
+              <% end %>
+
+              <div class="space-y-2 max-h-96 overflow-y-auto">
+                <%= if Enum.empty?(@unmatched_movies) do %>
                   <div class="text-gray-500 dark:text-gray-400 text-center py-8">
-                    All movies look good! ✓
+                    All movies matched! ✓
                   </div>
                 <% else %>
-                  <%= for movie <- @needs_review do %>
-                    <.review_row movie={movie} />
+                  <%= for movie <- @unmatched_movies do %>
+                    <.unmatched_movie_row movie={movie} />
                   <% end %>
                 <% end %>
               </div>
@@ -536,58 +529,54 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     """
   end
 
-  defp review_row(assigns) do
+  defp unmatched_movie_row(assigns) do
     ~H"""
-    <div class="bg-gray-100 dark:bg-gray-700/50 rounded-lg p-3">
+    <div class="bg-orange-50 dark:bg-orange-500/10 rounded-lg p-3 border-l-4 border-orange-500">
       <div class="flex justify-between items-start">
-        <div class="flex items-center gap-3">
-          <%= if @movie.poster_url do %>
-            <img src={@movie.poster_url} class="w-10 h-14 rounded object-cover" alt="" />
-          <% else %>
-            <div class="w-10 h-14 rounded bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-              <span class="text-gray-500 dark:text-gray-400 text-xs">?</span>
-            </div>
+        <div>
+          <div class="font-medium text-gray-900 dark:text-white">{@movie.polish_title}</div>
+          <%= if @movie.original_title && @movie.original_title != @movie.polish_title do %>
+            <div class="text-sm text-gray-500 dark:text-gray-400 italic">{@movie.original_title}</div>
           <% end %>
-          <div>
-            <div class="font-medium text-gray-900 dark:text-white">{@movie.title}</div>
-            <a
-              href={"https://www.themoviedb.org/movie/#{@movie.tmdb_id}"}
-              target="_blank"
-              class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              TMDB #{@movie.tmdb_id}
-            </a>
+        </div>
+        <div class="text-right">
+          <div class="text-lg font-bold text-orange-600 dark:text-orange-400">
+            {@movie.blocked_count}
           </div>
+          <div class="text-xs text-gray-500 dark:text-gray-400">blocked</div>
         </div>
       </div>
-      <div class="mt-2 flex flex-wrap gap-2">
-        <%= for issue <- @movie.issues do %>
-          <span class="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded text-xs">
-            {issue}
-          </span>
-        <% end %>
+      <div class="mt-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+        <div>
+          First seen: {format_relative_time(@movie.first_seen)}
+        </div>
+        <div>
+          Last seen: {format_relative_time(@movie.last_seen)}
+        </div>
       </div>
-      <div class="mt-3 flex items-center gap-2 border-t border-gray-200 dark:border-gray-600 pt-3">
-        <button
-          phx-click="confirm_match"
-          phx-value-id={@movie.id}
-          class="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-sm rounded transition-colors"
-        >
-          ✓ Confirm
-        </button>
-        <button
-          phx-click="reject_match"
-          phx-value-id={@movie.id}
-          class="px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-sm rounded transition-colors"
-        >
-          ✗ Reject
-        </button>
+      <div class="mt-2 flex gap-2">
         <a
-          href={"https://www.themoviedb.org/search?query=#{URI.encode(@movie.title || "")}"}
+          href={"https://www.themoviedb.org/search?query=#{URI.encode(@movie.polish_title || "")}"}
           target="_blank"
-          class="px-3 py-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-white text-sm rounded transition-colors"
+          class="px-2 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs rounded hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-colors"
         >
-          Search TMDB
+          Search TMDB (PL)
+        </a>
+        <%= if @movie.original_title do %>
+          <a
+            href={"https://www.themoviedb.org/search?query=#{URI.encode(@movie.original_title || "")}"}
+            target="_blank"
+            class="px-2 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs rounded hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-colors"
+          >
+            Search TMDB (EN)
+          </a>
+        <% end %>
+        <a
+          href={"https://www.imdb.com/find?q=#{URI.encode(@movie.original_title || @movie.polish_title || "")}"}
+          target="_blank"
+          class="px-2 py-1 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 text-xs rounded hover:bg-yellow-200 dark:hover:bg-yellow-500/30 transition-colors"
+        >
+          Search IMDB
         </a>
       </div>
     </div>

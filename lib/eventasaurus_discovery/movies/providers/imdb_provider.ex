@@ -41,7 +41,8 @@ defmodule EventasaurusDiscovery.Movies.Providers.ImdbProvider do
   alias EventasaurusWeb.Services.TmdbService
 
   # Provider configuration
-  @provider_name :imdb
+  # NOTE: Must be a string for Ecto to cast to :string type in Movie schema
+  @provider_name "imdb"
   @provider_priority 30
   # Supported via AKA data
   @supported_languages ~w(en pl)

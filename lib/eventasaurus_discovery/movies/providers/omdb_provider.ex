@@ -32,7 +32,8 @@ defmodule EventasaurusDiscovery.Movies.Providers.OmdbProvider do
   alias EventasaurusWeb.Services.TmdbService
 
   # Provider configuration
-  @provider_name :omdb
+  # NOTE: Must be a string for Ecto to cast to :string type in Movie schema
+  @provider_name "omdb"
   @provider_priority 20
   # OMDb is primarily English
   @supported_languages ~w(en)
