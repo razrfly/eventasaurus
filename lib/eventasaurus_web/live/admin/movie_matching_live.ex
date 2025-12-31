@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
   alias EventasaurusDiscovery.Movies.MatchingStats
 
   @refresh_interval 30_000
+  @per_page 25
 
   @impl true
   def mount(_params, _session, socket) do
@@ -25,6 +26,7 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
       Process.send_after(self(), :refresh, @refresh_interval)
     end
 
+    # Initialize with defaults - handle_params will apply URL state
     socket =
       socket
       |> assign(:page_title, "Movie Matching Dashboard")
@@ -35,9 +37,80 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
       |> assign(:status_filter, "all")
       |> assign(:selected_movie, nil)
       |> assign(:show_detail_modal, false)
-      |> load_data()
+      |> assign(:page, 1)
+      |> assign(:per_page, @per_page)
+      |> assign(:total_count, 0)
+      |> assign(:total_pages, 1)
+      # Initialize data with empty defaults for first render
+      |> assign(:overview, %{
+        total_lookups: 0,
+        successful_matches: 0,
+        pending: 0,
+        success_rate: 0.0
+      })
+      |> assign(:providers, [])
+      |> assign(:confidence_distribution, %{})
+      |> assign(:failures, [])
+      |> assign(:failure_analysis, [])
+      |> assign(:recent_matches, [])
+      |> assign(:hourly_counts, [])
+      |> assign(:total_movies, 0)
+      |> assign(:duplicate_count, 0)
+      |> assign(:unmatched_movies, [])
+      |> assign(:showtime_impact, %{})
+      |> assign(:last_updated, DateTime.utc_now())
 
     {:ok, socket}
+  end
+
+  @impl true
+  def handle_params(params, _url, socket) do
+    # Parse URL params and apply state
+    socket =
+      socket
+      |> assign(:page, parse_page(params["page"]))
+      |> assign(:status_filter, params["status"] || "all")
+      |> assign(:sort_by, params["sort_by"] || "status")
+      |> assign(:sort_dir, params["sort_dir"] || "asc")
+      |> assign(:time_range, params["range"] || "24h")
+      |> assign(:loading, true)
+      |> load_data()
+
+    {:noreply, socket}
+  end
+
+  defp parse_page(nil), do: 1
+
+  defp parse_page(page) when is_binary(page) do
+    case Integer.parse(page) do
+      {p, _} when p > 0 -> p
+      _ -> 1
+    end
+  end
+
+  defp parse_page(_), do: 1
+
+  # Build URL params from current socket state + updates
+  # Following CityIndexLive pattern for clean URL state management
+  defp build_params(socket, updates) do
+    page = updates[:page] || socket.assigns.page
+
+    %{
+      page: if(page > 1, do: page, else: nil),
+      status: updates[:status] || socket.assigns.status_filter,
+      sort_by: updates[:sort_by] || socket.assigns.sort_by,
+      sort_dir: updates[:sort_dir] || socket.assigns.sort_dir,
+      range: updates[:range] || socket.assigns.time_range
+    }
+    # Remove nil values and defaults to keep URLs clean
+    |> Enum.reject(fn {k, v} ->
+      is_nil(v) ||
+        (k == :status && v == "all") ||
+        (k == :sort_by && v == "status") ||
+        (k == :sort_dir && v == "asc") ||
+        (k == :range && v == "24h")
+    end)
+    |> Map.new()
   end
 
   @impl true
@@ -48,13 +121,9 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
   @impl true
   def handle_event("change_time_range", %{"range" => range}, socket) do
-    socket =
-      socket
-      |> assign(:time_range, range)
-      |> assign(:loading, true)
-      |> load_data()
-
-    {:noreply, socket}
+    # Reset to page 1 when time range changes
+    params = build_params(socket, %{range: range, page: 1})
+    {:noreply, push_patch(socket, to: ~p"/admin/movies?#{params}")}
   end
 
   @impl true
@@ -69,23 +138,45 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
         {column, if(column == "status", do: "asc", else: "desc")}
       end
 
-    {:noreply, assign(socket, sort_by: sort_by, sort_dir: sort_dir)}
+    # Reset to page 1 when sort changes
+    params = build_params(socket, %{sort_by: sort_by, sort_dir: sort_dir, page: 1})
+    {:noreply, push_patch(socket, to: ~p"/admin/movies?#{params}")}
   end
 
   @impl true
   def handle_event("filter_status", %{"status" => status}, socket) do
-    {:noreply, assign(socket, status_filter: status)}
+    # Reset to page 1 when filter changes
+    params = build_params(socket, %{status: status, page: 1})
+    {:noreply, push_patch(socket, to: ~p"/admin/movies?#{params}")}
+  end
+
+  @impl true
+  def handle_event("go_to_page", %{"page" => page_str}, socket) do
+    page = String.to_integer(page_str)
+
+    # Calculate total_pages fresh since render-time assigns don't persist to socket
+    unified_movies = build_unified_movie_list(socket.assigns)
+    filtered = filter_movies(unified_movies, socket.assigns.status_filter)
+    total_count = length(filtered)
+    total_pages = max(1, ceil(total_count / socket.assigns.per_page))
+
+    page = max(1, min(page, total_pages))
+    params = build_params(socket, %{page: page})
+    {:noreply, push_patch(socket, to: ~p"/admin/movies?#{params}")}
   end
 
   @impl true
   def handle_event("show_detail", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
+    local_index = String.to_integer(index_str)
     # Get the movie from the current unified list
     unified_movies = build_unified_movie_list(socket.assigns)
     filtered = filter_movies(unified_movies, socket.assigns.status_filter)
     sorted = sort_movies(filtered, socket.assigns.sort_by, socket.assigns.sort_dir)
 
-    movie = Enum.at(sorted, index)
+    # Adjust index for pagination offset
+    offset = (socket.assigns.page - 1) * socket.assigns.per_page
+    global_index = offset + local_index
+    movie = Enum.at(sorted, global_index)
 
     {:noreply,
      socket
@@ -143,10 +234,10 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
   defp load_data(socket) do
     hours = time_range_to_hours(socket.assigns.time_range)
 
-    # Load all data with controlled concurrency to avoid connection pool exhaustion
-    data_loaders = [
+    # Phase 1: Load independent data in parallel
+    # These queries don't depend on each other
+    independent_loaders = [
       {:overview, fn -> MatchingStats.get_overview_stats(hours) end},
-      {:providers, fn -> MatchingStats.get_provider_stats(hours) end},
       {:confidence, fn -> MatchingStats.get_confidence_distribution(hours) end},
       {:failures, fn -> MatchingStats.get_recent_failures(20) end},
       {:failure_analysis, fn -> MatchingStats.get_failure_analysis(hours) end},
@@ -154,13 +245,11 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
       {:hourly, fn -> MatchingStats.get_hourly_counts(min(hours, 48)) end},
       {:total_movies, fn -> MatchingStats.get_total_movie_count() end},
       {:duplicates, fn -> MatchingStats.get_duplicate_film_id_count() end},
-      # New: Unmatched movies blocking showtimes
-      {:unmatched_movies, fn -> MatchingStats.get_unmatched_movies_blocking_showtimes(hours) end},
-      {:showtime_impact, fn -> MatchingStats.get_showtime_impact_metrics(hours) end}
+      {:unmatched_movies, fn -> MatchingStats.get_unmatched_movies_blocking_showtimes(hours) end}
     ]
 
-    results =
-      data_loaders
+    phase1_results =
+      independent_loaders
       |> Task.async_stream(
         fn {key, loader} -> {key, loader.()} end,
         max_concurrency: @max_concurrency,
@@ -174,19 +263,27 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
       |> Enum.reject(fn {key, _} -> is_nil(key) end)
       |> Map.new()
 
+    # Phase 2: Derive dependent data from phase 1 results (no additional queries)
+    # Pass pre-computed data to avoid duplicate queries
+    overview = phase1_results[:overview]
+    unmatched_movies = phase1_results[:unmatched_movies] || []
+
+    providers = MatchingStats.get_provider_stats(hours, overview)
+    showtime_impact = MatchingStats.get_showtime_impact_metrics(hours, unmatched_movies)
+
     socket
     |> assign(:loading, false)
-    |> assign(:overview, results[:overview])
-    |> assign(:providers, results[:providers])
-    |> assign(:confidence_distribution, results[:confidence])
-    |> assign(:failures, results[:failures])
-    |> assign(:failure_analysis, results[:failure_analysis])
-    |> assign(:recent_matches, results[:recent_matches])
-    |> assign(:hourly_counts, results[:hourly])
-    |> assign(:total_movies, results[:total_movies])
-    |> assign(:duplicate_count, results[:duplicates])
-    |> assign(:unmatched_movies, results[:unmatched_movies] || [])
-    |> assign(:showtime_impact, results[:showtime_impact] || %{})
+    |> assign(:overview, overview)
+    |> assign(:providers, providers)
+    |> assign(:confidence_distribution, phase1_results[:confidence])
+    |> assign(:failures, phase1_results[:failures])
+    |> assign(:failure_analysis, phase1_results[:failure_analysis])
+    |> assign(:recent_matches, phase1_results[:recent_matches])
+    |> assign(:hourly_counts, phase1_results[:hourly])
+    |> assign(:total_movies, phase1_results[:total_movies])
+    |> assign(:duplicate_count, phase1_results[:duplicates])
+    |> assign(:unmatched_movies, unmatched_movies)
+    |> assign(:showtime_impact, showtime_impact)
     |> assign(:last_updated, DateTime.utc_now())
   end
 
@@ -203,6 +300,13 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     unified_movies = build_unified_movie_list(assigns)
     filtered_movies = filter_movies(unified_movies, assigns.status_filter)
     sorted_movies = sort_movies(filtered_movies, assigns.sort_by, assigns.sort_dir)
+
+    # Pagination calculations
+    total_count = length(sorted_movies)
+    total_pages = max(1, ceil(total_count / assigns.per_page))
+    page = min(assigns.page, total_pages)
+    offset = (page - 1) * assigns.per_page
+    paginated_movies = Enum.slice(sorted_movies, offset, assigns.per_page)
 
     # Count by status for filter badges
     status_counts = %{
@@ -233,11 +337,14 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
     assigns =
       assigns
-      |> assign(:unified_movies, sorted_movies)
+      |> assign(:unified_movies, paginated_movies)
       |> assign(:status_counts, status_counts)
       |> assign(:active_providers, active_providers)
       |> assign(:failure_summary, failure_summary)
       |> assign(:needs_attention, needs_attention)
+      |> assign(:total_count, total_count)
+      |> assign(:total_pages, total_pages)
+      |> assign(:page, page)
 
     ~H"""
     <div class="min-h-screen p-6">
@@ -427,6 +534,53 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
                 </tbody>
               </table>
             </div>
+
+            <!-- Pagination -->
+            <%= if @total_pages > 1 do %>
+              <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm text-gray-500 dark:text-gray-400">
+                    Showing {(@page - 1) * @per_page + 1} to {min(@page * @per_page, @total_count)} of {@total_count}
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <!-- Previous button -->
+                    <button
+                      phx-click="go_to_page"
+                      phx-value-page={@page - 1}
+                      disabled={@page == 1}
+                      class={"px-3 py-1.5 rounded text-sm #{if @page == 1, do: "text-gray-400 dark:text-gray-600 cursor-not-allowed", else: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}"}
+                    >
+                      ←
+                    </button>
+
+                    <!-- Page numbers -->
+                    <%= for p <- pagination_range(@page, @total_pages) do %>
+                      <%= if p == :ellipsis do %>
+                        <span class="px-2 text-gray-400 dark:text-gray-500">...</span>
+                      <% else %>
+                        <button
+                          phx-click="go_to_page"
+                          phx-value-page={p}
+                          class={"px-3 py-1.5 rounded text-sm #{if p == @page, do: "bg-blue-600 text-white", else: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}"}
+                        >
+                          {p}
+                        </button>
+                      <% end %>
+                    <% end %>
+
+                    <!-- Next button -->
+                    <button
+                      phx-click="go_to_page"
+                      phx-value-page={@page + 1}
+                      disabled={@page == @total_pages}
+                      class={"px-3 py-1.5 rounded text-sm #{if @page == @total_pages, do: "text-gray-400 dark:text-gray-600 cursor-not-allowed", else: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}"}
+                    >
+                      →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            <% end %>
           </div>
         <% end %>
       </div>
@@ -638,13 +792,15 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     {label, classes} =
       case assigns.status do
         :job_error ->
-          {"JOB ERROR", "bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400"}
+          {"JOB ERROR",
+           "bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400"}
 
         :unmatched ->
           {"UNMATCHED", "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400"}
 
         :low_confidence ->
-          {"LOW CONFIDENCE", "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400"}
+          {"LOW CONFIDENCE",
+           "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400"}
 
         :matched ->
           {"MATCHED", "bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400"}
@@ -1241,4 +1397,28 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
   defp confidence_bar_color("50-69%"), do: "bg-orange-500"
   defp confidence_bar_color("<50%"), do: "bg-red-500"
   defp confidence_bar_color(_), do: "bg-gray-500"
+
+  # Pagination range helper - returns page numbers with ellipsis for large page counts
+  # Following CityIndexLive pattern
+  defp pagination_range(_current_page, total_pages) when total_pages <= 7 do
+    Enum.to_list(1..total_pages)
+  end
+
+  defp pagination_range(current_page, total_pages) do
+    # Show: 1 ... (current-1) current (current+1) ... last
+    cond do
+      current_page <= 4 ->
+        # Near the start: 1 2 3 4 5 ... last
+        Enum.to_list(1..5) ++ [:ellipsis, total_pages]
+
+      current_page >= total_pages - 3 ->
+        # Near the end: 1 ... (last-4) (last-3) (last-2) (last-1) last
+        [1, :ellipsis] ++ Enum.to_list((total_pages - 4)..total_pages)
+
+      true ->
+        # In the middle: 1 ... (current-1) current (current+1) ... last
+        [1, :ellipsis] ++
+          Enum.to_list((current_page - 1)..(current_page + 1)) ++ [:ellipsis, total_pages]
+    end
+  end
 end

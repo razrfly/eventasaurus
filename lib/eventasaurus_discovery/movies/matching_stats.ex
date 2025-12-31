@@ -27,38 +27,32 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   def get_overview_stats(hours \\ 24) do
     since = hours_ago(hours)
 
-    # Query MovieDetailJob executions from Oban
-    base_query =
+    # Single query with CASE/WHEN aggregation for all job stats (was 3 separate queries)
+    job_stats =
       from(j in "oban_jobs",
         where: j.worker == "EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob",
-        where: j.inserted_at >= ^since
+        where: j.inserted_at >= ^since,
+        select: %{
+          total: count(),
+          completed:
+            fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
+          discarded:
+            fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state)
+        }
       )
+      |> Repo.replica().one() || %{total: 0, completed: 0, discarded: 0}
 
-    total =
-      from(j in base_query, select: count())
-      |> Repo.one() || 0
+    total = job_stats.total || 0
+    completed = job_stats.completed || 0
+    discarded = job_stats.discarded || 0
 
-    completed =
-      from(j in base_query,
-        where: j.state == "completed",
-        select: count()
-      )
-      |> Repo.one() || 0
-
-    discarded =
-      from(j in base_query,
-        where: j.state == "discarded",
-        select: count()
-      )
-      |> Repo.one() || 0
-
-    # Movies created in the time period (successful matches)
+    # Movies created in the time period (separate table, still 1 query)
     movies_created =
       from(m in Movie,
         where: m.inserted_at >= ^since,
         select: count()
       )
-      |> Repo.one() || 0
+      |> Repo.replica().one() || 0
 
     success_rate =
       if total > 0 do
@@ -83,12 +77,18 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   Shows success rates by provider (TMDB, OMDb, IMDB).
   Note: Currently we primarily track TMDB success, but this is
   extensible for multi-provider tracking.
-  """
-  def get_provider_stats(hours \\ 24) do
-    # For now, all successful matches go through TMDB
-    # Future: Parse provider from job metadata when multi-provider is enabled
-    stats = get_overview_stats(hours)
 
+  Accepts pre-computed overview_stats to avoid duplicate queries.
+  """
+  def get_provider_stats(hours \\ 24, overview_stats \\ nil)
+
+  def get_provider_stats(hours, nil) do
+    # Called without pre-computed stats - compute inline (still avoids separate function call)
+    get_provider_stats(hours, get_overview_stats(hours))
+  end
+
+  def get_provider_stats(_hours, stats) when is_map(stats) do
+    # Use pre-computed stats - no duplicate queries
     [
       %{
         provider: :tmdb,
@@ -136,7 +136,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         where: m.inserted_at >= ^since,
         select: m.metadata
       )
-      |> Repo.all()
+      |> Repo.replica().all()
 
     # Group by confidence buckets (5 buckets per Issue #3083 spec)
     # Default to 0.8 (80%) if not explicitly stored
@@ -215,7 +215,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
       where: j.discarded_at >= ^from_time and j.discarded_at <= ^to_time,
       select: j.errors
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(&categorize_error/1)
     |> Enum.frequencies()
   end
@@ -315,7 +315,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         attempt: j.attempt
       }
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(&format_failure/1)
   end
 
@@ -341,7 +341,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         inserted_at: m.inserted_at
       }
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(fn movie ->
       # Default to 0.8 for consistency with get_recent_matches
       # Movies without explicit match_confidence are assumed to be high-confidence TMDB matches
@@ -375,7 +375,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         inserted_at: m.inserted_at
       }
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(fn movie ->
       source_title = get_in(movie.metadata || %{}, ["cinema_city_polish_title"])
       confidence = get_in(movie.metadata || %{}, ["match_confidence"]) || 0.8
@@ -404,7 +404,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         count: count()
       }
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> fill_missing_hours(hours)
   end
 
@@ -435,7 +435,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         inserted_at: j.inserted_at
       }
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.reduce(%{}, fn job, acc ->
       # Extract movie info from job args
       # Args structure: %{"showtime" => %{"film" => %{"polish_title" => "...", ...}}}
@@ -478,8 +478,17 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   - total_blocked_showtimes: Total number of showtimes blocked
   - unique_unmatched_movies: Number of unique movies that aren't matched
   - showtime_loss_rate: Percentage of showtimes blocked vs total attempted
+
+  Accepts pre-computed unmatched_movies list to avoid duplicate queries.
   """
-  def get_showtime_impact_metrics(hours \\ 168) do
+  def get_showtime_impact_metrics(hours \\ 168, unmatched_movies \\ nil)
+
+  def get_showtime_impact_metrics(hours, nil) do
+    # Called without pre-computed data - compute inline
+    get_showtime_impact_metrics(hours, get_unmatched_movies_blocking_showtimes(hours))
+  end
+
+  def get_showtime_impact_metrics(hours, unmatched_movies) when is_list(unmatched_movies) do
     since = hours_ago(hours)
 
     # Total ShowtimeProcessJob attempts
@@ -489,7 +498,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         where: j.inserted_at >= ^since,
         select: count()
       )
-      |> Repo.one() || 0
+      |> Repo.replica().one() || 0
 
     # Failed ShowtimeProcessJobs (blocked)
     blocked =
@@ -499,10 +508,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         where: j.inserted_at >= ^since,
         select: count()
       )
-      |> Repo.one() || 0
-
-    # Get unmatched movies for unique count
-    unmatched = get_unmatched_movies_blocking_showtimes(hours)
+      |> Repo.replica().one() || 0
 
     loss_rate =
       if total_attempted > 0 do
@@ -513,7 +519,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
 
     %{
       total_blocked_showtimes: blocked,
-      unique_unmatched_movies: length(unmatched),
+      unique_unmatched_movies: length(unmatched_movies),
       total_showtime_attempts: total_attempted,
       showtime_loss_rate: loss_rate
     }
@@ -544,7 +550,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
       having: count() > 1,
       select: count()
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> length()
   end
 
@@ -553,7 +559,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   """
   def get_total_movie_count do
     from(m in Movie, select: count())
-    |> Repo.one() || 0
+    |> Repo.replica().one() || 0
   end
 
   @doc """
@@ -564,7 +570,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
       where: fragment("?->>'cinema_city_film_id' IS NOT NULL", m.metadata),
       select: count()
     )
-    |> Repo.one() || 0
+    |> Repo.replica().one() || 0
   end
 
   @doc """
