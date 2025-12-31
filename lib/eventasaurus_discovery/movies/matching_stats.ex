@@ -167,7 +167,8 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   def get_failure_analysis(hours \\ 24) do
     now = DateTime.utc_now()
     today_start = hours_ago(hours)
-    week_start = hours_ago(168)  # 7 days
+    # 7 days
+    week_start = hours_ago(168)
 
     # Get today's failures by error category
     today_failures = get_failures_by_category(today_start, now)
@@ -176,7 +177,15 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
     week_failures = get_failures_by_category(week_start, now)
 
     # Calculate averages (7-day total / 7)
-    categories = ["movie_not_ready", "duplicate_movie_error", "no_results", "low_confidence", "changeset_error", "api_timeout", "unknown"]
+    categories = [
+      "movie_not_ready",
+      "duplicate_movie_error",
+      "no_results",
+      "low_confidence",
+      "changeset_error",
+      "api_timeout",
+      "unknown"
+    ]
 
     Enum.map(categories, fn category ->
       today_count = Map.get(today_failures, category, 0)
@@ -231,7 +240,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         "duplicate_movie_error"
 
       String.contains?(msg, "no results") or String.contains?(msg, "not found") or
-          String.contains?(msg, "No movie found") or String.contains?(msg, "tmdb_no_results") ->
+        String.contains?(msg, "No movie found") or String.contains?(msg, "tmdb_no_results") ->
         "no_results"
 
       String.contains?(msg, "needs_review") or String.contains?(msg, "tmdb_needs_review") ->
@@ -246,7 +255,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
 
       # Ecto changeset validation errors (e.g., "is invalid" from cast failures)
       String.contains?(msg, "is invalid") or String.contains?(msg, "validation: :cast") or
-          String.contains?(msg, "changeset") or String.contains?(msg, "Ecto.Changeset") ->
+        String.contains?(msg, "changeset") or String.contains?(msg, "Ecto.Changeset") ->
         "changeset_error"
 
       true ->
@@ -437,13 +446,18 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
 
       key = {polish_title, original_title}
 
-      Map.update(acc, key, %{count: 1, first: job.inserted_at, last: job.inserted_at}, fn existing ->
-        %{
-          count: existing.count + 1,
-          first: min_datetime(existing.first, job.inserted_at),
-          last: max_datetime(existing.last, job.inserted_at)
-        }
-      end)
+      Map.update(
+        acc,
+        key,
+        %{count: 1, first: job.inserted_at, last: job.inserted_at},
+        fn existing ->
+          %{
+            count: existing.count + 1,
+            first: min_datetime(existing.first, job.inserted_at),
+            last: max_datetime(existing.last, job.inserted_at)
+          }
+        end
+      )
     end)
     |> Enum.map(fn {{polish_title, original_title}, data} ->
       %{

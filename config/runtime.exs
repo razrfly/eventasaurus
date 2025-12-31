@@ -176,7 +176,8 @@ config :eventasaurus, Oban,
        {"0 6 * * *", EventasaurusApp.Images.ComputeImageCacheStatsJob},
        # TMDB Now Playing movies sync daily at 7 AM UTC
        # Pre-populates movie database with currently playing movies in Poland
-       {"0 7 * * *", EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob, args: %{region: "PL", pages: 10}}
+       {"0 7 * * *", EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob,
+        args: %{region: "PL", pages: 10}}
        # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]
