@@ -161,7 +161,8 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   Get failure analysis with 7-day trend comparison.
 
   Returns error breakdown by category with today vs 7-day average comparison.
-  Categories: movie_not_ready, duplicate_movie_error, no_results, api_timeout, unknown
+  Categories: movie_not_ready, duplicate_movie_error, no_results, low_confidence,
+              changeset_error, api_timeout, unknown
   """
   def get_failure_analysis(hours \\ 24) do
     now = DateTime.utc_now()
@@ -175,7 +176,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
     week_failures = get_failures_by_category(week_start, now)
 
     # Calculate averages (7-day total / 7)
-    categories = ["movie_not_ready", "duplicate_movie_error", "no_results", "low_confidence", "api_timeout", "unknown"]
+    categories = ["movie_not_ready", "duplicate_movie_error", "no_results", "low_confidence", "changeset_error", "api_timeout", "unknown"]
 
     Enum.map(categories, fn category ->
       today_count = Map.get(today_failures, category, 0)
@@ -243,6 +244,11 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
           String.contains?(msg, "connection") ->
         "api_timeout"
 
+      # Ecto changeset validation errors (e.g., "is invalid" from cast failures)
+      String.contains?(msg, "is invalid") or String.contains?(msg, "validation: :cast") or
+          String.contains?(msg, "changeset") or String.contains?(msg, "Ecto.Changeset") ->
+        "changeset_error"
+
       true ->
         "unknown"
     end
@@ -267,6 +273,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   defp format_category_label("duplicate_movie_error"), do: "Duplicate Error"
   defp format_category_label("no_results"), do: "No Results"
   defp format_category_label("low_confidence"), do: "Low Confidence"
+  defp format_category_label("changeset_error"), do: "Changeset Error"
   defp format_category_label("api_timeout"), do: "API Timeout"
   defp format_category_label("unknown"), do: "Unknown"
   defp format_category_label(other), do: Phoenix.Naming.humanize(other)
@@ -275,6 +282,7 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   defp category_color("duplicate_movie_error"), do: "#ef4444"
   defp category_color("no_results"), do: "#8b5cf6"
   defp category_color("low_confidence"), do: "#ec4899"
+  defp category_color("changeset_error"), do: "#f97316"
   defp category_color("api_timeout"), do: "#3b82f6"
   defp category_color("unknown"), do: "#6b7280"
   defp category_color(_), do: "#6b7280"
@@ -389,6 +397,127 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
     )
     |> Repo.all()
     |> fill_missing_hours(hours)
+  end
+
+  @doc """
+  Get unmatched movies blocking showtimes from ShowtimeProcessJob failures.
+
+  This queries ShowtimeProcessJob jobs that failed due to movie_not_matched,
+  grouping by movie title to show which movies are blocking the most showtimes.
+
+  Returns a list of maps with:
+  - polish_title: The Polish title of the movie
+  - original_title: The original title (if available)
+  - blocked_count: Number of showtimes blocked
+  - first_seen: When this movie first failed
+  - last_seen: Most recent failure
+  """
+  def get_unmatched_movies_blocking_showtimes(hours \\ 168) do
+    since = hours_ago(hours)
+
+    # Query ShowtimeProcessJob failures (cancelled or discarded)
+    # These are showtimes that couldn't be created because the movie wasn't matched
+    from(j in "oban_jobs",
+      where: j.worker == "EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob",
+      where: j.state in ["cancelled", "discarded"],
+      where: j.inserted_at >= ^since,
+      select: %{
+        args: j.args,
+        inserted_at: j.inserted_at
+      }
+    )
+    |> Repo.all()
+    |> Enum.reduce(%{}, fn job, acc ->
+      # Extract movie info from job args
+      # Args structure: %{"showtime" => %{"film" => %{"polish_title" => "...", ...}}}
+      showtime = job.args["showtime"] || %{}
+      film = showtime["film"] || %{}
+      polish_title = film["polish_title"] || film["title"] || "Unknown"
+      original_title = film["original_title"]
+
+      key = {polish_title, original_title}
+
+      Map.update(acc, key, %{count: 1, first: job.inserted_at, last: job.inserted_at}, fn existing ->
+        %{
+          count: existing.count + 1,
+          first: min_datetime(existing.first, job.inserted_at),
+          last: max_datetime(existing.last, job.inserted_at)
+        }
+      end)
+    end)
+    |> Enum.map(fn {{polish_title, original_title}, data} ->
+      %{
+        polish_title: polish_title,
+        original_title: original_title,
+        blocked_count: data.count,
+        first_seen: data.first,
+        last_seen: data.last
+      }
+    end)
+    |> Enum.sort_by(& &1.blocked_count, :desc)
+  end
+
+  @doc """
+  Get aggregate impact metrics for unmatched movies.
+
+  Returns:
+  - total_blocked_showtimes: Total number of showtimes blocked
+  - unique_unmatched_movies: Number of unique movies that aren't matched
+  - showtime_loss_rate: Percentage of showtimes blocked vs total attempted
+  """
+  def get_showtime_impact_metrics(hours \\ 168) do
+    since = hours_ago(hours)
+
+    # Total ShowtimeProcessJob attempts
+    total_attempted =
+      from(j in "oban_jobs",
+        where: j.worker == "EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob",
+        where: j.inserted_at >= ^since,
+        select: count()
+      )
+      |> Repo.one() || 0
+
+    # Failed ShowtimeProcessJobs (blocked)
+    blocked =
+      from(j in "oban_jobs",
+        where: j.worker == "EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob",
+        where: j.state in ["cancelled", "discarded"],
+        where: j.inserted_at >= ^since,
+        select: count()
+      )
+      |> Repo.one() || 0
+
+    # Get unmatched movies for unique count
+    unmatched = get_unmatched_movies_blocking_showtimes(hours)
+
+    loss_rate =
+      if total_attempted > 0 do
+        Float.round(blocked / total_attempted * 100, 1)
+      else
+        0.0
+      end
+
+    %{
+      total_blocked_showtimes: blocked,
+      unique_unmatched_movies: length(unmatched),
+      total_showtime_attempts: total_attempted,
+      showtime_loss_rate: loss_rate
+    }
+  end
+
+  # Helper for datetime comparison
+  defp min_datetime(a, b) do
+    case NaiveDateTime.compare(a, b) do
+      :lt -> a
+      _ -> b
+    end
+  end
+
+  defp max_datetime(a, b) do
+    case NaiveDateTime.compare(a, b) do
+      :gt -> a
+      _ -> b
+    end
   end
 
   @doc """
