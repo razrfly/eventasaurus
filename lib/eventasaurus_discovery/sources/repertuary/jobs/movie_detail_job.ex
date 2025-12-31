@@ -116,7 +116,8 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
         # High confidence match (≥70%) or Now Playing fallback match (60-70%) - auto-accept
         match_type = if confidence >= 0.70, do: "standard", else: "now_playing_fallback"
 
-        case TmdbMatcher.find_or_create_movie(tmdb_id) do
+        # Pass provider info to find_or_create_movie for tracking
+        case TmdbMatcher.find_or_create_movie(tmdb_id, matched_by_provider: provider) do
           {:ok, movie} ->
             Logger.info(
               "✅ Auto-matched (#{match_type}) via #{provider}: #{movie.title} (#{trunc(confidence * 100)}% confidence)"
@@ -208,7 +209,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
 
   # Store Repertuary.pl slug and matched_by_provider in movie metadata for later database lookups
   # Using generic "repertuary_slug" key since movie slugs are consistent across all cities
-  defp store_repertuary_slug(movie, movie_slug, provider \\ nil) do
+  defp store_repertuary_slug(movie, movie_slug, provider) do
     # Add repertuary_slug and optionally provider to movie metadata
     current_metadata = movie.metadata || %{}
 

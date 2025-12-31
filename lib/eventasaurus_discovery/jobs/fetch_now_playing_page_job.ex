@@ -194,7 +194,8 @@ defmodule EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob do
 
     # Create or update movie using TmdbMatcher's find_or_create_movie
     # This handles the upsert logic and slug generation
-    case TmdbMatcher.find_or_create_movie(tmdb_id) do
+    # Pass "tmdb" as the provider since this is direct TMDB "Now Playing" sync
+    case TmdbMatcher.find_or_create_movie(tmdb_id, matched_by_provider: "tmdb") do
       {:ok, movie} ->
         # Deep merge metadata to preserve existing translations and regions
         updated_metadata = deep_merge_metadata(movie.metadata || %{}, metadata)

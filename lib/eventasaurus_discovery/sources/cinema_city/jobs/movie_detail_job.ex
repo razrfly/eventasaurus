@@ -71,7 +71,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
               true -> "low_confidence_accepted"
             end
 
-          case TmdbMatcher.find_or_create_movie(tmdb_id) do
+          # Pass provider info to find_or_create_movie for tracking
+          case TmdbMatcher.find_or_create_movie(tmdb_id, matched_by_provider: provider) do
             {:ok, movie} ->
               # Enhanced logging with more details for analysis
               Logger.info("""
@@ -249,7 +250,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
   # IMPORTANT: Only store if the movie doesn't already have a DIFFERENT cinema_city_film_id
   # This prevents data corruption when the same TMDB movie is incorrectly matched
   # to multiple Cinema City films
-  defp store_cinema_city_film_id(movie, cinema_city_film_id, source_id, provider \\ nil) do
+  defp store_cinema_city_film_id(movie, cinema_city_film_id, source_id, provider) do
     current_metadata = movie.metadata || %{}
     existing_film_id = Map.get(current_metadata, "cinema_city_film_id")
 
