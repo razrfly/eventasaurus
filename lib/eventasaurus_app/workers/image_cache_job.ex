@@ -41,13 +41,14 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Images.CachedImage
   alias EventasaurusApp.Services.R2Client
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   require Logger
 
   @permanent_failures [:file_too_large, {:http_error, 404}, {:http_error, 401}]
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     # Extract required field
     cached_image_id = args["cached_image_id"]
 
@@ -63,18 +64,28 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
 
     case Repo.get(CachedImage, cached_image_id) do
       nil ->
-        Logger.error(
-          "CachedImage not found: #{cached_image_id} (#{entity_type}/#{entity_id}/#{position})"
+        # Record was deleted (likely parent transaction rolled back or entity was cleaned up)
+        # Use :cancel to prevent retries - the record will never exist
+        # See GitHub issue #3107 for details on this race condition
+        Logger.warning(
+          "📸 ImageCacheJob: CachedImage record deleted before job ran - " <>
+            "cached_image_id=#{cached_image_id} (#{entity_type}/#{entity_id}/#{position})"
         )
 
-        {:error, :not_found}
+        MetricsTracker.record_failure(
+          job,
+          {:record_deleted, "CachedImage #{cached_image_id} no longer exists"},
+          "image_cache_#{entity_type}_#{entity_id}_#{position}"
+        )
+
+        {:cancel, :record_deleted}
 
       cached_image ->
-        process_image(cached_image)
+        process_image(cached_image, job)
     end
   end
 
-  defp process_image(%CachedImage{} = cached_image) do
+  defp process_image(%CachedImage{} = cached_image, job) do
     # Mark as downloading - if this fails, still continue with the download
     # The final success/failure update is what matters
     updated_image =
@@ -96,14 +107,14 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
 
     case R2Client.download_and_upload(updated_image.original_url, r2_path) do
       {:ok, result} ->
-        handle_success(updated_image, result)
+        handle_success(updated_image, result, job)
 
       {:error, reason} ->
-        handle_failure(updated_image, reason)
+        handle_failure(updated_image, reason, job)
     end
   end
 
-  defp handle_success(cached_image, result) do
+  defp handle_success(cached_image, result, job) do
     Logger.info(
       "✅ ImageCacheJob: Successfully cached #{cached_image.entity_type}/#{cached_image.entity_id}/#{cached_image.position}"
     )
@@ -121,10 +132,14 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
     |> CachedImage.cache_result_changeset(attrs)
     |> Repo.update()
 
+    # Track success in monitoring system
+    external_id = build_external_id(cached_image)
+    MetricsTracker.record_success(job, external_id)
+
     :ok
   end
 
-  defp handle_failure(cached_image, reason) do
+  defp handle_failure(cached_image, reason, job) do
     error_message = format_error(reason)
 
     Logger.warning(
@@ -140,6 +155,10 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
     cached_image
     |> CachedImage.cache_result_changeset(attrs)
     |> Repo.update()
+
+    # Track failure in monitoring system
+    external_id = build_external_id(cached_image)
+    MetricsTracker.record_failure(job, reason, external_id)
 
     # Determine if this is a permanent failure
     if permanent_failure?(reason) do
@@ -203,5 +222,10 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
     reason in @permanent_failures or
       match?({:http_error, 403}, reason) or
       match?({:not_configured, _}, reason)
+  end
+
+  # Build external ID for MetricsTracker following source-implementation-guide.md format
+  defp build_external_id(%CachedImage{} = cached_image) do
+    "image_cache_#{cached_image.entity_type}_#{cached_image.entity_id}_#{cached_image.image_type}_#{cached_image.position}"
   end
 end
