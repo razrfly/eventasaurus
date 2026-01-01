@@ -127,7 +127,7 @@ config :eventasaurus, Oban,
   repo: oban_repo,
   # Use Distributed Erlang for notifications instead of PostgreSQL LISTEN/NOTIFY
   # This allows Oban to work with PgBouncer (transaction pooling) which doesn't support LISTEN/NOTIFY
-  # Requires Distributed Erlang clustering (Fly.io provides this via libcluster)
+  # Requires Distributed Erlang clustering (Fly.io provides this via dns_cluster)
   # See: https://hexdocs.pm/oban/Oban.Notifiers.PG.html
   notifier: Oban.Notifiers.PG,
   # Enable leader election so only one machine runs plugins (Cron, Reindexer, etc.)
@@ -616,17 +616,16 @@ if config_env() == :prod do
     # Disable prepared statements for PgBouncer compatibility
     prepare: :unnamed
 
-  # SessionRepo: Direct connection (port 5432) for Oban, migrations, advisory locks
+  # SessionRepo: Direct connection (port 5432) for migrations and advisory locks
   # Using hostname-based config to guarantee socket_options: [:inet] is applied
   #
-  # Phase 1 optimization (Issue #3080):
-  # - Reduced from 5 to 3 to conserve scarce direct connections
-  # - Oban needs 1-2 connections for producer/notifier (advisory locks)
-  # - Remaining 1-2 connections for job processing (jobs will queue)
-  # - With 15 total Oban workers, some queuing is expected and acceptable
+  # Issue #3119: SessionRepo is now ONLY used for migrations
+  # - Oban uses Repo (PgBouncer) with Notifiers.PG (no LISTEN/NOTIFY needed)
+  # - Pool size reduced to 1 since only migrations need direct connections
+  # - Migrations require direct connections for advisory locks
   #
   # Direct connections are the bottleneck (25 limit on PlanetScale).
-  # Oban MUST use direct connections for LISTEN/NOTIFY (PgBouncer incompatible).
+  # PgBouncer handles 95%+ of traffic; this repo is for migrations only.
   config :eventasaurus, EventasaurusApp.SessionRepo,
     username: ps_user,
     password: ps_pass,
@@ -646,21 +645,20 @@ if config_env() == :prod do
   # PlanetScale routes to replicas when username has |replica suffix
   # PgBouncer does NOT support replica routing, so direct connection is required
   #
-  # Phase 1 optimization (Issue #3080):
-  # - Reduced from 5 to 2 to conserve scarce direct connections
-  # - TEMPORARILY: Repo.replica() now returns Repo (PgBouncer) for stability
-  # - This repo is kept for future Phase 4 when we implement pooled replica reads
-  # - Current usage is minimal (fallback only via ReplicaRepo.safe_all/safe_one)
+  # Issue #3119: ReplicaRepo is used for long-running read-only operations
+  # - Repo.replica() returns ReplicaRepo in production (see lib/eventasaurus_app/repo.ex)
+  # - Pool size: 3 connections (separate from primary's 25-connection limit)
+  # - Offloads heavy reads from primary, preserving capacity for writes
   #
-  # Use for:
-  # - Admin dashboards and analytics (TEMPORARILY routed to primary via Repo.replica())
-  # - DiscoveryStatsCache background refresh
-  # - Heavy read queries where eventual consistency is acceptable
+  # Use for (via Repo.replica()):
+  # - DiscoveryStatsCache, CityPageCache refresh
+  # - Admin dashboard analytics
+  # - Heavy aggregate queries
   #
   # DO NOT use for:
   # - Reads immediately after writes (replication lag)
   # - Authentication or session queries
-  # - Any write operations (will be rejected by Ecto read_only: true)
+  # - Any write operations
   #
   # Kill switch: Set USE_REPLICA=false to route all reads to primary
   # See: https://planetscale.com/docs/postgres/scaling/replicas
