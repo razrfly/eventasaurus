@@ -381,9 +381,9 @@ defmodule EventasaurusApp.Discovery do
 
     now = DateTime.utc_now()
 
-    # Valid participation statuses
-    valid_participant_statuses = [:accepted, :confirmed_with_order]
-    valid_event_user_roles = ["organizer", "host", "cohost", "attendee"]
+    # Use module attributes for consistent status filtering across discovery functions
+    valid_participant_statuses = @valid_participant_statuses
+    valid_event_user_roles = @valid_event_user_roles
 
     # Get events the user attended
     user_participant_events =
