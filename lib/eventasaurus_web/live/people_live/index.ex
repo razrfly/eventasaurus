@@ -14,6 +14,7 @@ defmodule EventasaurusWeb.PeopleLive.Index do
   """
   use EventasaurusWeb, :live_view
 
+  alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Discovery
   alias EventasaurusApp.Relationships
   alias EventasaurusWeb.RelationshipButtonComponent
@@ -361,7 +362,7 @@ defmodule EventasaurusWeb.PeopleLive.Index do
     ~H"""
     <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
       <div class="flex items-start gap-4">
-        <.link navigate={~p"/users/#{@user.username}"} class="flex-shrink-0">
+        <.link navigate={~p"/users/#{User.username_slug(@user)}"} class="flex-shrink-0">
           <img
             src={generate_avatar_url(@user)}
             alt={@user.name || "User"}
@@ -369,7 +370,7 @@ defmodule EventasaurusWeb.PeopleLive.Index do
           />
         </.link>
         <div class="flex-1 min-w-0">
-          <.link navigate={~p"/users/#{@user.username}"} class="hover:text-indigo-600 transition-colors">
+          <.link navigate={~p"/users/#{User.username_slug(@user)}"} class="hover:text-indigo-600 transition-colors">
             <h3 class="font-medium text-gray-900 truncate">
               <%= @user.name || "Anonymous" %>
             </h3>

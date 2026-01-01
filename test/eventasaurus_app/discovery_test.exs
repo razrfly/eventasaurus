@@ -380,7 +380,20 @@ defmodule EventasaurusApp.DiscoveryTest do
       assert events == []
     end
 
-    test "excludes non-accepted participant statuses" do
+    test "excludes cancelled participant statuses" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      event = insert(:event, start_at: DateTime.add(DateTime.utc_now(), -7, :day))
+
+      insert(:event_participant, user: user1, event: event, status: :accepted)
+      insert(:event_participant, user: user2, event: event, status: :cancelled)
+
+      events = Discovery.shared_events(user1, user2)
+
+      assert events == []
+    end
+
+    test "includes pending participant statuses" do
       user1 = insert(:user)
       user2 = insert(:user)
       event = insert(:event, start_at: DateTime.add(DateTime.utc_now(), -7, :day))
@@ -390,7 +403,8 @@ defmodule EventasaurusApp.DiscoveryTest do
 
       events = Discovery.shared_events(user1, user2)
 
-      assert events == []
+      assert length(events) == 1
+      assert hd(events).id == event.id
     end
   end
 
