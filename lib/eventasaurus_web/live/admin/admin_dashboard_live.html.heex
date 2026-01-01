@@ -101,19 +101,27 @@
         </.link>
 
         <.link
-          navigate={~p"/admin/scraper-logs"}
-          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors border-l-4 border-red-400"
+          navigate={~p"/admin/monitoring"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors border-l-4 border-green-400"
         >
-          <div class="font-medium text-gray-900">Scraper Logs ⭐</div>
-          <div class="text-sm text-gray-600">Error tracking & debugging</div>
+          <div class="font-medium text-gray-900">Monitoring Dashboard ⭐</div>
+          <div class="text-sm text-gray-600">Health scores, SLOs & error analysis</div>
         </.link>
 
         <.link
-          navigate={~p"/admin/error-trends"}
-          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors border-l-4 border-yellow-400"
+          navigate={~p"/admin/movies"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors border-l-4 border-purple-400"
         >
-          <div class="font-medium text-gray-900">Error Trends & Analysis ⭐</div>
-          <div class="text-sm text-gray-600">Historical patterns & SLOs</div>
+          <div class="font-medium text-gray-900">Movie Matching ⭐</div>
+          <div class="text-sm text-gray-600">TMDB/OMDb matching stats</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/images"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors border-l-4 border-cyan-400"
+        >
+          <div class="font-medium text-gray-900">Image Cache ⭐</div>
+          <div class="text-sm text-gray-600">Cache stats & recent failures</div>
         </.link>
 
         <.link

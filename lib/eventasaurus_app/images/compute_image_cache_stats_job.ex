@@ -21,7 +21,7 @@ defmodule EventasaurusApp.Images.ComputeImageCacheStatsJob do
 
   require Logger
 
-  alias EventasaurusApp.Images.{ImageCacheStats, ImageCacheStatsSnapshot}
+  alias EventasaurusApp.Images.{ImageCacheStats, ImageCacheStatsSnapshot, ImageCacheStatsCache}
 
   @impl Oban.Worker
   def perform(%Oban.Job{attempt: attempt}) do
@@ -47,6 +47,9 @@ defmodule EventasaurusApp.Images.ComputeImageCacheStatsJob do
         {:ok, snapshot} ->
           # Cleanup old snapshots (keep last 5)
           ImageCacheStatsSnapshot.cleanup(5)
+
+          # Notify the in-memory cache to reload
+          ImageCacheStatsCache.notify_update()
 
           Logger.info(
             "✅ Image cache stats computation completed in #{duration_ms}ms (snapshot ##{snapshot.id})"
