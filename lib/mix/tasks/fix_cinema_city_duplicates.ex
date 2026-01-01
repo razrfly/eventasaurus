@@ -1,12 +1,13 @@
 defmodule Mix.Tasks.FixCinemaCityDuplicates do
   @moduledoc """
-  Fixes duplicate cinema_city_film_id entries in movies table.
+  Fixes duplicate Cinema City film_id entries in movies table.
 
-  Due to a bug in MovieDetailJob.store_cinema_city_film_id, some movies ended up
-  with incorrect cinema_city_film_id values that belong to different films.
+  Due to historical bugs in MovieDetailJob.store_cinema_city_film_id, some movies
+  ended up with incorrect cinema_city_film_id values that belong to different films.
 
-  This task identifies movies with duplicate film_ids and removes the film_id
-  from the NEWER entries (keeping the oldest/correct one).
+  This task handles both formats:
+  - Legacy singular format: metadata.cinema_city_film_id (string)
+  - New array format: metadata.cinema_city_film_ids (array of strings)
 
   ## Usage
 
@@ -18,11 +19,15 @@ defmodule Mix.Tasks.FixCinemaCityDuplicates do
 
   ## What it does
 
-  1. Finds all cinema_city_film_ids that appear on multiple movies
+  1. Finds all cinema_city_film_ids (legacy format) that appear on multiple movies
   2. For each duplicate group, keeps the OLDEST movie's film_id (first created)
-  3. Removes cinema_city_film_id from the NEWER movies
+  3. Removes both cinema_city_film_id and cinema_city_film_ids from the NEWER movies
 
-  The affected movies will get correctly re-matched on the next scraper run.
+  The affected movies will get correctly re-matched on the next scraper run,
+  and will use the new array format.
+
+  Note: With the new array format (cinema_city_film_ids), duplicates are much
+  less likely because multiple language variants share the same movie record.
   """
 
   use Mix.Task
@@ -142,10 +147,11 @@ defmodule Mix.Tasks.FixCinemaCityDuplicates do
     movie = Repo.get!(Movie, movie_id)
     current_metadata = movie.metadata || %{}
 
-    # Remove cinema_city_film_id and cinema_city_source_id
+    # Remove all Cinema City film_id fields (both legacy and array formats)
     updated_metadata =
       current_metadata
       |> Map.delete("cinema_city_film_id")
+      |> Map.delete("cinema_city_film_ids")
       |> Map.delete("cinema_city_source_id")
 
     changeset = Movie.changeset(movie, %{metadata: updated_metadata})

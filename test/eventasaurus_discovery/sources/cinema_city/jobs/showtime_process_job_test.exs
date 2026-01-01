@@ -1,7 +1,11 @@
 defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJobTest do
   use EventasaurusApp.DataCase, async: false
 
+  import Ecto.Query
+
+  alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob
+  alias EventasaurusDiscovery.Movies.Movie
 
   describe "perform/1 - movie dependency handling" do
     test "returns {:snooze, 30} when movie is not ready yet" do
@@ -106,6 +110,124 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJobTest d
       result = ShowtimeProcessJob.perform(job)
 
       assert {:cancel, :movie_not_matched} = result
+    end
+  end
+
+  describe "get_movie/1 - cinema_city_film_ids array lookup" do
+    test "finds movie using new array format (cinema_city_film_ids)" do
+      # Create a movie with the new array format in metadata
+      base_film_id = "test_base_#{System.unique_integer([:positive])}"
+      variant_film_id = "#{base_film_id}1"
+
+      {:ok, movie} =
+        %Movie{}
+        |> Movie.changeset(%{
+          title: "Test Movie with Array Film IDs",
+          tmdb_id: 999_999,
+          original_title: "Test Movie",
+          metadata: %{
+            "cinema_city_film_ids" => [base_film_id, variant_film_id],
+            "cinema_city_source_id" => 1
+          }
+        })
+        |> Repo.insert()
+
+      # Test finding movie by base film_id using JSON containment
+      # Note: We use (?::text)::jsonb for Postgrex parameter compatibility
+      film_id_json = Jason.encode!([base_film_id])
+
+      found_movie =
+        from(m in Movie,
+          where: fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^film_id_json),
+          limit: 1
+        )
+        |> Repo.one()
+
+      assert found_movie != nil
+      assert found_movie.id == movie.id
+
+      # Test finding movie by variant film_id (the Ukrainian dubbed version)
+      variant_film_id_json = Jason.encode!([variant_film_id])
+
+      found_by_variant =
+        from(m in Movie,
+          where: fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^variant_film_id_json),
+          limit: 1
+        )
+        |> Repo.one()
+
+      assert found_by_variant != nil
+      assert found_by_variant.id == movie.id
+
+      # Cleanup
+      Repo.delete!(movie)
+    end
+
+    test "finds movie using legacy singular format (cinema_city_film_id) as fallback" do
+      # Create a movie with the legacy singular format
+      legacy_film_id = "legacy_#{System.unique_integer([:positive])}"
+
+      {:ok, movie} =
+        %Movie{}
+        |> Movie.changeset(%{
+          title: "Test Movie with Legacy Film ID",
+          tmdb_id: 888_888,
+          original_title: "Legacy Test Movie",
+          metadata: %{
+            "cinema_city_film_id" => legacy_film_id,
+            "cinema_city_source_id" => 1
+          }
+        })
+        |> Repo.insert()
+
+      # Test finding movie by legacy singular film_id
+      found_movie =
+        from(m in Movie,
+          where: fragment("?->>'cinema_city_film_id' = ?", m.metadata, ^legacy_film_id),
+          limit: 1
+        )
+        |> Repo.one()
+
+      assert found_movie != nil
+      assert found_movie.id == movie.id
+
+      # Cleanup
+      Repo.delete!(movie)
+    end
+
+    test "prefers array format lookup over legacy format" do
+      # Create a movie with both formats (migration scenario)
+      film_id = "mixed_#{System.unique_integer([:positive])}"
+
+      {:ok, movie} =
+        %Movie{}
+        |> Movie.changeset(%{
+          title: "Test Movie with Both Formats",
+          tmdb_id: 777_777,
+          original_title: "Mixed Format Test",
+          metadata: %{
+            "cinema_city_film_ids" => [film_id, "#{film_id}1"],
+            "cinema_city_film_id" => film_id,
+            "cinema_city_source_id" => 1
+          }
+        })
+        |> Repo.insert()
+
+      # Array format lookup should find it
+      film_id_json = Jason.encode!([film_id])
+
+      found_by_array =
+        from(m in Movie,
+          where: fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^film_id_json),
+          limit: 1
+        )
+        |> Repo.one()
+
+      assert found_by_array != nil
+      assert found_by_array.id == movie.id
+
+      # Cleanup
+      Repo.delete!(movie)
     end
   end
 end

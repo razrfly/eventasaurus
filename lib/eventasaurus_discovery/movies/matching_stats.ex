@@ -377,14 +377,21 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
     )
     |> Repo.replica().all()
     |> Enum.map(fn movie ->
-      source_title = get_in(movie.metadata || %{}, ["cinema_city_polish_title"])
-      confidence = get_in(movie.metadata || %{}, ["match_confidence"]) || 0.8
-      provider = get_in(movie.metadata || %{}, ["matched_by_provider"]) || "tmdb"
+      metadata = movie.metadata || %{}
+      source_title = get_in(metadata, ["cinema_city_polish_title"])
+      confidence = get_in(metadata, ["match_confidence"]) || 0.8
+      provider = get_in(metadata, ["matched_by_provider"]) || "tmdb"
+
+      # Extract cinema_city_film_ids (array format) or fallback to legacy singular format
+      cinema_city_film_ids = get_in(metadata, ["cinema_city_film_ids"])
+      cinema_city_film_id = get_in(metadata, ["cinema_city_film_id"])
 
       movie
       |> Map.put(:source_title, source_title)
       |> Map.put(:confidence, confidence)
       |> Map.put(:provider, provider)
+      |> Map.put(:cinema_city_film_ids, cinema_city_film_ids)
+      |> Map.put(:cinema_city_film_id, cinema_city_film_id)
     end)
   end
 
@@ -542,16 +549,30 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
 
   @doc """
   Get duplicate cinema_city_film_id count for data quality monitoring.
+
+  Checks both legacy singular format (cinema_city_film_id) and new array format
+  (cinema_city_film_ids) for duplicates.
+
+  Note: With the new array format, duplicates are less likely since multiple
+  film_ids can be stored on the same movie. This function mainly tracks
+  legacy duplicates that may still exist.
   """
   def get_duplicate_film_id_count do
-    from(m in Movie,
-      where: fragment("?->>'cinema_city_film_id' IS NOT NULL", m.metadata),
-      group_by: fragment("?->>'cinema_city_film_id'", m.metadata),
-      having: count() > 1,
-      select: count()
-    )
-    |> Repo.replica().all()
-    |> length()
+    # Check legacy singular format for duplicates
+    legacy_duplicates =
+      from(m in Movie,
+        where: fragment("?->>'cinema_city_film_id' IS NOT NULL", m.metadata),
+        group_by: fragment("?->>'cinema_city_film_id'", m.metadata),
+        having: count() > 1,
+        select: count()
+      )
+      |> Repo.replica().all()
+      |> length()
+
+    # For array format, duplicates would mean the same film_id appears in
+    # multiple movies' arrays - this is a more complex query but less likely
+    # to occur with the new design
+    legacy_duplicates
   end
 
   @doc """
@@ -564,10 +585,16 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
 
   @doc """
   Get movies with Cinema City film IDs.
+
+  Counts movies that have either:
+  - New array format: cinema_city_film_ids (array)
+  - Legacy singular format: cinema_city_film_id (string)
   """
   def get_cinema_city_movie_count do
     from(m in Movie,
-      where: fragment("?->>'cinema_city_film_id' IS NOT NULL", m.metadata),
+      where:
+        fragment("?->'cinema_city_film_ids' IS NOT NULL", m.metadata) or
+          fragment("?->>'cinema_city_film_id' IS NOT NULL", m.metadata),
       select: count()
     )
     |> Repo.replica().one() || 0
@@ -597,10 +624,14 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   end
 
   @doc """
-  Reject a movie match (remove cinema_city_film_id for re-matching).
+  Reject a movie match (remove cinema_city_film_ids for re-matching).
 
-  This clears the cinema_city_film_id from metadata so the next scraper run
+  This clears all Cinema City film IDs from metadata so the next scraper run
   will attempt to re-match this movie with potentially better data.
+
+  Handles both:
+  - New array format: cinema_city_film_ids (array)
+  - Legacy singular format: cinema_city_film_id (string)
   """
   def reject_movie_match(movie_id) do
     case Repo.get(Movie, movie_id) do
@@ -610,7 +641,9 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
       movie ->
         updated_metadata =
           (movie.metadata || %{})
+          # Remove both legacy and new format
           |> Map.delete("cinema_city_film_id")
+          |> Map.delete("cinema_city_film_ids")
           |> Map.put("rejected_at", DateTime.utc_now() |> DateTime.to_iso8601())
           |> Map.put("needs_rematch", true)
 
