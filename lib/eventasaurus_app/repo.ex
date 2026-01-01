@@ -3,14 +3,15 @@ defmodule EventasaurusApp.Repo do
   Primary Ecto Repo for Eventasaurus.
 
   For read-heavy operations where eventual consistency is acceptable,
-  use `replica/0` to route queries to read replicas:
+  use `replica/0` to route queries:
 
       Repo.replica().all(query)
 
   The `replica/0` function handles:
   - Test environment: Returns primary Repo (sandbox compatibility)
   - Kill switch: USE_REPLICA=false routes to primary
-  - Production: Returns ReplicaRepo (connects to PlanetScale replicas)
+  - Production: Currently returns primary Repo via PgBouncer for connection stability
+    (direct replica connections temporarily disabled - see issue #3080 Phase 4)
   """
 
   use Ecto.Repo,
@@ -22,9 +23,11 @@ defmodule EventasaurusApp.Repo do
   @doc """
   Returns the appropriate repo for read operations.
 
-  In production, returns ReplicaRepo which connects to PlanetScale read replicas.
-  In test environment, returns the primary Repo for sandbox compatibility.
-  Can be disabled with USE_REPLICA=false environment variable.
+  **Current behavior**: Returns primary Repo via PgBouncer for all environments.
+  Direct replica connections are temporarily disabled to reduce connection pressure.
+  See issue #3080 Phase 4 for re-enabling with Dedicated Replica PgBouncer.
+
+  Can be disabled with USE_REPLICA=false environment variable (currently a no-op).
 
   ## Usage
 
