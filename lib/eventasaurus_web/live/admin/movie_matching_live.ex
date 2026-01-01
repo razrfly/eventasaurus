@@ -956,11 +956,32 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
 
   # Generate a deduplication key from movie titles
   # Uses polish_title/title and original_title/source_title, normalized to lowercase
+  # Falls back to cinema_city_film_id or a unique identifier if titles are empty
+  # to prevent incorrect merging of movies with missing title data
   defp movie_dedup_key(movie) do
     polish = (movie.polish_title || movie.title || "") |> String.downcase() |> String.trim()
     original = (movie.original_title || movie.source_title || "") |> String.downcase() |> String.trim()
-    {polish, original}
+
+    # If both titles are empty, fall back to cinema_city_film_id or generate a unique key
+    # This prevents multiple untitled movies from incorrectly merging
+    if polish == "" and original == "" do
+      fallback_id =
+        movie[:cinema_city_film_id] ||
+          get_first_film_id(movie[:cinema_city_film_ids]) ||
+          movie[:movie_id] ||
+          movie[:job_id] ||
+          :erlang.unique_integer([:positive])
+
+      {:no_title, fallback_id}
+    else
+      {polish, original}
+    end
   end
+
+  # Extract the first film_id from a list of cinema_city_film_ids
+  defp get_first_film_id(nil), do: nil
+  defp get_first_film_id([]), do: nil
+  defp get_first_film_id([first | _]), do: first
 
   # Merge two movie entries, preferring job_error status and combining blocked_counts
   defp merge_movie_entries(existing, new) do
