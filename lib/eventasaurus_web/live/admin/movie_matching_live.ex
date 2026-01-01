@@ -960,7 +960,9 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
   # to prevent incorrect merging of movies with missing title data
   defp movie_dedup_key(movie) do
     polish = (movie.polish_title || movie.title || "") |> String.downcase() |> String.trim()
-    original = (movie.original_title || movie.source_title || "") |> String.downcase() |> String.trim()
+
+    original =
+      (movie.original_title || movie.source_title || "") |> String.downcase() |> String.trim()
 
     # If both titles are empty, fall back to cinema_city_film_id or generate a unique key
     # This prevents multiple untitled movies from incorrectly merging

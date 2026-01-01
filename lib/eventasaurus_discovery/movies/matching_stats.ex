@@ -34,10 +34,8 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
         where: j.inserted_at >= ^since,
         select: %{
           total: count(),
-          completed:
-            fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
-          discarded:
-            fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state)
+          completed: fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
+          discarded: fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state)
         }
       )
       |> Repo.replica().one() || %{total: 0, completed: 0, discarded: 0}

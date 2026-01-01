@@ -8,6 +8,17 @@ defmodule EventasaurusApp.Repo.Migrations.BackfillUsernames do
   3. Fallback: "user-{id}"
 
   Handles uniqueness conflicts by appending incrementing numbers.
+
+  ## Design Note
+
+  This migration intentionally inlines all username generation logic rather than
+  depending on application modules (User.Username). This follows Ecto best practices:
+  migrations should be self-contained and immutable. If the application's username
+  logic changes in the future, this migration will continue to work consistently
+  with the logic as it existed when the migration was created.
+
+  The slugification algorithm here is equivalent to User.Username.slugify_name/1,
+  producing the same output for our use cases (ASCII names and email prefixes).
   """
   use Ecto.Migration
 
