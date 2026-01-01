@@ -1,6 +1,271 @@
+defmodule EventasaurusApp.Accounts.User.Username do
+  @moduledoc """
+  Username generation and uniqueness handling for users.
+
+  Follows the same slug patterns used by City.Slug and Venue.Slug:
+  - Generate base username from name or email
+  - Ensure uniqueness via progressive disambiguation
+  - Fallback to user-{id} pattern
+  """
+  import Ecto.Query
+  alias EventasaurusApp.Repo
+
+  @username_regex ~r/^[a-zA-Z0-9_-]{3,30}$/
+
+  @doc """
+  Generate a unique username for a user based on their attributes.
+
+  Priority order:
+  1. First name + last initial (e.g., "john-s")
+  2. Email prefix (part before @)
+  3. Fallback to "user-{id}"
+
+  Handles uniqueness conflicts by appending incrementing numbers.
+  """
+  @spec generate(map()) :: String.t()
+  def generate(%{id: id} = attrs) when is_integer(id) do
+    base = generate_base(attrs)
+    ensure_unique(base, id)
+  end
+
+  def generate(attrs) do
+    # For new users without ID yet, just return the base
+    # The ID will be used for fallback after insert if needed
+    generate_base(attrs)
+  end
+
+  @doc """
+  Generate a unique username for backfilling existing users.
+  Takes user_id to exclude from uniqueness check.
+  """
+  @spec generate_for_backfill(integer(), String.t() | nil, String.t() | nil, String.t() | nil) ::
+          String.t()
+  def generate_for_backfill(user_id, first_name, last_name, email) do
+    base =
+      generate_base(%{
+        first_name: first_name,
+        last_name: last_name,
+        name: combine_name(first_name, last_name),
+        email: email,
+        id: user_id
+      })
+
+    ensure_unique(base, user_id)
+  end
+
+  defp combine_name(first, last) do
+    [first, last]
+    |> Enum.filter(&(&1 && String.trim(&1) != ""))
+    |> Enum.join(" ")
+    |> case do
+      "" -> nil
+      name -> name
+    end
+  end
+
+  # Generate base username from user attributes
+  defp generate_base(attrs) do
+    cond do
+      # Try first name + last initial
+      base = from_name(attrs) ->
+        base
+
+      # Try email prefix
+      base = from_email(attrs) ->
+        base
+
+      # Fallback to user-{id}
+      true ->
+        fallback_username(attrs)
+    end
+  end
+
+  # Generate from first_name + last initial
+  # Handles both split first_name/last_name and combined name field
+  defp from_name(%{first_name: first, last_name: last})
+       when is_binary(first) and byte_size(first) > 0 do
+    trimmed_first = String.trim(first)
+
+    if byte_size(trimmed_first) > 0 do
+      first_slug = slugify_name(trimmed_first)
+
+      if is_binary(first_slug) and byte_size(first_slug) >= 3 do
+        last_initial =
+          if is_binary(last) and byte_size(String.trim(last)) > 0 do
+            last |> String.trim() |> String.first() |> String.downcase()
+          else
+            nil
+          end
+
+        if last_initial do
+          "#{first_slug}-#{last_initial}"
+        else
+          first_slug
+        end
+      else
+        nil
+      end
+    else
+      nil
+    end
+  end
+
+  defp from_name(%{name: name}) when is_binary(name) and byte_size(name) > 0 do
+    trimmed_name = String.trim(name)
+
+    if byte_size(trimmed_name) == 0 do
+      nil
+    else
+      # Split name into parts and use first + last initial
+      parts = String.split(trimmed_name, ~r/\s+/, trim: true)
+
+      case parts do
+        [first] ->
+          slug = slugify_name(first)
+          if is_binary(slug) and byte_size(slug) >= 3, do: slug, else: nil
+
+        [first | rest] ->
+          first_slug = slugify_name(first)
+          last_initial = rest |> List.last() |> String.first() |> String.downcase()
+
+          if is_binary(first_slug) and byte_size(first_slug) >= 2 do
+            "#{first_slug}-#{last_initial}"
+          else
+            nil
+          end
+
+        [] ->
+          nil
+      end
+    end
+  end
+
+  defp from_name(_), do: nil
+
+  # Generate from email prefix
+  defp from_email(%{email: email}) when is_binary(email) do
+    prefix =
+      email
+      |> String.split("@")
+      |> List.first()
+      |> slugify_name()
+
+    # Ensure it meets minimum length requirement
+    if is_binary(prefix) and byte_size(prefix) >= 3 do
+      # Truncate to max 30 chars
+      String.slice(prefix, 0, 30)
+    else
+      nil
+    end
+  end
+
+  defp from_email(_), do: nil
+
+  # Fallback username pattern
+  defp fallback_username(%{id: id}) when is_integer(id), do: "user-#{id}"
+  defp fallback_username(_), do: "user-#{System.system_time(:microsecond)}"
+
+  # Slugify a name component for username
+  defp slugify_name(name) when is_binary(name) do
+    name
+    |> String.trim()
+    |> String.downcase()
+    |> Slug.slugify()
+    |> case do
+      nil -> nil
+      "" -> nil
+      slug -> String.replace(slug, "-", "")
+    end
+  end
+
+  defp slugify_name(_), do: nil
+
+  # Ensure username is unique via progressive disambiguation
+  # Strategy: base -> base-1 -> base-2 -> ... -> user-{id}
+  defp ensure_unique(base, user_id) do
+    cond do
+      valid_and_available?(base, user_id) ->
+        base
+
+      # Try with incrementing numbers
+      true ->
+        find_available_variant(base, user_id) || "user-#{user_id}"
+    end
+  end
+
+  defp find_available_variant(base, user_id) do
+    # Truncate base to leave room for suffix (max 30 chars total)
+    max_base_len = 26
+    truncated_base = String.slice(base || "", 0, max_base_len)
+
+    Enum.find_value(1..99, fn n ->
+      candidate = "#{truncated_base}-#{n}"
+
+      if valid_and_available?(candidate, user_id) do
+        candidate
+      else
+        nil
+      end
+    end)
+  end
+
+  defp valid_and_available?(username, user_id) do
+    valid?(username) and not username_exists?(username, user_id)
+  end
+
+  defp valid?(username) when is_binary(username) do
+    String.match?(username, @username_regex) and not reserved?(username)
+  end
+
+  defp valid?(_), do: false
+
+  defp reserved?(username) do
+    reserved_list = get_reserved_usernames()
+    String.downcase(username) in reserved_list
+  end
+
+  defp get_reserved_usernames do
+    reserved_usernames_path = Application.app_dir(:eventasaurus, "priv/reserved_usernames.txt")
+
+    case File.read(reserved_usernames_path) do
+      {:ok, content} ->
+        content
+        |> String.split("\n")
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(fn line -> line == "" or String.starts_with?(line, "#") end)
+        |> Enum.map(&String.downcase/1)
+
+      {:error, _} ->
+        # Fallback list
+        ~w(admin administrator root system support help api www about contact
+           privacy terms login logout signup register dashboard events orders
+           tickets checkout profile settings user users)
+    end
+  end
+
+  # Check if username already exists (excluding current user)
+  defp username_exists?(username, user_id) do
+    query =
+      from(u in EventasaurusApp.Accounts.User,
+        where: fragment("lower(?)", u.username) == ^String.downcase(username)
+      )
+
+    query =
+      if user_id do
+        from(u in query, where: u.id != ^user_id)
+      else
+        query
+      end
+
+    Repo.exists?(query)
+  end
+end
+
 defmodule EventasaurusApp.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
+
+  alias EventasaurusApp.Accounts.User.Username
 
   schema "users" do
     field(:email, :string)
@@ -368,6 +633,34 @@ defmodule EventasaurusApp.Accounts.User do
   """
   def has_username?(%__MODULE__{username: username}) when is_binary(username), do: true
   def has_username?(%__MODULE__{}), do: false
+
+  @doc """
+  Generate a unique username for a user based on their attributes.
+
+  Delegates to User.Username module which handles:
+  - Priority: name-based → email-based → user-{id} fallback
+  - Uniqueness via progressive disambiguation (base → base-1 → base-2)
+  - Reserved username checking
+
+  ## Examples
+
+      iex> User.generate_username(%{name: "John Smith", email: "john@example.com", id: 123})
+      "john-s"
+
+      iex> User.generate_username(%{email: "jane.doe@example.com", id: 456})
+      "janedoe"
+  """
+  def generate_username(attrs), do: Username.generate(attrs)
+
+  @doc """
+  Generate a unique username for backfilling an existing user.
+
+  Takes individual fields rather than a user struct to work directly
+  with database columns in migrations.
+  """
+  def generate_username_for_backfill(user_id, first_name, last_name, email) do
+    Username.generate_for_backfill(user_id, first_name, last_name, email)
+  end
 
   @doc """
   Get profile handle for display (@username)
