@@ -103,6 +103,8 @@ defmodule Eventasaurus.Application do
       EventasaurusApp.Events.PollStatsCache,
       # Start Discovery Stats Cache for admin page performance optimization
       EventasaurusDiscovery.Admin.DiscoveryStatsCache,
+      # Start Image Cache Stats Cache for image cache dashboard performance
+      EventasaurusApp.Images.ImageCacheStatsCache,
       # Start City Page Cache for city page performance optimization
       EventasaurusWeb.Cache.CityPageCache,
       # Start Event Page Cache for event page performance optimization

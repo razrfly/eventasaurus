@@ -2,8 +2,14 @@ defmodule EventasaurusWeb.Admin.ImageCacheDashboardLive do
   @moduledoc """
   Admin dashboard for monitoring and managing the image cache.
 
-  Uses cached stats from image_cache_stats_snapshots table, computed daily by
-  ComputeImageCacheStatsJob. Falls back to live queries if cache is empty.
+  Uses in-memory cached stats from ImageCacheStatsCache GenServer, which reads from
+  image_cache_stats_snapshots table. Stats are computed daily by ComputeImageCacheStatsJob.
+  Falls back to live queries if cache is empty.
+
+  Architecture:
+  - GenServer holds stats in memory (zero DB queries for dashboard load)
+  - Oban job computes stats daily and updates both DB and GenServer
+  - Dashboard reads from memory instantly
 
   Features:
   - Summary stats cards (total, cached, pending, failed, storage size)
@@ -21,8 +27,7 @@ defmodule EventasaurusWeb.Admin.ImageCacheDashboardLive do
 
   alias EventasaurusApp.Images.{
     ImageCacheStats,
-    ImageCacheStatsSnapshot,
-    ComputeImageCacheStatsJob
+    ImageCacheStatsCache
   }
 
   @impl true
@@ -36,8 +41,8 @@ defmodule EventasaurusWeb.Admin.ImageCacheDashboardLive do
 
   @impl true
   def handle_event("refresh", _params, socket) do
-    # Trigger Oban job for background refresh
-    case ComputeImageCacheStatsJob.trigger_now() do
+    # Trigger Oban job for background refresh via the cache
+    case ImageCacheStatsCache.refresh() do
       {:ok, job} ->
         Logger.info("Triggered image cache stats refresh job ##{job.id}")
 
@@ -76,18 +81,20 @@ defmodule EventasaurusWeb.Admin.ImageCacheDashboardLive do
   end
 
   defp load_stats(socket) do
-    # Try cached stats first
-    case ImageCacheStatsSnapshot.get_latest() do
+    # Try in-memory cached stats first (instant, no DB query)
+    case ImageCacheStatsCache.get_stats() do
       nil ->
         # No cache - fall back to live query (first load or cache cleared)
-        Logger.info("No image cache stats snapshot found - computing live")
+        Logger.info("No image cache stats in memory - computing live")
         load_live_stats(socket)
 
-      snapshot ->
-        # Use cached stats
-        stats = ImageCacheStatsSnapshot.get_latest_stats()
-        is_stale = is_stale?(snapshot.computed_at)
+      %{stats: nil} ->
+        # GenServer running but no stats yet
+        Logger.info("GenServer running but no stats yet - computing live")
+        load_live_stats(socket)
 
+      %{stats: stats, computed_at: computed_at, is_stale: is_stale} ->
+        # Use in-memory cached stats (instant!)
         socket
         |> assign(:loading, false)
         |> assign(:refreshing, false)
@@ -101,7 +108,7 @@ defmodule EventasaurusWeb.Admin.ImageCacheDashboardLive do
           :failure_breakdown,
           stats[:failure_breakdown] || stats["failure_breakdown"] || []
         )
-        |> assign(:last_updated, snapshot.computed_at)
+        |> assign(:last_updated, computed_at)
         |> assign(:is_stale, is_stale)
         |> assign(:error, nil)
     end
@@ -137,14 +144,6 @@ defmodule EventasaurusWeb.Admin.ImageCacheDashboardLive do
       |> assign(:loading, false)
       |> assign(:refreshing, false)
       |> assign(:error, "Failed to load stats: #{Exception.message(e)}")
-  end
-
-  # Stats are considered stale if older than 25 hours (slightly more than daily refresh)
-  defp is_stale?(nil), do: true
-
-  defp is_stale?(computed_at) do
-    twenty_five_hours_ago = DateTime.utc_now() |> DateTime.add(-25, :hour)
-    DateTime.compare(computed_at, twenty_five_hours_ago) == :lt
   end
 
   # Helper functions for template
