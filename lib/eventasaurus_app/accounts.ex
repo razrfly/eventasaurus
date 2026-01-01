@@ -94,6 +94,7 @@ defmodule EventasaurusApp.Accounts do
   name or email. If a collision occurs on the generated username, the system
   retries with an alternative unique username.
   """
+  @spec create_user(map()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
   def create_user(attrs \\ %{}) do
     attrs = maybe_generate_username(attrs)
 
