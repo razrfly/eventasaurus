@@ -74,7 +74,12 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
           # Pass provider info to find_or_create_movie for tracking
           case TmdbMatcher.find_or_create_movie(tmdb_id, matched_by_provider: provider) do
             {:ok, movie} ->
-              # Enhanced logging with more details for analysis
+              # Store Cinema City film_id and provider in movie metadata for later lookups
+              # Now returns a detailed result map for observability
+              storage_result =
+                store_cinema_city_film_id(movie, cinema_city_film_id, source_id, provider)
+
+              # Enhanced logging with storage result
               Logger.info("""
               ✅ Auto-matched (#{match_type}) via #{provider}: #{movie.title}
                  Polish title: #{polish_title}
@@ -82,10 +87,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
                  TMDB ID: #{tmdb_id}
                  Cinema City ID: #{cinema_city_film_id}
                  Provider: #{provider}
+                 Storage: #{storage_result.result} (all IDs: #{inspect(storage_result.all_film_ids)})
               """)
-
-              # Store Cinema City film_id and provider in movie metadata for later lookups
-              store_cinema_city_film_id(movie, cinema_city_film_id, source_id, provider)
 
               {:ok,
                %{
@@ -96,7 +99,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
                  tmdb_id: tmdb_id,
                  match_type: match_type,
                  polish_title: polish_title,
-                 matched_by_provider: provider
+                 matched_by_provider: provider,
+                 # New observability fields
+                 film_id_storage: storage_result
                }}
 
             {:error, reason} ->
@@ -247,60 +252,98 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
   def extract_original_title(_polish_title, _language_info), do: nil
 
   # Store Cinema City film_id and matched_by_provider in movie metadata for later database lookups
-  # IMPORTANT: Only store if the movie doesn't already have a DIFFERENT cinema_city_film_id
-  # This prevents data corruption when the same TMDB movie is incorrectly matched
-  # to multiple Cinema City films
+  # Uses array storage (cinema_city_film_ids) to support multiple language variants of the same movie
+  # Example: Avatar has "7148s2r" (Polish) and "7148s2r1" (Ukrainian dubbed)
+  # Both point to the same TMDB movie and should have showtimes linked
+  #
+  # Returns a storage result map for observability:
+  # %{stored: true/false, result: "added"|"already_exists"|"migrated"|"error", all_film_ids: [...]}
   defp store_cinema_city_film_id(movie, cinema_city_film_id, source_id, provider) do
     current_metadata = movie.metadata || %{}
-    existing_film_id = Map.get(current_metadata, "cinema_city_film_id")
+
+    # Get existing film_ids - handle both legacy singular and new array format
+    {existing_film_ids, needs_migration} = get_existing_film_ids(current_metadata)
 
     cond do
-      # Same film_id already stored - nothing to do
-      existing_film_id == cinema_city_film_id ->
+      # Film_id already in array - nothing to do
+      cinema_city_film_id in existing_film_ids ->
         Logger.debug(
-          "💾 Cinema City film_id already stored: #{cinema_city_film_id} -> #{movie.id}"
+          "💾 Cinema City film_id already in array: #{cinema_city_film_id} -> #{movie.id}"
         )
 
-        :ok
+        %{
+          stored: false,
+          result: "already_exists",
+          all_film_ids: existing_film_ids,
+          movie_id: movie.id
+        }
 
-      # Different film_id already stored - DON'T overwrite!
-      # This is likely a matching error - log a warning
-      is_binary(existing_film_id) and existing_film_id != cinema_city_film_id ->
-        Logger.warning("""
-        ⚠️ Cinema City film_id conflict detected!
-           Movie: #{movie.title} (ID: #{movie.id}, TMDB: #{movie.tmdb_id})
-           Existing film_id: #{existing_film_id}
-           New film_id: #{cinema_city_film_id}
-           Keeping existing film_id to prevent data corruption.
-           This may indicate an incorrect TMDB match.
-        """)
-
-        # Return :ok to not fail the job, but don't store the new film_id
-        :ok
-
-      # No existing film_id - safe to store
+      # Add new film_id to array (either new array or append to existing)
       true ->
+        new_film_ids = existing_film_ids ++ [cinema_city_film_id]
+
         updated_metadata =
           current_metadata
-          |> Map.put("cinema_city_film_id", cinema_city_film_id)
+          # Remove legacy singular field if migrating
+          |> Map.delete("cinema_city_film_id")
+          # Store as array
+          |> Map.put("cinema_city_film_ids", new_film_ids)
           |> Map.put("cinema_city_source_id", source_id)
           |> maybe_put_provider(provider)
 
         case MovieStore.update_movie(movie, %{metadata: updated_metadata}) do
           {:ok, _updated_movie} ->
-            Logger.debug(
-              "💾 Stored Cinema City film_id in movie metadata: #{cinema_city_film_id} -> #{movie.id} (provider: #{provider || "unknown"})"
-            )
+            result_type = if needs_migration, do: "migrated", else: "added"
 
-            :ok
+            if needs_migration do
+              Logger.info(
+                "💾 Migrated Cinema City film_id to array format: #{inspect(new_film_ids)} -> #{movie.id}"
+              )
+            else
+              Logger.info(
+                "💾 Added Cinema City film_id to array: #{cinema_city_film_id} -> #{movie.id} (total: #{length(new_film_ids)})"
+              )
+            end
+
+            %{
+              stored: true,
+              result: result_type,
+              all_film_ids: new_film_ids,
+              movie_id: movie.id,
+              provider: provider
+            }
 
           {:error, changeset} ->
             Logger.error(
               "❌ Failed to store Cinema City film_id in metadata: #{inspect(changeset.errors)}"
             )
 
-            :error
+            %{
+              stored: false,
+              result: "error",
+              all_film_ids: existing_film_ids,
+              movie_id: movie.id,
+              error: inspect(changeset.errors)
+            }
         end
+    end
+  end
+
+  # Get existing film_ids from metadata, handling both legacy and new formats
+  # Returns {list_of_film_ids, needs_migration_flag}
+  defp get_existing_film_ids(metadata) do
+    cond do
+      # New array format - use directly
+      is_list(metadata["cinema_city_film_ids"]) ->
+        {metadata["cinema_city_film_ids"], false}
+
+      # Legacy singular format - needs migration
+      is_binary(metadata["cinema_city_film_id"]) ->
+        {[metadata["cinema_city_film_id"]], true}
+
+      # No existing film_ids
+      true ->
+        {[], false}
     end
   end
 

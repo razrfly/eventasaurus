@@ -396,34 +396,92 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
   defp search_until_confident([], _query, _opts, _threshold), do: []
 
   defp search_until_confident([provider | rest], query, opts, threshold) do
+    # Log the query being searched
+    query_title = query[:polish_title] || query[:original_title] || query[:title] || "unknown"
+
+    Logger.info(
+      "🔎 [#{provider.name()}] Searching for: \"#{query_title}\" (original: \"#{query[:original_title] || "none"}\")"
+    )
+
     case provider.search(query, opts) do
       {:ok, [_ | _] = results} ->
         # Sort by confidence
         sorted = Enum.sort_by(results, & &1[:confidence], :desc)
         best = List.first(sorted)
 
-        if best[:confidence] && best[:confidence] >= threshold do
-          # Found confident match, stop searching
-          Logger.info(
-            "✅ #{provider.name()} found confident match: #{best[:title]} (#{trunc(best[:confidence] * 100)}%)"
-          )
+        # Log what the provider returned
+        Logger.info(
+          "📊 [#{provider.name()}] Top result: \"#{best[:title]}\" (TMDB #{best[:tmdb_id] || best[:id]}) " <>
+            "confidence=#{trunc((best[:confidence] || 0) * 100)}% threshold=#{trunc(threshold * 100)}%"
+        )
 
-          sorted
+        # Check title similarity for diagnostic purposes
+        title_sim = calculate_title_similarity(query, best)
+
+        Logger.info(
+          "📏 [#{provider.name()}] Title similarity: #{trunc(title_sim * 100)}% " <>
+            "(query: \"#{query_title}\" → result: \"#{best[:title]}\")"
+        )
+
+        if best[:confidence] && best[:confidence] >= threshold do
+          # Check if title actually matches before accepting
+          if title_sim >= 0.7 do
+            Logger.info(
+              "✅ [#{provider.name()}] ACCEPTED: \"#{best[:title]}\" (confidence=#{trunc(best[:confidence] * 100)}%, " <>
+                "title_sim=#{trunc(title_sim * 100)}%)"
+            )
+
+            sorted
+          else
+            # Title doesn't match well - this is the mismatch case!
+            Logger.warning(
+              "⚠️ [#{provider.name()}] REJECTED despite high confidence: \"#{best[:title]}\" " <>
+                "(confidence=#{trunc(best[:confidence] * 100)}% but title_sim=#{trunc(title_sim * 100)}% < 70%)"
+            )
+
+            Logger.info("⏭️ [#{provider.name()}] Title mismatch detected, trying next provider...")
+            more_results = search_until_confident(rest, query, opts, threshold)
+            deduplicate_results(sorted ++ more_results)
+          end
         else
           # Continue searching other providers
-          Logger.debug("⏭️ #{provider.name()} best match below threshold, trying next provider")
+          Logger.debug(
+            "⏭️ [#{provider.name()}] Best match below threshold (#{trunc((best[:confidence] || 0) * 100)}% < #{trunc(threshold * 100)}%), trying next provider"
+          )
 
           more_results = search_until_confident(rest, query, opts, threshold)
           deduplicate_results(sorted ++ more_results)
         end
 
       {:ok, []} ->
-        Logger.debug("⏭️ #{provider.name()} returned no results, trying next provider")
+        Logger.info("⏭️ [#{provider.name()}] No results found, trying next provider")
         search_until_confident(rest, query, opts, threshold)
 
       {:error, reason} ->
-        Logger.warning("⚠️ #{provider.name()} failed: #{inspect(reason)}, trying next provider")
+        Logger.warning("⚠️ [#{provider.name()}] Error: #{inspect(reason)}, trying next provider")
         search_until_confident(rest, query, opts, threshold)
+    end
+  end
+
+  # Calculate title similarity between query and result using Jaro-Winkler distance
+  defp calculate_title_similarity(query, result) do
+    query_titles =
+      [query[:title], query[:original_title], query[:polish_title]]
+      |> Enum.filter(&(&1 && &1 != ""))
+      |> Enum.map(&String.downcase/1)
+
+    result_titles =
+      [result[:title], result[:original_title]]
+      |> Enum.filter(&(&1 && &1 != ""))
+      |> Enum.map(&String.downcase/1)
+
+    if Enum.empty?(query_titles) or Enum.empty?(result_titles) do
+      0.0
+    else
+      # Find best match between any query title and result title
+      for qt <- query_titles, rt <- result_titles, reduce: 0.0 do
+        acc -> max(acc, String.jaro_distance(qt, rt))
+      end
     end
   end
 

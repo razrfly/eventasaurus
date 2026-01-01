@@ -701,12 +701,25 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
                 </div>
               <% end %>
 
-              <!-- Cinema City Film ID -->
-              <%= if @movie.cinema_city_film_id do %>
+              <!-- Cinema City Film IDs (supports both array and legacy singular format) -->
+              <%= if @movie.cinema_city_film_ids && length(@movie.cinema_city_film_ids) > 0 do %>
                 <div>
-                  <div class="font-medium text-gray-500 dark:text-gray-400">Cinema City Film ID</div>
-                  <div class="text-gray-900 dark:text-white font-mono text-xs">{@movie.cinema_city_film_id}</div>
+                  <div class="font-medium text-gray-500 dark:text-gray-400">Cinema City Film IDs</div>
+                  <div class="text-gray-900 dark:text-white font-mono text-xs">
+                    <%= for {film_id, idx} <- Enum.with_index(@movie.cinema_city_film_ids) do %>
+                      <span class={if idx > 0, do: "ml-1 pl-1 border-l border-gray-300 dark:border-gray-600", else: ""}>
+                        {film_id}
+                      </span>
+                    <% end %>
+                  </div>
                 </div>
+              <% else %>
+                <%= if @movie.cinema_city_film_id do %>
+                  <div>
+                    <div class="font-medium text-gray-500 dark:text-gray-400">Cinema City Film ID</div>
+                    <div class="text-gray-900 dark:text-white font-mono text-xs">{@movie.cinema_city_film_id}</div>
+                  </div>
+                <% end %>
               <% end %>
 
               <!-- Job ID (for errors) -->
@@ -848,6 +861,8 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
           error_message: nil,
           error_category: nil,
           attempts: nil,
+          # Unmatched movies don't have Cinema City film IDs yet
+          cinema_city_film_ids: nil,
           cinema_city_film_id: nil,
           movie_id: nil
         }
@@ -879,7 +894,9 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
           error_message: nil,
           error_category: nil,
           attempts: nil,
-          cinema_city_film_id: nil,
+          # Support both array and legacy singular format for Cinema City film IDs
+          cinema_city_film_ids: match.cinema_city_film_ids,
+          cinema_city_film_id: match.cinema_city_film_id,
           movie_id: match.id
         }
       end)
@@ -904,6 +921,8 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
           error_message: failure.error,
           error_category: categorize_error_message(failure.error),
           attempts: failure.attempts,
+          # Job errors have singular cinema_city_film_id from job args
+          cinema_city_film_ids: nil,
           cinema_city_film_id: failure.cinema_city_film_id,
           movie_id: nil
         }
