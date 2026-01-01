@@ -55,6 +55,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
     # Extract observable context (provided for dashboard visibility)
     entity_type = args["entity_type"]
     entity_id = args["entity_id"]
+    image_type = args["image_type"]
     position = args["position"]
 
     # Log with context for observability
@@ -75,7 +76,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
         MetricsTracker.record_failure(
           job,
           {:record_deleted, "CachedImage #{cached_image_id} no longer exists"},
-          "image_cache_#{entity_type}_#{entity_id}_#{position}"
+          "image_cache_#{entity_type}_#{entity_id}_#{image_type}_#{position}"
         )
 
         {:cancel, :record_deleted}
