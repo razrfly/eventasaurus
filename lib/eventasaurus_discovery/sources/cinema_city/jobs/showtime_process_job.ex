@@ -319,7 +319,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
 
     array_query =
       from(m in EventasaurusDiscovery.Movies.Movie,
-        where: fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^film_id_json),
+        where:
+          fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^film_id_json),
         order_by: [asc: m.inserted_at],
         limit: 1
       )

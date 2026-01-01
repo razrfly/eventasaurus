@@ -13,14 +13,27 @@ defmodule EventasaurusApp.Accounts.User.Username do
   @username_regex ~r/^[a-zA-Z0-9_-]{3,30}$/
 
   @doc """
-  Generate a unique username for a user based on their attributes.
+  Generate a username for a user based on their attributes.
 
   Priority order:
   1. First name + last initial (e.g., "john-s")
   2. Email prefix (part before @)
   3. Fallback to "user-{id}"
 
-  Handles uniqueness conflicts by appending incrementing numbers.
+  ## With user ID (existing users)
+
+  When called with `%{id: integer()}`, returns a guaranteed unique username
+  by checking the database and appending numbers if needed (e.g., "john-s-1").
+
+  ## Without user ID (new users)
+
+  When called without an ID, returns a base username WITHOUT uniqueness validation.
+  The caller is responsible for handling potential unique constraint violations
+  on insert, typically by:
+  1. Attempting insert with the generated username
+  2. On constraint violation, calling `generate/1` again with the assigned ID
+
+  This is the expected workflow for new user registration.
   """
   @spec generate(map()) :: String.t()
   def generate(%{id: id} = attrs) when is_integer(id) do
@@ -29,8 +42,6 @@ defmodule EventasaurusApp.Accounts.User.Username do
   end
 
   def generate(attrs) do
-    # For new users without ID yet, just return the base
-    # The ID will be used for fallback after insert if needed
     generate_base(attrs)
   end
 
@@ -224,7 +235,14 @@ defmodule EventasaurusApp.Accounts.User.Username do
     String.downcase(username) in reserved_list
   end
 
-  defp get_reserved_usernames do
+  @doc """
+  Get the list of reserved usernames that cannot be used.
+
+  Reads from priv/reserved_usernames.txt if available, otherwise uses a hardcoded fallback list.
+  Used by both username generation and validation.
+  """
+  @spec get_reserved_usernames() :: [String.t()]
+  def get_reserved_usernames do
     reserved_usernames_path = Application.app_dir(:eventasaurus, "priv/reserved_usernames.txt")
 
     case File.read(reserved_usernames_path) do
@@ -499,53 +517,10 @@ defmodule EventasaurusApp.Accounts.User do
     )
   end
 
-  # Reserved username checking
+  # Reserved username checking - delegates to Username module to avoid duplication
   defp reserved_username?(username) when is_binary(username) do
     username_lower = String.downcase(username)
-    username_lower in get_reserved_usernames()
-  end
-
-  defp get_reserved_usernames do
-    reserved_usernames_path = Application.app_dir(:eventasaurus, "priv/reserved_usernames.txt")
-
-    case File.read(reserved_usernames_path) do
-      {:ok, content} ->
-        content
-        |> String.split("\n")
-        |> Enum.map(&String.trim/1)
-        |> Enum.reject(fn line ->
-          line == "" or String.starts_with?(line, "#")
-        end)
-        |> Enum.map(&String.downcase/1)
-
-      {:error, _} ->
-        # Fallback list if file is not found
-        [
-          "admin",
-          "administrator",
-          "root",
-          "system",
-          "support",
-          "help",
-          "api",
-          "www",
-          "about",
-          "contact",
-          "privacy",
-          "terms",
-          "login",
-          "logout",
-          "signup",
-          "register",
-          "dashboard",
-          "events",
-          "orders",
-          "tickets",
-          "checkout",
-          "profile",
-          "settings"
-        ]
-    end
+    username_lower in Username.get_reserved_usernames()
   end
 
   @doc """
@@ -658,6 +633,13 @@ defmodule EventasaurusApp.Accounts.User do
   Takes individual fields rather than a user struct to work directly
   with database columns in migrations.
   """
+  @spec generate_username_for_backfill(
+          integer(),
+          String.t() | nil,
+          String.t() | nil,
+          String.t() | nil
+        ) ::
+          String.t()
   def generate_username_for_backfill(user_id, first_name, last_name, email) do
     Username.generate_for_backfill(user_id, first_name, last_name, email)
   end

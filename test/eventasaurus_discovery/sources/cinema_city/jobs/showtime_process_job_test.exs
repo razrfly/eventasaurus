@@ -138,7 +138,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJobTest d
 
       found_movie =
         from(m in Movie,
-          where: fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^film_id_json),
+          where:
+            fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^film_id_json),
           limit: 1
         )
         |> Repo.one()
@@ -151,7 +152,12 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJobTest d
 
       found_by_variant =
         from(m in Movie,
-          where: fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^variant_film_id_json),
+          where:
+            fragment(
+              "?->'cinema_city_film_ids' @> (?::text)::jsonb",
+              m.metadata,
+              ^variant_film_id_json
+            ),
           limit: 1
         )
         |> Repo.one()
@@ -218,7 +224,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJobTest d
 
       found_by_array =
         from(m in Movie,
-          where: fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^film_id_json),
+          where:
+            fragment("?->'cinema_city_film_ids' @> (?::text)::jsonb", m.metadata, ^film_id_json),
           limit: 1
         )
         |> Repo.one()
