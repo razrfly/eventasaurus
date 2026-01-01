@@ -89,11 +89,67 @@ defmodule EventasaurusApp.Accounts do
 
   @doc """
   Creates a user.
+
+  If no username is provided, one is automatically generated based on the user's
+  name or email. If a collision occurs on the generated username, the system
+  retries with an alternative unique username.
   """
   def create_user(attrs \\ %{}) do
+    attrs = maybe_generate_username(attrs)
+
+    case do_create_user(attrs) do
+      {:ok, user} ->
+        {:ok, user}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if username_conflict?(changeset) do
+          # Retry with a timestamp-based unique username
+          retry_with_unique_username(attrs)
+        else
+          {:error, changeset}
+        end
+    end
+  end
+
+  # Generate a username if one wasn't provided
+  defp maybe_generate_username(attrs) do
+    # Check for both atom and string keys
+    has_username =
+      Map.has_key?(attrs, :username) ||
+        Map.has_key?(attrs, "username")
+
+    if has_username do
+      attrs
+    else
+      # Generate base username from attrs (name or email based)
+      username = User.generate_username(attrs)
+      Map.put(attrs, :username, username)
+    end
+  end
+
+  defp do_create_user(attrs) do
     %User{}
     |> User.changeset(attrs)
     |> Repo.insert()
+  end
+
+  # Check if the changeset error is specifically a username uniqueness conflict
+  defp username_conflict?(changeset) do
+    Enum.any?(changeset.errors, fn
+      {:username, {_, opts}} when is_list(opts) ->
+        Keyword.get(opts, :constraint) == :unique
+
+      _ ->
+        false
+    end)
+  end
+
+  # Retry user creation with a guaranteed-unique timestamp-based username
+  defp retry_with_unique_username(attrs) do
+    # Use microsecond timestamp for uniqueness
+    unique_username = "user-#{System.system_time(:microsecond)}"
+    attrs = Map.put(attrs, :username, unique_username)
+    do_create_user(attrs)
   end
 
   @doc """
