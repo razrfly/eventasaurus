@@ -635,6 +635,23 @@ defmodule EventasaurusApp.DiscoveryTest do
       [result] = results
       assert result.user.id == frequent_attendee.id
     end
+
+    test "includes pending participant statuses in event_co_attendees" do
+      user = insert(:user)
+      pending_attendee = insert(:user)
+      event = insert(:event, start_at: DateTime.add(DateTime.utc_now(), -7, :day))
+
+      # User has accepted status
+      insert(:event_participant, user: user, event: event, status: :accepted)
+      # Other attendee has pending status - should still appear
+      insert(:event_participant, user: pending_attendee, event: event, status: :pending)
+
+      results = Discovery.event_co_attendees(user)
+
+      assert length(results) == 1
+      [result] = results
+      assert result.user.id == pending_attendee.id
+    end
   end
 
   # =============================================================================
