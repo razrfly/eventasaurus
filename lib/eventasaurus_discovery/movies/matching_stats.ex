@@ -75,49 +75,106 @@ defmodule EventasaurusDiscovery.Movies.MatchingStats do
   Get provider breakdown statistics.
 
   Shows success rates by provider (TMDB, OMDb, IMDB).
-  Note: Currently we primarily track TMDB success, but this is
-  extensible for multi-provider tracking.
+  Queries the actual matched_by_provider column from the movies table,
+  with fallback to metadata for older records.
 
-  Accepts pre-computed overview_stats to avoid duplicate queries.
+  Accepts pre-computed overview_stats for total failure count.
   """
   def get_provider_stats(hours \\ 24, overview_stats \\ nil)
 
   def get_provider_stats(hours, nil) do
-    # Called without pre-computed stats - compute inline (still avoids separate function call)
+    # Called without pre-computed stats - compute inline
     get_provider_stats(hours, get_overview_stats(hours))
   end
 
-  def get_provider_stats(_hours, stats) when is_map(stats) do
-    # Use pre-computed stats - no duplicate queries
-    [
-      %{
-        provider: :tmdb,
-        name: "TMDB",
-        lookups: stats.successful_matches + stats.failed_matches,
-        successes: stats.successful_matches,
-        failures: stats.failed_matches,
-        success_rate: stats.success_rate,
-        color: "#01B4E4"
-      },
-      %{
-        provider: :omdb,
-        name: "OMDb",
-        lookups: 0,
-        successes: 0,
-        failures: 0,
-        success_rate: 0.0,
-        color: "#F5C518"
-      },
-      %{
-        provider: :imdb,
-        name: "IMDB",
-        lookups: 0,
-        successes: 0,
-        failures: 0,
-        success_rate: 0.0,
-        color: "#DBA506"
-      }
-    ]
+  def get_provider_stats(hours, stats) when is_map(stats) do
+    since = hours_ago(hours)
+
+    # Query actual provider breakdown from movies table
+    # Uses COALESCE to check column first, then metadata fallback, then default to 'tmdb'
+    provider_counts =
+      from(m in Movie,
+        where: m.inserted_at >= ^since,
+        group_by:
+          fragment(
+            "COALESCE(?, metadata->>'matched_by_provider', 'tmdb')",
+            m.matched_by_provider
+          ),
+        select: %{
+          provider:
+            fragment(
+              "COALESCE(?, metadata->>'matched_by_provider', 'tmdb')",
+              m.matched_by_provider
+            ),
+          count: count()
+        }
+      )
+      |> Repo.replica().all()
+      |> Enum.into(%{}, fn %{provider: p, count: c} -> {p, c} end)
+
+    # Get counts per provider (successes only - these are movies in our DB)
+    tmdb_count = Map.get(provider_counts, "tmdb", 0)
+    imdb_count = Map.get(provider_counts, "imdb", 0)
+
+    # Total successful matches (movies actually created)
+    total_matched = tmdb_count + imdb_count
+
+    # Get failure count from overview stats
+    total_failures = stats.failed_matches || 0
+
+    # Grand total = matched + failed (should equal total lookup attempts)
+    grand_total = total_matched + total_failures
+
+    # Build provider list - only show providers that actually matched something
+    # Each provider shows: count and percentage share of grand_total
+    # All shares should sum to ~100% (including failures)
+    providers =
+      [
+        if tmdb_count > 0 do
+          %{
+            provider: :tmdb,
+            name: "TMDB",
+            count: tmdb_count,
+            share: calculate_share(tmdb_count, grand_total),
+            color: "#01B4E4"
+          }
+        end,
+        if imdb_count > 0 do
+          %{
+            provider: :imdb,
+            name: "IMDB",
+            count: imdb_count,
+            share: calculate_share(imdb_count, grand_total),
+            color: "#DBA506"
+          }
+        end,
+        if total_failures > 0 do
+          %{
+            provider: :failed,
+            name: "Failed",
+            count: total_failures,
+            share: calculate_share(total_failures, grand_total),
+            color: "#EF4444"
+          }
+        end
+      ]
+      |> Enum.reject(&is_nil/1)
+      # Sort by count descending
+      |> Enum.sort_by(fn p -> -p.count end)
+
+    %{
+      providers: providers,
+      total_matched: total_matched,
+      total_failures: total_failures,
+      grand_total: grand_total
+    }
+  end
+
+  # Calculate percentage share of total
+  defp calculate_share(_count, 0), do: 0.0
+
+  defp calculate_share(count, total) do
+    Float.round(count / total * 100, 1)
   end
 
   @doc """

@@ -317,9 +317,10 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
       job_error: Enum.count(unified_movies, &(&1.status == :job_error))
     }
 
-    # Filter providers to only show those with activity
-    active_providers =
-      Enum.filter(assigns.providers, fn p -> p.successes > 0 || p.failures > 0 end)
+    # Provider stats now returns a map with :providers list containing only providers with matches
+    # The new structure is: %{providers: [...], total_matched: N, total_failures: N, grand_total: N}
+    # Each provider has :count and :share (percentage of grand_total that sums to 100%)
+    active_providers = Map.get(assigns.providers, :providers, [])
 
     # Calculate failure summary (job processing errors from Oban)
     failure_summary = summarize_failures(assigns.failure_analysis)
@@ -928,7 +929,54 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
         }
       end)
 
-    unmatched ++ matched ++ job_errors
+    # Deduplicate: Same movie can appear in both job_errors and unmatched
+    # Priority: job_error > unmatched (job_error has more actionable info like retry button)
+    # Merge blocked_count from unmatched into job_error entries
+    deduplicate_movies(job_errors ++ unmatched ++ matched)
+  end
+
+  # Deduplicate movies by title key, merging blocked_count and preferring job_error status
+  # This prevents the same movie from appearing twice (once as JOB ERROR, once as UNMATCHED)
+  defp deduplicate_movies(movies) do
+    movies
+    |> Enum.reduce(%{}, fn movie, acc ->
+      key = movie_dedup_key(movie)
+
+      case Map.get(acc, key) do
+        nil ->
+          Map.put(acc, key, movie)
+
+        existing ->
+          merged = merge_movie_entries(existing, movie)
+          Map.put(acc, key, merged)
+      end
+    end)
+    |> Map.values()
+  end
+
+  # Generate a deduplication key from movie titles
+  # Uses polish_title/title and original_title/source_title, normalized to lowercase
+  defp movie_dedup_key(movie) do
+    polish = (movie.polish_title || movie.title || "") |> String.downcase() |> String.trim()
+    original = (movie.original_title || movie.source_title || "") |> String.downcase() |> String.trim()
+    {polish, original}
+  end
+
+  # Merge two movie entries, preferring job_error status and combining blocked_counts
+  defp merge_movie_entries(existing, new) do
+    # Priority order: job_error > unmatched > low_confidence > matched
+    status_priority = %{job_error: 0, unmatched: 1, low_confidence: 2, matched: 3}
+    existing_priority = Map.get(status_priority, existing.status, 4)
+    new_priority = Map.get(status_priority, new.status, 4)
+
+    # Use the higher priority (lower number) entry as base
+    base = if existing_priority <= new_priority, do: existing, else: new
+    other = if existing_priority <= new_priority, do: new, else: existing
+
+    # Merge blocked_count from both entries
+    combined_blocked = (base.blocked_count || 0) + (other.blocked_count || 0)
+
+    %{base | blocked_count: combined_blocked}
   end
 
   # Categorize error message for display
@@ -1124,6 +1172,9 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     """
   end
 
+  # Provider row for the new distribution-based stats
+  # Shows: Provider Name | Count | Share% (percentage of total)
+  # All providers' share values should sum to 100%
   defp provider_row(assigns) do
     ~H"""
     <div class="flex items-center justify-between py-2">
@@ -1132,13 +1183,11 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
         <span class="font-medium text-gray-900 dark:text-white">{@provider.name}</span>
       </div>
       <div class="flex items-center gap-4">
-        <div class="text-sm">
-          <span class="text-green-600 dark:text-green-400">{@provider.successes}</span>
-          <span class="text-gray-400 dark:text-gray-500">/</span>
-          <span class="text-red-600 dark:text-red-400">{@provider.failures}</span>
+        <div class="text-sm text-gray-600 dark:text-gray-400">
+          {@provider.count} movies
         </div>
-        <div class="text-sm font-medium" style={"color: #{success_rate_color(@provider.success_rate)}"}>
-          {format_rate(@provider.success_rate)}%
+        <div class="text-sm font-medium w-16 text-right" style={"color: #{@provider.color}"}>
+          {format_rate(@provider.share)}%
         </div>
       </div>
     </div>
@@ -1404,10 +1453,8 @@ defmodule EventasaurusWeb.Admin.MovieMatchingLive do
     end
   end
 
-  defp success_rate_color(rate) when rate >= 95, do: "#22c55e"
-  defp success_rate_color(rate) when rate >= 80, do: "#3b82f6"
-  defp success_rate_color(rate) when rate >= 60, do: "#eab308"
-  defp success_rate_color(_), do: "#ef4444"
+  # Removed success_rate_color/1 - no longer needed with distribution-based provider stats
+  # Provider colors are now set directly on each provider entry
 
   # 5 buckets per Issue #3083 spec
   defp confidence_bar_color("≥95%"), do: "bg-green-500"
