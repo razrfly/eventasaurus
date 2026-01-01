@@ -1,17 +1,25 @@
 defmodule EventasaurusApp.Repo do
   @moduledoc """
-  Primary Ecto Repo for Eventasaurus.
+  Primary Ecto Repo for Eventasaurus (PgBouncer, port 6432).
 
-  For read-heavy operations where eventual consistency is acceptable,
-  use `replica/0` to route queries:
+  ## Connection Architecture (Issue #3119)
 
-      Repo.replica().all(query)
+  - **Repo (this module)**: PgBouncer primary - DEFAULT for all traffic
+  - **SessionRepo**: Direct primary - migrations and advisory locks only
+  - **ReplicaRepo**: Direct replicas - long-running read-only background jobs
 
-  The `replica/0` function handles:
-  - Test environment: Returns primary Repo (sandbox compatibility)
-  - Kill switch: USE_REPLICA=false routes to primary
-  - Production: Currently returns primary Repo via PgBouncer for connection stability
-    (direct replica connections temporarily disabled - see issue #3080 Phase 4)
+  ## Usage
+
+  For most operations, use Repo directly (goes through PgBouncer):
+
+      Repo.all(query)
+      Repo.insert(changeset)
+
+  For long-running READ-ONLY operations (stats caches, analytics), use replica:
+
+      Repo.replica().all(heavy_aggregate_query)
+
+  This offloads heavy reads to replicas, preserving primary capacity.
   """
 
   use Ecto.Repo,
@@ -21,36 +29,30 @@ defmodule EventasaurusApp.Repo do
   use Ecto.SoftDelete.Repo
 
   @doc """
-  Returns the appropriate repo for read operations.
+  Returns ReplicaRepo for long-running read-only operations.
 
-  **Current behavior**: Returns primary Repo via PgBouncer for all environments.
-  Direct replica connections are temporarily disabled to reduce connection pressure.
-  See issue #3080 Phase 4 for re-enabling with Dedicated Replica PgBouncer.
-
-  Can be disabled with USE_REPLICA=false environment variable (currently a no-op).
-
-  ## Usage
-
-      # Read from replica (eventual consistency OK)
-      Repo.replica().all(from e in Event, where: e.published == true)
-
-      # For reads after writes, use primary directly
-      event = Repo.insert!(changeset)
-      Repo.get!(Event, event.id)  # Primary, not replica
+  Routes to direct replica connections (port 5432) which:
+  - Have their own 25-connection limit per replica (separate from primary)
+  - Are ideal for heavy aggregates, stats caches, analytics
+  - Offload read pressure from primary
 
   ## When to Use
 
-  Use replica for:
-  - Admin dashboards and analytics
-  - Background job reads (stats caches, monitoring)
-  - Public listings where lag is acceptable
+  Use `Repo.replica()` for:
+  - Stats cache refreshes (DiscoveryStatsCache, CityPageCache, etc.)
+  - Admin dashboard analytics
   - Heavy aggregate queries
+  - Any long-running READ-ONLY operation
 
-  Use primary (default) for:
-  - Authentication/session queries
+  Use `Repo` directly for:
+  - All writes (inserts, updates, deletes)
+  - Short reads (web requests)
   - Reads immediately after writes
-  - Real-time collaborative features
   - Transaction-critical operations
+
+  ## Kill Switch
+
+  Set `USE_REPLICA=false` to route all replica reads to primary.
   """
   @spec replica() :: module()
   def replica do
@@ -63,11 +65,11 @@ defmodule EventasaurusApp.Repo do
       System.get_env("USE_REPLICA") == "false" ->
         __MODULE__
 
-      # Production: Temporarily route to PgBouncer primary for connection stability
-      # Direct replica connections (ReplicaRepo) disabled pending Dedicated Replica PgBouncer
-      # See issue #3080 Phase 4 for re-enabling with pooled replica access
+      # Production: Route to ReplicaRepo for long-running reads
+      # Uses direct connections to replicas (separate from primary's 25-connection limit)
+      # See issue #3119 for architecture details
       true ->
-        __MODULE__
+        EventasaurusApp.ReplicaRepo
     end
   end
 end

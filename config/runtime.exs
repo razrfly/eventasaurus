@@ -46,15 +46,16 @@ end
 config :eventasaurus, :environment, config_env()
 
 # Configure Oban for background job processing
-# Must be in runtime.exs to conditionally select repo based on environment
-# Production uses SessionRepo for long-running jobs (session pooler, advisory locks)
-# Development/test use regular Repo (same database, simpler)
-oban_repo =
-  if config_env() == :prod do
-    EventasaurusApp.SessionRepo
-  else
-    EventasaurusApp.Repo
-  end
+#
+# ARCHITECTURE (Issue #3119):
+# - Oban uses Repo (PgBouncer) for ALL database operations
+# - Oban uses Notifiers.PG (Distributed Erlang) for pub/sub notifications
+# - This eliminates the need for direct connections (LISTEN/NOTIFY doesn't work with PgBouncer)
+# - SessionRepo is now only used for migrations and advisory locks
+#
+# Previous: SessionRepo (direct connections) was required for LISTEN/NOTIFY
+# Now: Notifiers.PG uses Erlang's pg module - no database notifications needed
+oban_repo = EventasaurusApp.Repo
 
 # Base queues that run in all environments
 base_queues = [
@@ -124,6 +125,11 @@ oban_queues = base_queues ++ production_queues
 
 config :eventasaurus, Oban,
   repo: oban_repo,
+  # Use Distributed Erlang for notifications instead of PostgreSQL LISTEN/NOTIFY
+  # This allows Oban to work with PgBouncer (transaction pooling) which doesn't support LISTEN/NOTIFY
+  # Requires Distributed Erlang clustering (Fly.io provides this via libcluster)
+  # See: https://hexdocs.pm/oban/Oban.Notifiers.PG.html
+  notifier: Oban.Notifiers.PG,
   # Enable leader election so only one machine runs plugins (Cron, Reindexer, etc.)
   # Without this, all machines compete for advisory locks and run duplicate work.
   # See: https://hexdocs.pm/oban/Oban.Peers.Postgres.html
@@ -627,7 +633,7 @@ if config_env() == :prod do
     hostname: ps_host,
     port: ps_direct_port,
     database: ps_db,
-    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "2"),
+    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "1"),
     socket_options: socket_opts,
     queue_target: 5000,
     queue_interval: 30000,
@@ -666,7 +672,7 @@ if config_env() == :prod do
     hostname: ps_host,
     port: ps_direct_port,
     database: ps_db,
-    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "1"),
+    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "3"),
     socket_options: socket_opts,
     queue_target: 5000,
     queue_interval: 30000,
