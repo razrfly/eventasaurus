@@ -1,72 +1,722 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
   <!-- Header -->
-  <div class="mb-8">
-    <h1 class="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-    <p class="mt-2 text-gray-600">Central hub for all admin functionality</p>
+  <div class="mb-8 flex items-center justify-between">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+      <p class="mt-2 text-gray-600">Central hub for all admin functionality</p>
+    </div>
+    <button
+      phx-click="refresh"
+      class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+    >
+      <svg class="h-4 w-4 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      Refresh
+    </button>
   </div>
 
-  <!-- Statistics Overview -->
-  <div class="bg-white shadow rounded-lg p-6 mb-8">
-    <h2 class="text-xl font-semibold mb-4">System Overview</h2>
+  <!-- Tier 1: Health Overview (4 key status cards) -->
+  <div class="mb-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold text-gray-900">Health Overview</h2>
+      <.link navigate={~p"/admin/monitoring"} class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+        View Details &rarr;
+      </.link>
+    </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
-      <div class="bg-blue-50 p-4 rounded-lg">
-        <div class="text-sm text-blue-600 font-medium">Total Events</div>
-        <div class="text-2xl font-bold text-blue-900">
-          {format_number(@stats.total_events)}
+    <%= if stats_loaded?(@tier1_stats) do %>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- System Health Card -->
+        <.link navigate={~p"/admin/monitoring"} class="block">
+          <div class={"bg-white shadow rounded-lg p-5 border-l-4 hover:shadow-md transition-shadow #{health_border_class(@tier1_stats.health.status)}"}>
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-gray-500">System Health</div>
+                <div class={"text-3xl font-bold mt-1 #{health_value_class(@tier1_stats.health.status)}"}>
+                  {format_number(@tier1_stats.health.avg_score)}%
+                </div>
+              </div>
+              <div class={"flex items-center justify-center w-12 h-12 rounded-full #{health_bg_class(@tier1_stats.health.status)}"}>
+                <%= case @tier1_stats.health.status do %>
+                  <% :healthy -> %>
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                  <% :degraded -> %>
+                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  <% _ -> %>
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                <% end %>
+              </div>
+            </div>
+            <div class={"text-sm mt-2 #{health_text_class(@tier1_stats.health.status)}"}>
+              {health_text(@tier1_stats.health.status)}
+            </div>
+          </div>
+        </.link>
+
+        <!-- Sources Status Card -->
+        <.link navigate={~p"/admin/monitoring"} class="block">
+          <div class="bg-white shadow rounded-lg p-5 border-l-4 border-blue-500 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-gray-500">Sources Status</div>
+                <div class="text-3xl font-bold mt-1 text-blue-900">
+                  {@tier1_stats.health.sources_meeting_slo}/{@tier1_stats.health.total_sources}
+                </div>
+              </div>
+              <div class="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+            <div class="text-sm mt-2 text-gray-500">
+              <%= if @tier1_stats.health.total_sources - @tier1_stats.health.sources_meeting_slo > 0 do %>
+                <span class="text-orange-600 font-medium">
+                  {@tier1_stats.health.total_sources - @tier1_stats.health.sources_meeting_slo} at risk
+                </span>
+              <% else %>
+                All meeting SLO
+              <% end %>
+            </div>
+          </div>
+        </.link>
+
+        <!-- Active Alerts Card -->
+        <.link navigate={~p"/admin/job-executions"} class="block">
+          <div class={"bg-white shadow rounded-lg p-5 border-l-4 hover:shadow-md transition-shadow #{alerts_border_class(@tier1_stats.alerts.severity)}"}>
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-gray-500">Active Alerts</div>
+                <div class={"text-3xl font-bold mt-1 #{alerts_value_class(@tier1_stats.alerts.severity)}"}>
+                  {format_number(@tier1_stats.alerts.total)}
+                </div>
+              </div>
+              <div class={"flex items-center justify-center w-12 h-12 rounded-full #{alerts_bg_class(@tier1_stats.alerts.severity)}"}>
+                <%= case @tier1_stats.alerts.severity do %>
+                  <% :ok -> %>
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                  <% :info -> %>
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  <% :warning -> %>
+                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  <% :critical -> %>
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                <% end %>
+              </div>
+            </div>
+            <div class="text-sm mt-2 text-gray-500">
+              <%= cond do %>
+                <% @tier1_stats.alerts.critical > 0 -> %>
+                  <span class="text-red-600 font-medium">{@tier1_stats.alerts.critical} critical</span>
+                  <%= if @tier1_stats.alerts.warning > 0 do %>
+                    <span class="text-gray-400 mx-1">·</span>
+                    <span class="text-yellow-600">{@tier1_stats.alerts.warning} warning</span>
+                  <% end %>
+                <% @tier1_stats.alerts.warning > 0 -> %>
+                  <span class="text-yellow-600 font-medium">{@tier1_stats.alerts.warning} warning</span>
+                <% @tier1_stats.alerts.total > 0 -> %>
+                  <span class="text-blue-600">{@tier1_stats.alerts.info} info</span>
+                <% true -> %>
+                  <span class="text-green-600">No active alerts</span>
+              <% end %>
+            </div>
+          </div>
+        </.link>
+
+        <!-- Data Freshness Card -->
+        <.link navigate={~p"/admin/imports"} class="block">
+          <div class={"bg-white shadow rounded-lg p-5 border-l-4 hover:shadow-md transition-shadow #{freshness_border_class(@tier1_stats.freshness.status)}"}>
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-gray-500">Data Freshness</div>
+                <div class={"text-3xl font-bold mt-1 #{freshness_value_class(@tier1_stats.freshness.status)}"}>
+                  {@tier1_stats.freshness.synced_today}/{@tier1_stats.freshness.total_sources}
+                </div>
+              </div>
+              <div class={"flex items-center justify-center w-12 h-12 rounded-full #{freshness_bg_class(@tier1_stats.freshness.status)}"}>
+                <svg class={"w-6 h-6 #{freshness_icon_class(@tier1_stats.freshness.status)}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+            </div>
+            <div class="text-sm mt-2 text-gray-500">
+              <%= if @tier1_stats.freshness.most_recent_hours_ago do %>
+                Last sync: {format_hours_ago(@tier1_stats.freshness.most_recent_hours_ago)}
+              <% else %>
+                Synced today
+              <% end %>
+            </div>
+          </div>
+        </.link>
+      </div>
+    <% else %>
+      <!-- Loading skeleton -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <%= for _ <- 1..4 do %>
+          <div class="bg-white shadow rounded-lg p-5 animate-pulse">
+            <div class="flex items-center justify-between">
+              <div class="flex-1">
+                <div class="h-4 bg-gray-200 rounded w-24 mb-3"></div>
+                <div class="h-9 bg-gray-200 rounded w-16"></div>
+              </div>
+              <div class="h-12 w-12 bg-gray-200 rounded-full"></div>
+            </div>
+            <div class="h-4 bg-gray-200 rounded w-20 mt-3"></div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+
+  <!-- Queue Stats (secondary row) -->
+  <%= if stats_loaded?(@tier1_stats) do %>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <.link navigate={~p"/admin/oban"} class="block">
+        <div class="bg-white shadow rounded-lg p-4 hover:shadow-md transition-shadow">
+          <div class="text-sm text-gray-500 font-medium">Queue Pending</div>
+          <div class="text-2xl font-bold text-indigo-900">
+            {format_number(@tier1_stats.queue.total_pending)}
+          </div>
+          <div class="text-xs text-gray-500 mt-1">
+            {format_number(@tier1_stats.queue.executing)} executing
+          </div>
+        </div>
+      </.link>
+
+      <.link navigate={~p"/admin/oban"} class="block">
+        <div class={"bg-white shadow rounded-lg p-4 hover:shadow-md transition-shadow #{if @tier1_stats.queue.retryable > 0, do: "border-l-4 border-red-500"}"}>
+          <div class={"text-sm font-medium #{if @tier1_stats.queue.retryable > 0, do: "text-red-600", else: "text-gray-500"}"}>Retryable Jobs</div>
+          <div class={"text-2xl font-bold #{if @tier1_stats.queue.retryable > 0, do: "text-red-900", else: "text-gray-900"}"}>
+            {format_number(@tier1_stats.queue.retryable)}
+          </div>
+          <div class="text-xs text-gray-500 mt-1">
+            {format_number(@tier1_stats.queue.discarded)} discarded
+          </div>
+        </div>
+      </.link>
+
+      <.link navigate={~p"/admin/oban"} class="block">
+        <div class="bg-white shadow rounded-lg p-4 hover:shadow-md transition-shadow">
+          <div class="text-sm text-gray-500 font-medium">Scheduled</div>
+          <div class="text-2xl font-bold text-gray-900">
+            {format_number(@tier1_stats.queue.scheduled)}
+          </div>
+          <div class="text-xs text-gray-500 mt-1">
+            upcoming jobs
+          </div>
+        </div>
+      </.link>
+
+      <.link navigate={~p"/admin/oban"} class="block">
+        <div class="bg-white shadow rounded-lg p-4 hover:shadow-md transition-shadow">
+          <div class="text-sm text-gray-500 font-medium">Available</div>
+          <div class="text-2xl font-bold text-gray-900">
+            {format_number(@tier1_stats.queue.available)}
+          </div>
+          <div class="text-xs text-gray-500 mt-1">
+            ready to run
+          </div>
+        </div>
+      </.link>
+    </div>
+  <% end %>
+
+  <!-- Tier 2: Key Metrics Section (6 cards) -->
+  <div class="mb-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold text-gray-900">Key Metrics</h2>
+    </div>
+
+    <%= if stats_loaded?(@tier2_stats) do %>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- 1. Total Events Card (with upcoming/past breakdown) -->
+        <.link navigate={~p"/admin/imports"} class="block">
+          <div class="bg-white shadow rounded-lg p-5 border-l-4 border-blue-500 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-gray-500">Total Events</div>
+                <div class="text-3xl font-bold mt-1 text-blue-900">
+                  {format_number(@tier2_stats.events.total_events)}
+                </div>
+              </div>
+              <div class="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center space-x-4 text-sm">
+              <div class="flex items-center text-green-600">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+                <span>{format_number(@tier2_stats.events.upcoming_events)} upcoming</span>
+              </div>
+              <div class="flex items-center text-gray-500">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{format_number(@tier2_stats.events.past_events)} past</span>
+              </div>
+            </div>
+          </div>
+        </.link>
+
+        <!-- 2. Movie Matching Card (success rate + needs attention) -->
+        <.link navigate={~p"/admin/movies"} class="block">
+          <div class={"bg-white shadow rounded-lg p-5 border-l-4 hover:shadow-md transition-shadow #{if @tier2_stats.movies.unmatched_blocking > 0, do: "border-orange-500", else: "border-teal-500"}"}>
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-gray-500">Movie Matching</div>
+                <div class={"text-3xl font-bold mt-1 #{if @tier2_stats.movies.unmatched_blocking > 0, do: "text-orange-900", else: "text-teal-900"}"}>
+                  {format_number(@tier2_stats.movies.match_rate)}%
+                </div>
+              </div>
+              <div class={"flex items-center justify-center w-12 h-12 rounded-full #{if @tier2_stats.movies.unmatched_blocking > 0, do: "bg-orange-100", else: "bg-teal-100"}"}>
+                <svg class={"w-6 h-6 #{if @tier2_stats.movies.unmatched_blocking > 0, do: "text-orange-600", else: "text-teal-600"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                </svg>
+              </div>
+            </div>
+            <div class="mt-3 text-sm">
+              <%= if @tier2_stats.movies.unmatched_blocking > 0 do %>
+                <span class="text-orange-600 font-medium">
+                  {format_number(@tier2_stats.movies.unmatched_blocking)} need attention
+                </span>
+              <% else %>
+                <span class="text-teal-600">All movies matched</span>
+              <% end %>
+            </div>
+          </div>
+        </.link>
+
+        <!-- 3. Image Cache Card (cached count + failures + size) -->
+        <.link navigate={~p"/admin/images"} class="block">
+          <div class={"bg-white shadow rounded-lg p-5 border-l-4 hover:shadow-md transition-shadow #{if @tier2_stats.images.failed > 0, do: "border-red-500", else: "border-cyan-500"}"}>
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-gray-500">Image Cache</div>
+                <div class={"text-3xl font-bold mt-1 #{if @tier2_stats.images.failed > 0, do: "text-red-900", else: "text-cyan-900"}"}>
+                  {format_number(@tier2_stats.images.cached)}
+                </div>
+              </div>
+              <div class={"flex items-center justify-center w-12 h-12 rounded-full #{if @tier2_stats.images.failed > 0, do: "bg-red-100", else: "bg-cyan-100"}"}>
+                <svg class={"w-6 h-6 #{if @tier2_stats.images.failed > 0, do: "text-red-600", else: "text-cyan-600"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center space-x-4 text-sm">
+              <%= if @tier2_stats.images.failed > 0 do %>
+                <span class="text-red-600 font-medium">{format_number(@tier2_stats.images.failed)} failed</span>
+              <% end %>
+              <span class="text-gray-500">{format_bytes(@tier2_stats.images.storage_bytes)}</span>
+            </div>
+          </div>
+        </.link>
+
+        <!-- 4. Geocoding Card (success rate + failed venues) -->
+        <.link navigate={~p"/admin/geocoding"} class="block">
+          <div class={"bg-white shadow rounded-lg p-5 border-l-4 hover:shadow-md transition-shadow #{if @tier2_stats.geocoding.failed_count > 0, do: "border-yellow-500", else: "border-green-500"}"}>
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-gray-500">Geocoding</div>
+                <div class={"text-3xl font-bold mt-1 #{if @tier2_stats.geocoding.failed_count > 0, do: "text-yellow-900", else: "text-green-900"}"}>
+                  {format_number(@tier2_stats.geocoding.success_rate)}%
+                </div>
+              </div>
+              <div class={"flex items-center justify-center w-12 h-12 rounded-full #{if @tier2_stats.geocoding.failed_count > 0, do: "bg-yellow-100", else: "bg-green-100"}"}>
+                <svg class={"w-6 h-6 #{if @tier2_stats.geocoding.failed_count > 0, do: "text-yellow-600", else: "text-green-600"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+            </div>
+            <div class="mt-3 text-sm">
+              <%= if @tier2_stats.geocoding.failed_count > 0 do %>
+                <span class="text-yellow-600 font-medium">
+                  {format_number(@tier2_stats.geocoding.failed_count)} failed lookups
+                </span>
+              <% else %>
+                <span class="text-green-600">All lookups successful</span>
+              <% end %>
+            </div>
+          </div>
+        </.link>
+
+        <!-- 5. Data Quality Card (duplicates + collisions) -->
+        <.link navigate={~p"/admin/venues/duplicates"} class="block">
+          <div class={"bg-white shadow rounded-lg p-5 border-l-4 hover:shadow-md transition-shadow #{if @tier2_stats.data_quality.duplicate_groups > 0 or @tier2_stats.data_quality.total_collisions > 0, do: "border-purple-500", else: "border-gray-300"}"}>
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-gray-500">Data Quality</div>
+                <div class="text-3xl font-bold mt-1 text-purple-900">
+                  {format_number(@tier2_stats.data_quality.duplicate_groups)}
+                </div>
+              </div>
+              <div class="flex items-center justify-center w-12 h-12 rounded-full bg-purple-100">
+                <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center space-x-4 text-sm">
+              <span class="text-purple-600">duplicate groups</span>
+              <%= if @tier2_stats.data_quality.total_collisions > 0 do %>
+                <span class="text-gray-400">·</span>
+                <span class="text-gray-500">{format_number(@tier2_stats.data_quality.total_collisions)} collisions</span>
+              <% end %>
+            </div>
+          </div>
+        </.link>
+
+        <!-- 6. Job Queue Card (from tier1 stats) -->
+        <%= if stats_loaded?(@tier1_stats) do %>
+          <.link navigate={~p"/admin/oban"} class="block">
+            <div class={"bg-white shadow rounded-lg p-5 border-l-4 hover:shadow-md transition-shadow #{if @tier1_stats.queue.retryable > 0, do: "border-red-500", else: "border-indigo-500"}"}>
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-sm font-medium text-gray-500">Job Queue</div>
+                  <div class={"text-3xl font-bold mt-1 #{if @tier1_stats.queue.retryable > 0, do: "text-red-900", else: "text-indigo-900"}"}>
+                    {format_number(@tier1_stats.queue.total_pending)}
+                  </div>
+                </div>
+                <div class={"flex items-center justify-center w-12 h-12 rounded-full #{if @tier1_stats.queue.retryable > 0, do: "bg-red-100", else: "bg-indigo-100"}"}>
+                  <svg class={"w-6 h-6 #{if @tier1_stats.queue.retryable > 0, do: "text-red-600", else: "text-indigo-600"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+              </div>
+              <div class="mt-3 flex items-center space-x-4 text-sm">
+                <span class="text-gray-500">{format_number(@tier1_stats.queue.executing)} active</span>
+                <%= if @tier1_stats.queue.retryable > 0 do %>
+                  <span class="text-gray-400">·</span>
+                  <span class="text-red-600 font-medium">{format_number(@tier1_stats.queue.retryable)} retrying</span>
+                <% end %>
+              </div>
+            </div>
+          </.link>
+        <% else %>
+          <!-- Job Queue Loading skeleton -->
+          <div class="bg-white shadow rounded-lg p-5 animate-pulse">
+            <div class="flex items-center justify-between">
+              <div class="flex-1">
+                <div class="h-4 bg-gray-200 rounded w-24 mb-3"></div>
+                <div class="h-9 bg-gray-200 rounded w-16"></div>
+              </div>
+              <div class="h-12 w-12 bg-gray-200 rounded-full"></div>
+            </div>
+            <div class="h-4 bg-gray-200 rounded w-32 mt-3"></div>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <!-- Loading skeleton for all 6 cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <%= for _ <- 1..6 do %>
+          <div class="bg-white shadow rounded-lg p-5 animate-pulse">
+            <div class="flex items-center justify-between">
+              <div class="flex-1">
+                <div class="h-4 bg-gray-200 rounded w-24 mb-3"></div>
+                <div class="h-9 bg-gray-200 rounded w-16"></div>
+              </div>
+              <div class="h-12 w-12 bg-gray-200 rounded-full"></div>
+            </div>
+            <div class="h-4 bg-gray-200 rounded w-32 mt-3"></div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+
+  <!-- Source Status Table (sortable) -->
+  <div class="mb-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold text-gray-900">Source Status</h2>
+      <.link navigate={~p"/admin/monitoring"} class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+        View All Sources &rarr;
+      </.link>
+    </div>
+
+    <%= if @source_table && @source_table != :error && is_list(@source_table) do %>
+      <div class="bg-white shadow rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th
+                scope="col"
+                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                phx-click="sort_sources"
+                phx-value-column="display_name"
+              >
+                <div class="flex items-center space-x-1">
+                  <span>Source</span>
+                  <%= if @sort_by == :display_name do %>
+                    <svg class={"w-4 h-4 #{if @sort_dir == :asc, do: "transform rotate-180"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  <% end %>
+                </div>
+              </th>
+              <th
+                scope="col"
+                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                phx-click="sort_sources"
+                phx-value-column="health_score"
+              >
+                <div class="flex items-center space-x-1">
+                  <span>Health</span>
+                  <%= if @sort_by == :health_score do %>
+                    <svg class={"w-4 h-4 #{if @sort_dir == :asc, do: "transform rotate-180"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  <% end %>
+                </div>
+              </th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                7d Trend
+              </th>
+              <th
+                scope="col"
+                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                phx-click="sort_sources"
+                phx-value-column="success_rate"
+              >
+                <div class="flex items-center space-x-1">
+                  <span>Success %</span>
+                  <%= if @sort_by == :success_rate do %>
+                    <svg class={"w-4 h-4 #{if @sort_dir == :asc, do: "transform rotate-180"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  <% end %>
+                </div>
+              </th>
+              <th
+                scope="col"
+                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                phx-click="sort_sources"
+                phx-value-column="p95_duration"
+              >
+                <div class="flex items-center space-x-1">
+                  <span>P95</span>
+                  <%= if @sort_by == :p95_duration do %>
+                    <svg class={"w-4 h-4 #{if @sort_dir == :asc, do: "transform rotate-180"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  <% end %>
+                </div>
+              </th>
+              <th
+                scope="col"
+                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                phx-click="sort_sources"
+                phx-value-column="last_execution"
+              >
+                <div class="flex items-center space-x-1">
+                  <span>Last Run</span>
+                  <%= if @sort_by == :last_execution do %>
+                    <svg class={"w-4 h-4 #{if @sort_dir == :asc, do: "transform rotate-180"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  <% end %>
+                </div>
+              </th>
+              <th
+                scope="col"
+                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                phx-click="sort_sources"
+                phx-value-column="coverage_days"
+              >
+                <div class="flex items-center space-x-1">
+                  <span>Coverage</span>
+                  <%= if @sort_by == :coverage_days do %>
+                    <svg class={"w-4 h-4 #{if @sort_dir == :asc, do: "transform rotate-180"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  <% end %>
+                </div>
+              </th>
+              <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <%= for source <- @source_table do %>
+              <tr class="hover:bg-gray-50">
+                <!-- Source Name -->
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div class={"w-2 h-2 rounded-full mr-2 #{source_health_dot_class(source.health_status)}"} />
+                    <span class="text-sm font-medium text-gray-900">{source.display_name}</span>
+                  </div>
+                </td>
+
+                <!-- Health Score -->
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{source_health_badge_class(source.health_score)}"}>
+                    {source.health_score}%
+                  </span>
+                </td>
+
+                <!-- 7d Trend Sparkline -->
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <%= if source.daily_rates && length(source.daily_rates) > 0 do %>
+                    <div class="flex items-center space-x-1">
+                      <svg class="w-16 h-6" viewBox="0 0 64 24" preserveAspectRatio="none">
+                        <polyline
+                          fill="none"
+                          stroke={sparkline_color(source.trend_direction)}
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          points={sparkline_points(source.daily_rates)}
+                        />
+                      </svg>
+                      <span class={"text-xs #{trend_text_class(source.trend_direction)}"}>
+                        {trend_arrow(source.trend_direction)}
+                      </span>
+                    </div>
+                  <% else %>
+                    <span class="text-xs text-gray-400">No data</span>
+                  <% end %>
+                </td>
+
+                <!-- Success Rate -->
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class={"text-sm font-medium #{success_rate_color(source.success_rate)}"}>
+                    {Float.round(source.success_rate, 1)}%
+                  </span>
+                </td>
+
+                <!-- P95 Duration -->
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class={"text-sm #{if source.p95_duration <= 3000, do: "text-gray-600", else: "text-orange-600"}"}>
+                    {format_duration(source.p95_duration)}
+                  </span>
+                </td>
+
+                <!-- Last Run -->
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                  {format_last_run(source.last_execution)}
+                </td>
+
+                <!-- Coverage -->
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div class="flex space-x-0.5">
+                      <%= for i <- 1..7 do %>
+                        <div class={"w-1.5 h-4 rounded-sm #{if i <= source.coverage_days, do: "bg-green-400", else: "bg-gray-200"}"} />
+                      <% end %>
+                    </div>
+                    <span class="ml-2 text-xs text-gray-500">{source.coverage_days}/7</span>
+                  </div>
+                </td>
+
+                <!-- Actions -->
+                <td class="px-4 py-3 whitespace-nowrap text-right text-sm">
+                  <.link
+                    navigate={~p"/admin/monitoring?source=#{source.name}"}
+                    class="text-blue-600 hover:text-blue-900 mr-3"
+                  >
+                    Details
+                  </.link>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <!-- Loading skeleton for source table -->
+      <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div class="animate-pulse">
+          <div class="bg-gray-50 px-4 py-3 border-b">
+            <div class="flex space-x-4">
+              <%= for _ <- 1..8 do %>
+                <div class="h-4 bg-gray-200 rounded w-16"></div>
+              <% end %>
+            </div>
+          </div>
+          <%= for _ <- 1..5 do %>
+            <div class="px-4 py-3 border-b">
+              <div class="flex items-center space-x-4">
+                <div class="h-4 bg-gray-200 rounded w-24"></div>
+                <div class="h-4 bg-gray-200 rounded w-12"></div>
+                <div class="h-4 bg-gray-200 rounded w-16"></div>
+                <div class="h-4 bg-gray-200 rounded w-12"></div>
+                <div class="h-4 bg-gray-200 rounded w-10"></div>
+                <div class="h-4 bg-gray-200 rounded w-20"></div>
+                <div class="h-4 bg-gray-200 rounded w-16"></div>
+                <div class="h-4 bg-gray-200 rounded w-12"></div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+
+  <!-- Tier 3: Context Stats (Geocoding, Sources) -->
+  <%= if stats_loaded?(@tier3_stats) do %>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <!-- Geocoding Stats -->
+      <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900">Geocoding</h3>
+          <.link navigate={~p"/admin/geocoding"} class="text-sm text-blue-600 hover:text-blue-800">
+            View Details &rarr;
+          </.link>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-600">Success Rate</div>
+            <div class="text-xl font-semibold">{format_number(@tier3_stats.geocoding.success_rate)}%</div>
+          </div>
+          <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-600">Cache Hit Rate</div>
+            <div class="text-xl font-semibold">{format_number(@tier3_stats.geocoding.cache_hit_rate)}%</div>
+          </div>
         </div>
       </div>
 
-      <div class="bg-green-50 p-4 rounded-lg">
-        <div class="text-sm text-green-600 font-medium">Venues</div>
-        <div class="text-2xl font-bold text-green-900">
-          {format_number(@stats.unique_venues)}
+      <!-- Collision Stats -->
+      <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900">Collisions (24h)</h3>
         </div>
-      </div>
-
-      <div class="bg-purple-50 p-4 rounded-lg">
-        <div class="text-sm text-purple-600 font-medium">Performers</div>
-        <div class="text-2xl font-bold text-purple-900">
-          {format_number(@stats.performers)}
-        </div>
-      </div>
-
-      <div class="bg-yellow-50 p-4 rounded-lg">
-        <div class="text-sm text-yellow-600 font-medium">Upcoming</div>
-        <div class="text-2xl font-bold text-yellow-900">
-          {format_number(@stats.upcoming_events)}
-        </div>
-      </div>
-
-      <div class="bg-gray-50 p-4 rounded-lg">
-        <div class="text-sm text-gray-600 font-medium">Past Events</div>
-        <div class="text-2xl font-bold text-gray-900">
-          {format_number(@stats.past_events)}
-        </div>
-      </div>
-
-      <div class="bg-indigo-50 p-4 rounded-lg">
-        <div class="text-sm text-indigo-600 font-medium">Active Jobs</div>
-        <div class="text-2xl font-bold text-indigo-900">
-          {format_number(@stats.active_jobs)}
-        </div>
-      </div>
-
-      <div class="bg-teal-50 p-4 rounded-lg">
-        <div class="text-sm text-teal-600 font-medium">Geocoding Queue</div>
-        <div class="text-2xl font-bold text-teal-900">
-          {format_number(@stats.geocoding_queue)}
-        </div>
-      </div>
-
-      <div class="bg-red-50 p-4 rounded-lg">
-        <div class="text-sm text-red-600 font-medium">Recent Errors (24h)</div>
-        <div class="text-2xl font-bold text-red-900">
-          {format_number(@stats.recent_errors)}
+        <div class="grid grid-cols-3 gap-4">
+          <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-600">Total</div>
+            <div class="text-xl font-semibold">{format_number(@tier3_stats.collisions.total_collisions)}</div>
+          </div>
+          <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-600">Cross-Source</div>
+            <div class="text-xl font-semibold">{format_number(@tier3_stats.collisions.cross_source)}</div>
+          </div>
+          <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-600">Same-Source</div>
+            <div class="text-xl font-semibold">{format_number(@tier3_stats.collisions.same_source)}</div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  <% end %>
 
   <!-- Navigation Sections -->
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
