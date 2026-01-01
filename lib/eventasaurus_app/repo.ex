@@ -60,9 +60,11 @@ defmodule EventasaurusApp.Repo do
       System.get_env("USE_REPLICA") == "false" ->
         __MODULE__
 
-      # Production: Use ReplicaRepo
+      # Production: Temporarily route to PgBouncer primary for connection stability
+      # Direct replica connections (ReplicaRepo) disabled pending Dedicated Replica PgBouncer
+      # See issue #3080 Phase 4 for re-enabling with pooled replica access
       true ->
-        EventasaurusApp.ReplicaRepo
+        __MODULE__
     end
   end
 end
