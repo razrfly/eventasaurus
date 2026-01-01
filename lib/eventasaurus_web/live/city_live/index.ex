@@ -90,6 +90,8 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:aggregate, true)
            # Track that we're in deferred loading mode - handle_params will update filters from URL
            |> assign(:deferred_loading, true)
+           # Prevent concurrent/duplicate fetch_events calls (fixes double-fetch bug)
+           |> assign(:fetch_in_progress, false)
            |> defer_expensive_loading()}
         else
           {:ok,
@@ -172,62 +174,82 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   @impl true
   def handle_info(:load_events, socket) do
-    # DEBUG: Artificial delay to visualize staged loading (remove in production)
-    if Application.get_env(:eventasaurus, :debug_staged_loading, false) do
-      Process.sleep(2000)
-    end
-
-    # STAGE 2: Load events (expensive geographic query)
-    socket =
-      try do
-        socket
-        |> fetch_events()
-        |> fetch_nearby_cities()
-        |> assign(:events_loading, false)
-        # Clear deferred_loading flag - initial loading is complete
-        |> assign(:deferred_loading, false)
-      rescue
-        e ->
-          Logger.error(
-            "Failed to load events for city #{socket.assigns.city.slug}: #{inspect(e)}"
-          )
-
-          socket
-          |> assign(:events, [])
-          |> assign(:events_loading, false)
-          |> assign(:deferred_loading, false)
-          |> assign(:total_events, 0)
+    # Guard: Skip if fetch is already in progress (prevents double-fetch bug)
+    if socket.assigns[:fetch_in_progress] do
+      {:noreply, socket}
+    else
+      # DEBUG: Artificial delay to visualize staged loading (remove in production)
+      if Application.get_env(:eventasaurus, :debug_staged_loading, false) do
+        Process.sleep(2000)
       end
 
-    {:noreply, socket}
+      # Mark fetch as in progress before starting
+      socket = assign(socket, :fetch_in_progress, true)
+
+      # STAGE 2: Load events (expensive geographic query)
+      socket =
+        try do
+          socket
+          |> fetch_events()
+          |> fetch_nearby_cities()
+          |> assign(:events_loading, false)
+          # Clear deferred_loading flag - initial loading is complete
+          |> assign(:deferred_loading, false)
+          |> assign(:fetch_in_progress, false)
+        rescue
+          e ->
+            Logger.error(
+              "Failed to load events for city #{socket.assigns.city.slug}: #{inspect(e)}"
+            )
+
+            socket
+            |> assign(:events, [])
+            |> assign(:events_loading, false)
+            |> assign(:deferred_loading, false)
+            |> assign(:fetch_in_progress, false)
+            |> assign(:total_events, 0)
+        end
+
+      {:noreply, socket}
+    end
   end
 
   @impl true
   def handle_info(:load_filtered_events, socket) do
-    # DEBUG: Artificial delay to visualize staged loading on filter changes
-    if Application.get_env(:eventasaurus, :debug_staged_loading, false) do
-      Process.sleep(2000)
-    end
-
-    # Load events with current filters (expensive geographic query)
-    socket =
-      try do
-        socket
-        |> fetch_events()
-        |> assign(:events_loading, false)
-      rescue
-        e ->
-          Logger.error(
-            "Failed to load filtered events for city #{socket.assigns.city.slug}: #{inspect(e)}"
-          )
-
-          socket
-          |> assign(:events, [])
-          |> assign(:events_loading, false)
-          |> assign(:total_events, 0)
+    # Guard: Skip if fetch is already in progress (prevents double-fetch bug)
+    if socket.assigns[:fetch_in_progress] do
+      {:noreply, socket}
+    else
+      # DEBUG: Artificial delay to visualize staged loading on filter changes
+      if Application.get_env(:eventasaurus, :debug_staged_loading, false) do
+        Process.sleep(2000)
       end
 
-    {:noreply, socket}
+      # Mark fetch as in progress before starting
+      socket = assign(socket, :fetch_in_progress, true)
+
+      # Load events with current filters (expensive geographic query)
+      socket =
+        try do
+          socket
+          |> fetch_events()
+          |> assign(:events_loading, false)
+          |> assign(:fetch_in_progress, false)
+        rescue
+          e ->
+            Logger.error(
+              "Failed to load filtered events for city #{socket.assigns.city.slug}: #{inspect(e)}"
+            )
+
+            socket
+            |> assign(:events, [])
+            |> assign(:events_loading, false)
+            |> assign(:fetch_in_progress, false)
+            |> assign(:total_events, 0)
+        end
+
+      {:noreply, socket}
+    end
   end
 
   # Language change is handled by LanguageHooks via on_mount
