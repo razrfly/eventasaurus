@@ -582,18 +582,24 @@ if config_env() == :prod do
   # Repo: Pooled connection via PgBouncer (port 6432) for web requests
   # Using hostname-based config to guarantee socket_options: [:inet] is applied
   #
-  # Pool size: 3 connections for web request handling
-  # PgBouncer provides additional pooling on the database side.
+  # Pool size: 10 connections for web request handling (increased from 3)
+  # PgBouncer provides additional pooling on the database side, so these are
+  # client connections TO PgBouncer, not direct DB connections.
   #
-  # Total connections per machine: Repo(3) + SessionRepo(5) + ReplicaRepo(5) = 13
-  # PlanetScale connection limits should accommodate this comfortably.
+  # Phase 1 optimization (Issue #3080):
+  # - Increased from 3 to 10 to better utilize PgBouncer capacity
+  # - PgBouncer can handle 400 client connections with few backend connections
+  # - This allows higher web concurrency without more direct DB connections
+  #
+  # Total DIRECT connections per machine: SessionRepo(3) + ReplicaRepo(2) = 5
+  # (Repo uses PgBouncer, so doesn't count against direct connection limit)
   config :eventasaurus, EventasaurusApp.Repo,
     username: ps_user,
     password: ps_pass,
     hostname: ps_host,
     port: ps_pooler_port,
     database: ps_db,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "3"),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     socket_options: socket_opts,
     queue_target: 5000,
     queue_interval: 30000,
@@ -607,21 +613,21 @@ if config_env() == :prod do
   # SessionRepo: Direct connection (port 5432) for Oban, migrations, advisory locks
   # Using hostname-based config to guarantee socket_options: [:inet] is applied
   #
-  # Pool size increased from 2 to 5 to support Oban job processing.
-  # With 15 total Oban workers (reduced from 42), 5 connections provides
-  # reasonable throughput without overwhelming PlanetScale connection limits.
-  #
-  # Connection math:
+  # Phase 1 optimization (Issue #3080):
+  # - Reduced from 5 to 3 to conserve scarce direct connections
   # - Oban needs 1-2 connections for producer/notifier (advisory locks)
-  # - Remaining 3-4 connections for actual job processing
-  # - Total workers (15) / pool (5) = 3x ratio allows some queuing
+  # - Remaining 1-2 connections for job processing (jobs will queue)
+  # - With 15 total Oban workers, some queuing is expected and acceptable
+  #
+  # Direct connections are the bottleneck (25 limit on PlanetScale).
+  # Oban MUST use direct connections for LISTEN/NOTIFY (PgBouncer incompatible).
   config :eventasaurus, EventasaurusApp.SessionRepo,
     username: ps_user,
     password: ps_pass,
     hostname: ps_host,
     port: ps_direct_port,
     database: ps_db,
-    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "5"),
+    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "3"),
     socket_options: socket_opts,
     queue_target: 5000,
     queue_interval: 30000,
@@ -634,8 +640,14 @@ if config_env() == :prod do
   # PlanetScale routes to replicas when username has |replica suffix
   # PgBouncer does NOT support replica routing, so direct connection is required
   #
+  # Phase 1 optimization (Issue #3080):
+  # - Reduced from 5 to 2 to conserve scarce direct connections
+  # - TEMPORARILY: Repo.replica() now returns Repo (PgBouncer) for stability
+  # - This repo is kept for future Phase 4 when we implement pooled replica reads
+  # - Current usage is minimal (fallback only via ReplicaRepo.safe_all/safe_one)
+  #
   # Use for:
-  # - Admin dashboards and analytics
+  # - Admin dashboards and analytics (TEMPORARILY routed to primary via Repo.replica())
   # - DiscoveryStatsCache background refresh
   # - Heavy read queries where eventual consistency is acceptable
   #
@@ -654,7 +666,7 @@ if config_env() == :prod do
     hostname: ps_host,
     port: ps_direct_port,
     database: ps_db,
-    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "5"),
+    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "2"),
     socket_options: socket_opts,
     queue_target: 5000,
     queue_interval: 30000,
