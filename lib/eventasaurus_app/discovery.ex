@@ -213,7 +213,9 @@ defmodule EventasaurusApp.Discovery do
   # =============================================================================
 
   # Valid participation statuses and roles used across discovery functions
-  @valid_participant_statuses [:accepted, :confirmed_with_order]
+  # Note: :pending is included because many real attendees register but aren't marked as "accepted"
+  # Production data showed 69% of RSVPs are "pending" - excluding them misses most potential connections
+  @valid_participant_statuses [:accepted, :confirmed_with_order, :pending]
   @valid_event_user_roles ["organizer", "host", "cohost", "attendee"]
 
   @doc false
