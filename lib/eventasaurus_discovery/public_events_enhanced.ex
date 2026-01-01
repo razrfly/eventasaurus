@@ -438,23 +438,36 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         nil
       end
 
-    events
-    |> Repo.preload([
-      :categories,
-      :performers,
-      # Load nested source association for aggregate_events
-      sources: :source,
-      # Load nested venue associations for aggregate_events
-      venue: [city_ref: :country],
-      # Load movies association (empty nested for now)
-      movies: []
-    ])
+    preloaded_events =
+      events
+      |> Repo.preload([
+        :categories,
+        :performers,
+        # Load nested source association for aggregate_events
+        sources: :source,
+        # Load nested venue associations for aggregate_events
+        venue: [city_ref: :country],
+        # Load movies association (empty nested for now)
+        movies: []
+      ])
+
+    # BATCH FIX: Collect all source IDs and fetch cached URLs in ONE query
+    # This fixes the N+1 problem that was causing 10+ second load times
+    all_source_ids =
+      preloaded_events
+      |> Enum.flat_map(fn event -> Enum.map(event.sources, & &1.id) end)
+      |> Enum.uniq()
+
+    # Single batch query instead of 300-400 individual queries
+    image_cache = EventSourceImages.get_urls(all_source_ids)
+
+    preloaded_events
     |> Enum.map(fn event ->
       # Add display fields based on language
       Map.merge(event, %{
         display_title: get_localized_title(event, language),
         display_description: get_localized_description(event, language),
-        cover_image_url: get_cover_image_url(event, browsing_city)
+        cover_image_url: get_cover_image_url(event, browsing_city, image_cache)
       })
     end)
   end
@@ -711,13 +724,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   Sorts sources by priority and last_seen_at timestamp, then extracts
   the first available image from either the image_url field or metadata.
   """
-  def get_cover_image_url(event, browsing_city \\ nil) do
+  def get_cover_image_url(event, browsing_city \\ nil, image_cache \\ %{}) do
     # For movie events, prioritize movie images from TMDb
     result =
       case get_movie_image(event) do
         nil ->
           # Fall back to source image if no movie image available
-          from_sources = get_image_from_sources(event, browsing_city)
+          from_sources = get_image_from_sources(event, browsing_city, image_cache)
           from_sources
 
         image_url ->
@@ -742,7 +755,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     end
   end
 
-  defp get_image_from_sources(event, browsing_city) do
+  defp get_image_from_sources(event, browsing_city, image_cache) do
     # Sort sources by priority and try to get the first available image
     # Fix: Sort by newest last_seen_at first (negative timestamp)
     sorted_sources =
@@ -773,11 +786,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         {priority, ts}
       end)
 
-    # Try to extract image from sources, checking cache first
+    # Try to extract image from sources, using pre-fetched cache map
     source_image =
       Enum.find_value(sorted_sources, fn source ->
-        # First check if we have a cached version of this source's image
-        case get_cached_source_image(source) do
+        # Look up in pre-fetched cache map (O(1) instead of DB query)
+        case get_cached_source_image(source, image_cache) do
           {:cached, cdn_url} ->
             cdn_url
 
@@ -832,15 +845,14 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   # Check if a source's image has been cached to R2.
   # Returns {:cached, cdn_url} if cached, :not_cached otherwise.
   #
-  # Uses EventSourceImages bridge module which handles production vs dev/test:
-  # - In production: queries cache and returns CDN URL if cached
-  # - In dev/test: skips cache lookup entirely (returns nil)
+  # Uses pre-fetched image_cache map for O(1) lookup instead of DB query.
+  # The cache is populated by a single batch query in preload_with_sources.
   #
   # Also triggers lazy caching for enabled sources that haven't been cached yet.
   # This allows gradual migration of existing images without a backfill job.
-  defp get_cached_source_image(source) do
-    # Use the bridge module which handles production vs dev/test environment
-    case EventSourceImages.get_url(source.id) do
+  defp get_cached_source_image(source, image_cache) do
+    # O(1) map lookup instead of individual DB query - fixes N+1 problem
+    case Map.get(image_cache, source.id) do
       cdn_url when is_binary(cdn_url) ->
         {:cached, cdn_url}
 
