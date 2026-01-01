@@ -24,6 +24,7 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
       |> assign(:tier2_stats, nil)
       |> assign(:tier3_stats, nil)
       |> assign(:source_table, nil)
+      |> assign(:zscore_data, nil)
       |> assign(:sort_by, :health_score)
       |> assign(:sort_dir, :desc)
 
@@ -77,21 +78,33 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
   end
 
   @impl true
+  def handle_async(:zscore_data, {:ok, data}, socket) do
+    {:noreply, assign(socket, :zscore_data, data)}
+  end
+
+  def handle_async(:zscore_data, {:exit, reason}, socket) do
+    Logger.error("Failed to load z-score data: #{inspect(reason)}")
+    {:noreply, assign(socket, :zscore_data, nil)}
+  end
+
+  @impl true
   def handle_event("refresh", _params, socket) do
     {:noreply, load_stats_async(socket)}
   end
 
   # Allowlist of valid sort columns to prevent atom exhaustion
-  @allowed_sort_columns ~w(display_name health_score success_rate p95_duration last_execution coverage_days)a
+  # Validate as strings BEFORE converting to atom
+  @allowed_sort_columns ~w(display_name health_score success_rate p95_duration last_execution coverage_days)
 
   @impl true
   def handle_event("sort_sources", %{"column" => column}, socket) do
-    column_atom = String.to_existing_atom(column)
-
-    # Validate column against allowlist to prevent malicious requests
-    if column_atom not in @allowed_sort_columns do
+    # Validate against string allowlist BEFORE converting to atom
+    # This prevents both atom exhaustion and ArgumentError from to_existing_atom
+    if column not in @allowed_sort_columns do
       {:noreply, socket}
     else
+      # Safe to convert - we know this atom exists in our allowlist
+      column_atom = String.to_existing_atom(column)
       current_sort = socket.assigns.sort_by
       current_dir = socket.assigns.sort_dir
 
@@ -126,6 +139,7 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
     |> start_async(:tier2_stats, fn -> UnifiedDashboardStats.fetch_tier2_stats() end)
     |> start_async(:tier3_stats, fn -> UnifiedDashboardStats.fetch_tier3_stats() end)
     |> start_async(:source_table, fn -> UnifiedDashboardStats.fetch_source_table_stats() end)
+    |> start_async(:zscore_data, fn -> UnifiedDashboardStats.fetch_zscore_data() end)
   end
 
   # Helper function to check if stats are loaded
@@ -291,11 +305,12 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
   # daily_rates is a list of maps: [%{day: "2026-01-01", success_rate: 75.5, total: 100}, ...]
   def sparkline_points(daily_rates) when is_list(daily_rates) and length(daily_rates) > 0 do
     # Extract success_rate values from the maps
-    rates = Enum.map(daily_rates, fn
-      %{success_rate: rate} when is_number(rate) -> rate
-      rate when is_number(rate) -> rate
-      _ -> 0.0
-    end)
+    rates =
+      Enum.map(daily_rates, fn
+        %{success_rate: rate} when is_number(rate) -> rate
+        rate when is_number(rate) -> rate
+        _ -> 0.0
+      end)
 
     # Normalize rates to fit in 64x24 viewbox
     min_val = Enum.min(rates) || 0
@@ -307,7 +322,7 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
     |> Enum.map(fn {rate, i} ->
       x = i * (64 / max(length(rates) - 1, 1))
       # Invert Y because SVG y=0 is top
-      y = 22 - ((rate - min_val) / range * 20)
+      y = 22 - (rate - min_val) / range * 20
       "#{Float.round(x, 1)},#{Float.round(y, 1)}"
     end)
     |> Enum.join(" ")
@@ -361,4 +376,63 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
   end
 
   def format_last_run(_), do: "Unknown"
+
+  # Z-score helper functions
+
+  @doc """
+  Get z-score status for a source from zscore_data.
+  Returns {:ok, status, zscore_info} | :not_available
+  """
+  def get_zscore_status(_source, nil), do: :not_available
+
+  def get_zscore_status(source, zscore_data) do
+    case Enum.find(zscore_data.sources, &(&1.source == source)) do
+      nil -> :not_available
+      data -> {:ok, data.overall_status, data}
+    end
+  end
+
+  @doc """
+  Render z-score indicator HTML as raw string.
+  """
+  def render_zscore_indicator(:not_available) do
+    # Empty span for no data
+    ""
+  end
+
+  def render_zscore_indicator({:ok, :normal, _data}) do
+    ~s(<span class="text-green-500" title="Normal - within expected range">✓</span>)
+  end
+
+  def render_zscore_indicator({:ok, :warning, data}) do
+    tooltip = zscore_tooltip(data)
+    ~s(<span class="text-yellow-500 cursor-help" title="#{tooltip}">⚠</span>)
+  end
+
+  def render_zscore_indicator({:ok, :critical, data}) do
+    tooltip = zscore_tooltip(data)
+    ~s(<span class="text-red-500 cursor-help" title="#{tooltip}">!</span>)
+  end
+
+  defp zscore_tooltip(data) do
+    parts = []
+
+    parts =
+      if Map.has_key?(data, :success_zscore) && data.success_zscore != nil do
+        z_val = Float.round(data.success_zscore, 2)
+        parts ++ ["Success z=#{z_val}"]
+      else
+        parts
+      end
+
+    parts =
+      if Map.has_key?(data, :duration_zscore) && data.duration_zscore != nil do
+        z_val = Float.round(data.duration_zscore, 2)
+        parts ++ ["Duration z=#{z_val}"]
+      else
+        parts
+      end
+
+    Enum.join(parts, ", ")
+  end
 end

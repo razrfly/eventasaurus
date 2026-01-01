@@ -172,9 +172,17 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   end
 
   defp load_health_data(source_key, hours) do
-    case Health.check(source: source_key, hours: hours) do
-      {:ok, health} -> health
-      {:error, _} -> nil
+    case Health.check(source_key, hours: hours) do
+      {:ok, health} ->
+        # Transform to match template expectations
+        health
+        |> Map.put(:overall_score, Health.score(health))
+        |> Map.put(:successful, health.completed)
+        |> Map.put(:total, health.total_executions)
+        |> Map.put(:avg_duration_ms, health.avg_duration)
+
+      {:error, _} ->
+        nil
     end
   end
 

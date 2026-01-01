@@ -7,11 +7,18 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
 
   Features:
   - Health overview with overall score
-  - SLO compliance status per source
+  - Z-score based relative performance (replaces arbitrary SLO thresholds)
+  - Statistical outlier detection comparing sources to their peers
   - Error category breakdown with recommendations
   - Time range filtering
   - Action items for degraded workers
   - 7-day sparkline trends with trend indicators (Phase 4.1)
+
+  Z-Score System (Issue #3135):
+  - Compares each source's performance to the population mean
+  - Success rate: z < -1.0 = warning, z < -1.5 = critical
+  - Duration: z > 1.5 = warning, z > 2.0 = critical
+  - Self-calibrating: thresholds adjust as overall performance improves
 
   Target: < 500ms load time using existing optimized queries.
   """
@@ -46,6 +53,12 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
       |> assign(:total_failures, 0)
       |> assign(:action_items, [])
       |> assign(:top_errors, [])
+      # Z-score data for relative performance assessment
+      |> assign(:zscore_data, nil)
+      |> assign(:normal_count, 0)
+      |> assign(:warning_count, 0)
+      |> assign(:critical_count, 0)
+      |> assign(:outliers, [])
 
     # Load data asynchronously to avoid blocking mount and exhausting connection pool
     send(self(), :load_initial_data)
@@ -229,6 +242,18 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
         {:error, _} -> %{sources: [], total_alerts: 0}
       end
 
+    # Load z-score data for relative performance assessment
+    # Always use 7 days for z-score calculation to have stable baseline
+    {zscore_data, normal_count, warning_count, critical_count, outliers} =
+      case Health.compute_source_zscores(hours: 168) do
+        {:ok, data} ->
+          outlier_names = data.sources |> Enum.filter(&(&1.overall_status != :normal)) |> Enum.map(& &1.source)
+          {data, data.normal_count, data.warning_count, data.critical_count, outlier_names}
+
+        {:error, _} ->
+          {nil, 0, 0, 0, []}
+      end
+
     socket
     |> assign(:health_results, health_results)
     |> assign(:error_results, error_results)
@@ -242,6 +267,11 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     |> assign(:total_failures, total_failures)
     |> assign(:action_items, action_items)
     |> assign(:top_errors, top_errors)
+    |> assign(:zscore_data, zscore_data)
+    |> assign(:normal_count, normal_count)
+    |> assign(:warning_count, warning_count)
+    |> assign(:critical_count, critical_count)
+    |> assign(:outliers, outliers)
   end
 
   defp calculate_aggregates(health_results) do
@@ -388,18 +418,34 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
               </div>
             </div>
 
-            <!-- SLO Status -->
+            <!-- Relative Performance (Z-Score based) -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-              <div class="text-sm font-medium text-gray-500 dark:text-gray-400">SLO Compliance</div>
+              <div class="text-sm font-medium text-gray-500 dark:text-gray-400" title="Statistical outliers vs population mean">
+                Relative Performance
+              </div>
               <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-bold text-green-600 dark:text-green-400">
-                  <%= @meeting_slo_count %>
+                  <%= @normal_count %>
                 </span>
-                <span class="text-gray-400">/</span>
-                <span class={"text-xl font-semibold #{if @at_risk_count > 0, do: "text-red-600 dark:text-red-400", else: "text-gray-400"}"}>
-                  <%= @at_risk_count %> at risk
-                </span>
+                <span class="text-sm text-gray-400">normal</span>
+                <%= if @warning_count > 0 do %>
+                  <span class="text-xl font-semibold text-yellow-600 dark:text-yellow-400">
+                    <%= @warning_count %>
+                  </span>
+                  <span class="text-sm text-gray-400">warn</span>
+                <% end %>
+                <%= if @critical_count > 0 do %>
+                  <span class="text-xl font-semibold text-red-600 dark:text-red-400">
+                    <%= @critical_count %>
+                  </span>
+                  <span class="text-sm text-gray-400">outlier</span>
+                <% end %>
               </div>
+              <%= if @zscore_data do %>
+                <div class="text-xs text-gray-400 dark:text-gray-500 mt-1" title="Population baseline">
+                  μ: <%= Float.round(@zscore_data.success_mean, 1) %>% success, <%= Float.round(@zscore_data.duration_mean, 1) %>s avg
+                </div>
+              <% end %>
             </div>
 
             <!-- Total Executions -->
@@ -456,8 +502,8 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                       <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" title="Date Coverage">
                         Cov
                       </th>
-                      <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        SLO
+                      <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" title="Z-Score relative to peers">
+                        Z
                       </th>
                       <th class="w-8"></th>
                     </tr>
@@ -468,6 +514,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                       <% trend = Map.get(@trend_results, source) %>
                       <% scheduler_status = get_scheduler_status(source, @scheduler_health) %>
                       <% coverage_status = get_coverage_status(source, @coverage_data) %>
+                      <% zscore_status = get_zscore_status(source, @zscore_data) %>
                       <tr
                         phx-click="navigate_to_source"
                         phx-value-source={source}
@@ -501,15 +548,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                               <%= Phoenix.HTML.raw(render_status_indicator(coverage_status)) %>
                             </td>
                             <td class="px-4 py-2 text-center">
-                              <%= if health.meeting_slos do %>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                  OK
-                                </span>
-                              <% else %>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                  At Risk
-                                </span>
-                              <% end %>
+                              <%= Phoenix.HTML.raw(render_zscore_indicator(zscore_status)) %>
                             </td>
                           <% {:error, :no_executions} -> %>
                             <td colspan="2" class="px-4 py-2 text-sm text-gray-400 text-center">
@@ -522,7 +561,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                               <%= Phoenix.HTML.raw(render_status_indicator(coverage_status)) %>
                             </td>
                             <td class="px-4 py-2 text-center">
-                              <span class="text-gray-400">-</span>
+                              <%= Phoenix.HTML.raw(render_zscore_indicator(zscore_status)) %>
                             </td>
                           <% {:error, _} -> %>
                             <td colspan="2" class="px-4 py-2 text-sm text-red-500 text-center">
@@ -535,7 +574,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                               <%= Phoenix.HTML.raw(render_status_indicator(coverage_status)) %>
                             </td>
                             <td class="px-4 py-2 text-center">
-                              <span class="text-gray-400">-</span>
+                              <%= Phoenix.HTML.raw(render_zscore_indicator(zscore_status)) %>
                             </td>
                           <% nil -> %>
                             <td colspan="2" class="px-4 py-2 text-sm text-gray-400 text-center">
@@ -548,7 +587,7 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
                               <%= Phoenix.HTML.raw(render_status_indicator(coverage_status)) %>
                             </td>
                             <td class="px-4 py-2 text-center">
-                              <span class="text-gray-400">-</span>
+                              <%= Phoenix.HTML.raw(render_zscore_indicator(zscore_status)) %>
                             </td>
                         <% end %>
                         <td class="px-2 py-2 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300">
@@ -716,6 +755,66 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
           true ->
             {:ok, :warning}
         end
+    end
+  end
+
+  # Get z-score status for a source from zscore_data
+  # Returns {:ok, status, zscore_info} | :not_available
+  defp get_zscore_status(_source, nil), do: :not_available
+
+  defp get_zscore_status(source, zscore_data) do
+    case Enum.find(zscore_data.sources, &(&1.source == source)) do
+      nil ->
+        :not_available
+
+      source_data ->
+        {:ok, source_data.overall_status, source_data}
+    end
+  end
+
+  # Render z-score indicator with tooltip showing details
+  defp render_zscore_indicator(:not_available) do
+    "<span class=\"text-gray-400 dark:text-gray-500\" title=\"No z-score data\">-</span>"
+  end
+
+  defp render_zscore_indicator({:ok, :normal, _data}) do
+    "<span class=\"text-green-500 dark:text-green-400\" title=\"Normal (within expected range)\">✓</span>"
+  end
+
+  defp render_zscore_indicator({:ok, :warning, data}) do
+    tooltip = zscore_tooltip(data)
+    "<span class=\"text-yellow-500 dark:text-yellow-400\" title=\"#{tooltip}\">⚠</span>"
+  end
+
+  defp render_zscore_indicator({:ok, :critical, data}) do
+    tooltip = zscore_tooltip(data)
+    "<span class=\"text-red-500 dark:text-red-400\" title=\"#{tooltip}\">✗</span>"
+  end
+
+  # Build tooltip text showing z-score details
+  defp zscore_tooltip(data) do
+    parts = []
+
+    parts =
+      if data.success_status != :normal do
+        z_val = Float.round(data.success_zscore, 2)
+        parts ++ ["Success z=#{z_val} (#{data.success_status})"]
+      else
+        parts
+      end
+
+    parts =
+      if data.duration_status != :normal do
+        z_val = Float.round(data.duration_zscore, 2)
+        parts ++ ["Duration z=#{z_val} (#{data.duration_status})"]
+      else
+        parts
+      end
+
+    if Enum.empty?(parts) do
+      "Statistical outlier"
+    else
+      Enum.join(parts, ", ")
     end
   end
 

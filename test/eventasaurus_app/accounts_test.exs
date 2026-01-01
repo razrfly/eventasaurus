@@ -7,10 +7,11 @@ defmodule EventasaurusApp.AccountsTest do
 
   describe "users" do
     test "create_user/1 auto-generates username from name when not provided" do
-      {:ok, user} = Accounts.create_user(%{
-        email: "john.smith.test@example.com",
-        name: "John Smith"
-      })
+      {:ok, user} =
+        Accounts.create_user(%{
+          email: "john.smith.test@example.com",
+          name: "John Smith"
+        })
 
       assert user.username != nil
       # Should be name-based: "john-s" (first name + last initial)
@@ -18,10 +19,12 @@ defmodule EventasaurusApp.AccountsTest do
     end
 
     test "create_user/1 auto-generates username from email when name not suitable" do
-      {:ok, user} = Accounts.create_user(%{
-        email: "janedoe.test@example.com",
-        name: "X"  # Too short for name-based
-      })
+      {:ok, user} =
+        Accounts.create_user(%{
+          email: "janedoe.test@example.com",
+          # Too short for name-based
+          name: "X"
+        })
 
       assert user.username != nil
       # Should be email-based: "janedoetest"
@@ -30,17 +33,20 @@ defmodule EventasaurusApp.AccountsTest do
 
     test "create_user/1 handles username collision with retry" do
       # Create first user with name "Test User"
-      {:ok, user1} = Accounts.create_user(%{
-        email: "first.collision.test@example.com",
-        name: "Test Collision"
-      })
+      {:ok, user1} =
+        Accounts.create_user(%{
+          email: "first.collision.test@example.com",
+          name: "Test Collision"
+        })
+
       assert user1.username == "test-c"
 
       # Create second user with same name pattern - should get unique username
-      {:ok, user2} = Accounts.create_user(%{
-        email: "second.collision.test@example.com",
-        name: "Test Collision"
-      })
+      {:ok, user2} =
+        Accounts.create_user(%{
+          email: "second.collision.test@example.com",
+          name: "Test Collision"
+        })
 
       # Should have a unique username (timestamp-based fallback)
       assert user2.username != nil
@@ -49,11 +55,12 @@ defmodule EventasaurusApp.AccountsTest do
     end
 
     test "create_user/1 respects explicitly provided username" do
-      {:ok, user} = Accounts.create_user(%{
-        email: "explicit.username.test@example.com",
-        name: "Test User",
-        username: "mycustomname"
-      })
+      {:ok, user} =
+        Accounts.create_user(%{
+          email: "explicit.username.test@example.com",
+          name: "Test User",
+          username: "mycustomname"
+        })
 
       assert user.username == "mycustomname"
     end
