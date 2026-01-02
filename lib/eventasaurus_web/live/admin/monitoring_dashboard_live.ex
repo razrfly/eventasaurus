@@ -247,7 +247,9 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     {zscore_data, normal_count, warning_count, critical_count, outliers} =
       case Health.compute_source_zscores(hours: 168) do
         {:ok, data} ->
-          outlier_names = data.sources |> Enum.filter(&(&1.overall_status != :normal)) |> Enum.map(& &1.source)
+          outlier_names =
+            data.sources |> Enum.filter(&(&1.overall_status != :normal)) |> Enum.map(& &1.source)
+
           {data, data.normal_count, data.warning_count, data.critical_count, outlier_names}
 
         {:error, _} ->

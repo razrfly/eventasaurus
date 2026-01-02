@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.VenuesIndexLive do
   @default_page_size 30
 
   @impl true
+  @spec mount(map(), map(), Phoenix.LiveView.Socket.t()) :: {:ok, Phoenix.LiveView.Socket.t()}
   def mount(_params, _session, socket) do
     socket =
       socket
@@ -37,6 +38,8 @@ defmodule EventasaurusWeb.VenuesIndexLive do
   end
 
   @impl true
+  @spec handle_params(map(), String.t(), Phoenix.LiveView.Socket.t()) ::
+          {:noreply, Phoenix.LiveView.Socket.t()}
   def handle_params(params, _url, socket) do
     page = parse_page(params["page"])
     search = params["search"]
@@ -51,7 +54,8 @@ defmodule EventasaurusWeb.VenuesIndexLive do
       |> assign(:loading, false)
       |> SEOHelpers.assign_meta_tags(
         title: "Venues",
-        description: "Discover venues hosting events near you. Find concert halls, theaters, clubs, and more.",
+        description:
+          "Discover venues hosting events near you. Find concert halls, theaters, clubs, and more.",
         canonical_path: "/venues"
       )
 
@@ -98,16 +102,23 @@ defmodule EventasaurusWeb.VenuesIndexLive do
     # Count total
     total = Repo.aggregate(query, :count)
 
-    # Get page of venues with event counts
+    # Get page of venues
     venues =
       from(v in query,
         offset: ^((page - 1) * @default_page_size),
         limit: ^@default_page_size
       )
       |> Repo.all()
-      |> Enum.map(fn venue ->
-        event_count = count_venue_events(venue.id)
-        Map.put(venue, :upcoming_event_count, event_count)
+
+    # Batch load event counts to avoid N+1 queries
+    venue_ids = Enum.map(venues, & &1.id)
+    event_counts = batch_count_venue_events(venue_ids)
+
+    # Merge event counts into venues
+    venues =
+      Enum.map(venues, fn venue ->
+        count = Map.get(event_counts, venue.id, 0)
+        Map.put(venue, :upcoming_event_count, count)
       end)
 
     total_pages = ceil(total / @default_page_size)
@@ -123,17 +134,24 @@ defmodule EventasaurusWeb.VenuesIndexLive do
     {venues, pagination}
   end
 
-  defp count_venue_events(venue_id) do
+  # Batch count upcoming events for multiple venues in a single query
+  # Returns a map of %{venue_id => count}
+  @spec batch_count_venue_events([integer()]) :: %{integer() => integer()}
+  defp batch_count_venue_events([]), do: %{}
+
+  defp batch_count_venue_events(venue_ids) do
     now = DateTime.utc_now()
 
     from(pe in PublicEvent,
-      where: pe.venue_id == ^venue_id,
+      where: pe.venue_id in ^venue_ids,
       where:
         (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
           (is_nil(pe.ends_at) and pe.starts_at > ^now),
-      select: count(pe.id)
+      group_by: pe.venue_id,
+      select: {pe.venue_id, count(pe.id)}
     )
-    |> Repo.one() || 0
+    |> Repo.all()
+    |> Map.new()
   end
 
   defp parse_page(nil), do: 1

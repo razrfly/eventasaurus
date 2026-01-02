@@ -470,7 +470,6 @@ defmodule EventasaurusWeb.Router do
       live "/groups/:slug/people", GroupLive.Show, :people
       live "/groups/:slug/activities", GroupLive.Show, :activities
       live "/groups/:slug/edit", GroupLive.Edit, :edit
-      live "/events", EventsLive
       live "/events/new", EventLive.New
       live "/events/:slug/edit", EventLive.Edit
       live "/checkout/payment", CheckoutPaymentLive
@@ -650,6 +649,14 @@ defmodule EventasaurusWeb.Router do
 
     # Redirect /c/:city_slug/venues/:venue_slug → /venues/:venue_slug
     get "/:city_slug/venues/:venue_slug", VenueRedirectController, :redirect_venue_show
+  end
+
+  # 301 Redirect for deprecated /events route (Issue #3147)
+  # The /events route was legacy - /activities is the public discovery page
+  scope "/", EventasaurusWeb do
+    pipe_through :browser
+
+    get "/events", EventsRedirectController, :redirect_to_activities
   end
 
   # City-based routes with /c/ prefix

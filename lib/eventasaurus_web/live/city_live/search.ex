@@ -202,6 +202,13 @@ defmodule EventasaurusWeb.CityLive.Search do
         []
       end
 
+    # Filter out events with nil slugs to prevent rendering crashes
+    events =
+      Enum.filter(events, fn
+        %EventasaurusDiscovery.PublicEvents.PublicEvent{slug: nil} -> false
+        _ -> true
+      end)
+
     # Build pagination metadata
     page = filters[:page] || 1
     page_size = filters[:page_size] || 60

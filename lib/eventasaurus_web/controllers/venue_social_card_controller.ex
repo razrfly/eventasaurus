@@ -36,10 +36,14 @@ defmodule EventasaurusWeb.VenueSocialCardController do
     %{
       name: venue.name,
       slug: venue.slug,
-      city_ref: if(venue.city_ref, do: %{
-        name: venue.city_ref.name,
-        slug: venue.city_ref.slug
-      }, else: %{name: "", slug: ""}),
+      city_ref:
+        if(venue.city_ref,
+          do: %{
+            name: venue.city_ref.name,
+            slug: venue.city_ref.slug
+          },
+          else: %{name: "", slug: ""}
+        ),
       address: venue.address,
       event_count: event_count,
       cover_image_url: cover_image,
