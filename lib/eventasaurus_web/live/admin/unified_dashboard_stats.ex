@@ -597,9 +597,23 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   Fetches z-score data for statistical analysis of source health metrics.
   Uses 7-day (168 hours) window for baseline calculations.
 
-  Returns:
-    {:ok, %{sources: [...], success_mean: float, duration_mean: float, ...}} | {:error, reason}
+  Returns the z-score data map on success, or nil on failure.
+
+  ## Return Value
+
+      %{
+        sources: [%{source: String.t(), overall_status: atom(), ...}],
+        success_mean: float(),
+        success_stddev: float(),
+        duration_mean: float(),
+        duration_stddev: float(),
+        normal_count: integer(),
+        warning_count: integer(),
+        critical_count: integer(),
+        hours: integer()
+      } | nil
   """
+  @spec fetch_zscore_data() :: map() | nil
   def fetch_zscore_data do
     case Health.compute_source_zscores(hours: 168) do
       {:ok, zscore_data} ->
