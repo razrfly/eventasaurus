@@ -175,7 +175,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
 
       iex> venue = %{slug: "klub-jazz", city_ref: %{slug: "krakow"}, name: "Jazz Club"}
       iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(venue, :venue)
-      "/social-cards/venue/krakow/klub-jazz/f6a7b8c9.png"
+      "/social-cards/venue/klub-jazz/f6a7b8c9.png"
 
       iex> performer = %{slug: "john-doe", name: "John Doe", event_count: 5}
       iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(performer, :performer)
@@ -220,9 +220,9 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
         "/social-cards/source/#{city_slug}/#{content_type_slug}/#{identifier}/#{hash}.png"
 
       :venue ->
-        city_slug = extract_city_slug(data, :city_ref)
+        # Issue #3143: Simplified to flat /venues/:slug URL
         venue_slug = extract_slug(data, :slug, :id, "venue")
-        "/social-cards/venue/#{city_slug}/#{venue_slug}/#{hash}.png"
+        "/social-cards/venue/#{venue_slug}/#{hash}.png"
 
       :performer ->
         performer_slug = extract_slug(data, :slug, :id, "performer")
@@ -272,7 +272,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/activity/my-activity/d4e5f6a7.png")
       "d4e5f6a7"
 
-      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/venue/krakow/klub-jazz/f6a7b8c9.png")
+      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/venue/klub-jazz/f6a7b8c9.png")
       "f6a7b8c9"
 
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/performer/john-doe/a7b8c9d0.png")
@@ -303,8 +303,8 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
         [_full_match, hash] = match
         hash
 
-      # Venue pattern: /social-cards/venue/city-slug/venue-slug/hash.png
-      match = Regex.run(~r/\/social-cards\/venue\/[^\/]+\/[^\/]+\/([a-f0-9]{8})(?:\.png)?$/, path) ->
+      # Venue pattern: /social-cards/venue/venue-slug/hash.png (Issue #3143: simplified)
+      match = Regex.run(~r/\/social-cards\/venue\/[^\/]+\/([a-f0-9]{8})(?:\.png)?$/, path) ->
         [_full_match, hash] = match
         hash
 

@@ -7,7 +7,7 @@ defmodule Eventasaurus.Sitemap do
   - Phase 1: Static pages (/, /activities, /about, etc.)
   - Phase 2: Activities (/activities/:slug)
   - Phase 3: Cities (/c/:city_slug and subpages)
-  - Phase 4: Venues (/c/:city_slug/venues/:venue_slug)
+  - Phase 4: Venues (/venues/:slug) - Updated Issue #3143: simplified from city-scoped
   - Phase 5: Containers (festivals, conferences, tours, etc.)
   - Phase 6: Movie aggregation pages (/c/:city_slug/movies/:movie_slug)
   - Phase 7: Content aggregation pages (/:content_type/:identifier)
@@ -108,7 +108,7 @@ defmodule Eventasaurus.Sitemap do
       %{
         key: :venues,
         name: "Venues",
-        description: "Venue pages within cities (only venues with public events)",
+        description: "Venue pages (/venues/:slug) - simplified flat structure",
         count: count_venues(),
         sample: sample_venue_url(base_url)
       },
@@ -346,18 +346,20 @@ defmodule Eventasaurus.Sitemap do
     end)
   end
 
-  # Returns a stream of all venues in active cities that have public events
+  # Returns a stream of all public venues in active cities
   # Excludes private venues (user home addresses, etc.) from the sitemap
+  # Issue #3143: Simplified to flat /venues/:slug URLs (no city scoping)
   defp venue_urls(opts) do
     base_url = get_base_url(opts)
 
     # Query public venues in active cities
     # is_public=true indicates scraper-created venues (theaters, bars, concert halls)
     # is_public=false indicates user-created private venues (excluded from sitemap)
+    # Still filter by discovery_enabled cities to only include venues in active cities
     from(v in EventasaurusApp.Venues.Venue,
       join: c in EventasaurusDiscovery.Locations.City,
       on: v.city_id == c.id,
-      select: %{slug: v.slug, updated_at: v.updated_at, city_slug: c.slug},
+      select: %{slug: v.slug, updated_at: v.updated_at},
       where: v.is_public == true and c.discovery_enabled == true and not is_nil(v.slug)
     )
     |> Repo.stream()
@@ -370,7 +372,7 @@ defmodule Eventasaurus.Sitemap do
         end
 
       %Sitemapper.URL{
-        loc: "#{base_url}/c/#{venue.city_slug}/venues/#{venue.slug}",
+        loc: "#{base_url}/venues/#{venue.slug}",
         changefreq: :weekly,
         priority: 0.6,
         lastmod: lastmod
@@ -733,16 +735,15 @@ defmodule Eventasaurus.Sitemap do
     active_cities * 10
   end
 
-  # Count venues in active cities that have public events
+  # Count public venues in active cities
   # Must match the filtering logic in venue_urls/1
+  # Issue #3143: Updated to match simplified venue_urls query
   defp count_venues do
     from(v in EventasaurusApp.Venues.Venue,
       join: c in EventasaurusDiscovery.Locations.City,
       on: v.city_id == c.id,
-      inner_join: pe in PublicEvent,
-      on: pe.venue_id == v.id,
-      select: count(v.id, :distinct),
-      where: c.discovery_enabled == true and not is_nil(v.slug)
+      select: count(v.id),
+      where: v.is_public == true and c.discovery_enabled == true and not is_nil(v.slug)
     )
     |> Repo.one() || 0
   end
@@ -821,23 +822,22 @@ defmodule Eventasaurus.Sitemap do
     end
   end
 
-  # Get a sample venue URL (only venues with public events)
+  # Get a sample venue URL (public venues in active cities)
   # Must match the filtering logic in venue_urls/1
+  # Issue #3143: Simplified to flat /venues/:slug URLs
   defp sample_venue_url(base_url) do
     venue =
       from(v in EventasaurusApp.Venues.Venue,
         join: c in EventasaurusDiscovery.Locations.City,
         on: v.city_id == c.id,
-        inner_join: pe in PublicEvent,
-        on: pe.venue_id == v.id,
-        select: %{venue_slug: v.slug, city_slug: c.slug},
-        where: c.discovery_enabled == true and not is_nil(v.slug),
+        select: v.slug,
+        where: v.is_public == true and c.discovery_enabled == true and not is_nil(v.slug),
         limit: 1
       )
       |> Repo.one()
 
     if venue do
-      "#{base_url}/c/#{venue.city_slug}/venues/#{venue.venue_slug}"
+      "#{base_url}/venues/#{venue}"
     else
       nil
     end

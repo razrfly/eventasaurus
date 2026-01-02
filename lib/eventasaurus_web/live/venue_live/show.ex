@@ -80,37 +80,10 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   @impl true
-  def handle_params(
-        %{"venue_slug" => venue_slug, "city_slug" => city_slug} = params,
-        _url,
-        socket
-      ) do
-    # City-scoped venue route (e.g., /c/:city_slug/venues/:venue_slug)
-    venue = get_venue_by_slug(venue_slug, city_slug)
-
-    case venue do
-      nil ->
-        {:noreply,
-         socket
-         |> put_flash(:error, gettext("Venue not found"))
-         |> push_navigate(to: ~p"/")}
-
-      venue ->
-        # Apply URL params to socket assigns, then load venue
-        # Track that we're using the city-scoped route pattern
-        socket =
-          socket
-          |> apply_url_params(params)
-          |> assign(:route_pattern, :city_scoped)
-
-        load_and_assign_venue(venue, socket)
-    end
-  end
-
-  @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
     # Direct venue slug route (e.g., /venues/:slug)
-    venue = get_venue_by_slug(slug, params["city_slug"])
+    # Issue #3143: City-scoped routes now redirect here via VenueRedirectController
+    venue = get_venue_by_slug(slug)
 
     case venue do
       nil ->
@@ -121,12 +94,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
       venue ->
         # Apply URL params to socket assigns, then load venue
-        # Track that we're using the direct route pattern
-        socket =
-          socket
-          |> apply_url_params(params)
-          |> assign(:route_pattern, :direct)
-
+        socket = apply_url_params(socket, params)
         load_and_assign_venue(venue, socket)
     end
   end
@@ -316,14 +284,9 @@ defmodule EventasaurusWeb.VenueLive.Show do
   @impl true
   def handle_info({:show_auth_modal, :follow}, socket) do
     # Redirect to login with return URL to come back after authentication
+    # Issue #3143: Always use flat /venues/:slug URL
     venue = socket.assigns.venue
-    route_pattern = socket.assigns[:route_pattern] || :direct
-
-    return_to =
-      case route_pattern do
-        :city_scoped -> ~p"/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
-        :direct -> ~p"/venues/#{venue.slug}"
-      end
+    return_to = ~p"/venues/#{venue.slug}"
 
     {:noreply,
      socket
@@ -390,13 +353,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
     # Build venue description for SEO (using total event count)
     description = build_venue_description_simple(venue, all_events_count)
 
-    # Build canonical path
-    canonical_path =
-      if venue.city_ref do
-        "/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
-      else
-        "/venues/#{venue.slug}"
-      end
+    # Build canonical path (Issue #3143: always use flat /venues/:slug)
+    canonical_path = "/venues/#{venue.slug}"
 
     # Generate Open Graph meta tags with branded social card
     og_tags =
@@ -435,19 +393,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
     {:noreply, socket}
   end
 
-  defp get_venue_by_slug(slug, city_slug) when is_binary(city_slug) do
-    # City-scoped lookup - preload city_ref for URL building
-    from(v in Venue,
-      join: c in assoc(v, :city_ref),
-      where: v.slug == ^slug and c.slug == ^city_slug,
-      preload: [:city_ref],
-      limit: 1
-    )
-    |> Repo.one()
-  end
-
-  defp get_venue_by_slug(slug, _city_slug) do
-    # Direct slug lookup - preload city_ref for URL building
+  # Issue #3143: Simplified to only use direct slug lookup
+  defp get_venue_by_slug(slug) do
     from(v in Venue,
       where: v.slug == ^slug,
       preload: [:city_ref],
@@ -545,15 +492,9 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   # Build full venue URL using request_uri for ngrok support
+  # Issue #3143: Always use flat /venues/:slug URL
   defp build_venue_url(venue, base_url) do
-    path =
-      if venue.city_ref do
-        "/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
-      else
-        "/venues/#{venue.slug}"
-      end
-
-    "#{base_url}#{path}"
+    "#{base_url}/venues/#{venue.slug}"
   end
 
   # Build Open Graph meta tags for venue pages with branded social card
@@ -667,23 +608,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   # Build URL path with current filter state
-  # IMPORTANT: Must stay within the same live_session to use push_patch
-  # - :city_scoped routes are in live_session :city (/c/:city_slug/venues/:venue_slug)
-  # - :direct routes are in live_session :default (/venues/:slug)
+  # Issue #3143: Simplified to always use flat /venues/:slug URL
   defp build_path(socket) do
     venue = socket.assigns.venue
     params = build_filter_params(socket)
-    route_pattern = socket.assigns[:route_pattern] || :direct
-
-    # Use the same route pattern we came in with to stay in the same live_session
-    base_path =
-      case route_pattern do
-        :city_scoped ->
-          ~p"/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
-
-        :direct ->
-          ~p"/venues/#{venue.slug}"
-      end
+    base_path = ~p"/venues/#{venue.slug}"
 
     if map_size(params) > 0 do
       "#{base_path}?#{URI.encode_query(params)}"
