@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.EventsRedirectController do
   @doc """
   Redirects /events to /activities (301 permanent redirect).
   """
+  @spec redirect_to_activities(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def redirect_to_activities(conn, _params) do
     conn
     |> put_status(:moved_permanently)
