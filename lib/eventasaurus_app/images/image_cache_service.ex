@@ -113,12 +113,9 @@ defmodule EventasaurusApp.Images.ImageCacheService do
           {:ok, cached_image} ->
             # Enqueue the download job with observable context
             # Args include entity info for Oban dashboard visibility
-            # IMPORTANT: Use Oban.insert(Repo, job) to ensure the job is inserted
-            # within the same transaction. This prevents orphaned jobs when the
-            # parent transaction rolls back. See GitHub issue #3107.
             build_job_args(cached_image, original_url, source)
             |> ImageCacheJob.new(priority: priority)
-            |> then(&Oban.insert(Repo, &1))
+            |> Oban.insert()
 
             {:ok, cached_image}
 
@@ -145,10 +142,9 @@ defmodule EventasaurusApp.Images.ImageCacheService do
           case existing |> CachedImage.changeset(attrs) |> Repo.update() do
             {:ok, updated} ->
               # Enqueue with observable context
-              # Use Oban.insert(Repo, job) for transaction safety (see issue #3107)
               build_job_args(updated, original_url, source)
               |> ImageCacheJob.new(priority: priority)
-              |> then(&Oban.insert(Repo, &1))
+              |> Oban.insert()
 
               {:ok, updated}
 
@@ -344,11 +340,9 @@ defmodule EventasaurusApp.Images.ImageCacheService do
 
     Enum.each(images, fn image ->
       # Enqueue with observable context for retry visibility
-      # Note: retry_failed is called outside transactions, so Oban.insert() is fine here
-      # but we use Oban.insert(Repo, job) for consistency
       build_job_args(image, image.original_url, image.original_source)
       |> ImageCacheJob.new(priority: 3)
-      |> then(&Oban.insert(Repo, &1))
+      |> Oban.insert()
     end)
 
     {:ok, length(images)}
