@@ -640,6 +640,18 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
+  # 301 Redirects for deprecated city-scoped venue routes (Issue #3143)
+  # These redirect to the new flat /venues/:slug structure for SEO preservation
+  scope "/c", EventasaurusWeb do
+    pipe_through :public
+
+    # Redirect /c/:city_slug/venues → /venues
+    get "/:city_slug/venues", VenueRedirectController, :redirect_venues_index
+
+    # Redirect /c/:city_slug/venues/:venue_slug → /venues/:venue_slug
+    get "/:city_slug/venues/:venue_slug", VenueRedirectController, :redirect_venue_show
+  end
+
   # City-based routes with /c/ prefix
   live_session :city,
     on_mount: [
@@ -652,9 +664,8 @@ defmodule EventasaurusWeb.Router do
       # City homepage (shows events by default)
       live "/:city_slug", CityLive.Index, :index
 
-      # City venues
-      live "/:city_slug/venues", CityLive.Venues, :index
-      live "/:city_slug/venues/:venue_slug", VenueLive.Show, :show
+      # City venues - REMOVED (Issue #3143)
+      # Now redirected to /venues and /venues/:slug via VenueRedirectController above
 
       # City search
       live "/:city_slug/search", CityLive.Search, :index
@@ -710,8 +721,8 @@ defmodule EventasaurusWeb.Router do
         :generate_card,
         as: :source_aggregation_social_card_cached
 
-    # Venue social card generation (matches /c/:city_slug/venues/:venue_slug)
-    get "/social-cards/venue/:city_slug/:venue_slug/:hash/*rest",
+    # Venue social card generation (Issue #3143: simplified to /venues/:slug)
+    get "/social-cards/venue/:venue_slug/:hash/*rest",
         VenueSocialCardController,
         :generate_card,
         as: :venue_social_card_cached
@@ -756,6 +767,7 @@ defmodule EventasaurusWeb.Router do
       # Phase 3: Index pages (1h cache)
       live "/activities", PublicEventsHomeLive, :index
       live "/movies", MoviesIndexLive, :index
+      live "/venues", VenuesIndexLive, :index
 
       # Phase 1: Activity show pages (48h cache)
       live "/activities/:slug", PublicEventShowLive, :show

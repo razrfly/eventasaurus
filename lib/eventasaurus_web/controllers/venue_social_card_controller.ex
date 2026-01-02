@@ -5,54 +5,41 @@ defmodule EventasaurusWeb.VenueSocialCardController do
   This controller generates social cards with Wombie branding for venue pages,
   showing venue name, city, event count, and venue image.
 
-  Route: GET /social-cards/venue/:city_slug/:venue_slug/:hash/*rest
+  Issue #3143: Simplified to match flat /venues/:slug route structure.
+  Route: GET /social-cards/venue/:venue_slug/:hash/*rest
   """
   use EventasaurusWeb.SocialCardController, type: :venue
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Images.VenueImages
-  alias EventasaurusDiscovery.Locations
   import EventasaurusWeb.SocialCardView, only: [sanitize_venue: 1, render_venue_card_svg: 1]
 
   @impl true
-  def lookup_entity(%{"city_slug" => city_slug, "venue_slug" => venue_slug}) do
-    case Locations.get_city_by_slug(city_slug) do
+  def lookup_entity(%{"venue_slug" => venue_slug}) do
+    case Venues.get_venue_by_slug(venue_slug) do
       nil ->
-        {:error, :not_found, "City not found for slug: #{city_slug}"}
+        {:error, :not_found, "Venue not found for slug: #{venue_slug}"}
 
-      city ->
-        case Venues.get_venue_by_slug(venue_slug) do
-          nil ->
-            {:error, :not_found, "Venue not found for slug: #{venue_slug}"}
-
-          venue ->
-            # Verify venue belongs to the specified city
-            if venue.city_id != city.id do
-              {:error, :not_found,
-               "Venue #{venue_slug} belongs to city_id=#{venue.city_id}, not #{city_slug} (id=#{city.id})"}
-            else
-              {:ok, {venue, city}}
-            end
-        end
+      venue ->
+        # Preload city_ref for building card data
+        venue = Repo.preload(venue, :city_ref)
+        {:ok, venue}
     end
   end
 
   @impl true
-  def build_card_data({venue, city}) do
-    # Preload city_ref for the fallback image chain (venue images → city gallery → general)
-    venue = Repo.preload(venue, :city_ref)
-
+  def build_card_data(venue) do
     event_count = Venues.count_upcoming_events(venue.id)
     cover_image = get_venue_cover_image(venue)
 
     %{
       name: venue.name,
       slug: venue.slug,
-      city_ref: %{
-        name: city.name,
-        slug: city.slug
-      },
+      city_ref: if(venue.city_ref, do: %{
+        name: venue.city_ref.name,
+        slug: venue.city_ref.slug
+      }, else: %{name: "", slug: ""}),
       address: venue.address,
       event_count: event_count,
       cover_image_url: cover_image,
@@ -61,8 +48,8 @@ defmodule EventasaurusWeb.VenueSocialCardController do
   end
 
   @impl true
-  def build_slug(%{"city_slug" => city_slug, "venue_slug" => venue_slug}, _data) do
-    "#{city_slug}_#{venue_slug}"
+  def build_slug(%{"venue_slug" => venue_slug}, _data) do
+    venue_slug
   end
 
   @impl true

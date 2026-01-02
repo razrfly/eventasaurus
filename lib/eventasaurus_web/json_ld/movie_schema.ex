@@ -371,8 +371,9 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   end
 
   # Build venue URL
-  defp build_venue_url(venue, city) do
-    Helpers.build_url("/c/#{city.slug}/venues/#{venue.slug}")
+  # Issue #3143: Simplified to flat /venues/:slug URL
+  defp build_venue_url(venue, _city) do
+    Helpers.build_url("/venues/#{venue.slug}")
   end
 
   # Build activity URL for screening

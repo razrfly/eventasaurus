@@ -110,17 +110,18 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
     end
   end
 
-  # Build the canonical venue URL using city-scoped path
+  # Build the canonical venue URL using flat /venues/:slug path
+  # Issue #3143: Simplified from city-scoped /c/:city/venues/:slug
   defp build_venue_url(venue, request_uri) do
-    if venue.slug && venue.city_ref && venue.city_ref.slug do
-      path = "/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
+    if venue.slug do
+      path = "/venues/#{venue.slug}"
       UrlHelper.build_url(path, request_uri)
     else
       nil
     end
   end
 
-  # Add venue URL (using city-scoped canonical URL)
+  # Add venue URL (using flat /venues/:slug canonical URL)
   defp add_url(schema, venue, request_uri) do
     case build_venue_url(venue, request_uri) do
       nil -> schema
