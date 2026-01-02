@@ -134,10 +134,17 @@ config :eventasaurus, Oban,
   # Without this, all machines compete for advisory locks and run duplicate work.
   # See: https://hexdocs.pm/oban/Oban.Peers.Postgres.html
   #
-  # Impact: ~50% reduction in advisory lock contention when running multiple machines.
-  # PlanetScale query insights showed 16,856 advisory lock calls competing between machines.
-  peer: Oban.Peers.Postgres,
-  stage_interval: 1_000,
+  # Issue #3140: Switched from Peers.Postgres to Peers.Global
+  # Peers.Postgres uses pg_advisory_lock which DOES NOT WORK with PgBouncer transaction pooling.
+  # Advisory locks are session-scoped but PgBouncer releases connections after each transaction,
+  # causing all nodes to think they're leader and retry constantly → connection exhaustion.
+  # Peers.Global uses Distributed Erlang (same as Notifiers.PG) which works with PgBouncer.
+  peer: Oban.Peers.Global,
+  # Increased from 1_000 to 5_000 to reduce polling pressure (Issue #3140)
+  # Each queue polls every stage_interval, so 13 queues × 2 machines = 26 polls/second at 1s
+  # At 5s this drops to ~5 polls/second, significantly reducing connection contention
+  # Tradeoff: Job pickup latency increases from max 1s to max 5s (acceptable for scrapers)
+  stage_interval: 5_000,
   queues: oban_queues,
   plugins: [
     # Keep completed jobs for 12 hours for debugging
