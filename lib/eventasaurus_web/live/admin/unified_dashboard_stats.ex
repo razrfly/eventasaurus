@@ -376,7 +376,14 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   rescue
     e ->
       Logger.error("Failed to fetch data freshness: #{Exception.message(e)}")
-      %{sources: [], synced_today: 0, total_sources: 0, most_recent_hours_ago: nil, status: :unknown}
+
+      %{
+        sources: [],
+        synced_today: 0,
+        total_sources: 0,
+        most_recent_hours_ago: nil,
+        status: :unknown
+      }
   end
 
   defp fetch_event_stats do
@@ -396,7 +403,14 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   rescue
     e ->
       Logger.error("Failed to fetch event stats: #{Exception.message(e)}")
-      %{total_events: 0, upcoming_events: 0, past_events: 0, unique_venues: 0, unique_performers: 0}
+
+      %{
+        total_events: 0,
+        upcoming_events: 0,
+        past_events: 0,
+        unique_venues: 0,
+        unique_performers: 0
+      }
   end
 
   defp fetch_movie_stats do
@@ -466,12 +480,25 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
         }
 
       {:error, _reason} ->
-        %{total_requests: 0, success_rate: 0.0, cache_hit_rate: 0.0, avg_latency_ms: 0, failed_count: 0}
+        %{
+          total_requests: 0,
+          success_rate: 0.0,
+          cache_hit_rate: 0.0,
+          avg_latency_ms: 0,
+          failed_count: 0
+        }
     end
   rescue
     e ->
       Logger.error("Failed to fetch geocoding stats: #{Exception.message(e)}")
-      %{total_requests: 0, success_rate: 0.0, cache_hit_rate: 0.0, avg_latency_ms: 0, failed_count: 0}
+
+      %{
+        total_requests: 0,
+        success_rate: 0.0,
+        cache_hit_rate: 0.0,
+        avg_latency_ms: 0,
+        failed_count: 0
+      }
   end
 
   defp fetch_data_quality_stats do
@@ -516,7 +543,14 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   rescue
     e ->
       Logger.error("Failed to fetch data quality stats: #{Exception.message(e)}")
-      %{duplicate_groups: 0, total_collisions: 0, cross_source_collisions: 0, same_source_collisions: 0, collision_rate: 0.0}
+
+      %{
+        duplicate_groups: 0,
+        total_collisions: 0,
+        cross_source_collisions: 0,
+        same_source_collisions: 0,
+        collision_rate: 0.0
+      }
   end
 
   defp fetch_collision_stats do
@@ -557,6 +591,27 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
     e ->
       Logger.error("Failed to fetch source stats: #{Exception.message(e)}")
       []
+  end
+
+  @doc """
+  Fetches z-score data for statistical analysis of source health metrics.
+  Uses 7-day (168 hours) window for baseline calculations.
+
+  Returns:
+    {:ok, %{sources: [...], success_mean: float, duration_mean: float, ...}} | {:error, reason}
+  """
+  def fetch_zscore_data do
+    case Health.compute_source_zscores(hours: 168) do
+      {:ok, zscore_data} ->
+        zscore_data
+
+      {:error, _reason} ->
+        nil
+    end
+  rescue
+    e ->
+      Logger.error("Failed to fetch z-score data: #{Exception.message(e)}")
+      nil
   end
 
   @doc """
@@ -675,7 +730,12 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
     |> Enum.reject(fn {day, _} -> day == "unknown" end)
     |> Enum.map(fn {day, points} ->
       total = Enum.sum(Enum.map(points, & &1.total))
-      avg_rate = if total > 0, do: Enum.sum(Enum.map(points, & &1.success_rate)) / length(points), else: 0.0
+
+      avg_rate =
+        if total > 0,
+          do: Enum.sum(Enum.map(points, & &1.success_rate)) / length(points),
+          else: 0.0
+
       %{day: day, success_rate: Float.round(avg_rate, 1), total: total}
     end)
     |> Enum.sort_by(& &1.day)
@@ -717,7 +777,10 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   def format_bytes(0), do: "0 B"
   def format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
   def format_bytes(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  def format_bytes(bytes) when bytes < 1_073_741_824, do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+
+  def format_bytes(bytes) when bytes < 1_073_741_824,
+    do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+
   def format_bytes(bytes), do: "#{Float.round(bytes / 1_073_741_824, 2)} GB"
 
   @doc """

@@ -32,9 +32,17 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
   #   ...
   # }
 
-  # SLO Targets
+  # SLO Targets (legacy - kept for backwards compatibility)
   @slo_success_rate 95.0
   @slo_p95_duration 3000.0
+
+  # Z-score thresholds for relative performance assessment
+  # Success rate: lower is worse (negative z-score = below average)
+  @zscore_success_warning -1.0
+  @zscore_success_critical -1.5
+  # Duration: higher is worse (positive z-score = slower than average)
+  @zscore_duration_warning 1.5
+  @zscore_duration_critical 2.0
 
   @doc """
   Checks health for a given source over a time period.
@@ -112,6 +120,321 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
   def meeting_slos?(health) do
     health.meeting_slos
   end
+
+  # =============================================================================
+  # Z-Score Based Relative Performance Assessment
+  # =============================================================================
+
+  @typedoc "Z-score classification status"
+  @type zscore_status :: :normal | :warning | :critical
+
+  @typedoc "Source z-score metrics"
+  @type source_zscore :: %{
+          source: String.t(),
+          success_rate: float(),
+          avg_duration: float(),
+          success_zscore: float(),
+          duration_zscore: float(),
+          success_status: zscore_status(),
+          duration_status: zscore_status(),
+          overall_status: zscore_status()
+        }
+
+  @typedoc "Aggregate z-score stats across all sources"
+  @type zscore_stats :: %{
+          sources: [source_zscore()],
+          success_mean: float(),
+          success_stddev: float(),
+          duration_mean: float(),
+          duration_stddev: float(),
+          normal_count: non_neg_integer(),
+          warning_count: non_neg_integer(),
+          critical_count: non_neg_integer()
+        }
+
+  @doc """
+  Calculates z-score for a value given mean and standard deviation.
+
+  Z-score = (value - mean) / stddev
+
+  Returns 0.0 if stddev is 0 (all values are identical).
+
+  ## Examples
+
+      iex> Health.calculate_zscore(85.0, 75.0, 10.0)
+      1.0
+
+      iex> Health.calculate_zscore(65.0, 75.0, 10.0)
+      -1.0
+  """
+  @spec calculate_zscore(number(), number(), number()) :: float()
+  def calculate_zscore(_value, _mean, stddev) when stddev == 0, do: 0.0
+
+  def calculate_zscore(value, mean, stddev) do
+    Float.round((value - mean) / stddev, 2)
+  end
+
+  @doc """
+  Classifies a z-score into :normal, :warning, or :critical status.
+
+  For success rate (higher is better, so negative z-scores are bad):
+    - z >= -1.0: normal
+    - -1.5 <= z < -1.0: warning
+    - z < -1.5: critical
+
+  For duration (lower is better, so positive z-scores are bad):
+    - z <= 1.5: normal
+    - 1.5 < z <= 2.0: warning
+    - z > 2.0: critical
+
+  ## Examples
+
+      iex> Health.classify_zscore(-0.5, :success)
+      :normal
+
+      iex> Health.classify_zscore(-1.2, :success)
+      :warning
+
+      iex> Health.classify_zscore(2.5, :duration)
+      :critical
+  """
+  @spec classify_zscore(float(), :success | :duration) :: zscore_status()
+  def classify_zscore(zscore, :success) do
+    cond do
+      zscore < @zscore_success_critical -> :critical
+      zscore < @zscore_success_warning -> :warning
+      true -> :normal
+    end
+  end
+
+  def classify_zscore(zscore, :duration) do
+    cond do
+      zscore > @zscore_duration_critical -> :critical
+      zscore > @zscore_duration_warning -> :warning
+      true -> :normal
+    end
+  end
+
+  @doc """
+  Computes z-scores for all active sources based on their relative performance.
+
+  Queries last 7 days of job execution data, calculates mean and standard deviation
+  across all sources, then returns z-scores showing how each source compares to peers.
+
+  ## Options
+
+    * `:hours` - Number of hours to analyze (default: 168 = 7 days)
+
+  ## Examples
+
+      {:ok, stats} = Health.compute_source_zscores()
+      # => %{
+      #   sources: [
+      #     %{source: "cinema_city", success_rate: 28.7, success_zscore: -1.71, ...},
+      #     %{source: "karnet", success_rate: 98.3, success_zscore: 1.00, ...},
+      #     ...
+      #   ],
+      #   success_mean: 72.6,
+      #   success_stddev: 25.6,
+      #   duration_mean: 16.9,
+      #   duration_stddev: 29.9,
+      #   normal_count: 5,
+      #   warning_count: 1,
+      #   critical_count: 1
+      # }
+  """
+  @spec compute_source_zscores(keyword()) :: {:ok, zscore_stats()} | {:error, atom()}
+  def compute_source_zscores(opts \\ []) do
+    hours = Keyword.get(opts, :hours, 168)
+    from_time = DateTime.add(DateTime.utc_now(), -hours, :hour)
+
+    # Query aggregated stats per source
+    source_stats = fetch_source_aggregate_stats(from_time)
+
+    if Enum.empty?(source_stats) do
+      {:error, :no_data}
+    else
+      # Calculate mean and stddev for success rate
+      success_rates = Enum.map(source_stats, & &1.success_rate)
+      success_mean = mean(success_rates)
+      success_stddev = stddev(success_rates, success_mean)
+
+      # Calculate mean and stddev for duration
+      durations = Enum.map(source_stats, & &1.avg_duration)
+      duration_mean = mean(durations)
+      duration_stddev = stddev(durations, duration_mean)
+
+      # Calculate z-scores for each source
+      sources_with_zscores =
+        source_stats
+        |> Enum.map(fn stat ->
+          success_zscore = calculate_zscore(stat.success_rate, success_mean, success_stddev)
+          duration_zscore = calculate_zscore(stat.avg_duration, duration_mean, duration_stddev)
+
+          success_status = classify_zscore(success_zscore, :success)
+          duration_status = classify_zscore(duration_zscore, :duration)
+
+          # Overall status is the worse of the two
+          overall_status = worse_status(success_status, duration_status)
+
+          %{
+            source: stat.source,
+            success_rate: stat.success_rate,
+            avg_duration: stat.avg_duration,
+            total_jobs: stat.total_jobs,
+            success_zscore: success_zscore,
+            duration_zscore: duration_zscore,
+            success_status: success_status,
+            duration_status: duration_status,
+            overall_status: overall_status
+          }
+        end)
+        |> Enum.sort_by(& &1.success_zscore)
+
+      # Count by status
+      status_counts =
+        sources_with_zscores
+        |> Enum.group_by(& &1.overall_status)
+        |> Map.new(fn {status, sources} -> {status, length(sources)} end)
+
+      {:ok,
+       %{
+         sources: sources_with_zscores,
+         success_mean: Float.round(success_mean, 1),
+         success_stddev: Float.round(success_stddev, 1),
+         duration_mean: Float.round(duration_mean, 1),
+         duration_stddev: Float.round(duration_stddev, 1),
+         normal_count: Map.get(status_counts, :normal, 0),
+         warning_count: Map.get(status_counts, :warning, 0),
+         critical_count: Map.get(status_counts, :critical, 0),
+         hours: hours
+       }}
+    end
+  end
+
+  @doc """
+  Returns a summary of source health using z-scores.
+
+  Provides a quick overview suitable for dashboard display.
+
+  ## Examples
+
+      {:ok, summary} = Health.zscore_summary()
+      # => %{
+      #   total_sources: 7,
+      #   normal_count: 5,
+      #   warning_count: 1,
+      #   critical_count: 1,
+      #   outliers: ["cinema_city", "repertuary"],
+      #   status: :warning  # :normal | :warning | :critical
+      # }
+  """
+  @spec zscore_summary(keyword()) :: {:ok, map()} | {:error, atom()}
+  def zscore_summary(opts \\ []) do
+    case compute_source_zscores(opts) do
+      {:ok, stats} ->
+        outliers =
+          stats.sources
+          |> Enum.filter(&(&1.overall_status != :normal))
+          |> Enum.map(& &1.source)
+
+        overall_status =
+          cond do
+            stats.critical_count > 0 -> :critical
+            stats.warning_count > 0 -> :warning
+            true -> :normal
+          end
+
+        {:ok,
+         %{
+           total_sources: length(stats.sources),
+           normal_count: stats.normal_count,
+           warning_count: stats.warning_count,
+           critical_count: stats.critical_count,
+           outliers: outliers,
+           status: overall_status,
+           success_mean: stats.success_mean,
+           duration_mean: stats.duration_mean
+         }}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  # Fetch aggregate stats for all sources from job_execution_summaries
+  defp fetch_source_aggregate_stats(from_time) do
+    query =
+      from(j in JobExecutionSummary,
+        where: j.attempted_at >= ^from_time,
+        where: like(j.worker, "EventasaurusDiscovery.Sources.%"),
+        group_by: fragment("substring(? from 'Sources\\.([^.]+)\\.Jobs')", j.worker),
+        having: count(j.id) >= 10,
+        select: %{
+          source_match: fragment("substring(? from 'Sources\\.([^.]+)\\.Jobs')", j.worker),
+          total_jobs: count(j.id),
+          completed_jobs: count(fragment("CASE WHEN ? = 'completed' THEN 1 END", j.state)),
+          avg_duration_ms:
+            avg(fragment("CASE WHEN ? = 'completed' THEN ? END", j.state, j.duration_ms))
+        }
+      )
+
+    Repo.replica().all(query)
+    |> Enum.reject(fn row -> is_nil(row.source_match) end)
+    |> Enum.map(fn row ->
+      # Convert PascalCase to snake_case for source name
+      source = Macro.underscore(row.source_match)
+
+      success_rate =
+        if row.total_jobs > 0 do
+          Float.round(row.completed_jobs / row.total_jobs * 100, 1)
+        else
+          0.0
+        end
+
+      avg_duration =
+        case row.avg_duration_ms do
+          nil -> 0.0
+          %Decimal{} = d -> Decimal.to_float(d) / 1000
+          ms when is_number(ms) -> Float.round(ms / 1000, 1)
+        end
+
+      %{
+        source: source,
+        total_jobs: row.total_jobs,
+        success_rate: success_rate,
+        avg_duration: avg_duration
+      }
+    end)
+  end
+
+  # Calculate mean of a list of numbers
+  defp mean([]), do: 0.0
+
+  defp mean(values) do
+    Enum.sum(values) / length(values)
+  end
+
+  # Calculate standard deviation
+  defp stddev([], _mean), do: 0.0
+  defp stddev([_], _mean), do: 0.0
+
+  defp stddev(values, mean) do
+    variance =
+      values
+      |> Enum.map(fn v -> :math.pow(v - mean, 2) end)
+      |> Enum.sum()
+      |> Kernel./(length(values))
+
+    :math.sqrt(variance)
+  end
+
+  # Return the worse of two statuses
+  defp worse_status(:critical, _), do: :critical
+  defp worse_status(_, :critical), do: :critical
+  defp worse_status(:warning, _), do: :warning
+  defp worse_status(_, :warning), do: :warning
+  defp worse_status(_, _), do: :normal
 
   @doc """
   Returns workers that are performing below the threshold.
