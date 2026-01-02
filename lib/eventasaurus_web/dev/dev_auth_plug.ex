@@ -7,13 +7,6 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
 
   In production, this module is replaced with a no-op that just passes
   the connection through unchanged.
-
-  ## USE_PROD_DB Mode
-
-  When connecting to a remote production database (USE_PROD_DB=true), the
-  connection pool can become exhausted due to high latency. To avoid blocking
-  every request with a database lookup, this plug caches the user struct
-  directly in the session after the first successful load.
   """
 
   if Mix.env() == :dev do
@@ -43,64 +36,37 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
       dev_mode_login = get_session(conn, "dev_mode_login")
 
       if dev_mode_login == true do
-        # First, check if we have a cached user struct in the session
-        # This avoids hitting the DB on every request when USE_PROD_DB=true
-        case get_session(conn, "dev_cached_user") do
-          %User{id: cached_id} = cached_user ->
-            # Verify cached user still exists in database (handles DB switch scenarios)
-            case Repo.replica().get(User, cached_id) do
-              nil ->
-                # Cached user no longer exists - clear stale session
-                Logger.warning(
-                  "DEV_AUTH_PLUG: Cached user #{cached_id} not found in DB - clearing session"
-                )
-
-                conn
-                |> delete_session("dev_mode_login")
-                |> delete_session("current_user_id")
-                |> delete_session("dev_cached_user")
-
-              _user ->
-                # Use cached user - it's valid
-                conn
-                |> assign(:auth_user, cached_user)
-                |> assign(:dev_mode_auth, true)
-            end
-
-          _ ->
-            # No cached user, need to load from DB (first request only)
-            load_and_cache_user(conn)
-        end
+        # Load user from database using current_user_id
+        # NOTE: We intentionally do NOT cache the User struct in the session
+        # because Ecto schemas are too large and cause cookie overflow (4KB limit)
+        load_user(conn)
       else
         # Not a dev login, pass through to normal auth
         conn
       end
     end
 
-    # Load user from database and cache in session for future requests
-    defp load_and_cache_user(conn) do
+    # Load user from database on each request
+    # This is fine for dev mode - the slight overhead is acceptable
+    defp load_user(conn) do
       case get_session(conn, "current_user_id") do
         nil ->
           # Dev session corrupted, clear it
           conn
           |> delete_session("dev_mode_login")
           |> delete_session("current_user_id")
-          |> delete_session("dev_cached_user")
 
         user_id ->
-          # Load the user - this only happens once per session
           case Repo.replica().get(User, user_id) do
             nil ->
               # User doesn't exist, clear session
               conn
               |> delete_session("dev_mode_login")
               |> delete_session("current_user_id")
-              |> delete_session("dev_cached_user")
 
             user ->
-              # SUCCESS: Cache user in session and set auth_user
+              # Set auth_user for the request
               conn
-              |> put_session("dev_cached_user", user)
               |> assign(:auth_user, user)
               |> assign(:dev_mode_auth, true)
           end

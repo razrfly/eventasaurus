@@ -335,6 +335,17 @@ defmodule EventasaurusWeb.Router do
     fetch_live_flash(conn, [])
   end
 
+  # Extract auth-related session data for LiveView
+  # This is called by live_session to pass session data to on_mount hooks
+  @doc false
+  def extract_auth_session(conn) do
+    %{
+      "dev_mode_login" => Plug.Conn.get_session(conn, "dev_mode_login"),
+      "current_user_id" => Plug.Conn.get_session(conn, "current_user_id"),
+      "language" => Plug.Conn.get_session(conn, "language")
+    }
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
     plug :fetch_session
@@ -574,7 +585,9 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Public routes with auth user assignment
-  live_session :default, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user}] do
+  live_session :default,
+    session: {__MODULE__, :extract_auth_session, []},
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
@@ -626,7 +639,9 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Public profile routes (with auth user assignment for privacy checking)
-  live_session :profiles, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user}] do
+  live_session :profiles,
+    session: {__MODULE__, :extract_auth_session, []},
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
@@ -661,6 +676,7 @@ defmodule EventasaurusWeb.Router do
 
   # City-based routes with /c/ prefix
   live_session :city,
+    session: {__MODULE__, :extract_auth_session, []},
     on_mount: [
       {EventasaurusWeb.Live.AuthHooks, :assign_auth_user},
       {EventasaurusWeb.Live.CityHooks, :assign_city}
@@ -767,6 +783,7 @@ defmodule EventasaurusWeb.Router do
   # - Index pages (Phase 3): 1h TTL (s-maxage=3600)
   # - Aggregated content (Phase 4): 1h TTL (s-maxage=3600)
   live_session :catalog,
+    session: {__MODULE__, :extract_auth_session, []},
     on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
     scope "/", EventasaurusWeb do
       pipe_through :public
@@ -795,6 +812,7 @@ defmodule EventasaurusWeb.Router do
 
   # User-created event routes (with theme support)
   live_session :events,
+    session: {__MODULE__, :extract_auth_session, []},
     on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
@@ -938,16 +956,5 @@ defmodule EventasaurusWeb.Router do
     pipe_through [:secure_api, :api_authenticated]
 
     get "/stats/source/:source_slug", SourceStatsController, :show
-  end
-
-  # Helper function to extract auth-related session keys for LiveView
-  # This is required because LiveView's socket doesn't automatically receive all session data.
-  # Only keys explicitly passed via this function are available in on_mount hooks.
-  @doc false
-  def extract_auth_session(conn) do
-    %{
-      "current_user_id" => Plug.Conn.get_session(conn, "current_user_id"),
-      "dev_mode_login" => Plug.Conn.get_session(conn, "dev_mode_login")
-    }
   end
 end

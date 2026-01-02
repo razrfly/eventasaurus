@@ -13,6 +13,7 @@ import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
 import { plausibleManager, initPlausibleClient } from "./analytics/plausible-manager";
 import { initClerkClient, ClerkAuthHandler, signOut as clerkSignOut, openSignIn as clerkOpenSignIn, openSignUp as clerkOpenSignUp } from "./auth/clerk-manager";
 import ClerkAuthUI from "./hooks/clerk-auth-ui";
+import AuthProtectedAction from "./hooks/auth-protected-action";
 import FormHooks from "./hooks/forms";
 import UIHooks from "./hooks/ui-interactions";
 import PaymentHooks from "./hooks/payment-business-logic";
@@ -67,6 +68,7 @@ const ModularHooks = {
   ClerkAuthHandler, // Clerk auth handler
   AuthHandler: ClerkAuthHandler, // Active auth handler (Clerk)
   ClerkAuthUI, // Client-side auth UI hydration for CDN-cached pages
+  AuthProtectedAction, // Client-side auth check for actions on CDN-cached pages
   ChartHook, // Chart.js hook for Phase 6
   HealthTrendChart, // Specialized Chart.js hook for monitoring dashboard health trend
   VenuesMap, // Interactive Google Maps for venues page
