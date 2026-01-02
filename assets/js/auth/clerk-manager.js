@@ -3,6 +3,8 @@
 
 let clerkInstance = null;
 let clerkLoaded = false;
+let lastAuthState = null;
+let authChangeDebounceTimer = null;
 
 // Wait for Clerk.js to be loaded from CDN
 async function waitForClerk(maxWait = 10000, interval = 100) {
@@ -58,21 +60,49 @@ export async function initClerkClient() {
   }
 }
 
-// Set up auth state change listener
+// Set up auth state change listener with debouncing and state comparison
 function setupAuthListener() {
   if (!clerkInstance) return;
 
-  // Clerk fires this when user signs in/out
+  // Clerk fires this when user signs in/out, but also on URL changes
+  // We debounce and compare state to prevent infinite loops
   clerkInstance.addListener(({ user, session }) => {
-    console.log('Clerk auth state changed:', {
-      hasUser: !!user,
-      hasSession: !!session
-    });
+    // Create a simple state fingerprint
+    const currentState = {
+      userId: user?.id || null,
+      sessionId: session?.id || null
+    };
 
-    // Dispatch custom event for other components to listen to
-    window.dispatchEvent(new CustomEvent('clerk:auth-change', {
-      detail: { user, session }
-    }));
+    // Compare with last known state to avoid redundant events
+    const stateChanged = !lastAuthState ||
+      lastAuthState.userId !== currentState.userId ||
+      lastAuthState.sessionId !== currentState.sessionId;
+
+    if (!stateChanged) {
+      // Auth state hasn't actually changed, skip the event
+      return;
+    }
+
+    // Clear any pending debounce timer
+    if (authChangeDebounceTimer) {
+      clearTimeout(authChangeDebounceTimer);
+    }
+
+    // Debounce the event dispatch to prevent rapid-fire events
+    authChangeDebounceTimer = setTimeout(() => {
+      console.log('Clerk auth state changed:', {
+        hasUser: !!user,
+        hasSession: !!session
+      });
+
+      // Update last known state
+      lastAuthState = currentState;
+
+      // Dispatch custom event for other components to listen to
+      window.dispatchEvent(new CustomEvent('clerk:auth-change', {
+        detail: { user, session }
+      }));
+    }, 100); // 100ms debounce
   });
 }
 
