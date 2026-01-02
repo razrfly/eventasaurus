@@ -58,6 +58,20 @@ defmodule EventasaurusWeb.CityLive.Index do
           # STAGED LOADING: Initialize with loading state, defer expensive operations
           # This prevents mount timeout and provides fast initial render
           # Note: handle_params will immediately follow and set real values from URL
+          #
+          # SEO FIX (Issue #3146): Generate SEO metadata SYNCHRONOUSLY in mount
+          # Social media crawlers don't execute JavaScript, so they only see the
+          # initial HTML. We must set OG tags before the first render.
+          # City stats queries are fast (COUNT queries), so we run them here.
+          # Event loading remains deferred for performance.
+
+          # Generate city stats and SEO metadata synchronously (fast COUNT queries)
+          city_stats = fetch_city_stats(city)
+          json_ld = CitySchema.generate(city, city_stats)
+          city_with_stats = Map.put(city, :stats, city_stats)
+          social_card_path = UrlBuilder.build_path(:city, city_with_stats)
+          og_tags = build_city_open_graph(city, city_stats, social_card_path, request_uri)
+
           {:ok,
            socket
            |> assign(:city, city)
@@ -76,7 +90,17 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:all_events_count, 0)
            |> assign(:categories, [])
            |> assign(:events, [])
-           |> assign(:open_graph, "")
+           # SEO metadata - set synchronously for crawlers (Issue #3146)
+           |> assign(:open_graph, og_tags)
+           |> SEOHelpers.assign_meta_tags(
+             title: page_title(city),
+             description: meta_description(city),
+             image: social_card_path,
+             type: "website",
+             canonical_path: "/c/#{city.slug}",
+             json_ld: json_ld,
+             request_uri: request_uri
+           )
            |> assign(:pagination, %Pagination{
              entries: [],
              page_number: 1,
@@ -118,10 +142,8 @@ defmodule EventasaurusWeb.CityLive.Index do
       Process.sleep(500)
     end
 
-    # STAGE 1: Load lightweight data (categories, languages, meta tags)
-    city = socket.assigns.city
+    # STAGE 1: Load lightweight data (categories, languages)
     city_slug = socket.assigns.city_slug
-    request_uri = socket.assigns.request_uri
 
     # Get dynamically available languages for this city
     available_languages =
@@ -139,31 +161,13 @@ defmodule EventasaurusWeb.CityLive.Index do
     # Get categories (cached)
     categories = CityPageCache.get_categories(&Categories.list_categories/0)
 
-    # Generate city stats and meta tags
-    city_stats = fetch_city_stats(city)
-    json_ld = CitySchema.generate(city, city_stats)
-
-    # Generate social card URL path
-    city_with_stats = Map.put(city, :stats, city_stats)
-    social_card_path = UrlBuilder.build_path(:city, city_with_stats)
-
-    # Generate Open Graph meta tags
-    og_tags = build_city_open_graph(city, city_stats, social_card_path, request_uri)
+    # NOTE: SEO metadata (open_graph, meta tags, json_ld) is set synchronously in mount
+    # so crawlers see it in the initial HTML response (Issue #3146)
 
     socket =
       socket
       |> assign(:available_languages, available_languages)
       |> assign(:categories, categories)
-      |> assign(:open_graph, og_tags)
-      |> SEOHelpers.assign_meta_tags(
-        title: page_title(city),
-        description: meta_description(city),
-        image: social_card_path,
-        type: "website",
-        canonical_path: "/c/#{city.slug}",
-        json_ld: json_ld,
-        request_uri: request_uri
-      )
       |> assign(:loading, false)
 
     # Trigger events loading (the expensive operation)
@@ -710,6 +714,20 @@ defmodule EventasaurusWeb.CityLive.Index do
         # No coordinates, fallback to empty list
         {[], 0, 0, %{}}
       end
+
+    # Filter out events with nil slugs to prevent rendering crashes
+    # This can happen when events are scraped without proper slug generation
+    geographic_events =
+      Enum.filter(geographic_events, fn
+        # PublicEvent with nil slug - exclude
+        %EventasaurusDiscovery.PublicEvents.PublicEvent{slug: nil} ->
+          Logger.warning("[CityPage] Filtering out event with nil slug")
+          false
+
+        # All other events/aggregations - include
+        _ ->
+          true
+      end)
 
     # Use actual counts for pagination
     page = filters[:page] || 1

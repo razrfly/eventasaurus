@@ -261,16 +261,16 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
         (old_movie.metadata || %{})
         |> Map.delete("repertuary_slug")
 
-      case EventasaurusDiscovery.Movies.MovieStore.update_movie(old_movie, %{metadata: updated_metadata}) do
+      case EventasaurusDiscovery.Movies.MovieStore.update_movie(old_movie, %{
+             metadata: updated_metadata
+           }) do
         {:ok, _} ->
           Logger.info(
             "🔄 Removed stale repertuary_slug '#{movie_slug}' from movie #{old_movie.id} (#{old_movie.title})"
           )
 
         {:error, _} ->
-          Logger.warning(
-            "⚠️ Failed to remove stale repertuary_slug from movie #{old_movie.id}"
-          )
+          Logger.warning("⚠️ Failed to remove stale repertuary_slug from movie #{old_movie.id}")
       end
     end)
   end
