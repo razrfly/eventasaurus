@@ -1,7 +1,7 @@
 # SEO Best Practices Guide
 
-**Version:** 1.0.0
-**Last Updated:** 2025-01-29
+**Version:** 1.1.0
+**Last Updated:** 2025-01-02
 **Maintainer:** Development Team
 
 ---
@@ -99,6 +99,82 @@ end
 > **⚠️ IMPORTANT:** Always capture and pass `request_uri` to `SEOHelpers.assign_meta_tags/2`. Without it, URLs will use static configuration (localhost in development) instead of the actual request host (ngrok, production domain, etc.). This causes social media crawlers to fail because they cannot access localhost URLs.
 >
 > See [Development & ngrok Support](#development--ngrok-support) for more details.
+
+### ⛔ Critical: LiveView Lifecycle and SEO Timing
+
+**SEO metadata MUST be set synchronously in `mount/3` or `handle_params/3`.** Social media crawlers (Facebook, Twitter, LinkedIn, etc.) only see the initial server-rendered HTML response—they do not execute JavaScript or wait for WebSocket connections.
+
+```elixir
+# ✅ CORRECT: SEO in mount (synchronous, before initial render)
+def mount(_params, _session, socket) do
+  entity = load_entity()
+  socket =
+    socket
+    |> assign(:entity, entity)
+    |> SEOHelpers.assign_meta_tags(title: entity.name, ...)
+  {:ok, socket}
+end
+
+# ✅ CORRECT: SEO in handle_params (synchronous, on each navigation)
+def handle_params(%{"slug" => slug}, _url, socket) do
+  entity = load_entity(slug)
+  socket =
+    socket
+    |> assign(:entity, entity)
+    |> SEOHelpers.assign_meta_tags(title: entity.name, ...)
+  {:noreply, socket}
+end
+
+# ❌ WRONG: SEO in handle_info (async, after WebSocket connects)
+def handle_info(:load_data, socket) do
+  entity = load_entity()
+  # Crawlers NEVER see this - they're already gone!
+  socket = SEOHelpers.assign_meta_tags(socket, title: entity.name, ...)
+  {:noreply, socket}
+end
+```
+
+**Why This Matters:**
+1. **Server-Side Rendering (SSR)**: `mount` runs during the initial HTTP request
+2. **Crawler Behavior**: Facebook/Twitter fetch the HTML once and parse `<meta>` tags immediately
+3. **No JavaScript**: Crawlers don't wait for LiveView's WebSocket or `handle_info` callbacks
+4. **Timing**: `handle_info` runs *after* the initial HTML is already sent to the client
+
+**Common Mistake - Empty String vs `nil`:**
+
+```elixir
+# ❌ WRONG: Empty string is TRUTHY in Elixir
+def mount(_params, _session, socket) do
+  socket = assign(socket, :open_graph, "")  # This is truthy!
+  {:ok, socket}
+end
+
+def handle_info(:load_data, socket) do
+  socket = assign(socket, :open_graph, build_og_tags())  # Too late!
+  {:noreply, socket}
+end
+
+# In template: if @open_graph do ... end
+# Result: Empty string passes the condition, but contains no useful data
+```
+
+```elixir
+# ✅ CORRECT: Set actual SEO data in mount, use nil for "not loaded yet"
+def mount(_params, _session, socket) do
+  entity = load_entity()
+  og_tags = build_og_tags(entity)
+  socket =
+    socket
+    |> assign(:open_graph, og_tags)  # Real data, set synchronously
+    |> SEOHelpers.assign_meta_tags(...)
+  {:ok, socket}
+end
+```
+
+**Reference Implementations:**
+- `venue_live/show.ex` - SEO in `handle_params` via `load_and_assign_venue/2`
+- `public_event_show_live.ex` - SEO in `handle_params`
+- `city_live/index.ex` - SEO in `mount`
 
 ### What Gets Generated
 
@@ -1223,6 +1299,82 @@ See `lib/eventasaurus_web/live/public_event_show_live.ex:27-34` for the canonica
 ---
 
 ## Troubleshooting
+
+### SEO Metadata Missing from Crawler View (Async Timing Bug)
+
+**Problem:** Social cards work in browser but crawlers see empty or default meta tags
+
+**Symptoms:**
+- Facebook Sharing Debugger shows generic/missing Open Graph tags
+- Twitter Card Validator shows no card preview
+- Browser "View Source" shows correct meta tags, but crawlers don't see them
+
+**Root Cause:** SEO metadata set in `handle_info` (async) instead of `mount`/`handle_params` (sync)
+
+**Why This Happens:**
+```
+Timeline for a social media crawler:
+
+1. Crawler requests URL           →  Phoenix receives HTTP request
+2. LiveView mount() runs          →  Initial HTML generated (THIS IS ALL CRAWLERS SEE)
+3. HTML response sent to crawler  →  Crawler parses <meta> tags NOW
+4. WebSocket connects             →  (Crawlers don't do this)
+5. handle_info() runs             →  (Too late - crawler is gone!)
+```
+
+**Diagnosis:**
+```bash
+# Check what crawlers actually see (no JavaScript execution)
+curl -s https://your-domain.com/your-page | grep -E "(og:|twitter:)"
+
+# Compare to browser view-source (should match if correct)
+# If curl shows empty/wrong tags but browser shows correct tags,
+# you have an async timing bug
+```
+
+**Fix Pattern:**
+```elixir
+# ❌ WRONG: Async data loading with SEO
+def mount(_params, _session, socket) do
+  send(self(), :load_data)  # Async!
+  {:ok, assign(socket, :loading, true)}
+end
+
+def handle_info(:load_data, socket) do
+  data = load_data()
+  socket = SEOHelpers.assign_meta_tags(socket, ...)  # TOO LATE!
+  {:noreply, socket}
+end
+
+# ✅ CORRECT: Sync SEO, async non-critical data
+def mount(_params, _session, socket) do
+  # Load ONLY what's needed for SEO synchronously
+  entity = load_entity_for_seo()
+
+  socket =
+    socket
+    |> assign(:entity, entity)
+    |> SEOHelpers.assign_meta_tags(title: entity.name, ...)
+
+  # Async load for UI enhancements (not SEO-critical)
+  send(self(), :load_additional_data)
+
+  {:ok, socket}
+end
+```
+
+**Empty String Gotcha:**
+```elixir
+# ❌ BUG: Empty string is truthy in Elixir!
+assign(socket, :open_graph, "")  # Template: if @open_graph → TRUE!
+
+# ✅ FIX: Use nil for "not set"
+assign(socket, :open_graph, nil)  # Template: if @open_graph → FALSE
+```
+
+**Reference:** See [Critical: LiveView Lifecycle and SEO Timing](#-critical-liveview-lifecycle-and-seo-timing) in Quick Start section.
+
+---
 
 ### Social Cards Not Appearing
 
