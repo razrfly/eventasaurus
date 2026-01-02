@@ -81,27 +81,36 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
     {:noreply, load_stats_async(socket)}
   end
 
+  # Allowlist of valid sort columns to prevent atom exhaustion
+  @allowed_sort_columns ~w(display_name health_score success_rate p95_duration last_execution coverage_days)a
+
   @impl true
   def handle_event("sort_sources", %{"column" => column}, socket) do
     column_atom = String.to_existing_atom(column)
-    current_sort = socket.assigns.sort_by
-    current_dir = socket.assigns.sort_dir
 
-    # Toggle direction if same column, otherwise default to desc
-    new_dir =
-      if column_atom == current_sort do
-        if current_dir == :desc, do: :asc, else: :desc
-      else
-        :desc
-      end
+    # Validate column against allowlist to prevent malicious requests
+    if column_atom not in @allowed_sort_columns do
+      {:noreply, socket}
+    else
+      current_sort = socket.assigns.sort_by
+      current_dir = socket.assigns.sort_dir
 
-    sorted = sort_sources(socket.assigns.source_table, column_atom, new_dir)
+      # Toggle direction if same column, otherwise default to desc
+      new_dir =
+        if column_atom == current_sort do
+          if current_dir == :desc, do: :asc, else: :desc
+        else
+          :desc
+        end
 
-    {:noreply,
-     socket
-     |> assign(:sort_by, column_atom)
-     |> assign(:sort_dir, new_dir)
-     |> assign(:source_table, sorted)}
+      sorted = sort_sources(socket.assigns.source_table, column_atom, new_dir)
+
+      {:noreply,
+       socket
+       |> assign(:sort_by, column_atom)
+       |> assign(:sort_dir, new_dir)
+       |> assign(:source_table, sorted)}
+    end
   end
 
   defp sort_sources(nil, _column, _dir), do: nil

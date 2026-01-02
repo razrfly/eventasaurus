@@ -68,11 +68,11 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   end
 
   @doc """
-  Fetches Tier 3 context stats (geocoding, collisions).
+  Fetches Tier 3 context stats (collisions, sources).
+  Note: geocoding is already fetched in Tier 2.
   """
   def fetch_tier3_stats do
     tasks = [
-      {:geocoding, fn -> fetch_geocoding_stats() end},
       {:collisions, fn -> fetch_collision_stats() end},
       {:sources, fn -> fetch_source_stats() end}
     ]
