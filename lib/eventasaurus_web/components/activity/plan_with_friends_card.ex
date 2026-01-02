@@ -77,7 +77,10 @@ defmodule EventasaurusWeb.Components.Activity.PlanWithFriendsCard do
           </div>
 
           <button
-            phx-click="open_plan_modal"
+            id="plan-with-friends-btn"
+            phx-hook="AuthProtectedAction"
+            data-auth-event="open_plan_modal"
+            data-auth-redirect="/auth/login"
             class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
           >
             <Heroicons.user_group class="w-5 h-5 mr-2" />

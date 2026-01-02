@@ -187,7 +187,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
-  def handle_params(%{"slug" => slug, "date_slug" => date_slug}, _url, socket) do
+  def handle_params(%{"slug" => slug, "date_slug" => date_slug}, url, socket) do
     # Handle URL with specific date: /activities/slug/oct-10
     socket =
       socket
@@ -213,18 +213,55 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           |> push_patch(to: ~p"/activities/#{slug}")
       end
 
+    # Check for open_modal query param (used by AuthProtectedAction hook for cache-bust reload)
+    socket = maybe_auto_open_modal(socket, url)
+
     {:noreply, socket}
   end
 
-  def handle_params(%{"slug" => slug}, _url, socket) do
+  def handle_params(%{"slug" => slug}, url, socket) do
     # Handle base URL without date: /activities/slug
     socket =
       socket
       |> fetch_event(slug)
       |> assign(:loading, false)
 
+    # Check for open_modal query param (used by AuthProtectedAction hook for cache-bust reload)
+    # When authenticated user clicks "Plan with Friends" on a cached page, the hook reloads
+    # with ?open_modal=open_plan_modal to auto-open the modal once session is restored
+    socket = maybe_auto_open_modal(socket, url)
+
     {:noreply, socket}
   end
+
+  # Auto-open modal based on query param (used for cache-bust reload flow)
+  defp maybe_auto_open_modal(socket, url) when is_binary(url) do
+    uri = URI.parse(url)
+
+    case uri.query do
+      nil ->
+        socket
+
+      query ->
+        params = URI.decode_query(query)
+
+        case Map.get(params, "open_modal") do
+          "open_plan_modal" ->
+            # User is authenticated and wants to open Plan with Friends modal
+            if socket.assigns[:auth_user] do
+              Logger.info("[PublicEventShowLive] Auto-opening Plan with Friends modal via URL param")
+              assign(socket, :show_plan_with_friends_modal, true)
+            else
+              socket
+            end
+
+          _ ->
+            socket
+        end
+    end
+  end
+
+  defp maybe_auto_open_modal(socket, _url), do: socket
 
   defp fetch_event(socket, slug) do
     language = socket.assigns.language

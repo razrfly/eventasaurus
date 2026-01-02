@@ -120,16 +120,13 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       cond do
         # Test mode: directly load user from session (set by test helpers)
         test_mode?() && session["current_user_id"] ->
-          user_id = session["current_user_id"]
-          EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id)
+          EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, session["current_user_id"])
 
         # Dev mode login: directly load the user from database
         dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] ->
-          user_id = session["current_user_id"]
-
-          case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id) do
+          case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, session["current_user_id"]) do
             nil ->
-              Logger.warning("DEV MODE: User #{user_id} not found in database - stale session")
+              Logger.warning("DEV MODE: User #{session["current_user_id"]} not found - stale session")
               nil
 
             user ->
