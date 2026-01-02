@@ -451,7 +451,7 @@
         <h2 class="text-xl font-semibold text-gray-900">Source Status</h2>
         <%= if @zscore_data do %>
           <p class="text-xs text-gray-500 mt-1">
-            μ: <%= Float.round(@zscore_data.success_mean, 1) %>% success, <%= Float.round(@zscore_data.duration_mean / 1000, 2) %>s avg
+            μ: <%= Float.round(@zscore_data.success_mean, 1) %>% success, <%= Float.round(@zscore_data.duration_mean, 1) %>s avg
           </p>
         <% end %>
       </div>
