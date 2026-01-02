@@ -254,9 +254,16 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
   defp get_movie(movie_slug) do
     # Query movie from database using metadata search
     # MovieDetailJob stores the slug in movie.metadata as "repertuary_slug"
+    #
+    # IMPORTANT: Use DESC order (newest first) because:
+    # - TMDB matching improves over time, newer matches are more accurate
+    # - Repertuary.pl may reassign slugs to different movies
+    # - Old wrong matches (e.g., "kevin-sam-w-domu" -> "Gabby's Dollhouse") get corrected
     query =
       from(m in EventasaurusDiscovery.Movies.Movie,
-        where: fragment("?->>'repertuary_slug' = ?", m.metadata, ^movie_slug)
+        where: fragment("?->>'repertuary_slug' = ?", m.metadata, ^movie_slug),
+        order_by: [desc: m.inserted_at],
+        limit: 1
       )
 
     case Repo.one(query) do

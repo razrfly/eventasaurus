@@ -210,6 +210,12 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
   # Store Repertuary.pl slug and matched_by_provider in movie metadata for later database lookups
   # Using generic "repertuary_slug" key since movie slugs are consistent across all cities
   defp store_repertuary_slug(movie, movie_slug, provider) do
+    # First, remove this slug from any OTHER movies that have it
+    # This handles cases where:
+    # - TMDB matching improved and we found the correct movie
+    # - Repertuary.pl reassigned the slug to a different movie
+    remove_slug_from_other_movies(movie.id, movie_slug)
+
     # Add repertuary_slug and optionally provider to movie metadata
     current_metadata = movie.metadata || %{}
 
@@ -233,6 +239,40 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
 
         :error
     end
+  end
+
+  # Remove repertuary_slug from other movies that have it
+  # This prevents duplicates when a slug is reassigned or matching improves
+  defp remove_slug_from_other_movies(current_movie_id, movie_slug) do
+    import Ecto.Query
+
+    # Find other movies with this slug (not the current movie)
+    query =
+      from(m in EventasaurusDiscovery.Movies.Movie,
+        where: fragment("?->>'repertuary_slug' = ?", m.metadata, ^movie_slug),
+        where: m.id != ^current_movie_id
+      )
+
+    other_movies = EventasaurusApp.Repo.all(query)
+
+    Enum.each(other_movies, fn old_movie ->
+      # Remove the slug from the old movie's metadata
+      updated_metadata =
+        (old_movie.metadata || %{})
+        |> Map.delete("repertuary_slug")
+
+      case EventasaurusDiscovery.Movies.MovieStore.update_movie(old_movie, %{metadata: updated_metadata}) do
+        {:ok, _} ->
+          Logger.info(
+            "🔄 Removed stale repertuary_slug '#{movie_slug}' from movie #{old_movie.id} (#{old_movie.title})"
+          )
+
+        {:error, _} ->
+          Logger.warning(
+            "⚠️ Failed to remove stale repertuary_slug from movie #{old_movie.id}"
+          )
+      end
+    end)
   end
 
   # Only add matched_by_provider if not already set (preserve original match provider)
