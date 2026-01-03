@@ -562,6 +562,105 @@ The application includes several admin dashboards for monitoring:
 - `/admin/oban` - Oban job queue dashboard
 - `/admin/discovery-dashboard` - Scraper discovery statistics
 
+## CDN Caching & LiveView Authentication
+
+This application uses Cloudflare CDN caching with an "islands architecture" pattern. Static HTML is cached and served from the CDN, while authenticated features hydrate client-side via LiveView.
+
+### The Problem
+
+When Cloudflare caches a page, it strips `Set-Cookie` headers from the response. This means the Phoenix session cookie may not be set for users who first visit a cached page. However, Clerk's `__session` cookie (set by Clerk's JavaScript) survives because it's set client-side.
+
+### The Solution: connect_params
+
+We pass client-side data to LiveView via `connect_params` during the WebSocket connection:
+
+**Client-side (`assets/js/app.js`):**
+```javascript
+// Helper to read a cookie by name
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return null;
+}
+
+// Get Clerk session token for LiveView auth
+function getClerkToken() {
+  // Skip if server already knows who we are
+  if (window.currentUser) return null;
+  return getCookie('__session') || null;
+}
+
+// LiveSocket uses a function for dynamic params
+let liveSocket = new LiveSocket("/live", Socket, {
+  params: () => ({
+    _csrf_token: csrfToken,
+    clerk_token: getClerkToken(),
+    // Add more client-side data here as needed:
+    // timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    // theme: localStorage.getItem('theme'),
+    // locale: getCookie('language_preference'),
+  }),
+  hooks: AllHooks,
+  uploaders: Uploaders
+});
+```
+
+**Server-side (`lib/eventasaurus_web/live/auth_hooks.ex`):**
+```elixir
+# IMPORTANT: connect_params only available when socket is connected
+defp get_user_from_connect_params(socket) do
+  if connected?(socket) do
+    case get_connect_params(socket) do
+      %{"clerk_token" => token} when is_binary(token) and token != "" ->
+        verify_and_get_user(token)
+      _ ->
+        nil
+    end
+  else
+    nil
+  end
+end
+```
+
+### When to Use This Pattern
+
+Use `connect_params` for any data where:
+1. **Client has it** - Available in cookies, localStorage, or browser APIs
+2. **Server needs it** - Required for rendering or business logic
+3. **CDN caching blocks normal flow** - Session cookies stripped by CDN
+
+### Adding New Client Data
+
+1. **Add to params function** in `assets/js/app.js`:
+```javascript
+params: () => ({
+  _csrf_token: csrfToken,
+  clerk_token: getClerkToken(),
+  my_new_param: getMyData(),  // Add here
+}),
+```
+
+2. **Read in LiveView hook** (create new hook or extend existing):
+```elixir
+def on_mount(:my_hook, _params, _session, socket) do
+  socket = if connected?(socket) do
+    params = get_connect_params(socket)
+    assign(socket, :my_data, params["my_new_param"])
+  else
+    assign(socket, :my_data, nil)  # Fallback for static render
+  end
+  {:cont, socket}
+end
+```
+
+### Key Files
+
+- `assets/js/app.js` - Client-side params function
+- `lib/eventasaurus_web/live/auth_hooks.ex` - Server-side auth verification
+- `lib/eventasaurus_app/auth/clerk/jwt.ex` - JWT verification
+- `lib/eventasaurus_app/auth/clerk/sync.ex` - User sync from Clerk claims
+
 ## Database Access
 
 ### Production Database (PlanetScale)
