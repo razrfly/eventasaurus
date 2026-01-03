@@ -83,10 +83,37 @@ const AllHooks = {
 
 // All hooks registered successfully - debug logging removed
 
+// Helper to read a cookie by name
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return null;
+}
+
+// Get Clerk session token for LiveView auth
+// This reads directly from the __session cookie that Clerk sets
+// Used to pass auth to LiveView on CDN-cached pages where Phoenix session may not be set
+function getClerkToken() {
+  // First check if we have server-side auth (window.currentUser is set in root.html.heex)
+  // If so, the server already knows who we are - no need for token
+  if (window.currentUser) {
+    return null;
+  }
+
+  // Read Clerk's session cookie directly
+  // This JWT is set by Clerk and survives CDN caching
+  return getCookie('__session') || null;
+}
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
-  params: {_csrf_token: csrfToken},
+  // Use a function for params so clerk_token is read fresh on each connection
+  params: () => ({
+    _csrf_token: csrfToken,
+    clerk_token: getClerkToken()
+  }),
   hooks: AllHooks,
   uploaders: Uploaders  // Unified R2 uploaders for external uploads
 });

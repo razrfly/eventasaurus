@@ -28,6 +28,8 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     statics: EventasaurusWeb.static_paths()
 
   alias EventasaurusApp.Accounts
+  alias EventasaurusApp.Auth.Clerk.JWT, as: ClerkJWT
+  alias EventasaurusApp.Auth.Clerk.Sync, as: ClerkSync
 
   require Logger
 
@@ -114,7 +116,8 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     {:cont, socket}
   end
 
-  # Private function to assign auth_user from session
+  # Private function to assign auth_user from session or connect_params
+  # Priority: session > connect_params (clerk_token)
   defp assign_auth_user(socket, session) do
     result =
       cond do
@@ -133,12 +136,63 @@ defmodule EventasaurusWeb.Live.AuthHooks do
               user
           end
 
-        # Production: Get user from Clerk session
+        # Production: Get user from Clerk session first
         true ->
-          get_clerk_auth_user(session)
+          case get_clerk_auth_user(session) do
+            nil ->
+              # Session auth failed - try connect_params token (for CDN-cached pages)
+              get_user_from_connect_params(socket)
+
+            user ->
+              user
+          end
       end
 
     Phoenix.Component.assign(socket, :auth_user, result)
+  end
+
+  # Get user from Clerk JWT token passed via LiveSocket connect_params
+  # This handles CDN-cached pages where Phoenix session cookie wasn't set
+  # but Clerk's __session cookie is available on the client
+  defp get_user_from_connect_params(socket) do
+    # connect_params only available when socket is connected (not during static render)
+    if connected?(socket) do
+      case get_connect_params(socket) do
+        %{"clerk_token" => token} when is_binary(token) and token != "" ->
+          verify_and_get_user(token)
+
+        _ ->
+          nil
+      end
+    else
+      nil
+    end
+  end
+
+  # Verify Clerk JWT and get/sync the user
+  defp verify_and_get_user(token) do
+    case ClerkJWT.verify_token(token) do
+      {:ok, claims} ->
+        # Try to get existing user first (faster, no sync)
+        case ClerkSync.get_user(claims) do
+          {:ok, user} ->
+            user
+
+          {:error, :not_found} ->
+            # User doesn't exist yet - sync will create them
+            case ClerkSync.sync_user(claims) do
+              {:ok, user} -> user
+              {:error, _reason} -> nil
+            end
+
+          {:error, _reason} ->
+            nil
+        end
+
+      {:error, reason} ->
+        Logger.debug("Clerk token verification failed: #{inspect(reason)}")
+        nil
+    end
   end
 
   # Get auth user from Clerk session
