@@ -331,15 +331,8 @@ defmodule EventasaurusWeb.SocialCards.Shared do
     end
   end
 
-  @doc """
-  Checks if a URL is from our cached CDN (cdn2.wombie.com/images/).
-  These images are already optimized and don't need Cloudflare transformation.
-  """
-  def is_cached_cdn_image?(url) when is_binary(url) do
-    String.contains?(url, "cdn2.wombie.com/images/")
-  end
-
-  def is_cached_cdn_image?(_), do: false
+  # Delegate to ImageUrlHelper to avoid duplication
+  defdelegate is_cached_cdn_image?(url), to: EventasaurusWeb.Helpers.ImageUrlHelper
 
   @doc """
   Transforms an image URL through Cloudflare's image resizing service.
