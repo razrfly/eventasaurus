@@ -302,8 +302,10 @@ defmodule EventasaurusWeb.Helpers.ImageUrlHelper do
   Check if a URL is from our cached CDN (R2 images/).
   These images are already optimized and don't need Cloudflare transformation.
   """
+  @spec is_cached_cdn_image?(any()) :: boolean()
   def is_cached_cdn_image?(url) when is_binary(url) do
-    String.starts_with?(url, r2_cdn_url() <> "/images/")
+    prefix = String.trim_trailing(r2_cdn_url(), "/") <> "/images/"
+    String.starts_with?(url, prefix)
   end
 
   def is_cached_cdn_image?(_), do: false
