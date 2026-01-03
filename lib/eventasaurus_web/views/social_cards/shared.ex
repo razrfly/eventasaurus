@@ -263,6 +263,10 @@ defmodule EventasaurusWeb.SocialCards.Shared do
 
   @doc """
   Gets an optimized base64 data URL for external images.
+
+  Prefers cached CDN images (cdn2.wombie.com/images/) which are already optimized.
+  For external URLs, uses Cloudflare's image transformation to resize on-the-fly,
+  avoiding the need for local ImageMagick processing and preventing OOM errors.
   """
   def optimized_external_image_data_url(%{cover_image_url: url}) do
     case Sanitizer.validate_image_url(url) do
@@ -271,14 +275,15 @@ defmodule EventasaurusWeb.SocialCards.Shared do
 
       valid_url ->
         unless String.starts_with?(valid_url, "/") do
-          case Eventasaurus.Services.SvgConverter.download_image_locally(valid_url) do
-            {:ok, local_path} ->
-              resized_path = resize_image_for_social_card(local_path)
+          # Determine the download URL based on whether it's a cached CDN image
+          download_url = get_optimized_download_url(valid_url)
 
-              case File.read(resized_path || local_path) do
+          case Eventasaurus.Services.SvgConverter.download_image_locally(download_url) do
+            {:ok, local_path} ->
+              case File.read(local_path) do
                 {:ok, image_data} ->
                   mime_type =
-                    case Path.extname(resized_path || local_path) |> String.downcase() do
+                    case Path.extname(local_path) |> String.downcase() do
                       ".png" -> "image/png"
                       ".jpg" -> "image/jpeg"
                       ".jpeg" -> "image/jpeg"
@@ -291,17 +296,15 @@ defmodule EventasaurusWeb.SocialCards.Shared do
                   data_url = "data:#{mime_type};base64,#{base64_data}"
 
                   File.rm(local_path)
-                  if resized_path && resized_path != local_path, do: File.rm(resized_path)
-
                   data_url
 
                 {:error, _reason} ->
                   File.rm(local_path)
-                  if resized_path && resized_path != local_path, do: File.rm(resized_path)
                   nil
               end
 
             {:error, _reason} ->
+              # If download fails, return nil
               nil
           end
         else
@@ -312,32 +315,41 @@ defmodule EventasaurusWeb.SocialCards.Shared do
 
   def optimized_external_image_data_url(_), do: nil
 
-  defp resize_image_for_social_card(image_path) do
-    try do
-      resized_path = image_path <> "_resized"
+  @doc """
+  Determines the optimal URL to download for social card images.
 
-      # Use Task.async/await for timeout protection on external command
-      task =
-        Task.async(fn ->
-          System.cmd(
-            "convert",
-            [image_path, "-resize", "400x400>", "-quality", "85", resized_path],
-            stderr_to_stdout: true
-          )
-        end)
-
-      {_output, exit_code} = Task.await(task, 30_000)
-
-      if exit_code == 0 && File.exists?(resized_path) do
-        resized_path
-      else
-        nil
-      end
-    rescue
-      _ -> nil
-    catch
-      :exit, _ -> nil
+  - Cached CDN images (cdn2.wombie.com/images/): Download directly, already optimized
+  - External images: Apply Cloudflare transformation for on-the-fly resizing
+  """
+  def get_optimized_download_url(url) do
+    if is_cached_cdn_image?(url) do
+      # Cached images are already optimized, download directly
+      url
+    else
+      # External images need Cloudflare transformation
+      cloudflare_resized_url(url, 400, 400)
     end
+  end
+
+  @doc """
+  Checks if a URL is from our cached CDN (cdn2.wombie.com/images/).
+  These images are already optimized and don't need Cloudflare transformation.
+  """
+  def is_cached_cdn_image?(url) when is_binary(url) do
+    String.contains?(url, "cdn2.wombie.com/images/")
+  end
+
+  def is_cached_cdn_image?(_), do: false
+
+  @doc """
+  Transforms an image URL through Cloudflare's image resizing service.
+
+  Returns a URL that will serve a resized version of the image.
+  """
+  def cloudflare_resized_url(original_url, width, height) do
+    # Cloudflare image transformation format:
+    # https://cdn.wombie.com/cdn-cgi/image/width=W,height=H,fit=cover,quality=85/ORIGINAL_URL
+    "https://cdn.wombie.com/cdn-cgi/image/width=#{width},height=#{height},fit=cover,quality=85/#{original_url}"
   end
 
   # ===========================================================================

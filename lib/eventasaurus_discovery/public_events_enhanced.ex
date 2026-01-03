@@ -329,31 +329,31 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
        when is_number(center_lat) and is_number(center_lng) and is_number(radius_km) do
     radius_meters = radius_km * 1000
 
-    # Subquery to find venue IDs within radius using GIST index
-    # The geography expression MUST match the index definition exactly:
+    # Use JOIN instead of IN (subquery) for better query planning and index usage.
+    # The geographic expression MUST match the GIST index definition exactly:
     # ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography
-    nearby_venue_ids =
-      from(v in Venue,
-        where: not is_nil(v.latitude) and not is_nil(v.longitude),
-        where:
-          fragment(
-            "ST_DWithin(
-              ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
-              ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
-              ?
-            )",
-            v.longitude,
-            v.latitude,
-            ^center_lng,
-            ^center_lat,
-            ^radius_meters
-          ),
-        select: v.id
-      )
-
-    # Join events to the pre-filtered venue IDs
+    #
+    # The JOIN approach allows PostgreSQL to:
+    # 1. Use the spatial index during the join operation
+    # 2. Avoid creating an intermediate result set
+    # 3. Better estimate row counts for query planning
     from(pe in query,
-      where: pe.venue_id in subquery(nearby_venue_ids)
+      join: v in Venue,
+      on: pe.venue_id == v.id,
+      where: not is_nil(v.latitude) and not is_nil(v.longitude),
+      where:
+        fragment(
+          "ST_DWithin(
+            ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
+            ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
+            ?
+          )",
+          v.longitude,
+          v.latitude,
+          ^center_lng,
+          ^center_lat,
+          ^radius_meters
+        )
     )
   end
 

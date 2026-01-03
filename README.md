@@ -17,10 +17,11 @@ A modern event planning and management platform built with Phoenix LiveView, des
 
 - **Backend**: Elixir/Phoenix 1.7
 - **Frontend**: Phoenix LiveView, Tailwind CSS, Alpine.js
-- **Database**: PostgreSQL 14+ (via Supabase)
-- **Authentication**: Supabase Auth
+- **Database**: PostgreSQL 14+ (via PlanetScale)
+- **Authentication**: Clerk
+- **CDN**: Cloudflare (with islands architecture for cached pages)
 - **Payments**: Stripe (optional)
-- **Analytics**: PostHog (optional)
+- **Analytics**: PostHog, Plausible (optional)
 - **Testing**: ExUnit, Wallaby (E2E)
 
 ## Prerequisites
@@ -712,6 +713,72 @@ Most entities support soft delete, allowing data recovery:
 - Events, polls, users, and groups can be soft-deleted
 - Deleted items are excluded from queries by default
 - Can be restored through the admin interface
+
+### CDN Caching & Authentication (Islands Architecture)
+
+This application uses Cloudflare CDN caching with an "islands architecture" pattern. Public pages are cached and served from the CDN for performance, while authenticated features hydrate client-side via LiveView.
+
+#### The Challenge
+
+When Cloudflare caches a page, it strips `Set-Cookie` headers from responses. This means the Phoenix session cookie may not be set for users who first visit a cached page. However, Clerk's `__session` cookie (set client-side by Clerk's JavaScript) survives CDN caching.
+
+#### The Solution: LiveSocket connect_params
+
+We pass client-side data to LiveView via `connect_params` during WebSocket connection:
+
+**Client-side** (`assets/js/app.js`):
+```javascript
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return null;
+}
+
+function getClerkToken() {
+  if (window.currentUser) return null; // Server already knows us
+  return getCookie('__session') || null;
+}
+
+let liveSocket = new LiveSocket("/live", Socket, {
+  params: () => ({
+    _csrf_token: csrfToken,
+    clerk_token: getClerkToken(),
+    // Add more client data here as needed
+  }),
+  // ...
+});
+```
+
+**Server-side** (`lib/eventasaurus_web/live/auth_hooks.ex`):
+```elixir
+# connect_params only available when socket is connected
+defp get_user_from_connect_params(socket) do
+  if connected?(socket) do
+    case get_connect_params(socket) do
+      %{"clerk_token" => token} when is_binary(token) and token != "" ->
+        verify_and_get_user(token)
+      _ -> nil
+    end
+  else
+    nil
+  end
+end
+```
+
+#### When to Use This Pattern
+
+Use `connect_params` for any data where:
+1. **Client has it** - Available in cookies, localStorage, or browser APIs
+2. **Server needs it** - Required for rendering or business logic
+3. **CDN caching blocks normal flow** - Session cookies stripped by CDN
+
+#### Key Files
+
+- `assets/js/app.js` - Client-side params function
+- `lib/eventasaurus_web/live/auth_hooks.ex` - Server-side JWT verification
+- `lib/eventasaurus_app/auth/clerk/jwt.ex` - Clerk JWT verification
+- `lib/eventasaurus_app/auth/clerk/sync.ex` - User sync from Clerk claims
 
 ## SEO & Social Cards
 
