@@ -154,8 +154,20 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   end
 
   defp fetch_queue_stats do
+    # DashboardStats returns {:ok, value} tuples from Cachex
     case DashboardStats.get_queue_statistics() do
-      stats when is_map(stats) ->
+      {:ok, [stats | _]} when is_map(stats) ->
+        # get_queue_statistics returns a list of queue stats
+        %{
+          available: stats[:available] || 0,
+          scheduled: stats[:scheduled] || 0,
+          executing: stats[:executing] || 0,
+          retryable: stats[:retryable] || 0,
+          discarded: stats[:discarded] || 0,
+          total_pending: (stats[:available] || 0) + (stats[:scheduled] || 0)
+        }
+
+      {:commit, [stats | _], _opts} when is_map(stats) ->
         %{
           available: stats[:available] || 0,
           scheduled: stats[:scheduled] || 0,
@@ -298,9 +310,19 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
     sources = discover_sources()
 
     # Get source statistics for last sync times
+    # DashboardStats returns {:ok, value} tuples from Cachex
     source_stats =
       case DashboardStats.get_source_statistics() do
-        stats when is_list(stats) ->
+        {:ok, stats} when is_list(stats) ->
+          stats
+          |> Enum.map(fn source ->
+            name = source[:source] || source["source"]
+            last_sync = source[:last_sync] || source["last_sync"]
+            {name, last_sync}
+          end)
+          |> Enum.into(%{})
+
+        {:commit, stats, _opts} when is_list(stats) ->
           stats
           |> Enum.map(fn source ->
             name = source[:source] || source["source"]
@@ -387,11 +409,12 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   end
 
   defp fetch_event_stats do
-    total_events = DashboardStats.get_total_events() || 0
-    upcoming_events = DashboardStats.get_upcoming_events() || 0
-    past_events = DashboardStats.get_past_events() || 0
-    unique_venues = DashboardStats.get_unique_venues() || 0
-    unique_performers = DashboardStats.get_unique_performers() || 0
+    # Cachex.fetch returns {:ok, value} or {:error, _}, so unwrap the tuple
+    total_events = unwrap_cache(DashboardStats.get_total_events())
+    upcoming_events = unwrap_cache(DashboardStats.get_upcoming_events())
+    past_events = unwrap_cache(DashboardStats.get_past_events())
+    unique_venues = unwrap_cache(DashboardStats.get_unique_venues())
+    unique_performers = unwrap_cache(DashboardStats.get_unique_performers())
 
     %{
       total_events: total_events,
@@ -503,13 +526,21 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
 
   defp fetch_data_quality_stats do
     # Get collision stats
+    # DashboardStats returns {:ok, value} tuples from Cachex
     collision_stats =
       case DashboardStats.get_collision_summary(24) do
-        summary when is_map(summary) ->
+        {:ok, summary} when is_map(summary) ->
           %{
             total_collisions: summary[:total_collisions] || 0,
-            cross_source: summary[:cross_source_collisions] || 0,
-            same_source: summary[:same_source_collisions] || 0
+            cross_source: summary[:cross_source_count] || 0,
+            same_source: summary[:same_source_count] || 0
+          }
+
+        {:commit, summary, _opts} when is_map(summary) ->
+          %{
+            total_collisions: summary[:total_collisions] || 0,
+            cross_source: summary[:cross_source_count] || 0,
+            same_source: summary[:same_source_count] || 0
           }
 
         _ ->
@@ -517,14 +548,16 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
       end
 
     # Get venue duplicate count
+    # DashboardStats returns {:ok, value} tuples from Cachex
     duplicate_count =
       case DashboardStats.get_venue_duplicates(100, 0.7) do
-        groups when is_list(groups) -> length(groups)
+        {:ok, groups} when is_list(groups) -> length(groups)
+        {:commit, groups, _opts} when is_list(groups) -> length(groups)
         _ -> 0
       end
 
     # Calculate collision rate if we have total events
-    total_events = DashboardStats.get_total_events() || 0
+    total_events = unwrap_cache(DashboardStats.get_total_events())
 
     collision_rate =
       if total_events > 0 do
@@ -554,12 +587,20 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   end
 
   defp fetch_collision_stats do
+    # DashboardStats returns {:ok, value} tuples from Cachex
     case DashboardStats.get_collision_summary(24) do
-      summary when is_map(summary) ->
+      {:ok, summary} when is_map(summary) ->
         %{
           total_collisions: summary[:total_collisions] || 0,
-          cross_source: summary[:cross_source_collisions] || 0,
-          same_source: summary[:same_source_collisions] || 0
+          cross_source: summary[:cross_source_count] || 0,
+          same_source: summary[:same_source_count] || 0
+        }
+
+      {:commit, summary, _opts} when is_map(summary) ->
+        %{
+          total_collisions: summary[:total_collisions] || 0,
+          cross_source: summary[:cross_source_count] || 0,
+          same_source: summary[:same_source_count] || 0
         }
 
       _ ->
@@ -572,8 +613,20 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   end
 
   defp fetch_source_stats do
+    # DashboardStats returns {:ok, value} tuples from Cachex
     case DashboardStats.get_source_statistics() do
-      stats when is_list(stats) ->
+      {:ok, stats} when is_list(stats) ->
+        stats
+        |> Enum.map(fn source ->
+          %{
+            name: source[:source] || source["source"],
+            event_count: source[:event_count] || source["event_count"] || 0,
+            last_sync: source[:last_sync] || source["last_sync"]
+          }
+        end)
+        |> Enum.sort_by(& &1.event_count, :desc)
+
+      {:commit, stats, _opts} when is_list(stats) ->
         stats
         |> Enum.map(fn source ->
           %{
@@ -848,4 +901,12 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   end
 
   defp extract_source_from_worker(_), do: nil
+
+  # Helper to unwrap Cachex {:ok, value} or {:error, _} tuples
+  defp unwrap_cache({:ok, value}), do: value
+  defp unwrap_cache({:commit, value}), do: value
+  defp unwrap_cache({:commit, value, _opts}), do: value
+  defp unwrap_cache({:error, _}), do: 0
+  defp unwrap_cache(value) when is_number(value), do: value
+  defp unwrap_cache(_), do: 0
 end

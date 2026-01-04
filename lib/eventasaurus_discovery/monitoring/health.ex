@@ -32,9 +32,10 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
   #   ...
   # }
 
-  # SLO Targets (legacy - kept for backwards compatibility)
-  @slo_success_rate 95.0
-  @slo_p95_duration 3000.0
+  # SLO Targets - relaxed for realistic web scraping expectations
+  # 85% success rate and 10s P95 duration are reasonable for external web scraping
+  @slo_success_rate 85.0
+  @slo_p95_duration 10_000.0
 
   # Z-score thresholds for relative performance assessment
   # Success rate: lower is worse (negative z-score = below average)
@@ -108,8 +109,8 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
   Returns whether the source is meeting its SLOs.
 
   SLOs:
-    * Success rate >= 95%
-    * P95 duration <= 3000ms
+    * Success rate >= 85%
+    * P95 duration <= 10000ms (10 seconds)
 
   ## Examples
 
@@ -825,7 +826,7 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
       changes.success_rate < -5.0 ->
         :alert
 
-      # Current success rate below SLO (95%)
+      # Current success rate below SLO (85%)
       current.success_rate < @slo_success_rate ->
         :alert
 
