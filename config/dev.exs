@@ -107,6 +107,23 @@ if use_prod_db do
     ssl: true,
     ssl_opts: [verify: :verify_none],
     prepare: :unnamed
+
+  # ObanRepo: Dedicated connection pool for Oban job processing (Issue #3160)
+  config :eventasaurus, EventasaurusApp.ObanRepo,
+    username: System.get_env("PLANETSCALE_DATABASE_USERNAME"),
+    password: System.get_env("PLANETSCALE_DATABASE_PASSWORD"),
+    hostname: ps_host,
+    port: String.to_integer(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")),
+    database: System.get_env("PLANETSCALE_DATABASE", "postgres"),
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 5,
+    queue_target: 5000,
+    queue_interval: 10000,
+    connect_timeout: 30_000,
+    ssl: true,
+    ssl_opts: [verify: :verify_none],
+    prepare: :unnamed
 else
   # Default: Local PostgreSQL for development
   config :eventasaurus, EventasaurusApp.Repo,
@@ -130,6 +147,16 @@ else
 
   # ReplicaRepo for development (points to same DB)
   config :eventasaurus, EventasaurusApp.ReplicaRepo,
+    username: "postgres",
+    password: "postgres",
+    hostname: "localhost",
+    database: "eventasaurus_dev",
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 5
+
+  # ObanRepo for development - dedicated pool for Oban (Issue #3160)
+  config :eventasaurus, EventasaurusApp.ObanRepo,
     username: "postgres",
     password: "postgres",
     hostname: "localhost",

@@ -61,6 +61,19 @@ config :eventasaurus, EventasaurusApp.ReplicaRepo,
   pool_timeout: 5_000,
   ownership_timeout: 60_000
 
+# Configure ObanRepo for testing - dedicated pool for Oban (Issue #3160)
+# In test, uses same sandbox as other repos for transactional isolation
+config :eventasaurus, EventasaurusApp.ObanRepo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "eventasaurus_test#{System.get_env("MIX_TEST_PARTITION")}",
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: 5,
+  timeout: 15_000,
+  pool_timeout: 5_000,
+  ownership_timeout: 60_000
+
 # In test we don't send emails
 config :eventasaurus, Eventasaurus.Mailer, adapter: Swoosh.Adapters.Test
 
