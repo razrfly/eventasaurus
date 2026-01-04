@@ -251,11 +251,12 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
       end
 
     # Check for image failures
+    # Snapshot uses short field name: failed (not failed_images)
     image_alerts =
       case ImageCacheStatsCache.get_stats() do
         %{stats: stats} when is_map(stats) ->
           summary = stats[:summary] || stats["summary"] || %{}
-          failed = summary[:failed_images] || summary["failed_images"] || 0
+          failed = summary[:failed] || summary["failed"] || 0
 
           if failed > 0 do
             severity = if failed > 10, do: :warning, else: :info
@@ -472,12 +473,13 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
       %{stats: stats} when is_map(stats) ->
         summary = stats[:summary] || stats["summary"] || %{}
 
+        # Snapshot uses short field names: total, cached, pending, failed, total_size_bytes
         %{
-          total: summary[:total_images] || summary["total_images"] || 0,
-          cached: summary[:cached_images] || summary["cached_images"] || 0,
-          pending: summary[:pending_images] || summary["pending_images"] || 0,
-          failed: summary[:failed_images] || summary["failed_images"] || 0,
-          storage_bytes: summary[:total_storage_bytes] || summary["total_storage_bytes"] || 0
+          total: summary[:total] || summary["total"] || 0,
+          cached: summary[:cached] || summary["cached"] || 0,
+          pending: summary[:pending] || summary["pending"] || 0,
+          failed: summary[:failed] || summary["failed"] || 0,
+          storage_bytes: summary[:total_size_bytes] || summary["total_size_bytes"] || 0
         }
 
       _ ->

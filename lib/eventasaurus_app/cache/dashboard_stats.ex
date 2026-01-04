@@ -235,62 +235,60 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   end
 
   @doc """
-  Get queue statistics for discovery queues.
+  Get queue statistics for ALL Oban queues (aggregated).
   Cached for 1 minute.
   """
   def get_queue_statistics do
     Cachex.fetch(@cache_name, :queue_statistics, fn ->
-      queues = [:discovery]
-
       # Use replica for all Oban queries - these are read-heavy dashboard stats
       # that don't need real-time consistency
-      stats =
-        Enum.map(queues, fn queue ->
-          available =
-            Repo.replica().aggregate(
-              from(j in Oban.Job,
-                where: j.queue == ^to_string(queue) and j.state == "available"
-              ),
-              :count,
-              :id
-            ) || 0
+      # Query all queues aggregated instead of just :discovery
+      available =
+        Repo.replica().aggregate(
+          from(j in Oban.Job, where: j.state == "available"),
+          :count,
+          :id
+        ) || 0
 
-          executing =
-            Repo.replica().aggregate(
-              from(j in Oban.Job,
-                where: j.queue == ^to_string(queue) and j.state == "executing"
-              ),
-              :count,
-              :id
-            ) || 0
+      executing =
+        Repo.replica().aggregate(
+          from(j in Oban.Job, where: j.state == "executing"),
+          :count,
+          :id
+        ) || 0
 
-          scheduled =
-            Repo.replica().aggregate(
-              from(j in Oban.Job,
-                where: j.queue == ^to_string(queue) and j.state == "scheduled"
-              ),
-              :count,
-              :id
-            ) || 0
+      scheduled =
+        Repo.replica().aggregate(
+          from(j in Oban.Job, where: j.state == "scheduled"),
+          :count,
+          :id
+        ) || 0
 
-          completed =
-            Repo.replica().aggregate(
-              from(j in Oban.Job,
-                where: j.queue == ^to_string(queue) and j.state == "completed"
-              ),
-              :count,
-              :id
-            ) || 0
+      retryable =
+        Repo.replica().aggregate(
+          from(j in Oban.Job, where: j.state == "retryable"),
+          :count,
+          :id
+        ) || 0
 
-          %{
-            name: queue,
-            available: available,
-            executing: executing,
-            scheduled: scheduled,
-            completed: completed,
-            total: available + executing + scheduled
-          }
-        end)
+      discarded =
+        Repo.replica().aggregate(
+          from(j in Oban.Job, where: j.state == "discarded"),
+          :count,
+          :id
+        ) || 0
+
+      stats = [
+        %{
+          name: :all,
+          available: available,
+          executing: executing,
+          scheduled: scheduled,
+          retryable: retryable,
+          discarded: discarded,
+          total: available + executing + scheduled
+        }
+      ]
 
       {:commit, stats, expire: :timer.minutes(1)}
     end)
