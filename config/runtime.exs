@@ -47,15 +47,15 @@ config :eventasaurus, :environment, config_env()
 
 # Configure Oban for background job processing
 #
-# ARCHITECTURE (Issue #3119):
-# - Oban uses Repo (PgBouncer) for ALL database operations
+# ARCHITECTURE (Issue #3160):
+# - Oban uses DEDICATED ObanRepo (PgBouncer) with isolated connection pool
 # - Oban uses Notifiers.PG (Distributed Erlang) for pub/sub notifications
 # - This eliminates the need for direct connections (LISTEN/NOTIFY doesn't work with PgBouncer)
 # - SessionRepo is now only used for migrations and advisory locks
 #
-# Previous: SessionRepo (direct connections) was required for LISTEN/NOTIFY
-# Now: Notifiers.PG uses Erlang's pg module - no database notifications needed
-oban_repo = EventasaurusApp.Repo
+# Previous (Issue #3119): Oban shared Repo with web requests → connection pool exhaustion
+# Now: ObanRepo has dedicated pool, preventing job stampedes from blocking web traffic
+oban_repo = EventasaurusApp.ObanRepo
 
 # Base queues that run in all environments
 base_queues = [
@@ -685,6 +685,36 @@ if config_env() == :prod do
     handshake_timeout: 30_000,
     ssl: true,
     ssl_opts: planetscale_ssl_opts
+
+  # ObanRepo: Dedicated pooled connection via PgBouncer (port 6432) for Oban jobs
+  # Using hostname-based config to guarantee socket_options: [:inet] is applied
+  #
+  # Issue #3160: DEDICATED connection pool for Oban job processing
+  # - Isolates Oban from web traffic, preventing job stampedes from blocking requests
+  # - Pool size: 5 connections (configurable via OBAN_POOL_SIZE env var)
+  # - Uses PgBouncer just like Repo, but with separate client pool
+  #
+  # Architecture (see lib/eventasaurus_app/oban_repo.ex for diagram):
+  # - Web Requests → Repo (pool: 10) → PgBouncer → PostgreSQL
+  # - Oban Jobs → ObanRepo (pool: 5) → PgBouncer → PostgreSQL
+  # - Migrations → SessionRepo (pool: 1) → Direct → PostgreSQL
+  # - Heavy Reads → ReplicaRepo (pool: 3) → Direct → Replicas
+  config :eventasaurus, EventasaurusApp.ObanRepo,
+    username: ps_user,
+    password: ps_pass,
+    hostname: ps_host,
+    port: ps_pooler_port,
+    database: ps_db,
+    pool_size: String.to_integer(System.get_env("OBAN_POOL_SIZE") || "5"),
+    socket_options: socket_opts,
+    queue_target: 5000,
+    queue_interval: 30000,
+    connect_timeout: 30_000,
+    handshake_timeout: 30_000,
+    ssl: true,
+    ssl_opts: planetscale_ssl_opts,
+    # Disable prepared statements for PgBouncer compatibility
+    prepare: :unnamed
 
   # Configure Cloudflare R2 storage settings
   config :eventasaurus, :r2,

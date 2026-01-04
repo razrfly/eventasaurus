@@ -66,11 +66,14 @@ defmodule Eventasaurus.Application do
       EventasaurusWeb.Telemetry,
       # Start Ecto repository (used alongside Supabase)
       EventasaurusApp.Repo,
-      # Start SessionRepo for Oban, migrations, and advisory locks
+      # Start SessionRepo for migrations and advisory locks
       EventasaurusApp.SessionRepo,
       # Start ReplicaRepo for read-heavy queries (connects to PlanetScale replicas)
       # Only started in production - dev/test use primary via Repo.replica() helper
       EventasaurusApp.ReplicaRepo,
+      # Start ObanRepo - dedicated connection pool for Oban job processing (Issue #3160)
+      # Isolates Oban from web traffic, preventing job stampedes from blocking requests
+      EventasaurusApp.ObanRepo,
       {DNSCluster, query: Application.get_env(:eventasaurus, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Eventasaurus.PubSub},
       # Start the Finch HTTP client for sending emails

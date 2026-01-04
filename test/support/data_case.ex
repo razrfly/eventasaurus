@@ -47,9 +47,17 @@ defmodule EventasaurusApp.DataCase do
         shared: not tags[:async]
       )
 
+    # Also set up sandbox for ObanRepo (Issue #3160)
+    # Oban uses dedicated ObanRepo in all environments, including tests
+    oban_pid =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.ObanRepo,
+        shared: not tags[:async]
+      )
+
     on_exit(fn ->
       Ecto.Adapters.SQL.Sandbox.stop_owner(pid)
       Ecto.Adapters.SQL.Sandbox.stop_owner(replica_pid)
+      Ecto.Adapters.SQL.Sandbox.stop_owner(oban_pid)
     end)
   end
 
