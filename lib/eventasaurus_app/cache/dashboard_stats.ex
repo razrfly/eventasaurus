@@ -278,6 +278,13 @@ defmodule EventasaurusApp.Cache.DashboardStats do
           :id
         ) || 0
 
+      completed =
+        Repo.replica().aggregate(
+          from(j in Oban.Job, where: j.state == "completed"),
+          :count,
+          :id
+        ) || 0
+
       stats = [
         %{
           name: :all,
@@ -286,6 +293,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
           scheduled: scheduled,
           retryable: retryable,
           discarded: discarded,
+          completed: completed,
           total: available + executing + scheduled
         }
       ]
