@@ -75,7 +75,7 @@ if use_prod_db do
     ssl_opts: [verify: :verify_none],
     prepare: :unnamed
 
-  # SessionRepo: Direct connection (port 5432) for Oban, migrations, advisory locks
+  # SessionRepo: Direct connection (port 5432) for migrations and advisory locks
   config :eventasaurus, EventasaurusApp.SessionRepo,
     username: System.get_env("PLANETSCALE_DATABASE_USERNAME"),
     password: System.get_env("PLANETSCALE_DATABASE_PASSWORD"),
@@ -135,7 +135,7 @@ else
     show_sensitive_data_on_connection_error: true,
     pool_size: 10
 
-  # SessionRepo for development (Oban, migrations, advisory locks)
+  # SessionRepo for development (migrations and advisory locks)
   config :eventasaurus, EventasaurusApp.SessionRepo,
     username: "postgres",
     password: "postgres",

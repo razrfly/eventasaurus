@@ -114,6 +114,7 @@ defmodule EventasaurusWeb.Telemetry do
   Measures connection pool statistics for all Ecto repos.
   Emits telemetry events that can be observed for alerting on pool exhaustion.
   """
+  @spec measure_repo_pool_stats() :: :ok
   def measure_repo_pool_stats do
     repos = [
       {:repo, EventasaurusApp.Repo},
@@ -124,19 +125,24 @@ defmodule EventasaurusWeb.Telemetry do
 
     for {name, repo} <- repos do
       try do
-        # Get pool stats from DBConnection
-        # This returns %{pool_size: n, pool_overflow: n, checked_out: n}
-        # when the repo is running
-        case :ets.whereis(repo) do
-          :undefined ->
+        # Get pool configuration and calculate utilization
+        config = repo.config()
+        pool_size = Keyword.get(config, :pool_size, 10)
+
+        # Try to get checkout queue length from DBConnection
+        # This reflects how many processes are waiting for a connection
+        case Process.whereis(repo) do
+          nil ->
             :ok
 
-          _table ->
-            # Emit pool utilization metric
-            # Higher values indicate potential exhaustion
+          _pid ->
+            # Emit pool metrics
+            # pool_size: configured connections
+            # Note: Actual checkout count requires DBConnection internals
+            # which aren't exposed publicly, so we emit config for monitoring
             :telemetry.execute(
               [:eventasaurus, name, :pool],
-              %{utilization: 0},
+              %{pool_size: pool_size},
               %{repo: repo}
             )
         end
@@ -144,5 +150,7 @@ defmodule EventasaurusWeb.Telemetry do
         _ -> :ok
       end
     end
+
+    :ok
   end
 end
