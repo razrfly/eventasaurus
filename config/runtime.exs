@@ -145,6 +145,10 @@ config :eventasaurus, Oban,
   # At 5s this drops to ~5 polls/second, significantly reducing connection contention
   # Tradeoff: Job pickup latency increases from max 1s to max 5s (acceptable for scrapers)
   stage_interval: 5_000,
+  # Issue #3172: Give jobs 60s to complete gracefully during shutdown
+  # Default was 15s, but Lifeline rescue_after is 300s - the mismatch caused state corruption
+  # during deploys (jobs orphaned in weird states). 60s aligns with Fly.io kill timeout.
+  shutdown_grace_period: :timer.seconds(60),
   queues: oban_queues,
   plugins: [
     # Keep completed jobs for 12 hours for debugging
@@ -190,7 +194,11 @@ config :eventasaurus, Oban,
        # TMDB Now Playing movies sync daily at 7 AM UTC
        # Pre-populates movie database with currently playing movies in Poland
        {"0 7 * * *", EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob,
-        args: %{region: "PL", pages: 10}}
+        args: %{region: "PL", pages: 10}},
+       # Oban job sanitizer runs every 30 minutes (Issue #3172)
+       # Detects and fixes corrupted jobs: zombies, priority blockers, stuck executing
+       # See: lib/eventasaurus_app/workers/oban_job_sanitizer_worker.ex
+       {"*/30 * * * *", EventasaurusApp.Workers.ObanJobSanitizerWorker}
        # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]
