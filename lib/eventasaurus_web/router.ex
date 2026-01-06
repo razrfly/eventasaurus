@@ -148,6 +148,12 @@ defmodule EventasaurusWeb.Router do
       plug EventasaurusWeb.Plugs.ObanAuthPlug
     end
 
+    # Oban Web UI - must be outside live_session as oban_dashboard creates its own
+    scope "/admin" do
+      pipe_through :oban_admin
+      oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
+    end
+
     # Admin LiveView routes wrapped in live_session for CDN-compatible auth (Issue #3176)
     # This enables the connect_params fallback for Clerk token verification
     # when the Phoenix session cookie is missing due to CDN caching
@@ -159,9 +165,6 @@ defmodule EventasaurusWeb.Router do
 
         # Main Admin Dashboard with admin authentication
         live "/", EventasaurusWeb.Admin.AdminDashboardLive
-
-        # Oban Web UI with admin authentication
-        oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
 
         # Job Execution Monitor with admin authentication
         live "/job-executions", EventasaurusWeb.Admin.JobExecutionMonitorLive

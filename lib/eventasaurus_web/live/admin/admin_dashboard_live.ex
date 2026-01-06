@@ -38,6 +38,8 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
 
   @impl true
   def handle_async(:tier1_stats, {:ok, stats}, socket) do
+    Logger.info("ADMIN_DEBUG: tier1_stats loaded successfully")
+    Logger.info("ADMIN_DEBUG: tier1_stats keys: #{inspect(Map.keys(stats))}")
     {:noreply, assign(socket, :tier1_stats, stats)}
   end
 
@@ -48,6 +50,7 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
 
   @impl true
   def handle_async(:tier2_stats, {:ok, stats}, socket) do
+    Logger.info("ADMIN_DEBUG: tier2_stats loaded successfully")
     {:noreply, assign(socket, :tier2_stats, stats)}
   end
 
