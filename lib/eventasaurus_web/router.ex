@@ -148,95 +148,107 @@ defmodule EventasaurusWeb.Router do
       plug EventasaurusWeb.Plugs.ObanAuthPlug
     end
 
+    # Admin LiveView routes wrapped in live_session for CDN-compatible auth (Issue #3176)
+    # This enables the connect_params fallback for Clerk token verification
+    # when the Phoenix session cookie is missing due to CDN caching
+    live_session :admin_authenticated,
+      on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}],
+      session: {__MODULE__, :extract_auth_session, []} do
+      scope "/admin" do
+        pipe_through :oban_admin
+
+        # Main Admin Dashboard with admin authentication
+        live "/", EventasaurusWeb.Admin.AdminDashboardLive
+
+        # Oban Web UI with admin authentication
+        oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
+
+        # Job Execution Monitor with admin authentication
+        live "/job-executions", EventasaurusWeb.Admin.JobExecutionMonitorLive
+        live "/job-executions/sources/:source_slug", EventasaurusWeb.Admin.SourcePipelineMonitorLive
+        live "/job-executions/:worker", EventasaurusWeb.Admin.JobTypeMonitorLive
+
+        # Unified Monitoring Dashboard (Issue #3048)
+        # Replaces deprecated /scraper-logs and /error-trends
+        live "/monitoring", EventasaurusWeb.Admin.MonitoringDashboardLive
+        live "/monitoring/sources/:source_key", EventasaurusWeb.Admin.SourceDetailLive
+
+        # Movie Matching Dashboard (Issue #3067 - Epic #3077 Phase 3)
+        live "/movies", EventasaurusWeb.Admin.MovieMatchingLive
+
+        # Sitemap Statistics with admin authentication
+        live "/sitemap", EventasaurusWeb.Admin.SitemapLive
+
+        # Discovery Dashboard with admin authentication
+        live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+
+        # Discovery Stats Dashboard with admin authentication
+        live "/discovery/stats", EventasaurusWeb.Admin.DiscoveryStatsLive, :index
+
+        live "/discovery/stats/source/:source_slug",
+             EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail,
+             :show
+
+        live "/discovery/stats/city/:city_slug",
+             EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail,
+             :show
+
+        # Category Analysis with admin authentication
+        live "/discovery/category-analysis/:source_slug",
+             EventasaurusWeb.Admin.CategoryAnalysisLive,
+             :show
+
+        # Geocoding Cost Dashboard with admin authentication
+        live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
+        live "/geocoding/providers", EventasaurusWeb.Admin.GeocodingProviderLive, :index
+
+        # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
+
+        # Image Cache Dashboard with admin authentication
+        live "/images", EventasaurusWeb.Admin.ImageCacheDashboardLive
+
+        # Venue Duplicate Management with admin authentication
+        live "/venues/duplicates", EventasaurusWeb.Admin.VenueDuplicatesLive
+
+        # City Discovery Configuration
+        live "/discovery/config", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :index
+        live "/discovery/config/:slug", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :show
+
+        # Category Management
+        live "/categories", EventasaurusWeb.Admin.CategoryDashboardLive, :index
+        live "/categories/list", EventasaurusWeb.Admin.CategoryIndexLive, :index
+        live "/categories/hierarchy", EventasaurusWeb.Admin.CategoryHierarchyLive, :index
+        live "/categories/insights", EventasaurusWeb.Admin.CategoryInsightsLive, :index
+        live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
+        live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
+
+        # Source Management
+        live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index
+        live "/sources/new", EventasaurusWeb.Admin.SourceFormLive, :new
+        live "/sources/:id/edit", EventasaurusWeb.Admin.SourceFormLive, :edit
+
+        # City Management (with admin authentication)
+        live "/cities", EventasaurusWeb.Admin.CityIndexLive, :index
+        live "/cities/new", EventasaurusWeb.Admin.CityFormLive, :new
+        live "/cities/:id/edit", EventasaurusWeb.Admin.CityFormLive, :edit
+        live "/cities/duplicates", EventasaurusWeb.Admin.CityDuplicatesLive, :index
+        live "/cities/cleanup", EventasaurusWeb.Admin.CityCleanupLive
+
+        # Venue Country Mismatches (with admin authentication)
+        live "/venues/country-mismatches", EventasaurusWeb.Admin.VenueCountryMismatchesLive, :index
+
+        # Design tools (with admin authentication)
+        live "/design/social-cards", EventasaurusWeb.Admin.SocialCardsPreviewLive
+      end
+    end
+
+    # Admin controller routes (outside live_session - these use plug-level auth only)
     scope "/admin" do
       pipe_through :oban_admin
-
-      # Main Admin Dashboard with admin authentication
-      live "/", EventasaurusWeb.Admin.AdminDashboardLive
-
-      # Oban Web UI with admin authentication
-      oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
-
-      # Job Execution Monitor with admin authentication
-      live "/job-executions", EventasaurusWeb.Admin.JobExecutionMonitorLive
-      live "/job-executions/sources/:source_slug", EventasaurusWeb.Admin.SourcePipelineMonitorLive
-      live "/job-executions/:worker", EventasaurusWeb.Admin.JobTypeMonitorLive
-
-      # Unified Monitoring Dashboard (Issue #3048)
-      # Replaces deprecated /scraper-logs and /error-trends
-      live "/monitoring", EventasaurusWeb.Admin.MonitoringDashboardLive
-      live "/monitoring/sources/:source_key", EventasaurusWeb.Admin.SourceDetailLive
-
-      # Movie Matching Dashboard (Issue #3067 - Epic #3077 Phase 3)
-      live "/movies", EventasaurusWeb.Admin.MovieMatchingLive
 
       # Deprecated route redirects (Issue #3048 Phase 3)
       get "/scraper-logs", EventasaurusWeb.Admin.RedirectController, :to_monitoring
       get "/error-trends", EventasaurusWeb.Admin.RedirectController, :to_monitoring
-
-      # Sitemap Statistics with admin authentication
-      live "/sitemap", EventasaurusWeb.Admin.SitemapLive
-
-      # Discovery Dashboard with admin authentication
-      live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
-
-      # Discovery Stats Dashboard with admin authentication
-      live "/discovery/stats", EventasaurusWeb.Admin.DiscoveryStatsLive, :index
-
-      live "/discovery/stats/source/:source_slug",
-           EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail,
-           :show
-
-      live "/discovery/stats/city/:city_slug",
-           EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail,
-           :show
-
-      # Category Analysis with admin authentication
-      live "/discovery/category-analysis/:source_slug",
-           EventasaurusWeb.Admin.CategoryAnalysisLive,
-           :show
-
-      # Geocoding Cost Dashboard with admin authentication
-      live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
-      live "/geocoding/providers", EventasaurusWeb.Admin.GeocodingProviderLive, :index
-
-      # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
-
-      # Image Cache Dashboard with admin authentication
-      live "/images", EventasaurusWeb.Admin.ImageCacheDashboardLive
-
-      # Venue Duplicate Management with admin authentication
-      live "/venues/duplicates", EventasaurusWeb.Admin.VenueDuplicatesLive
-
-      # City Discovery Configuration
-      live "/discovery/config", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :index
-      live "/discovery/config/:slug", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :show
-
-      # Category Management
-      live "/categories", EventasaurusWeb.Admin.CategoryDashboardLive, :index
-      live "/categories/list", EventasaurusWeb.Admin.CategoryIndexLive, :index
-      live "/categories/hierarchy", EventasaurusWeb.Admin.CategoryHierarchyLive, :index
-      live "/categories/insights", EventasaurusWeb.Admin.CategoryInsightsLive, :index
-      live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
-      live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
-
-      # Source Management
-      live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index
-      live "/sources/new", EventasaurusWeb.Admin.SourceFormLive, :new
-      live "/sources/:id/edit", EventasaurusWeb.Admin.SourceFormLive, :edit
-
-      # City Management (with admin authentication)
-      live "/cities", EventasaurusWeb.Admin.CityIndexLive, :index
-      live "/cities/new", EventasaurusWeb.Admin.CityFormLive, :new
-      live "/cities/:id/edit", EventasaurusWeb.Admin.CityFormLive, :edit
-      live "/cities/duplicates", EventasaurusWeb.Admin.CityDuplicatesLive, :index
-      live "/cities/cleanup", EventasaurusWeb.Admin.CityCleanupLive
-
-      # Venue Country Mismatches (with admin authentication)
-      live "/venues/country-mismatches", EventasaurusWeb.Admin.VenueCountryMismatchesLive, :index
-
-      # Design tools (with admin authentication)
-      live "/design/social-cards", EventasaurusWeb.Admin.SocialCardsPreviewLive
 
       # Unsplash Integration (with admin authentication)
       get "/unsplash", EventasaurusWeb.Admin.UnsplashTestController, :index
