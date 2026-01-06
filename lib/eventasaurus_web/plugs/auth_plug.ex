@@ -63,20 +63,22 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
     case get_clerk_token(conn) do
       nil ->
+        Logger.warning("[AUTH DEBUG] No Clerk token found in cookie for path: #{conn.request_path}")
         assign(conn, :auth_user, nil)
 
       token ->
+        # Log token info (first/last 10 chars only for security)
+        token_preview = "#{String.slice(token, 0, 10)}...#{String.slice(token, -10, 10)}"
+        Logger.info("[AUTH DEBUG] Found Clerk token for path: #{conn.request_path}, token: #{token_preview}")
+
         case JWT.verify_token(token) do
           {:ok, claims} ->
-            Logger.debug("Clerk token verified", %{
-              clerk_id: claims["sub"],
-              has_user_id: not is_nil(claims["userId"])
-            })
+            Logger.info("[AUTH DEBUG] Token verified for path: #{conn.request_path}, clerk_id: #{claims["sub"]}")
 
             assign(conn, :auth_user, claims)
 
           {:error, reason} ->
-            Logger.debug("Clerk token verification failed: #{inspect(reason)}")
+            Logger.warning("[AUTH DEBUG] Token verification FAILED for path: #{conn.request_path}, reason: #{inspect(reason)}")
             assign(conn, :auth_user, nil)
         end
     end
@@ -135,23 +137,28 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   def require_authenticated_user(conn, _opts) do
     if conn.assigns[:auth_user] do
       # Clerk tokens are verified each request, no proactive refresh needed
+      Logger.info("[AUTH DEBUG] require_authenticated_user PASSED for path: #{conn.request_path}")
       conn
     else
+      Logger.warning("[AUTH DEBUG] require_authenticated_user FAILED for path: #{conn.request_path} - redirecting to /auth/login")
+      # Use URL param for return_to (survives CDN caching which strips Set-Cookie headers)
+      return_to = if conn.method == "GET", do: current_path(conn), else: nil
+      login_path = build_login_path_with_return(return_to)
+      Logger.info("[AUTH DEBUG] Redirecting to #{login_path}")
+
       conn
-      |> maybe_store_return_to()
       |> put_flash(:error, "You must log in to access this page.")
-      |> redirect(to: ~p"/auth/login")
+      |> redirect(to: login_path)
       |> halt()
     end
   end
 
-  # Store the current path in session for redirect after login
-  defp maybe_store_return_to(conn) do
-    if conn.method == "GET" do
-      put_session(conn, :user_return_to, current_path(conn))
-    else
-      conn
-    end
+  # Build login path with return_to URL parameter (survives CDN caching)
+  defp build_login_path_with_return(nil), do: ~p"/auth/login"
+  defp build_login_path_with_return(return_to) do
+    # URL encode the return_to path to handle special characters
+    encoded = URI.encode(return_to, &URI.char_unreserved?/1)
+    "/auth/login?return_to=#{encoded}"
   end
 
   @doc """
@@ -274,8 +281,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   @doc """
   Redirects authenticated users away from auth pages.
 
-  With Clerk authentication, password recovery is handled by Clerk's hosted UI,
-  so we simply redirect all authenticated users to the dashboard.
+  With Clerk authentication, password recovery is handled by Clerk's hosted UI.
+  If a `return_to` URL parameter is present, redirects there (for CDN-compatible auth flow).
+  Otherwise, redirects to the dashboard.
 
   ## Usage
 
@@ -283,11 +291,41 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def redirect_if_user_is_authenticated_except_recovery(conn, _opts) do
     if conn.assigns[:auth_user] do
+      # Check for return_to URL param (CDN-compatible redirect after login)
+      return_to = get_safe_return_to(conn)
+      Logger.info("[AUTH DEBUG] redirect_if_authenticated: User IS authenticated at #{conn.request_path} - redirecting to #{return_to}")
+
       conn
-      |> redirect(to: ~p"/dashboard")
+      |> redirect(to: return_to)
       |> halt()
     else
+      Logger.info("[AUTH DEBUG] redirect_if_authenticated: User NOT authenticated at #{conn.request_path} - allowing access")
       conn
+    end
+  end
+
+  # Get return_to from URL params with security validation
+  # Only allows internal paths (must start with /) to prevent open redirect attacks
+  defp get_safe_return_to(conn) do
+    case conn.query_params["return_to"] do
+      nil ->
+        ~p"/dashboard"
+
+      "" ->
+        ~p"/dashboard"
+
+      return_to ->
+        # Security: Only allow internal paths (starting with /)
+        # Decode the URL-encoded path first
+        decoded = URI.decode(return_to)
+
+        if String.starts_with?(decoded, "/") and not String.starts_with?(decoded, "//") do
+          Logger.info("[AUTH DEBUG] Using return_to from URL param: #{decoded}")
+          decoded
+        else
+          Logger.warning("[AUTH DEBUG] Rejected unsafe return_to value: #{return_to}")
+          ~p"/dashboard"
+        end
     end
   end
 

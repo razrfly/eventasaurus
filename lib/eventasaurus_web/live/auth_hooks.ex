@@ -81,10 +81,16 @@ defmodule EventasaurusWeb.Live.AuthHooks do
         # but Clerk's __session cookie (set client-side) is still available.
         if connected?(socket) do
           # WebSocket connected, connect_params were checked, still no user -> redirect
+          # Use URL param for return_to (survives CDN caching which strips Set-Cookie headers)
+          # Get current_path from connect_params (passed from client JavaScript)
+          return_to = get_current_path_from_connect_params(socket)
+          login_path = build_login_path_with_return(return_to)
+          Logger.info("[AUTH HOOKS DEBUG] require_authenticated_user FAILED - redirecting to #{login_path}")
+
           socket =
             socket
             |> maybe_put_flash(:error, "You must log in to access this page.")
-            |> redirect(to: ~p"/auth/login")
+            |> redirect(to: login_path)
 
           {:halt, socket}
         else
@@ -102,6 +108,25 @@ defmodule EventasaurusWeb.Live.AuthHooks do
           end
 
         {:cont, assign(socket, :user, user)}
+    end
+  end
+
+  # Build login path with return_to URL parameter (survives CDN caching)
+  defp build_login_path_with_return(nil), do: ~p"/auth/login"
+  defp build_login_path_with_return(return_to) do
+    encoded = URI.encode(return_to, &URI.char_unreserved?/1)
+    "/auth/login?return_to=#{encoded}"
+  end
+
+  # Get the current path from connect_params for redirect after login
+  # Client JavaScript passes current_path via LiveSocket params
+  defp get_current_path_from_connect_params(socket) do
+    case get_connect_params(socket) do
+      %{"current_path" => path} when is_binary(path) and path != "" ->
+        path
+
+      _ ->
+        nil
     end
   end
 
