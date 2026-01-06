@@ -100,8 +100,9 @@ defmodule Eventasaurus.MixProject do
       {:resend, "~> 0.4"},
 
       # Background job processing
-      {:oban, "~> 2.17"},
-      {:oban_web, "~> 2.11"},
+      # Upgraded from 2.17 to 2.20.2 for v12/v13 migrations (Issue #3172)
+      {:oban, "~> 2.20.2"},
+      {:oban_web, "~> 2.11.6"},
 
       # Enhanced polling system dependencies
       # Caching for API responses and poll results
