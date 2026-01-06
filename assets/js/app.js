@@ -91,9 +91,50 @@ function getCookie(name) {
   return null;
 }
 
+// Cached Clerk token for LiveView authentication
+// This is refreshed periodically to prevent JWT expiration issues
+// when LiveView WebSocket reconnects after user sits idle
+let cachedClerkToken = null;
+let clerkTokenRefreshInterval = null;
+
+// Refresh Clerk token from SDK (gets fresh token, not stale cookie)
+// Clerk JWTs expire quickly (~60s), so we refresh every 30s
+async function refreshClerkToken() {
+  try {
+    const session = window.Clerk?.session;
+    if (session) {
+      cachedClerkToken = await session.getToken();
+    }
+  } catch (e) {
+    console.warn('Failed to refresh Clerk token:', e);
+    // Fall back to cookie on error
+    cachedClerkToken = getCookie('__session') || null;
+  }
+}
+
+// Start the token refresh interval
+// Called after Clerk is initialized
+function startClerkTokenRefresh() {
+  // Refresh immediately to get initial token
+  refreshClerkToken();
+
+  // Then refresh every 30 seconds (before 60s expiration)
+  if (clerkTokenRefreshInterval) {
+    clearInterval(clerkTokenRefreshInterval);
+  }
+  clerkTokenRefreshInterval = setInterval(refreshClerkToken, 30000);
+
+  // Also refresh when tab becomes visible (user returns from another tab)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      refreshClerkToken();
+    }
+  });
+}
+
 // Get Clerk session token for LiveView auth
-// This reads directly from the __session cookie that Clerk sets
-// Used to pass auth to LiveView on CDN-cached pages where Phoenix session may not be set
+// Uses cached fresh token to avoid JWT expiration issues on reconnect
+// Falls back to cookie if cache is empty
 function getClerkToken() {
   // First check if we have server-side auth (window.currentUser is set in root.html.heex)
   // If so, the server already knows who we are - no need for token
@@ -101,9 +142,9 @@ function getClerkToken() {
     return null;
   }
 
-  // Read Clerk's session cookie directly
-  // This JWT is set by Clerk and survives CDN caching
-  return getCookie('__session') || null;
+  // Prefer cached fresh token (refreshed every 30s)
+  // Fall back to cookie for initial load before refresh starts
+  return cachedClerkToken || getCookie('__session') || null;
 }
 
 // Set up LiveView
@@ -219,6 +260,10 @@ document.addEventListener("DOMContentLoaded", async function() {
   // This ensures __session cookie is set before LiveSocket reads it
   console.log('Initializing Clerk authentication...');
   await initClerkClient();
+
+  // Start token refresh interval to keep token fresh for LiveView reconnections
+  // This prevents JWT expiration issues when user sits idle on admin pages
+  startClerkTokenRefresh();
 
   // NOW connect LiveSocket - Clerk token will be available
   // This fixes the CDN caching issue where auth redirect happened
