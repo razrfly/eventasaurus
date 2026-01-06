@@ -72,12 +72,23 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
     case socket.assigns[:auth_user] do
       nil ->
-        socket =
-          socket
-          |> maybe_put_flash(:error, "You must log in to access this page.")
-          |> redirect(to: ~p"/auth/login")
+        # IMPORTANT: Don't redirect during static render (not connected yet)
+        # During static render, connect_params aren't available, so we can't check
+        # the Clerk token. Allow the page to load, then check auth when WebSocket connects.
+        # This fixes the CDN caching issue where Phoenix session cookie is stripped
+        # but Clerk's __session cookie (set client-side) is still available.
+        if connected?(socket) do
+          # WebSocket connected, connect_params were checked, still no user -> redirect
+          socket =
+            socket
+            |> maybe_put_flash(:error, "You must log in to access this page.")
+            |> redirect(to: ~p"/auth/login")
 
-        {:halt, socket}
+          {:halt, socket}
+        else
+          # Static render - allow page to load, will check again on WebSocket connect
+          {:cont, socket}
+        end
 
       auth_user ->
         # Process auth_user into a proper User struct for templates and business logic
