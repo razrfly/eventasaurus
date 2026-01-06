@@ -45,6 +45,8 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   - `:require_authenticated_user` - Requires authentication, redirects if not found
   - `:assign_auth_user_and_theme` - Assigns user data and theme information
   """
+  @spec on_mount(atom(), map(), map(), Phoenix.LiveView.Socket.t()) ::
+          {:cont, Phoenix.LiveView.Socket.t()} | {:halt, Phoenix.LiveView.Socket.t()}
   def on_mount(:assign_auth_user, _params, session, socket) do
     # First assign auth_user, then use the UPDATED socket for the user assignment
     socket_with_auth = assign_auth_user(socket, session)

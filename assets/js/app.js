@@ -189,9 +189,6 @@ window.addEventListener("eventasaurus:share-profile", (e) => {
   }
 });
 
-// Connect if there are any LiveViews on the page
-liveSocket.connect();
-
 // Expose liveSocket on window for web console debug logs and latency simulation
 window.liveSocket = liveSocket;
 
@@ -210,15 +207,24 @@ window.openSignUp = function(options = {}) {
 };
 
 // Initialize components on page load
-document.addEventListener("DOMContentLoaded", function() {
+// IMPORTANT: We must initialize Clerk BEFORE connecting LiveSocket
+// so the __session cookie is available for authentication
+document.addEventListener("DOMContentLoaded", async function() {
   // Initialize analytics with privacy checks
   posthogManager.showPrivacyBanner();
   posthogManager.init();
   plausibleManager.init();
 
-  // Initialize Clerk authentication
+  // Initialize Clerk authentication FIRST
+  // This ensures __session cookie is set before LiveSocket reads it
   console.log('Initializing Clerk authentication...');
-  initClerkClient();
+  await initClerkClient();
+
+  // NOW connect LiveSocket - Clerk token will be available
+  // This fixes the CDN caching issue where auth redirect happened
+  // because LiveSocket connected before Clerk set the session cookie
+  console.log('Connecting LiveSocket with Clerk token...');
+  liveSocket.connect();
 });
 
 // Initialize modular components
