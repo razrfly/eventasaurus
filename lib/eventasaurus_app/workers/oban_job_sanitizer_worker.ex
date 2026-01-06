@@ -126,23 +126,30 @@ defmodule EventasaurusApp.Workers.ObanJobSanitizerWorker do
         # Use raw SQL to append to the errors array (fragment doesn't work in update_all set)
         error_msg = "Discarded by ObanJobSanitizerWorker: zombie job with exhausted attempts"
 
-        {:ok, result} =
-          repo.query(
-            """
-            UPDATE oban_jobs
-            SET state = 'discarded',
-                discarded_at = $1,
-                errors = array_append(errors, $2::jsonb)
-            WHERE id = ANY($3)
-            """,
-            [now, Jason.encode!(%{at: now, error: error_msg}), ids]
-          )
+        case repo.query(
+               """
+               UPDATE oban_jobs
+               SET state = 'discarded',
+                   discarded_at = $1,
+                   errors = array_append(errors, $2::jsonb)
+               WHERE id = ANY($3)
+               """,
+               [now, Jason.encode!(%{at: now, error: error_msg}), ids]
+             ) do
+          {:ok, result} ->
+            Logger.warning(
+              "[ObanJobSanitizerWorker] Discarded #{result.num_rows} zombie available jobs: #{inspect(ids)}"
+            )
 
-        Logger.warning(
-          "[ObanJobSanitizerWorker] Discarded #{result.num_rows} zombie available jobs: #{inspect(ids)}"
-        )
+            result.num_rows
 
-        result.num_rows
+          {:error, reason} ->
+            Logger.error(
+              "[ObanJobSanitizerWorker] Failed to discard zombie jobs: #{inspect(reason)}"
+            )
+
+            0
+        end
       else
         0
       end
