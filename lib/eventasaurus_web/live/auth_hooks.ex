@@ -85,7 +85,6 @@ defmodule EventasaurusWeb.Live.AuthHooks do
           # Get current_path from connect_params (passed from client JavaScript)
           return_to = get_current_path_from_connect_params(socket)
           login_path = build_login_path_with_return(return_to)
-          Logger.info("[AUTH HOOKS DEBUG] require_authenticated_user FAILED - redirecting to #{login_path}")
 
           socket =
             socket
