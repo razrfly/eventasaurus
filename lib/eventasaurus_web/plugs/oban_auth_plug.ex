@@ -22,18 +22,11 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
   def init(default), do: default
 
   def call(conn, _default) do
-    # Log entry for debugging
-    user = conn.assigns[:user]
-    Logger.info("[OBAN AUTH DEBUG] Checking admin access for path: #{conn.request_path}, user: #{inspect(user && user.email)}")
-
     # Check if user is authorized via email list
     if is_admin_email?(conn) do
-      # User is authenticated as admin via email, allow access
-      Logger.info("[OBAN AUTH DEBUG] Admin access GRANTED to #{conn.assigns.user.email} via email whitelist")
       conn
     else
       # Fall back to password authentication for backward compatibility
-      Logger.warning("[OBAN AUTH DEBUG] Email whitelist check FAILED, falling back to password auth")
       handle_password_auth(conn)
     end
   end
@@ -69,13 +62,11 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
   # Handle legacy password authentication
   defp handle_password_auth(conn) do
     admin_password = System.get_env("OBAN_PASSWORD")
-    Logger.info("[OBAN AUTH DEBUG] handle_password_auth: OBAN_PASSWORD configured? #{not is_nil(admin_password) and admin_password != ""}")
 
     cond do
       # If no admin password is configured, check if we should provide more helpful message
       is_nil(admin_password) or admin_password == "" ->
         admin_emails = get_admin_emails()
-        Logger.info("[OBAN AUTH DEBUG] No OBAN_PASSWORD, admin_emails configured: #{admin_emails != []}")
 
         error_message =
           if admin_emails == [] do
@@ -83,8 +74,6 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
           else
             "Access denied. Your email is not authorized for admin access."
           end
-
-        Logger.warning("[OBAN AUTH DEBUG] Redirecting to /dashboard: #{error_message}")
 
         conn
         |> put_flash(:error, error_message)

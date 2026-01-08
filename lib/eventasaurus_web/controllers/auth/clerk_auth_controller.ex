@@ -20,11 +20,22 @@ defmodule EventasaurusWeb.Auth.ClerkAuthController do
   Uses Clerk's pre-built SignIn component.
   """
   def login(conn, params) do
-    # Store return URL if provided
-    conn = maybe_store_return_to(conn, params["return_to"])
+    # Get return_to from URL params (CDN-safe, doesn't rely on session)
+    # Validate it's a safe internal URL before passing to template
+    return_to = get_safe_return_to(params["return_to"])
 
-    render(conn, :clerk_login)
+    conn
+    |> assign(:return_to, return_to)
+    |> render(:clerk_login)
   end
+
+  # Validate return_to is a safe internal URL (prevents open redirect attacks)
+  defp get_safe_return_to(nil), do: nil
+  defp get_safe_return_to(""), do: nil
+  defp get_safe_return_to(url) when is_binary(url) do
+    if valid_internal_url?(url), do: url, else: nil
+  end
+  defp get_safe_return_to(_), do: nil
 
   @doc """
   Show the Clerk sign-up page.
@@ -38,7 +49,6 @@ defmodule EventasaurusWeb.Auth.ClerkAuthController do
     {conn, event} =
       case params["event_id"] do
         nil ->
-          Logger.info("Direct signup attempt - allowing for Clerk")
           # For Clerk, we allow direct signup (can be restricted in Clerk dashboard)
           {conn, nil}
 
@@ -101,8 +111,9 @@ defmodule EventasaurusWeb.Auth.ClerkAuthController do
   def callback(conn, params) do
     Logger.debug("Clerk auth callback received: #{inspect(Map.keys(params))}")
 
-    # Get the return URL from session
-    return_to = get_session(conn, :user_return_to)
+    # Get return_to from URL params first (CDN-safe), then fallback to session
+    # URL params are preferred because CDN caching can strip Set-Cookie headers
+    return_to = get_safe_return_to(params["return_to"]) || get_session(conn, :user_return_to)
 
     # Check for event signup context
     event_id = get_session(conn, :signup_event_id)
