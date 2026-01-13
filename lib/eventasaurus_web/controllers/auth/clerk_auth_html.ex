@@ -70,7 +70,7 @@ defmodule EventasaurusWeb.Auth.ClerkAuthHTML do
                 mounted = true;
                 container.innerHTML = ''; // Clear loading state
                 // Build callback URL with return_to param (CDN-safe, doesn't rely on session)
-                const returnTo = '<%= @return_to %>';
+                const returnTo = <%= Jason.encode!(@return_to) %>;
                 const callbackUrl = returnTo
                   ? '/auth/callback?return_to=' + encodeURIComponent(returnTo)
                   : '/auth/callback';

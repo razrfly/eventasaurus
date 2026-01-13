@@ -42,17 +42,18 @@ defmodule EventasaurusDiscovery.Http.Config do
   3. Continue until success or all adapters exhausted
   """
 
-  alias EventasaurusDiscovery.Http.Adapters.{Direct, Zyte}
+  alias EventasaurusDiscovery.Http.Adapters.{Crawlbase, Direct, Zyte}
 
   @type source :: atom()
   @type strategy :: :direct | :proxy | :fallback | :auto
-  @type adapter_name :: :direct | :zyte
+  @type adapter_name :: :direct | :zyte | :crawlbase
   @type adapter_module :: module()
 
   # Map adapter names to modules
   @adapter_modules %{
     direct: Direct,
-    zyte: Zyte
+    zyte: Zyte,
+    crawlbase: Crawlbase
   }
 
   @doc """
@@ -266,7 +267,7 @@ defmodule EventasaurusDiscovery.Http.Config do
   """
   @spec all_adapters() :: [adapter_module()]
   def all_adapters do
-    [Direct, Zyte]
+    [Direct, Zyte, Crawlbase]
   end
 
   # Private functions
@@ -280,7 +281,7 @@ defmodule EventasaurusDiscovery.Http.Config do
   end
 
   defp proxy_adapters do
-    [Zyte]
+    [Zyte, Crawlbase]
   end
 
   defp default_strategy do
