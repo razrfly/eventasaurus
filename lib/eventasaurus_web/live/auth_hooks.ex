@@ -110,25 +110,6 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     end
   end
 
-  # Build login path with return_to URL parameter (survives CDN caching)
-  defp build_login_path_with_return(nil), do: ~p"/auth/login"
-  defp build_login_path_with_return(return_to) do
-    encoded = URI.encode(return_to, &URI.char_unreserved?/1)
-    "/auth/login?return_to=#{encoded}"
-  end
-
-  # Get the current path from connect_params for redirect after login
-  # Client JavaScript passes current_path via LiveSocket params
-  defp get_current_path_from_connect_params(socket) do
-    case get_connect_params(socket) do
-      %{"current_path" => path} when is_binary(path) and path != "" ->
-        path
-
-      _ ->
-        nil
-    end
-  end
-
   def on_mount(:assign_auth_user_and_theme, _params, session, socket) do
     # First assign auth_user, then use the UPDATED socket for the user assignment
     socket_with_auth = assign_auth_user(socket, session)
@@ -151,6 +132,26 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       |> assign(:theme, :minimal)
 
     {:cont, socket}
+  end
+
+  # Build login path with return_to URL parameter (survives CDN caching)
+  defp build_login_path_with_return(nil), do: ~p"/auth/login"
+
+  defp build_login_path_with_return(return_to) do
+    encoded = URI.encode(return_to, &URI.char_unreserved?/1)
+    "/auth/login?return_to=#{encoded}"
+  end
+
+  # Get the current path from connect_params for redirect after login
+  # Client JavaScript passes current_path via LiveSocket params
+  defp get_current_path_from_connect_params(socket) do
+    case get_connect_params(socket) do
+      %{"current_path" => path} when is_binary(path) and path != "" ->
+        path
+
+      _ ->
+        nil
+    end
   end
 
   # Private function to assign auth_user from session or connect_params

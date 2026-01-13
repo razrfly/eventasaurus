@@ -6,7 +6,7 @@ A modular HTTP client system with automatic blocking detection and fallback supp
 
 The HTTP abstraction layer provides a unified interface for making HTTP requests across all scrapers. It handles:
 
-- **Multiple adapters**: Direct HTTP, Zyte proxy (browser rendering), and extensible for future adapters
+- **Multiple adapters**: Direct HTTP, Zyte proxy, Crawlbase proxy, and extensible for future adapters
 - **Automatic fallback**: If one adapter is blocked, automatically try the next
 - **Blocking detection**: Cloudflare, CAPTCHA, rate limits, and access denied detection
 - **Per-source configuration**: Configure different strategies for different scrapers
@@ -29,13 +29,13 @@ The HTTP abstraction layer provides a unified interface for making HTTP requests
 └─────────┬───────────┘              └─────────────────────┘
           │
           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Adapter Chain                              │
-│  ┌───────────┐    ┌───────────┐    ┌───────────────────────┐   │
-│  │  Direct   │ →  │   Zyte    │ →  │  Future Adapters...   │   │
-│  │ (HTTPoison)│    │ (Proxy)   │    │  (Playwright, etc.)   │   │
-│  └───────────┘    └───────────┘    └───────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                            Adapter Chain                                   │
+│  ┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────────┐   │
+│  │  Direct   │ →  │   Zyte    │ →  │ Crawlbase │ →  │ Future Adapters│   │
+│  │ (HTTPoison)│    │ (Proxy)   │    │  (Proxy)  │    │                │   │
+│  └───────────┘    └───────────┘    └───────────┘    └───────────────┘   │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Quick Start
@@ -76,8 +76,8 @@ config :eventasaurus_discovery, :http_strategies, %{
   # Default: try direct first, fallback to Zyte on blocking
   default: [:direct, :zyte],
 
-  # Always use Zyte (known Cloudflare blocking)
-  bandsintown: [:zyte],
+  # Always use Crawlbase (known Cloudflare blocking, cheaper than Zyte)
+  bandsintown: [:crawlbase],
 
   # Direct only (API works without proxy)
   cinema_city: [:direct],
@@ -93,19 +93,31 @@ config :eventasaurus_discovery, :http_strategies, %{
 }
 ```
 
+**Available adapters:**
+- `:direct` - Plain HTTPoison (fast, no cost, may be blocked)
+- `:zyte` - Zyte browser rendering proxy (bypasses blocking, has cost)
+- `:crawlbase` - Crawlbase API proxy (alternative to Zyte, has cost)
+
 ### API Keys
 
-Set the Zyte API key in your environment:
+**Zyte** - Set the API key in your environment:
 
 ```bash
 export ZYTE_API_KEY="your-api-key-here"
 ```
 
-Or in `config/runtime.exs`:
+**Crawlbase** - Two API keys available for different rendering modes:
 
-```elixir
-config :eventasaurus_discovery, :zyte_api_key, System.get_env("ZYTE_API_KEY")
+```bash
+# For static HTML requests (1 credit per request)
+export CRAWLBASE_NORMAL_API_KEY="your-normal-token-here"
+
+# For JavaScript-rendered requests (2 credits per request)
+export CRAWLBASE_JS_API_KEY="your-js-token-here"
 ```
+
+The Crawlbase adapter requires at least one key. Use the JS token for sites that require
+JavaScript rendering (e.g., Cloudflare-protected sites like Bandsintown).
 
 ## Strategies
 
@@ -161,6 +173,79 @@ Browser rendering proxy that bypasses Cloudflare and other protections.
 - Full JavaScript execution
 - Automatic browser fingerprinting
 - Per-request cost (check Zyte pricing)
+
+### Crawlbase Adapter
+
+Crawlbase API proxy for web scraping with anti-bot bypass. A cost-effective alternative to Zyte.
+
+```elixir
+# Uses Crawlbase with JavaScript rendering (default mode)
+{:ok, body, metadata} = Client.fetch(url,
+  source: :bandsintown,
+  mode: :javascript
+)
+
+# Uses Crawlbase with static HTML (faster, cheaper)
+{:ok, body, metadata} = Client.fetch(url,
+  source: :some_source,
+  mode: :normal
+)
+
+# With page wait for dynamic content
+{:ok, body, metadata} = Client.fetch(url,
+  source: :bandsintown,
+  mode: :javascript,
+  page_wait: 3000,
+  ajax_wait: true
+)
+```
+
+**Modes**:
+- `:javascript` - Browser rendering with JavaScript execution (default, 2 credits/request)
+- `:normal` - Static HTML without JavaScript (1 credit/request)
+
+**Options**:
+- `page_wait` - Milliseconds to wait after page load (default: 2000)
+- `ajax_wait` - Wait for AJAX requests to complete (default: true)
+- `timeout` - Connection timeout in ms (default: 60000)
+- `recv_timeout` - Receive timeout in ms (default: 60000)
+
+**Features**:
+- Bypasses Cloudflare challenges
+- Automatic CAPTCHA solving (included in API)
+- JavaScript execution with page wait
+- Lower cost than Zyte for most use cases
+- Per-request pricing (check Crawlbase pricing)
+
+**Error Handling**:
+```elixir
+case Crawlbase.fetch(url, mode: :javascript) do
+  {:ok, body, metadata} ->
+    # metadata.mode == :javascript
+    process_body(body)
+
+  {:error, :not_configured} ->
+    # CRAWLBASE_JS_API_KEY not set
+    Logger.error("Crawlbase JS token not configured")
+
+  {:error, {:crawlbase_error, status, message}} ->
+    # Crawlbase API error
+    Logger.error("Crawlbase error (#{status}): #{message}")
+
+  {:error, {:rate_limit, retry_after}} ->
+    # Rate limited, retry after N seconds
+    Process.sleep(retry_after * 1000)
+    retry_request()
+
+  {:error, {:timeout, :connect}} ->
+    # Connection timeout
+    {:error, :timeout}
+
+  {:error, {:network_error, reason}} ->
+    # Network failure
+    {:error, reason}
+end
+```
 
 ## Blocking Detection
 
@@ -220,7 +305,7 @@ details = BlockingDetector.details(status_code, headers, body)
 %{
   status_code: 200,
   headers: [{"Content-Type", "text/html"}, ...],
-  adapter: "direct" | "zyte",
+  adapter: "direct" | "zyte" | "crawlbase",
   duration_ms: 150,
   attempts: 1,
   blocked_by: []  # List of adapters that were blocked
@@ -473,18 +558,43 @@ Use telemetry to track which sites are blocking and which adapters succeed:
 
 ### "All adapters failed"
 
-1. Check if Zyte API key is configured
+1. Check if proxy API keys are configured (Zyte or Crawlbase)
 2. Verify the site isn't rate limiting you
-3. Check Zyte dashboard for usage/errors
+3. Check proxy dashboard for usage/errors (Zyte or Crawlbase)
 4. Try increasing timeout
+5. Consider switching proxy providers if one is blocked
 
 ### "Not configured" error
 
 The adapter requires configuration that isn't set:
 
 ```bash
-# Check if API key is set
+# Check if Zyte API key is set
 echo $ZYTE_API_KEY
+
+# Check if Crawlbase API keys are set
+echo $CRAWLBASE_NORMAL_API_KEY
+echo $CRAWLBASE_JS_API_KEY
+```
+
+### Crawlbase-specific errors
+
+**`{:error, {:crawlbase_error, status, message}}`**
+
+1. Check Crawlbase dashboard for account status and credits
+2. Verify the correct token is being used (Normal vs JS)
+3. Status 520-530 often indicates the target site is blocking Crawlbase
+
+**Mode-specific "not configured"**
+
+Crawlbase requires different tokens for different modes:
+- `:javascript` mode requires `CRAWLBASE_JS_API_KEY`
+- `:normal` mode requires `CRAWLBASE_NORMAL_API_KEY`
+
+```elixir
+# Check which modes are available
+Crawlbase.available_for_mode?(:javascript)  # => true/false
+Crawlbase.available_for_mode?(:normal)      # => true/false
 ```
 
 ### Slow requests
@@ -506,6 +616,7 @@ echo $ZYTE_API_KEY
 | `lib/eventasaurus_discovery/http/adapter.ex` | Adapter behaviour definition |
 | `lib/eventasaurus_discovery/http/adapters/direct.ex` | Direct HTTP adapter |
 | `lib/eventasaurus_discovery/http/adapters/zyte.ex` | Zyte proxy adapter |
+| `lib/eventasaurus_discovery/http/adapters/crawlbase.ex` | Crawlbase API proxy adapter |
 | `lib/eventasaurus_discovery/http/blocking_detector.ex` | Blocking detection logic |
 | `lib/eventasaurus_discovery/http/config.ex` | Per-source configuration |
 | `lib/eventasaurus_discovery/http/client.ex` | Main entry point |

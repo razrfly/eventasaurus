@@ -227,14 +227,24 @@ config :stripity_stripe,
 # Optional: adapter returns {:error, :not_configured} when key is not set
 config :eventasaurus, :zyte_api_key, System.get_env("ZYTE_API_KEY") || ""
 
+# Configure Crawlbase API for browser-rendered HTTP requests
+# Used by Http.Adapters.Crawlbase to bypass Cloudflare and other anti-bot protections
+# Two token types available:
+#   - CRAWLBASE_NORMAL_API_KEY: For static HTML requests (1 credit per request)
+#   - CRAWLBASE_JS_API_KEY: For JavaScript-rendered requests (2 credits per request)
+# Optional: adapter returns {:error, :not_configured} when required key is not set
+config :eventasaurus, :crawlbase_normal_api_key, System.get_env("CRAWLBASE_NORMAL_API_KEY")
+config :eventasaurus, :crawlbase_js_api_key, System.get_env("CRAWLBASE_JS_API_KEY")
+
 # Configure per-source HTTP strategies for the Http.Client fallback chain
 # Each source can specify an ordered list of adapters to try:
 #   - :direct - Plain HTTPoison (fast, no cost, may be blocked)
 #   - :zyte - Zyte browser rendering proxy (bypasses blocking, has cost)
+#   - :crawlbase - Crawlbase API proxy (alternative to Zyte, has cost)
 #
 # Strategies:
-#   - Single adapter: [:direct] or [:zyte] - Use only that adapter
-#   - Fallback chain: [:direct, :zyte] - Try direct first, fallback to Zyte if blocked
+#   - Single adapter: [:direct] or [:zyte] or [:crawlbase] - Use only that adapter
+#   - Fallback chain: [:direct, :zyte] - Try direct first, fallback to proxy if blocked
 #
 # Http.Client will detect blocking (Cloudflare, CAPTCHA, rate limits) and
 # automatically try the next adapter in the chain.
