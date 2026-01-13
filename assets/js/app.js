@@ -153,7 +153,10 @@ let liveSocket = new LiveSocket("/live", Socket, {
   // Use a function for params so clerk_token is read fresh on each connection
   params: () => ({
     _csrf_token: csrfToken,
-    clerk_token: getClerkToken()
+    clerk_token: getClerkToken(),
+    // Pass current path for CDN-compatible redirect after login
+    // (session cookies stripped by CDN, so we need URL-based return_to)
+    current_path: window.location.pathname
   }),
   hooks: AllHooks,
   uploaders: Uploaders  // Unified R2 uploaders for external uploads
