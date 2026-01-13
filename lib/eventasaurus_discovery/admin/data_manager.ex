@@ -119,9 +119,10 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
             |> Repo.delete_all()
 
           # For single-source events, delete everything
-          # IMPORTANT: Delete events FIRST - the ON DELETE CASCADE foreign keys
-          # will automatically delete related records (sources, performers, categories)
-          # This avoids the prevent_last_source_deletion trigger blocking us
+          # IMPORTANT: Delete events FIRST - ON DELETE CASCADE on public_event_sources
+          # will automatically clean up source links. Performers and categories must be
+          # deleted manually as they don't have CASCADE. This avoids the
+          # prevent_last_source_deletion trigger blocking us.
           deleted_count =
             if Enum.empty?(single_source_event_ids) do
               0
