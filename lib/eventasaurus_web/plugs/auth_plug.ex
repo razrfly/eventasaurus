@@ -63,22 +63,15 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
     case get_clerk_token(conn) do
       nil ->
-        Logger.warning("[AUTH DEBUG] No Clerk token found in cookie for path: #{conn.request_path}")
         assign(conn, :auth_user, nil)
 
       token ->
-        # Log token info (first/last 10 chars only for security)
-        token_preview = "#{String.slice(token, 0, 10)}...#{String.slice(token, -10, 10)}"
-        Logger.info("[AUTH DEBUG] Found Clerk token for path: #{conn.request_path}, token: #{token_preview}")
-
         case JWT.verify_token(token) do
           {:ok, claims} ->
-            Logger.info("[AUTH DEBUG] Token verified for path: #{conn.request_path}, clerk_id: #{claims["sub"]}")
-
             assign(conn, :auth_user, claims)
 
           {:error, reason} ->
-            Logger.warning("[AUTH DEBUG] Token verification FAILED for path: #{conn.request_path}, reason: #{inspect(reason)}")
+            Logger.debug("Clerk token verification failed: #{inspect(reason)}")
             assign(conn, :auth_user, nil)
         end
     end
@@ -136,15 +129,11 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def require_authenticated_user(conn, _opts) do
     if conn.assigns[:auth_user] do
-      # Clerk tokens are verified each request, no proactive refresh needed
-      Logger.info("[AUTH DEBUG] require_authenticated_user PASSED for path: #{conn.request_path}")
       conn
     else
-      Logger.warning("[AUTH DEBUG] require_authenticated_user FAILED for path: #{conn.request_path} - redirecting to /auth/login")
       # Use URL param for return_to (survives CDN caching which strips Set-Cookie headers)
       return_to = if conn.method == "GET", do: current_path(conn), else: nil
       login_path = build_login_path_with_return(return_to)
-      Logger.info("[AUTH DEBUG] Redirecting to #{login_path}")
 
       conn
       |> put_flash(:error, "You must log in to access this page.")
@@ -293,13 +282,11 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     if conn.assigns[:auth_user] do
       # Check for return_to URL param (CDN-compatible redirect after login)
       return_to = get_safe_return_to(conn)
-      Logger.info("[AUTH DEBUG] redirect_if_authenticated: User IS authenticated at #{conn.request_path} - redirecting to #{return_to}")
 
       conn
       |> redirect(to: return_to)
       |> halt()
     else
-      Logger.info("[AUTH DEBUG] redirect_if_authenticated: User NOT authenticated at #{conn.request_path} - allowing access")
       conn
     end
   end
@@ -320,10 +307,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
         decoded = URI.decode(return_to)
 
         if String.starts_with?(decoded, "/") and not String.starts_with?(decoded, "//") do
-          Logger.info("[AUTH DEBUG] Using return_to from URL param: #{decoded}")
           decoded
         else
-          Logger.warning("[AUTH DEBUG] Rejected unsafe return_to value: #{return_to}")
+          Logger.warning("Rejected unsafe return_to value in auth redirect")
           ~p"/dashboard"
         end
     end
