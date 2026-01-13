@@ -41,6 +41,13 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   def get_image_url(movie_data) when is_map(movie_data) do
     # Check for pre-existing URL formats first (these are already resolved URLs)
     cond do
+      # Check for pre-existing image_url field first (already resolved by TmdbRichDataProvider)
+      is_binary(movie_data[:image_url]) && movie_data[:image_url] != "" ->
+        movie_data[:image_url]
+
+      is_binary(movie_data["image_url"]) && movie_data["image_url"] != "" ->
+        movie_data["image_url"]
+
       # Try atom keys first - nested format with pre-resolved URL
       is_map(movie_data[:poster_path]) && movie_data[:poster_path][:url] ->
         movie_data[:poster_path][:url]

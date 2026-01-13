@@ -176,29 +176,27 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
 
   defp build_request_url(url, mode, page_wait, ajax_wait) do
     token = get_token_for_mode(mode)
-    encoded_url = URI.encode(url)
 
-    query_params = [
-      {"token", token},
-      {"url", encoded_url},
-      {"format", "json"}
-    ]
+    # Build base query params - URI.encode_query handles proper encoding
+    query_params = %{
+      "token" => token,
+      "url" => url,
+      "format" => "json"
+    }
 
     # Add JavaScript-specific parameters
     query_params =
       if mode == :javascript do
         query_params
-        |> Kernel.++([{"page_wait", to_string(page_wait)}])
-        |> Kernel.++(if ajax_wait, do: [{"ajax_wait", "true"}], else: [])
+        |> Map.put("page_wait", to_string(page_wait))
+        |> then(fn params ->
+          if ajax_wait, do: Map.put(params, "ajax_wait", "true"), else: params
+        end)
       else
         query_params
       end
 
-    query_string =
-      query_params
-      |> Enum.map(fn {k, v} -> "#{k}=#{v}" end)
-      |> Enum.join("&")
-
+    query_string = URI.encode_query(query_params)
     "#{@crawlbase_api_url}?#{query_string}"
   end
 

@@ -163,28 +163,40 @@ defmodule EventasaurusApp.Images.MovieImageResolver do
   end
 
   # Extract poster path from rich_data
+  # Handles both atom and string keys since data can come from different sources
   defp extract_poster_path(rich_data) when is_map(rich_data) do
-    # Try structured path first (media.images.posters)
-    case get_in(rich_data, ["media", "images", "posters"]) do
+    # Try structured path first (media.images.posters) - check both key types
+    # TmdbService returns atom keys, but some data sources may use string keys
+    posters =
+      get_in(rich_data, [:media, :images, :posters]) ||
+        get_in(rich_data, ["media", "images", "posters"])
+
+    case posters do
       [first | _] when is_map(first) ->
-        first["file_path"] || first[:file_path]
+        first[:file_path] || first["file_path"]
 
       _ ->
         # Fall back to direct poster_path
-        rich_data["poster_path"] || rich_data[:poster_path]
+        rich_data[:poster_path] || rich_data["poster_path"]
     end
   end
 
   # Extract backdrop path from rich_data
+  # Handles both atom and string keys since data can come from different sources
   defp extract_backdrop_path(rich_data) when is_map(rich_data) do
-    # Try structured path first (media.images.backdrops)
-    case get_in(rich_data, ["media", "images", "backdrops"]) do
+    # Try structured path first (media.images.backdrops) - check both key types
+    # TmdbService returns atom keys, but some data sources may use string keys
+    backdrops =
+      get_in(rich_data, [:media, :images, :backdrops]) ||
+        get_in(rich_data, ["media", "images", "backdrops"])
+
+    case backdrops do
       [first | _] when is_map(first) ->
-        first["file_path"] || first[:file_path]
+        first[:file_path] || first["file_path"]
 
       _ ->
         # Fall back to direct backdrop_path
-        rich_data["backdrop_path"] || rich_data[:backdrop_path]
+        rich_data[:backdrop_path] || rich_data["backdrop_path"]
     end
   end
 
