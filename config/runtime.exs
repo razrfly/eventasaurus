@@ -251,8 +251,8 @@ config :eventasaurus, :crawlbase_js_api_key, System.get_env("CRAWLBASE_JS_API_KE
 config :eventasaurus, :http_strategies, %{
   # Default strategy: try direct first, fallback to Zyte if blocked
   default: [:direct, :zyte],
-  # Bandsintown: always use Zyte (known Cloudflare blocking)
-  bandsintown: [:zyte],
+  # Bandsintown: always use Crawlbase (known Cloudflare blocking)
+  bandsintown: [:crawlbase],
   # Resident Advisor: try direct first, fallback to Zyte
   resident_advisor: [:direct, :zyte],
   # Cinema City: direct only (API works fine)

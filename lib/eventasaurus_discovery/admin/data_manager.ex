@@ -70,6 +70,9 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
 
   @doc """
   Clears public events by source.
+
+  For events that have ONLY this source, deletes the entire event and related records.
+  For events that have multiple sources, only removes the source association.
   """
   def clear_by_source(source_name) when is_binary(source_name) do
     Logger.info("Starting clear of public events from source: #{source_name}")
@@ -83,7 +86,7 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
         0
       else
         # Get all event IDs for this source
-        event_ids =
+        all_event_ids =
           from(pes in PublicEventSource,
             where: pes.source_id == ^source.id,
             select: pes.event_id
@@ -91,32 +94,61 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
           |> Repo.all()
           |> Enum.uniq()
 
-        if Enum.empty?(event_ids) do
+        if Enum.empty?(all_event_ids) do
           0
         else
-          # Delete related records
-          from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
-          |> Repo.delete_all()
+          # Find events that have ONLY this source (should be fully deleted)
+          # These are events where the only source entry is for this source
+          single_source_event_ids =
+            from(pes in PublicEventSource,
+              where: pes.event_id in ^all_event_ids,
+              group_by: pes.event_id,
+              having: count(pes.id) == 1,
+              select: pes.event_id
+            )
+            |> Repo.all()
 
-          from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
-          |> Repo.delete_all()
+          # Events with multiple sources - only remove the source link
+          multi_source_event_ids = all_event_ids -- single_source_event_ids
 
-          from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
-          |> Repo.delete_all()
-
-          # Delete events
-          {deleted_count, _} =
-            from(pe in PublicEvent, where: pe.id in ^event_ids)
+          # For multi-source events, just remove the source association
+          {unlinked_count, _} =
+            from(pes in PublicEventSource,
+              where: pes.event_id in ^multi_source_event_ids and pes.source_id == ^source.id
+            )
             |> Repo.delete_all()
+
+          # For single-source events, delete everything
+          # IMPORTANT: Delete events FIRST - the ON DELETE CASCADE foreign keys
+          # will automatically delete related records (sources, performers, categories)
+          # This avoids the prevent_last_source_deletion trigger blocking us
+          deleted_count =
+            if Enum.empty?(single_source_event_ids) do
+              0
+            else
+              # Delete related records that don't have CASCADE (performers, categories)
+              from(pep in PublicEventPerformer, where: pep.event_id in ^single_source_event_ids)
+              |> Repo.delete_all()
+
+              from(pec in PublicEventCategory, where: pec.event_id in ^single_source_event_ids)
+              |> Repo.delete_all()
+
+              # Delete events FIRST - ON DELETE CASCADE handles public_event_sources
+              {count, _} =
+                from(pe in PublicEvent, where: pe.id in ^single_source_event_ids)
+                |> Repo.delete_all()
+
+              count
+            end
 
           # Clean up orphaned containers from this source
           container_count = clean_orphaned_containers_by_source(source.id)
 
           Logger.info(
-            "Successfully cleared #{deleted_count} events#{if container_count > 0, do: " and #{container_count} containers", else: ""} from source: #{source_name}"
+            "Successfully cleared #{deleted_count} events, unlinked #{unlinked_count} multi-source events#{if container_count > 0, do: ", cleaned #{container_count} containers", else: ""} from source: #{source_name}"
           )
 
-          deleted_count
+          deleted_count + unlinked_count
         end
       end
     end)
@@ -162,17 +194,15 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
         if Enum.empty?(event_ids) do
           0
         else
-          # Delete related records
+          # Delete related records (performers, categories)
           from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
           |> Repo.delete_all()
 
           from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
           |> Repo.delete_all()
 
-          from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
-          |> Repo.delete_all()
-
-          # Delete events
+          # Delete events FIRST - ON DELETE CASCADE handles public_event_sources
+          # This avoids the prevent_last_source_deletion trigger blocking us
           {deleted_count, _} =
             from(pe in PublicEvent, where: pe.id in ^event_ids)
             |> Repo.delete_all()
@@ -218,17 +248,15 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       if Enum.empty?(event_ids) do
         0
       else
-        # Delete related records
+        # Delete related records (performers, categories)
         from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
         |> Repo.delete_all()
 
         from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
         |> Repo.delete_all()
 
-        from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
-        |> Repo.delete_all()
-
-        # Delete events
+        # Delete events FIRST - ON DELETE CASCADE handles public_event_sources
+        # This avoids the prevent_last_source_deletion trigger blocking us
         {deleted_count, _} =
           from(pe in PublicEvent, where: pe.id in ^event_ids)
           |> Repo.delete_all()
@@ -271,17 +299,15 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       if Enum.empty?(event_ids) do
         0
       else
-        # Delete related records
+        # Delete related records (performers, categories)
         from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
         |> Repo.delete_all()
 
         from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
         |> Repo.delete_all()
 
-        from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
-        |> Repo.delete_all()
-
-        # Delete events
+        # Delete events FIRST - ON DELETE CASCADE handles public_event_sources
+        # This avoids the prevent_last_source_deletion trigger blocking us
         {deleted_count, _} =
           from(pe in PublicEvent, where: pe.id in ^event_ids)
           |> Repo.delete_all()
@@ -327,17 +353,15 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       if Enum.empty?(event_ids) do
         0
       else
-        # Delete related records
+        # Delete related records (performers, categories)
         from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
         |> Repo.delete_all()
 
         from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
         |> Repo.delete_all()
 
-        from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
-        |> Repo.delete_all()
-
-        # Delete events
+        # Delete events FIRST - ON DELETE CASCADE handles public_event_sources
+        # This avoids the prevent_last_source_deletion trigger blocking us
         {deleted_count, _} =
           from(pe in PublicEvent, where: pe.id in ^event_ids)
           |> Repo.delete_all()
@@ -394,17 +418,15 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       if Enum.empty?(event_ids) do
         0
       else
-        # Delete related records
+        # Delete related records (performers, categories)
         from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
         |> Repo.delete_all()
 
         from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
         |> Repo.delete_all()
 
-        from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
-        |> Repo.delete_all()
-
-        # Delete events
+        # Delete events FIRST - ON DELETE CASCADE handles public_event_sources
+        # This avoids the prevent_last_source_deletion trigger blocking us
         {deleted_count, _} =
           from(pe in PublicEvent, where: pe.id in ^event_ids)
           |> Repo.delete_all()

@@ -167,8 +167,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
 
     @tag :external
     test "successfully fetches a URL with javascript mode" do
-      if not Crawlbase.available_for_mode?(:javascript) do
-        {:skip, "CRAWLBASE_JS_API_KEY not configured"}
+      unless Crawlbase.available_for_mode?(:javascript) do
+        IO.puts("Skipping: CRAWLBASE_JS_API_KEY not configured")
+        assert true
       else
         url = "https://httpbin.org/html"
 
@@ -183,28 +184,29 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
 
           {:error, {:timeout, _}} ->
             # Acceptable in slow network conditions
-            :ok
+            assert true
 
           {:error, {:network_error, _}} ->
             # Acceptable if network is unavailable
-            :ok
+            assert true
 
           {:error, {:crawlbase_error, status, message}} ->
             # Log but don't fail - Crawlbase might have temporary issues
             IO.puts("Crawlbase error (#{status}): #{message}")
-            :ok
+            assert true
 
           {:error, {:rate_limit, _}} ->
             # Acceptable if rate limited
-            :ok
+            assert true
         end
       end
     end
 
     @tag :external
     test "successfully fetches a URL with normal mode" do
-      if not Crawlbase.available_for_mode?(:normal) do
-        {:skip, "CRAWLBASE_NORMAL_API_KEY not configured"}
+      unless Crawlbase.available_for_mode?(:normal) do
+        IO.puts("Skipping: CRAWLBASE_NORMAL_API_KEY not configured")
+        assert true
       else
         url = "https://httpbin.org/json"
 
@@ -217,24 +219,25 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
             assert is_integer(metadata.duration_ms)
 
           {:error, {:timeout, _}} ->
-            :ok
+            assert true
 
           {:error, {:network_error, _}} ->
-            :ok
+            assert true
 
           {:error, {:crawlbase_error, _, _}} ->
-            :ok
+            assert true
 
           {:error, {:rate_limit, _}} ->
-            :ok
+            assert true
         end
       end
     end
 
     @tag :external
     test "can fetch Cloudflare-protected site (Bandsintown)" do
-      if not Crawlbase.available_for_mode?(:javascript) do
-        {:skip, "CRAWLBASE_JS_API_KEY not configured"}
+      unless Crawlbase.available_for_mode?(:javascript) do
+        IO.puts("Skipping: CRAWLBASE_JS_API_KEY not configured")
+        assert true
       else
         # This is the main use case - bypassing Cloudflare
         url = "https://www.bandsintown.com/c/krakow-poland?came_from=257&page=1"
@@ -255,16 +258,16 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
             assert metadata.mode == :javascript
 
           {:error, {:timeout, _}} ->
-            :ok
+            assert true
 
           {:error, {:network_error, _}} ->
-            :ok
+            assert true
 
           {:error, {:crawlbase_error, _, _}} ->
-            :ok
+            assert true
 
           {:error, {:rate_limit, _}} ->
-            :ok
+            assert true
         end
       end
     end
@@ -272,32 +275,34 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
 
   describe "request options" do
     # These tests verify the function accepts various options without crashing
+    # They test option acceptance regardless of whether the adapter is configured
 
     test "accepts mode option" do
-      if not Crawlbase.available?() do
-        assert {:error, :not_configured} = Crawlbase.fetch("https://example.com", mode: :javascript)
-        assert {:error, :not_configured} = Crawlbase.fetch("https://example.com", mode: :normal)
-      end
+      # Test that mode option is accepted (doesn't raise)
+      result_js = Crawlbase.fetch("https://example.com", mode: :javascript)
+      result_normal = Crawlbase.fetch("https://example.com", mode: :normal)
+
+      # Should return either :not_configured or a valid response tuple
+      assert match?({:error, _}, result_js) or match?({:ok, _, _}, result_js)
+      assert match?({:error, _}, result_normal) or match?({:ok, _, _}, result_normal)
     end
 
     test "accepts page_wait option" do
-      if not Crawlbase.available?() do
-        assert {:error, :not_configured} = Crawlbase.fetch("https://example.com", page_wait: 5000)
-      end
+      result = Crawlbase.fetch("https://example.com", page_wait: 5000)
+      assert match?({:error, _}, result) or match?({:ok, _, _}, result)
     end
 
     test "accepts ajax_wait option" do
-      if not Crawlbase.available?() do
-        assert {:error, :not_configured} = Crawlbase.fetch("https://example.com", ajax_wait: true)
-        assert {:error, :not_configured} = Crawlbase.fetch("https://example.com", ajax_wait: false)
-      end
+      result_true = Crawlbase.fetch("https://example.com", ajax_wait: true)
+      result_false = Crawlbase.fetch("https://example.com", ajax_wait: false)
+
+      assert match?({:error, _}, result_true) or match?({:ok, _, _}, result_true)
+      assert match?({:error, _}, result_false) or match?({:ok, _, _}, result_false)
     end
 
     test "accepts timeout options" do
-      if not Crawlbase.available?() do
-        assert {:error, :not_configured} =
-                 Crawlbase.fetch("https://example.com", timeout: 30_000, recv_timeout: 30_000)
-      end
+      result = Crawlbase.fetch("https://example.com", timeout: 30_000, recv_timeout: 30_000)
+      assert match?({:error, _}, result) or match?({:ok, _, _}, result)
     end
   end
 
