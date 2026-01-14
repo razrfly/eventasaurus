@@ -58,21 +58,10 @@ defmodule Mix.Tasks.Monitor.Chain do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
   alias EventasaurusDiscovery.JobExecutionSummaries.Lineage
+  alias EventasaurusDiscovery.Sources.SourcePatterns
   import Ecto.Query
 
   @shortdoc "Visualizes job execution chains and cascade failures"
-
-  @source_patterns %{
-    "cinema_city" => "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
-    "repertuary" => "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob",
-    "karnet" => "EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob",
-    "week_pl" => "EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob",
-    "bandsintown" => "EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob",
-    "resident_advisor" => "EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob",
-    "sortiraparis" => "EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob",
-    "inquizition" => "EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob",
-    "waw4free" => "EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob"
-  }
 
   def run(args) do
     Mix.Task.run("app.start")
@@ -103,8 +92,7 @@ defmodule Mix.Tasks.Monitor.Chain do
 
       true ->
         IO.puts(IO.ANSI.red() <> "❌ Error: --source or --job-id required" <> IO.ANSI.reset())
-        IO.puts("\nAvailable sources:")
-        Enum.each(@source_patterns, fn {name, _} -> IO.puts("  - #{name}") end)
+        SourcePatterns.print_available_sources()
         System.halt(1)
     end
   end
@@ -133,14 +121,13 @@ defmodule Mix.Tasks.Monitor.Chain do
   end
 
   defp display_chains_for_source(source, failed_only, max_depth, limit) do
-    unless Map.has_key?(@source_patterns, source) do
+    unless SourcePatterns.valid_source?(source) do
       IO.puts(IO.ANSI.red() <> "❌ Error: Unknown source '#{source}'" <> IO.ANSI.reset())
-      IO.puts("\nAvailable sources:")
-      Enum.each(@source_patterns, fn {name, _} -> IO.puts("  - #{name}") end)
+      SourcePatterns.print_available_sources()
       System.halt(1)
     end
 
-    sync_worker = @source_patterns[source]
+    {:ok, sync_worker} = SourcePatterns.get_sync_worker(source)
 
     # Get recent sync jobs
     query =
@@ -168,8 +155,7 @@ defmodule Mix.Tasks.Monitor.Chain do
       System.halt(0)
     end
 
-    source_display =
-      source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+    source_display = SourcePatterns.get_display_name(source)
 
     IO.puts(
       "\n" <> IO.ANSI.cyan() <> "🔗 #{source_display} Job Execution Chains" <> IO.ANSI.reset()

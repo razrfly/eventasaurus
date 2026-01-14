@@ -62,21 +62,10 @@ defmodule Mix.Tasks.Monitor.Errors do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
+  alias EventasaurusDiscovery.Sources.SourcePatterns
   import Ecto.Query
 
   @shortdoc "Analyzes error patterns and categorization for scrapers"
-
-  @source_patterns %{
-    "cinema_city" => "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%",
-    "repertuary" => "EventasaurusDiscovery.Sources.Repertuary.Jobs.%",
-    "karnet" => "EventasaurusDiscovery.Sources.Karnet.Jobs.%",
-    "week_pl" => "EventasaurusDiscovery.Sources.WeekPl.Jobs.%",
-    "bandsintown" => "EventasaurusDiscovery.Sources.Bandsintown.Jobs.%",
-    "resident_advisor" => "EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.%",
-    "sortiraparis" => "EventasaurusDiscovery.Sources.Sortiraparis.Jobs.%",
-    "inquizition" => "EventasaurusDiscovery.Sources.Inquizition.Jobs.%",
-    "waw4free" => "EventasaurusDiscovery.Sources.Waw4Free.Jobs.%"
-  }
 
   def run(args) do
     Mix.Task.run("app.start")
@@ -91,15 +80,13 @@ defmodule Mix.Tasks.Monitor.Errors do
 
     unless source do
       IO.puts(IO.ANSI.red() <> "❌ Error: --source is required" <> IO.ANSI.reset())
-      IO.puts("\nAvailable sources:")
-      Enum.each(@source_patterns, fn {name, _} -> IO.puts("  - #{name}") end)
+      SourcePatterns.print_available_sources()
       System.halt(1)
     end
 
-    unless Map.has_key?(@source_patterns, source) do
+    unless SourcePatterns.valid_source?(source) do
       IO.puts(IO.ANSI.red() <> "❌ Error: Unknown source '#{source}'" <> IO.ANSI.reset())
-      IO.puts("\nAvailable sources:")
-      Enum.each(@source_patterns, fn {name, _} -> IO.puts("  - #{name}") end)
+      SourcePatterns.print_available_sources()
       System.halt(1)
     end
 
@@ -107,7 +94,7 @@ defmodule Mix.Tasks.Monitor.Errors do
     limit = opts[:limit] || 20
     category_filter = opts[:category]
 
-    worker_pattern = @source_patterns[source]
+    {:ok, worker_pattern} = SourcePatterns.get_worker_pattern(source)
 
     # Query failed executions
     from_time = DateTime.add(DateTime.utc_now(), -hours, :hour)
@@ -230,8 +217,7 @@ defmodule Mix.Tasks.Monitor.Errors do
   end
 
   defp display_errors(analysis, source, category_filter, limit) do
-    source_display =
-      source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+    source_display = SourcePatterns.get_display_name(source)
 
     header =
       if category_filter do

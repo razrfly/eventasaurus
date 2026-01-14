@@ -19,6 +19,12 @@ defmodule Mix.Tasks.Audit.ObanHealth do
       # Fix detected issues (runs the sanitizer worker)
       mix audit.oban_health --fix
 
+      # Retry a specific job by ID
+      mix audit.oban_health --retry 12345
+
+      # Cancel a specific job by ID
+      mix audit.oban_health --cancel 12345
+
   ## Related
 
   The ObanJobSanitizerWorker runs every 30 minutes to automatically fix issues.
@@ -40,14 +46,30 @@ defmodule Mix.Tasks.Audit.ObanHealth do
 
     {opts, _, _} =
       OptionParser.parse(args,
-        switches: [problems_only: :boolean, fix: :boolean],
-        aliases: [p: :problems_only, f: :fix]
+        switches: [problems_only: :boolean, fix: :boolean, retry: :integer, cancel: :integer],
+        aliases: [p: :problems_only, f: :fix, r: :retry, c: :cancel]
       )
 
     problems_only = opts[:problems_only] || false
     fix_issues = opts[:fix] || false
+    retry_job_id = opts[:retry]
+    cancel_job_id = opts[:cancel]
 
     repo = EventasaurusApp.ObanRepo
+
+    # Handle single job operations first
+    cond do
+      retry_job_id ->
+        handle_retry_job(repo, retry_job_id)
+        System.halt(0)
+
+      cancel_job_id ->
+        handle_cancel_job(repo, cancel_job_id)
+        System.halt(0)
+
+      true ->
+        :continue
+    end
 
     IO.puts("")
     IO.puts(IO.ANSI.cyan() <> "🏥 Oban Health Report" <> IO.ANSI.reset())
@@ -276,5 +298,109 @@ defmodule Mix.Tasks.Audit.ObanHealth do
     str
     |> to_string()
     |> String.pad_trailing(width)
+  end
+
+  # Single job operations
+
+  defp handle_retry_job(repo, job_id) do
+    IO.puts("")
+    IO.puts(IO.ANSI.cyan() <> "🔄 Retrying Job ##{job_id}" <> IO.ANSI.reset())
+    IO.puts("")
+
+    case get_job(repo, job_id) do
+      nil ->
+        IO.puts(IO.ANSI.red() <> "❌ Job ##{job_id} not found" <> IO.ANSI.reset())
+
+      job ->
+        display_job_details(job)
+
+        case Oban.retry_job(job_id) do
+          :ok ->
+            IO.puts(IO.ANSI.green() <> "✅ Job ##{job_id} queued for retry" <> IO.ANSI.reset())
+
+          {:ok, _} ->
+            IO.puts(IO.ANSI.green() <> "✅ Job ##{job_id} queued for retry" <> IO.ANSI.reset())
+
+          {:error, reason} ->
+            IO.puts(
+              IO.ANSI.red() <>
+                "❌ Failed to retry job: #{inspect(reason)}" <>
+                IO.ANSI.reset()
+            )
+        end
+    end
+  end
+
+  defp handle_cancel_job(repo, job_id) do
+    IO.puts("")
+    IO.puts(IO.ANSI.cyan() <> "🚫 Cancelling Job ##{job_id}" <> IO.ANSI.reset())
+    IO.puts("")
+
+    case get_job(repo, job_id) do
+      nil ->
+        IO.puts(IO.ANSI.red() <> "❌ Job ##{job_id} not found" <> IO.ANSI.reset())
+
+      job ->
+        display_job_details(job)
+
+        case Oban.cancel_job(job_id) do
+          :ok ->
+            IO.puts(IO.ANSI.green() <> "✅ Job ##{job_id} cancelled" <> IO.ANSI.reset())
+
+          {:ok, _} ->
+            IO.puts(IO.ANSI.green() <> "✅ Job ##{job_id} cancelled" <> IO.ANSI.reset())
+
+          {:error, reason} ->
+            IO.puts(
+              IO.ANSI.red() <>
+                "❌ Failed to cancel job: #{inspect(reason)}" <>
+                IO.ANSI.reset()
+            )
+        end
+    end
+  end
+
+  defp get_job(repo, job_id) do
+    query =
+      from(j in "oban_jobs",
+        where: j.id == ^job_id,
+        select: %{
+          id: j.id,
+          queue: j.queue,
+          worker: j.worker,
+          state: j.state,
+          attempt: j.attempt,
+          max_attempts: j.max_attempts,
+          scheduled_at: j.scheduled_at,
+          attempted_at: j.attempted_at,
+          errors: j.errors
+        }
+      )
+
+    repo.one(query)
+  end
+
+  defp display_job_details(job) do
+    worker_short = String.split(job.worker, ".") |> List.last()
+
+    IO.puts("   ID:          #{job.id}")
+    IO.puts("   Worker:      #{worker_short}")
+    IO.puts("   Queue:       #{job.queue}")
+    IO.puts("   State:       #{job.state}")
+    IO.puts("   Attempt:     #{job.attempt}/#{job.max_attempts}")
+    IO.puts("   Scheduled:   #{format_datetime(job.scheduled_at)}")
+    IO.puts("   Attempted:   #{format_datetime(job.attempted_at)}")
+
+    if job.errors && length(job.errors) > 0 do
+      latest_error = List.first(job.errors)
+
+      if is_map(latest_error) do
+        error_msg = latest_error["message"] || latest_error["error"] || inspect(latest_error)
+        truncated = String.slice(to_string(error_msg), 0, 60)
+        IO.puts("   Last Error:  #{truncated}...")
+      end
+    end
+
+    IO.puts("")
   end
 end

@@ -1,13 +1,13 @@
 defmodule Mix.Tasks.Audit.SchedulerHealth do
   @moduledoc """
-  Audit scheduler health for cinema scrapers (Cinema City and Repertuary).
+  Audit scheduler health for all scrapers.
 
-  Verifies that both scrapers are running daily as scheduled and identifies
+  Verifies that scrapers are running daily as scheduled and identifies
   any gaps in execution or failures.
 
   ## Usage
 
-      # Check last 7 days (default)
+      # Check last 7 days for all sources (default)
       mix audit.scheduler_health
 
       # Check specific number of days
@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
 
       # Check specific source only
       mix audit.scheduler_health --source cinema_city
-      mix audit.scheduler_health --source repertuary
+      mix audit.scheduler_health --source bandsintown
 
   ## Output
 
@@ -32,20 +32,14 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
   import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
+  alias EventasaurusDiscovery.Sources.SourcePatterns
 
-  @shortdoc "Audit scheduler health for cinema scrapers"
+  @shortdoc "Audit scheduler health for scrapers"
 
-  @sources %{
-    "cinema_city" => %{
-      pattern: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
-      display_name: "Cinema City",
-      child_job_key: "jobs_scheduled"
-    },
-    "repertuary" => %{
-      pattern: "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob",
-      display_name: "Repertuary",
-      child_job_key: "movie_jobs_scheduled"
-    }
+  # Source-specific child job key configuration
+  # Falls back to "jobs_scheduled" if not specified
+  @child_job_keys %{
+    "repertuary" => "movie_jobs_scheduled"
   }
 
   @impl Mix.Task
@@ -62,18 +56,17 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
     source = opts[:source]
 
     # Validate source if provided
-    if source && !Map.has_key?(@sources, source) do
+    if source && !SourcePatterns.valid_source?(source) do
       IO.puts(IO.ANSI.red() <> "❌ Unknown source: #{source}" <> IO.ANSI.reset())
-      IO.puts("\nAvailable sources:")
-      Enum.each(@sources, fn {key, config} -> IO.puts("  - #{key} (#{config.display_name})") end)
+      SourcePatterns.print_available_sources()
       System.halt(1)
     end
 
     sources_to_check =
       if source do
-        [{source, @sources[source]}]
+        [source]
       else
-        Map.to_list(@sources)
+        SourcePatterns.all_cli_keys()
       end
 
     IO.puts("")
@@ -89,8 +82,8 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
     all_alerts = []
 
     all_alerts =
-      Enum.reduce(sources_to_check, all_alerts, fn {source_key, config}, alerts ->
-        source_alerts = display_source_health(source_key, config, days)
+      Enum.reduce(sources_to_check, all_alerts, fn source_key, alerts ->
+        source_alerts = display_source_health(source_key, days)
         alerts ++ source_alerts
       end)
 
@@ -98,13 +91,17 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
     display_summary(all_alerts, days)
   end
 
-  defp display_source_health(source_key, config, days) do
-    IO.puts(IO.ANSI.blue() <> "📊 #{config.display_name}" <> IO.ANSI.reset())
+  defp display_source_health(source_key, days) do
+    display_name = SourcePatterns.get_display_name(source_key)
+    {:ok, sync_worker} = SourcePatterns.get_sync_worker(source_key)
+    child_job_key = Map.get(@child_job_keys, source_key, "jobs_scheduled")
+
+    IO.puts(IO.ANSI.blue() <> "📊 #{display_name}" <> IO.ANSI.reset())
     IO.puts(String.duplicate("─", 70))
 
     # Get all SyncJob executions for this source in the time range
     from_date = days_ago(days)
-    executions = fetch_sync_job_executions(config.pattern, from_date)
+    executions = fetch_sync_job_executions(sync_worker, from_date)
 
     if Enum.empty?(executions) do
       IO.puts(
@@ -146,7 +143,7 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
             execs ->
               # Find the latest execution for this date
               latest = Enum.max_by(execs, & &1.attempted_at)
-              display_execution(latest, config)
+              display_execution(latest, child_job_key)
 
               if latest.state != "completed" do
                 error_msg = get_in(latest.results || %{}, ["error_message"]) || "Unknown error"
@@ -199,7 +196,7 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
     end
   end
 
-  defp display_execution(exec, config) do
+  defp display_execution(exec, child_job_key) do
     status =
       case exec.state do
         "completed" -> IO.ANSI.green() <> pad("✅ OK", 10) <> IO.ANSI.reset()
@@ -216,7 +213,7 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
       end
 
     jobs_spawned =
-      case get_in(exec.results || %{}, [config.child_job_key]) do
+      case get_in(exec.results || %{}, [child_job_key]) do
         nil -> "-"
         count -> "#{count}"
       end
@@ -248,7 +245,7 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
       alerts
       |> Enum.group_by(fn {source, _type, _msg} -> source end)
       |> Enum.each(fn {source, source_alerts} ->
-        source_name = @sources[source].display_name
+        source_name = SourcePatterns.get_display_name(source)
         IO.puts("  #{source_name}:")
 
         Enum.each(source_alerts, fn {_source, type, msg} ->
