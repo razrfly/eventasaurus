@@ -34,6 +34,9 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   attr :matching_occurrences, :list, default: []
   attr :is_movie_event, :boolean, default: false
   attr :is_venue_event, :boolean, default: false
+  # Phase 2: Context Detection attributes
+  attr :entry_context, :atom, default: :standard_event
+  attr :is_single_occurrence, :boolean, default: false
   attr :filter_preview_count, :integer, default: nil
   attr :movie_id, :integer, default: nil
   attr :city_id, :integer, default: nil
@@ -170,6 +173,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   end
 
   # Mode Selection View
+  # Phase 2: Adaptive behavior based on entry_context and is_single_occurrence
   defp render_mode_selection(assigns) do
     ~H"""
     <div class="space-y-6">
@@ -187,59 +191,95 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
             </svg>
           </div>
           <div class="ml-4 flex-1">
-            <h3 class="text-lg font-bold text-gray-900">Quick Plan</h3>
+            <h3 class="text-lg font-bold text-gray-900">
+              <%= if @is_single_occurrence, do: "Create Event", else: "Quick Plan" %>
+            </h3>
             <p class="mt-1 text-sm text-gray-600">
-              <%= if @selected_occurrence do %>
-                Create an event for <span class="font-semibold"><%= format_occurrence_datetime_full(@selected_occurrence) %></span>
-                <%= if Map.get(@selected_occurrence, :venue_name) do %>
-                  at <span class="font-semibold"><%= @selected_occurrence.venue_name %></span>
-                <% end %>
-              <% else %>
-                Pick a specific showtime and create your event instantly
+              <%= cond do %>
+                <% @is_single_occurrence && @selected_occurrence -> %>
+                  Create an event for <span class="font-semibold"><%= format_occurrence_datetime_full(@selected_occurrence) %></span>
+                  <%= if Map.get(@selected_occurrence, :venue_name) do %>
+                    at <span class="font-semibold"><%= @selected_occurrence.venue_name %></span>
+                  <% end %>
+                <% @entry_context == :specific_showtime && @selected_occurrence -> %>
+                  Create an event for <span class="font-semibold"><%= format_occurrence_datetime_full(@selected_occurrence) %></span>
+                  <%= if Map.get(@selected_occurrence, :venue_name) do %>
+                    at <span class="font-semibold"><%= @selected_occurrence.venue_name %></span>
+                  <% end %>
+                  <span class="block mt-1 text-xs text-green-600">✓ Showtime already selected</span>
+                <% @selected_occurrence -> %>
+                  Create an event for <span class="font-semibold"><%= format_occurrence_datetime_full(@selected_occurrence) %></span>
+                  <%= if Map.get(@selected_occurrence, :venue_name) do %>
+                    at <span class="font-semibold"><%= @selected_occurrence.venue_name %></span>
+                  <% end %>
+                <% true -> %>
+                  Pick a specific showtime and create your event instantly
               <% end %>
             </p>
             <p class="mt-2 text-xs text-gray-500">
-              Best for: When you already know which theater and time works for your group
+              <%= if @is_single_occurrence do %>
+                This event has a single date/time
+              <% else %>
+                Best for: When you already know which theater and time works for your group
+              <% end %>
             </p>
           </div>
         </div>
       </button>
 
-      <!-- Flexible Plan Option -->
-      <button
-        type="button"
-        phx-click="select_planning_mode"
-        phx-value-mode="flexible"
-        class="w-full p-6 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition text-left"
-      >
-        <div class="flex items-start">
-          <div class="flex-shrink-0">
-            <svg class="w-12 h-12 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-          </div>
-          <div class="ml-4 flex-1">
-            <h3 class="text-lg font-bold text-gray-900">Flexible Plan with Poll</h3>
-            <p class="mt-1 text-sm text-gray-600">
-              Create a poll with multiple showtime options and let your friends vote on which time works best
-            </p>
-            <div class="mt-3 p-3 bg-purple-50 rounded-md border border-purple-100">
-              <p class="text-xs text-gray-700">
-                <span class="font-semibold">How it works:</span>
-              </p>
-              <ol class="mt-1 text-xs text-gray-600 space-y-1 list-decimal list-inside">
-                <li>Choose date range and preferred times</li>
-                <li>Invite friends to vote on options</li>
-                <li>Everyone picks their availability</li>
-                <li>Book the time that works for most people</li>
-              </ol>
+      <!-- Flexible Plan Option - Hidden for single-occurrence events -->
+      <!-- Recommended for generic movie pages (no specific showtime selected) -->
+      <%= unless @is_single_occurrence do %>
+        <% is_recommended = @entry_context == :generic_movie %>
+        <button
+          type="button"
+          phx-click="select_planning_mode"
+          phx-value-mode="flexible"
+          class={[
+            "w-full p-6 border-2 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition text-left relative",
+            if(is_recommended, do: "border-purple-400 bg-purple-50/50", else: "border-gray-200")
+          ]}
+        >
+          <!-- Recommended badge for generic movie pages -->
+          <%= if is_recommended do %>
+            <div class="absolute -top-3 left-4 px-2 py-0.5 bg-purple-600 text-white text-xs font-semibold rounded-full">
+              ✨ Recommended
             </div>
-            <p class="mt-2 text-xs text-gray-500">
-              Best for: When your group needs to coordinate schedules
-            </p>
+          <% end %>
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <svg class="w-12 h-12 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+            </div>
+            <div class="ml-4 flex-1">
+              <h3 class="text-lg font-bold text-gray-900">
+                Flexible Plan with Poll
+                <%= if is_recommended do %>
+                  <span class="text-sm font-normal text-purple-600 ml-1">— Best for groups</span>
+                <% end %>
+              </h3>
+              <p class="mt-1 text-sm text-gray-600">
+                Create a poll with multiple showtime options and let your friends vote on which time works best
+              </p>
+              <div class="mt-3 p-3 bg-purple-50 rounded-md border border-purple-100">
+                <p class="text-xs text-gray-700">
+                  <span class="font-semibold">How it works:</span>
+                </p>
+                <ol class="mt-1 text-xs text-gray-600 space-y-1 list-decimal list-inside">
+                  <li>Choose date range and preferred times</li>
+                  <li>Invite friends to vote on options</li>
+                  <li>Everyone picks their availability</li>
+                  <li>Book the time that works for most people</li>
+                </ol>
+              </div>
+              <p class="mt-2 text-xs text-gray-500">
+                Best for: When your group needs to coordinate schedules
+              </p>
+            </div>
           </div>
-        </div>
-      </button>
+        </button>
+      <% end %>
 
       <!-- Event Preview -->
       <%= if @public_event do %>
@@ -367,7 +407,8 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
       <!-- Actions -->
       <div class="flex justify-end gap-4 pt-4 border-t">
-        <%= if @public_event do %>
+        <!-- Hide back button for single-occurrence events (auto-skipped to Quick Plan) -->
+        <%= if @public_event && !@is_single_occurrence do %>
           <button
             type="button"
             phx-click="select_planning_mode"
@@ -531,8 +572,10 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
       <!-- Filter Preview Count - only show when user has selected filters -->
       <%
+        # Check for date selections, time preferences (movies), and meal periods (venues)
         has_selected_filters = Enum.any?(Map.get(@filter_criteria, :selected_dates, [])) ||
-                               Enum.any?(Map.get(@filter_criteria, :time_preferences, []))
+                               Enum.any?(Map.get(@filter_criteria, :time_preferences, [])) ||
+                               Enum.any?(Map.get(@filter_criteria, :meal_periods, []))
       %>
       <%= if @filter_preview_count != nil and has_selected_filters do %>
         <div class={[
@@ -573,7 +616,8 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
       <!-- Actions -->
       <div class="flex justify-end gap-4 pt-4 border-t">
-        <%= if @public_event do %>
+        <!-- Hide back button for single-occurrence events (auto-skipped to Quick Plan) -->
+        <%= if @public_event && !@is_single_occurrence do %>
           <button
             type="button"
             phx-click="select_planning_mode"

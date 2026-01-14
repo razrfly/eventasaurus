@@ -37,6 +37,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.UrlHelper
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+  alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.EventRefresh
   alias EventasaurusWeb.Cache.EventPageCache
   alias Eventasaurus.SocialCards.HashGenerator
@@ -82,6 +83,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:matching_occurrences, [])
       |> assign(:is_movie_event, false)
       |> assign(:is_venue_event, false)
+      |> assign(:entry_context, :standard_event)
+      |> assign(:is_single_occurrence, false)
       |> assign(:filter_preview_count, nil)
       |> assign(:date_availability, %{})
 
@@ -575,8 +578,41 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         is_movie = is_movie_screening?(event)
         is_venue = !is_nil(event.venue) && is_nil(get_movie_data(event))
 
+        # Phase 2: Context Detection System
+        # Detect if single occurrence (only one showtime/date)
+        occurrence_count = PublicEvent.occurrence_count(event)
+        is_single_occurrence = occurrence_count == 1
+
+        # Detect entry context based on event type and user selection
+        selected_occurrence = socket.assigns.selected_occurrence
+
+        entry_context =
+          cond do
+            is_single_occurrence ->
+              :single_occurrence
+
+            is_movie && !is_nil(selected_occurrence) ->
+              :specific_showtime
+
+            is_movie ->
+              :generic_movie
+
+            true ->
+              :standard_event
+          end
+
         # Fetch date availability counts based on event type
         date_availability = fetch_date_availability(event, is_movie, is_venue)
+
+        # Phase 3: Adaptive Modal Behavior
+        # - Single-occurrence events → Skip directly to Quick Plan
+        # - Multi-showtime events → Show mode selection
+        initial_planning_mode =
+          if is_single_occurrence do
+            :quick
+          else
+            :selection
+          end
 
         {:noreply,
          socket
@@ -584,7 +620,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
          |> assign(:modal_organizer, user)
          |> assign(:is_movie_event, is_movie)
          |> assign(:is_venue_event, is_venue)
-         |> assign(:planning_mode, :selection)
+         |> assign(:entry_context, entry_context)
+         |> assign(:is_single_occurrence, is_single_occurrence)
+         |> assign(:planning_mode, initial_planning_mode)
          |> assign(:date_availability, date_availability)}
     end
   end
@@ -1379,6 +1417,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           filter_preview_count={@filter_preview_count}
           is_movie_event={@is_movie_event}
           is_venue_event={@is_venue_event}
+          entry_context={@entry_context}
+          is_single_occurrence={@is_single_occurrence}
           date_availability={@date_availability}
         />
       <% end %>

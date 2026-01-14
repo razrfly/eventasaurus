@@ -276,7 +276,11 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   def get_date_availability_counts("movie", movie_id, date_list, filter_criteria)
       when is_integer(movie_id) do
     try do
+      # Get venue_ids from filter_criteria (handle both atom and string keys)
+      venue_ids = get_filter_value(filter_criteria, :venue_ids, [])
+
       # Get all events linked to this movie with their occurrences JSONB
+      # Optionally filtered by venue_ids if provided
       events_query =
         from(pe in PublicEvent,
           join: em in EventMovie,
@@ -284,6 +288,18 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
           where: em.movie_id == ^movie_id,
           select: pe.occurrences
         )
+
+      events_query =
+        if is_list(venue_ids) and length(venue_ids) > 0 do
+          from(pe in PublicEvent,
+            join: em in EventMovie,
+            on: em.event_id == pe.id,
+            where: em.movie_id == ^movie_id and pe.venue_id in ^venue_ids,
+            select: pe.occurrences
+          )
+        else
+          events_query
+        end
 
       all_occurrences = Repo.all(events_query)
 
@@ -298,7 +314,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
         end)
 
       # Count showtimes for each date in the date_list
-      time_preferences = Map.get(filter_criteria, :time_preferences, [])
+      time_preferences = get_filter_value(filter_criteria, :time_preferences, [])
 
       counts =
         Enum.reduce(date_list, %{}, fn date, acc ->
@@ -498,11 +514,12 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   end
 
   # Time preference to hour range mapping
+  # These must match hour_to_time_slot/1 for consistent filtering
   defp time_range_for_preference("morning"), do: {6, 12}
   defp time_range_for_preference("afternoon"), do: {12, 17}
   defp time_range_for_preference("evening"), do: {17, 22}
-  # late_night wraps around midnight: 22:00-02:00
-  defp time_range_for_preference("late_night"), do: {:wrap, 22, 2}
+  # late_night wraps around midnight: 22:00-06:00 (matches hour_to_time_slot)
+  defp time_range_for_preference("late_night"), do: {:wrap, 22, 6}
   defp time_range_for_preference(_), do: nil
 
   # Venue time slot generation
@@ -510,7 +527,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   defp generate_venue_time_slots(venue, filter_criteria) do
     date_range = get_date_range(filter_criteria)
     meal_periods = get_meal_periods(filter_criteria)
-    limit = Map.get(filter_criteria, :limit, @default_limit)
+    limit = get_filter_value(filter_criteria, :limit, @default_limit)
 
     # Generate time slots for each date × meal period combination
     time_slots =
@@ -524,21 +541,33 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     time_slots
   end
 
-  defp get_date_range(%{date_range: %{start: start_date, end: end_date}}) do
-    Date.range(start_date, end_date) |> Enum.to_list()
+  # Get date range, handling both atom and string keys
+  defp get_date_range(filter_criteria) do
+    date_range = get_filter_value(filter_criteria, :date_range, nil)
+
+    case date_range do
+      %{start: start_date, end: end_date} ->
+        Date.range(start_date, end_date) |> Enum.to_list()
+
+      {start_date, end_date} ->
+        Date.range(start_date, end_date) |> Enum.to_list()
+
+      _ ->
+        []
+    end
   end
 
-  defp get_date_range(%{date_range: {start_date, end_date}}) do
-    Date.range(start_date, end_date) |> Enum.to_list()
+  # Get meal periods, handling both atom and string keys
+  defp get_meal_periods(filter_criteria) do
+    periods = get_filter_value(filter_criteria, :meal_periods, [])
+
+    if is_list(periods) and length(periods) > 0 do
+      periods
+    else
+      # Default to all meal periods if none specified or empty list
+      ["breakfast", "lunch", "dinner"]
+    end
   end
-
-  defp get_date_range(_), do: []
-
-  defp get_meal_periods(%{meal_periods: periods}) when is_list(periods) and length(periods) > 0,
-    do: periods
-
-  # Default to all meal periods if none specified or empty list
-  defp get_meal_periods(_), do: ["breakfast", "lunch", "dinner"]
 
   defp should_include_meal_period?(date, "brunch") do
     # Brunch only on weekends
@@ -577,4 +606,17 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   defp meal_period_to_time_range("late_night"), do: {22, 0, 2, 0}
   # Default to lunch hours if unknown
   defp meal_period_to_time_range(_), do: {12, 0, 15, 0}
+
+  # Helper to get filter values supporting both atom and string keys
+  # This handles cases where filter_criteria comes from different sources
+  # (LiveView assigns use atoms, JSON/external data may use strings)
+  defp get_filter_value(filter_criteria, key, default) when is_atom(key) do
+    string_key = Atom.to_string(key)
+
+    cond do
+      Map.has_key?(filter_criteria, key) -> Map.get(filter_criteria, key)
+      Map.has_key?(filter_criteria, string_key) -> Map.get(filter_criteria, string_key)
+      true -> default
+    end
+  end
 end
