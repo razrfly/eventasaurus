@@ -278,6 +278,7 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
               :failure -> "❌"
               :stale -> "⏰"
               :no_executions -> "🚫"
+              :worker_not_found -> "🔧"
             end
 
           IO.puts("    #{icon} #{msg}")
@@ -291,8 +292,9 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
     missing_count = Enum.count(alerts, fn {_, type, _} -> type == :missing end)
     failure_count = Enum.count(alerts, fn {_, type, _} -> type == :failure end)
     stale_count = Enum.count(alerts, fn {_, type, _} -> type == :stale end)
+    worker_not_found_count = Enum.count(alerts, fn {_, type, _} -> type == :worker_not_found end)
 
-    if missing_count > 0 || failure_count > 0 || stale_count > 0 do
+    if missing_count > 0 || failure_count > 0 || stale_count > 0 || worker_not_found_count > 0 do
       IO.puts(IO.ANSI.blue() <> "💡 Recommendations:" <> IO.ANSI.reset())
 
       if missing_count > 0 do
@@ -306,6 +308,11 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
       if stale_count > 0 do
         IO.puts("  • Verify the scraper is enabled in Admin > Discovery > City Config")
         IO.puts("  • Check if Oban worker is running: `mix monitor.jobs stats --hours 24`")
+      end
+
+      if worker_not_found_count > 0 do
+        IO.puts("  • Check SourceRegistry for missing source definitions")
+        IO.puts("  • Verify source key format matches registry (hyphens vs underscores)")
       end
 
       IO.puts("")
