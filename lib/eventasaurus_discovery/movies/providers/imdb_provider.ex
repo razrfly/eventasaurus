@@ -1,6 +1,6 @@
 defmodule EventasaurusDiscovery.Movies.Providers.ImdbProvider do
   @moduledoc """
-  IMDB provider implementation using Zyte web scraping.
+  IMDB provider implementation using Crawlbase web scraping.
 
   This is a tertiary/fallback provider that searches IMDB via web scraping
   and bridges results to TMDB via IMDB IDs. Particularly useful for:
@@ -11,7 +11,7 @@ defmodule EventasaurusDiscovery.Movies.Providers.ImdbProvider do
 
   ## How It Works
 
-  1. Search IMDB web with Polish title using Zyte browser rendering
+  1. Search IMDB web with Polish title using Crawlbase JavaScript rendering
   2. Parse search results to extract IMDB IDs
   3. Bridge IMDB ID → TMDB ID via TMDB's `/find` endpoint
   4. Return TMDB-compatible results with confidence scoring
@@ -22,8 +22,8 @@ defmodule EventasaurusDiscovery.Movies.Providers.ImdbProvider do
 
   ## Requirements
 
-  - `ZYTE_API_KEY` environment variable must be set
-  - Uses browser rendering for JavaScript-heavy IMDB pages
+  - `CRAWLBASE_JS_API_KEY` environment variable must be set
+  - Uses JavaScript rendering for IMDB pages
   - More expensive per-request than API-based providers
 
   ## Supported Languages
@@ -60,9 +60,9 @@ defmodule EventasaurusDiscovery.Movies.Providers.ImdbProvider do
 
   @impl true
   def search(query, opts \\ []) do
-    # Only proceed if Zyte is available
+    # Only proceed if Crawlbase is available
     unless ImdbService.available?() do
-      Logger.debug("ImdbProvider: Zyte not configured, skipping")
+      Logger.debug("ImdbProvider: Crawlbase not configured, skipping")
       {:ok, []}
     else
       year = Keyword.get(opts, :year) || Map.get(query, :year)
