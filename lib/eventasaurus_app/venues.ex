@@ -591,12 +591,18 @@ defmodule EventasaurusApp.Venues do
   @doc """
   Finds groups of duplicate venues based on proximity and name similarity.
 
-  Returns a list of duplicate groups, where each group contains venues that are
-  considered duplicates of each other.
+  Uses distance-based similarity thresholds (same as DuplicateDetection module):
+  - < 50m: 0% similarity required (same location = same venue)
+  - 50-100m: 40% similarity required
+  - 100-200m: 50% similarity required
+  - > 200m: 60% similarity required
+
+  This ensures the admin UI finds the same duplicates that would be blocked
+  during venue creation.
 
   ## Parameters
-  - `distance_threshold` - Maximum distance in meters (default: 100)
-  - `similarity_threshold` - Minimum name similarity 0.0-1.0 (default: 0.80)
+  - `:distance` - Maximum search distance in meters (default: 200)
+  - `:row_limit` - Maximum pairs to return to prevent OOM (default: 500)
 
   ## Returns
   List of maps with:
@@ -617,54 +623,66 @@ defmodule EventasaurusApp.Venues do
   """
   @spec find_duplicate_groups(keyword()) :: [map()]
   def find_duplicate_groups(opts \\ []) do
-    # For finding existing duplicates, use broader thresholds to catch more potential duplicates
-    # Default: 200m and 0.6 similarity (catches venues at "nearby" distance tier)
-    distance = Keyword.get(opts, :distance, 200)
-    similarity = Keyword.get(opts, :min_similarity, 0.6)
+    # Maximum search distance (default: 200m)
+    max_distance = Keyword.get(opts, :distance, 200)
     # Add a row limit to prevent OOM on large datasets (default: 500 pairs)
     row_limit = Keyword.get(opts, :row_limit, 500)
 
-    # Use a single optimized SQL query to find all duplicate pairs at once
-    # This replaces the O(n²) nested loop with n²/2 database queries
-    # Added LIMIT to prevent OOM on production systems
+    # Use distance-based similarity thresholds matching DuplicateDetection module:
+    # - < 50m: 0% similarity (same location = same venue)
+    # - 50-100m: 40% similarity
+    # - 100-200m: 50% similarity
+    # - > 200m: 60% similarity
+    #
+    # Uses a CTE to calculate distance first, then applies thresholds
     query = """
-    SELECT
-      v1.id as id1,
-      v1.name as name1,
-      v1.address as address1,
-      v1.latitude as lat1,
-      v1.longitude as lng1,
-      v1.slug as slug1,
-      v1.provider_ids as provider_ids1,
-      v2.id as id2,
-      v2.name as name2,
-      v2.address as address2,
-      v2.latitude as lat2,
-      v2.longitude as lng2,
-      v2.slug as slug2,
-      v2.provider_ids as provider_ids2,
-      ST_Distance(
-        ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
-        ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography
-      ) as distance,
-      similarity(v1.name, v2.name) as name_similarity
-    FROM venues v1
-    INNER JOIN venues v2 ON v1.id < v2.id
-    WHERE v1.latitude IS NOT NULL
-      AND v1.longitude IS NOT NULL
-      AND v2.latitude IS NOT NULL
-      AND v2.longitude IS NOT NULL
-      AND ST_DWithin(
-        ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
-        ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,
-        $1
-      )
-      AND similarity(v1.name, v2.name) >= $2
+    WITH venue_pairs AS (
+      SELECT
+        v1.id as id1,
+        v1.name as name1,
+        v1.address as address1,
+        v1.latitude as lat1,
+        v1.longitude as lng1,
+        v1.slug as slug1,
+        v1.provider_ids as provider_ids1,
+        v2.id as id2,
+        v2.name as name2,
+        v2.address as address2,
+        v2.latitude as lat2,
+        v2.longitude as lng2,
+        v2.slug as slug2,
+        v2.provider_ids as provider_ids2,
+        ST_Distance(
+          ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography
+        ) as distance,
+        similarity(v1.name, v2.name) as name_similarity
+      FROM venues v1
+      INNER JOIN venues v2 ON v1.id < v2.id
+      WHERE v1.latitude IS NOT NULL
+        AND v1.longitude IS NOT NULL
+        AND v2.latitude IS NOT NULL
+        AND v2.longitude IS NOT NULL
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,
+          $1
+        )
+    )
+    SELECT * FROM venue_pairs
+    WHERE
+      -- Distance-based similarity thresholds (matching DuplicateDetection module)
+      CASE
+        WHEN distance < 50 THEN name_similarity >= 0.0   -- Same location = same venue
+        WHEN distance < 100 THEN name_similarity >= 0.4  -- Very close = low bar
+        WHEN distance < 200 THEN name_similarity >= 0.5  -- Nearby = moderate bar
+        ELSE name_similarity >= 0.6                      -- Distant = high bar
+      END
     ORDER BY name_similarity DESC, distance ASC
-    LIMIT $3
+    LIMIT $2
     """
 
-    case Repo.query(query, [distance, similarity, row_limit]) do
+    case Repo.query(query, [max_distance, row_limit]) do
       {:ok, %{rows: rows}} ->
         # Convert query results to venue structs and similarity data
         {duplicate_pairs, venues_map} =
