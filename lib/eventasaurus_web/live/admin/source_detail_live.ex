@@ -2431,21 +2431,19 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   # Collision metrics helpers (Phase 1)
   defp confidence_bar_color(range) when is_binary(range) do
     # Range format is like "90%-100%" - extract the starting percentage
-    case String.split(range, "-") do
-      [start_str | _] ->
-        start_pct = start_str |> String.replace("%", "") |> String.to_integer()
-
-        cond do
-          start_pct >= 90 -> "bg-green-500"
-          start_pct >= 80 -> "bg-green-400"
-          start_pct >= 70 -> "bg-yellow-500"
-          start_pct >= 60 -> "bg-yellow-400"
-          start_pct >= 50 -> "bg-orange-500"
-          true -> "bg-gray-400"
-        end
-
-      _ ->
-        "bg-gray-400"
+    with [start_str | _] <- String.split(range, "-"),
+         clean_str <- String.replace(start_str, "%", ""),
+         {start_pct, _} <- Integer.parse(clean_str) do
+      cond do
+        start_pct >= 90 -> "bg-green-500"
+        start_pct >= 80 -> "bg-green-400"
+        start_pct >= 70 -> "bg-yellow-500"
+        start_pct >= 60 -> "bg-yellow-400"
+        start_pct >= 50 -> "bg-orange-500"
+        true -> "bg-gray-400"
+      end
+    else
+      _ -> "bg-gray-400"
     end
   end
 

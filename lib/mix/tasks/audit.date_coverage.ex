@@ -1,13 +1,13 @@
 defmodule Mix.Tasks.Audit.DateCoverage do
   @moduledoc """
-  Audit date coverage for cinema scrapers (Cinema City and Repertuary).
+  Audit date coverage for all scrapers.
 
   Verifies that scrapers are creating events for the expected date range
   (typically 7 days ahead) and identifies any gaps in coverage.
 
   ## Usage
 
-      # Check default 7-day coverage
+      # Check default 7-day coverage for all sources
       mix audit.date_coverage
 
       # Check specific number of days ahead
@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Audit.DateCoverage do
 
       # Check specific source only
       mix audit.date_coverage --source cinema_city
-      mix audit.date_coverage --source repertuary
+      mix audit.date_coverage --source bandsintown
 
   ## Output
 
@@ -32,28 +32,32 @@ defmodule Mix.Tasks.Audit.DateCoverage do
   import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Sources.SourcePatterns
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
 
   @shortdoc "Audit date coverage for cinema scrapers"
 
-  @sources %{
+  # Source-specific threshold configuration
+  # Sources not listed here use default thresholds
+  @source_thresholds %{
     "cinema_city" => %{
-      slug: "cinema-city",
-      display_name: "Cinema City",
       # From Config.days_ahead()
       expected_days: 7,
       # Minimum events expected per day (cinemas × movies per cinema)
       min_events_per_day: 20
     },
     "repertuary" => %{
-      slug: "repertuary",
-      display_name: "Repertuary",
       # From SyncJob - fetches days 0-6
       expected_days: 7,
       # Minimum events expected per day
       min_events_per_day: 10
     }
+  }
+
+  @default_thresholds %{
+    expected_days: 7,
+    min_events_per_day: 10
   }
 
   @impl Mix.Task
@@ -70,22 +74,17 @@ defmodule Mix.Tasks.Audit.DateCoverage do
     source = opts[:source]
 
     # Validate source if provided
-    if source && !Map.has_key?(@sources, source) do
+    if source && !SourcePatterns.valid_source?(source) do
       IO.puts(IO.ANSI.red() <> "❌ Unknown source: #{source}" <> IO.ANSI.reset())
-      IO.puts("\nAvailable sources:")
-
-      Enum.each(@sources, fn {key, config} ->
-        IO.puts("  - #{key} (#{config.display_name})")
-      end)
-
+      SourcePatterns.print_available_sources()
       System.halt(1)
     end
 
     sources_to_check =
       if source do
-        [{source, @sources[source]}]
+        [source]
       else
-        Map.to_list(@sources)
+        SourcePatterns.all_cli_keys()
       end
 
     IO.puts("")
@@ -99,8 +98,8 @@ defmodule Mix.Tasks.Audit.DateCoverage do
     all_alerts = []
 
     all_alerts =
-      Enum.reduce(sources_to_check, all_alerts, fn {source_key, config}, alerts ->
-        source_alerts = display_source_coverage(source_key, config, days)
+      Enum.reduce(sources_to_check, all_alerts, fn source_key, alerts ->
+        source_alerts = display_source_coverage(source_key, days)
         alerts ++ source_alerts
       end)
 
@@ -108,20 +107,26 @@ defmodule Mix.Tasks.Audit.DateCoverage do
     display_summary(all_alerts, days)
   end
 
-  defp display_source_coverage(source_key, config, days) do
-    IO.puts(IO.ANSI.blue() <> "📊 #{config.display_name}" <> IO.ANSI.reset())
+  defp display_source_coverage(source_key, days) do
+    display_name = SourcePatterns.get_display_name(source_key)
+    # Convert CLI key (underscore) to registry slug (hyphen)
+    source_slug = String.replace(source_key, "_", "-")
+    # Get thresholds for this source or use defaults
+    thresholds = Map.get(@source_thresholds, source_key, @default_thresholds)
+
+    IO.puts(IO.ANSI.blue() <> "📊 #{display_name}" <> IO.ANSI.reset())
     IO.puts(String.duplicate("─", 70))
 
     # Get source ID from database
-    case Repo.get_by(Source, slug: config.slug) do
+    case Repo.get_by(Source, slug: source_slug) do
       nil ->
         IO.puts(
           IO.ANSI.red() <>
-            "  ❌ Source not found in database: #{config.slug}" <> IO.ANSI.reset()
+            "  ❌ Source not found in database: #{source_slug}" <> IO.ANSI.reset()
         )
 
         IO.puts("")
-        [{source_key, :source_not_found, "Source #{config.slug} not found in database"}]
+        [{source_key, :source_not_found, "Source #{source_slug} not found in database"}]
 
       source ->
         # Get event counts by date
@@ -141,7 +146,7 @@ defmodule Mix.Tasks.Audit.DateCoverage do
           |> Enum.flat_map(fn offset ->
             date = Date.add(today, offset)
             event_count = Map.get(coverage, date, 0)
-            display_date_row(source_key, config, date, event_count)
+            display_date_row(source_key, thresholds, date, event_count)
           end)
 
         # Show coverage statistics
@@ -173,9 +178,9 @@ defmodule Mix.Tasks.Audit.DateCoverage do
     end
   end
 
-  defp display_date_row(source_key, config, date, event_count) do
+  defp display_date_row(source_key, thresholds, date, event_count) do
     day_name = date |> Date.day_of_week() |> day_abbreviation()
-    expected = config.min_events_per_day
+    expected = thresholds.min_events_per_day
 
     {status, status_color, coverage_pct} =
       cond do
@@ -243,7 +248,7 @@ defmodule Mix.Tasks.Audit.DateCoverage do
       alerts
       |> Enum.group_by(fn {source, _type, _msg} -> source end)
       |> Enum.each(fn {source, source_alerts} ->
-        source_name = @sources[source].display_name
+        source_name = SourcePatterns.get_display_name(source)
         IO.puts("  #{source_name}:")
 
         # Limit displayed alerts per source
