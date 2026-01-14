@@ -109,46 +109,80 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       |> Repo.all()
 
     # Group by venue and extract detailed information from ALL occurrences
+    # Separates into upcoming and recent past for better UX
     venues_with_info =
       screenings
       |> Enum.group_by(& &1.venue.id)
       |> Enum.map(fn {_venue_id, events} ->
         first_event = List.first(events)
 
-        # Extract ALL occurrences from ALL events for this venue
-        all_occurrences = extract_all_occurrences(events)
+        # Extract occurrences separated by time (upcoming vs recent past)
+        {upcoming_occurrences, recent_past_occurrences} = extract_occurrences_by_time(events)
 
-        # Count actual showtimes (occurrences), not events
-        showtime_count = length(all_occurrences)
+        # Count showtimes in each category
+        upcoming_count = length(upcoming_occurrences)
+        recent_past_count = length(recent_past_occurrences)
 
-        # Get date range from occurrences
+        # Get date range from upcoming occurrences (primary display)
+        # Fall back to recent past if no upcoming
         date_range =
-          if length(all_occurrences) > 0 do
-            extract_occurrence_date_range(all_occurrences)
-          else
-            format_date_short(Date.utc_today())
+          cond do
+            upcoming_count > 0 ->
+              extract_occurrence_date_range(upcoming_occurrences)
+
+            recent_past_count > 0 ->
+              extract_occurrence_date_range(recent_past_occurrences)
+
+            true ->
+              format_date_short(Date.utc_today())
           end
 
-        # Extract unique formats from occurrence labels
+        # Extract unique formats from all occurrences (both upcoming and past)
+        all_occurrences = upcoming_occurrences ++ recent_past_occurrences
         formats = extract_occurrence_formats(all_occurrences)
 
-        # Extract unique dates for optional display
+        # Extract unique dates for optional display (upcoming first)
         unique_dates =
           all_occurrences
           |> Enum.map(& &1.date)
           |> Enum.uniq()
           |> Enum.sort()
 
+        # Calculate past date range separately (for recently missed section)
+        past_date_range =
+          if recent_past_count > 0 do
+            extract_occurrence_date_range(recent_past_occurrences)
+          else
+            nil
+          end
+
         {first_event.venue,
          %{
-           count: showtime_count,
+           # New fields for upcoming vs recent past separation
+           upcoming_count: upcoming_count,
+           recent_past_count: recent_past_count,
+           upcoming_occurrences: upcoming_occurrences,
+           recent_past_occurrences: recent_past_occurrences,
+           # Keep count for backwards compatibility (now shows upcoming only for display)
+           count: upcoming_count,
            slug: first_event.slug,
            date_range: date_range,
+           past_date_range: past_date_range,
            formats: formats,
            dates: unique_dates
          }}
       end)
-      |> Enum.sort_by(fn {venue, _info} -> venue.name end)
+      # Filter out venues with no data in either category
+      |> Enum.filter(fn {_venue, info} ->
+        info.upcoming_count > 0 or info.recent_past_count > 0
+      end)
+      # Sort: venues with upcoming first (by name), then recent-past-only venues (by name)
+      |> Enum.sort_by(fn {venue, info} ->
+        # Primary sort: has upcoming (0) vs only past (1)
+        # Secondary sort: venue name
+        has_upcoming = if info.upcoming_count > 0, do: 0, else: 1
+        {has_upcoming, venue.name}
+      end)
 
     # Sum up all showtime counts from all venues
     total_showtimes =
@@ -617,41 +651,62 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   # Helper functions
 
   # Extract ALL occurrences from all events and parse them into structured data
-  defp extract_all_occurrences(events) do
+  # Returns {upcoming, recent_past} tuple where:
+  # - upcoming: occurrences with DateTime > now
+  # - recent_past: occurrences within the last `past_days` days (default 7)
+  @default_recent_past_days 7
+
+  defp extract_occurrences_by_time(events, past_days \\ @default_recent_past_days) do
     now = DateTime.utc_now()
+    today = Date.utc_today()
+    cutoff_date = Date.add(today, -past_days)
 
-    events
-    |> Enum.flat_map(fn event ->
-      case get_in(event.occurrences, ["dates"]) do
-        dates when is_list(dates) ->
-          dates
-          |> Enum.map(fn date_info ->
-            with {:ok, date} <- Date.from_iso8601(date_info["date"]),
-                 {:ok, time} <- parse_time_string(date_info["time"]) do
-              # Create datetime in UTC
-              utc_datetime = DateTime.new!(date, time, "Etc/UTC")
+    all_occurrences =
+      events
+      |> Enum.flat_map(fn event ->
+        case get_in(event.occurrences, ["dates"]) do
+          dates when is_list(dates) ->
+            dates
+            |> Enum.map(fn date_info ->
+              with {:ok, date} <- Date.from_iso8601(date_info["date"]),
+                   {:ok, time} <- parse_time_string(date_info["time"]) do
+                # Create datetime in UTC
+                utc_datetime = DateTime.new!(date, time, "Etc/UTC")
 
-              # Only include future occurrences
-              if DateTime.compare(utc_datetime, now) == :gt do
                 %{
                   date: date,
                   datetime: utc_datetime,
                   label: date_info["label"]
                 }
               else
-                nil
+                _ -> nil
               end
-            else
-              _ -> nil
-            end
-          end)
-          |> Enum.reject(&is_nil/1)
+            end)
+            |> Enum.reject(&is_nil/1)
 
-        _ ->
-          []
-      end
-    end)
-    |> Enum.sort_by(& &1.datetime, {:asc, DateTime})
+          _ ->
+            []
+        end
+      end)
+
+    # Separate into upcoming and recent past
+    {upcoming, past} =
+      Enum.split_with(all_occurrences, fn occ ->
+        DateTime.compare(occ.datetime, now) == :gt
+      end)
+
+    # Filter past to only include recent (within past_days)
+    recent_past =
+      past
+      |> Enum.filter(fn occ ->
+        Date.compare(occ.date, cutoff_date) != :lt
+      end)
+
+    # Sort both lists
+    upcoming_sorted = Enum.sort_by(upcoming, & &1.datetime, {:asc, DateTime})
+    recent_past_sorted = Enum.sort_by(recent_past, & &1.datetime, {:desc, DateTime})
+
+    {upcoming_sorted, recent_past_sorted}
   end
 
   # Parse time string to Time struct
