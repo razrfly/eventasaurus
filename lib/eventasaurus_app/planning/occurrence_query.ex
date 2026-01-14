@@ -276,20 +276,43 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   def get_date_availability_counts("movie", movie_id, date_list, filter_criteria)
       when is_integer(movie_id) do
     try do
-      # Get all occurrences for each date
+      # Get all events linked to this movie with their occurrences JSONB
+      events_query =
+        from(pe in PublicEvent,
+          join: em in EventMovie,
+          on: em.event_id == pe.id,
+          where: em.movie_id == ^movie_id,
+          select: pe.occurrences
+        )
+
+      all_occurrences = Repo.all(events_query)
+
+      # Extract all showtimes from the JSONB occurrences field
+      all_showtimes =
+        all_occurrences
+        |> Enum.flat_map(fn occurrences ->
+          case occurrences do
+            %{"dates" => dates} when is_list(dates) -> dates
+            _ -> []
+          end
+        end)
+
+      # Count showtimes for each date in the date_list
+      time_preferences = Map.get(filter_criteria, :time_preferences, [])
+
       counts =
         Enum.reduce(date_list, %{}, fn date, acc ->
-          # Query occurrences for this specific date
-          date_filter =
-            Map.put(filter_criteria, :date_range, %{start: date, end: date})
+          date_string = Date.to_iso8601(date)
 
-          case find_movie_occurrences(movie_id, date_filter) do
-            {:ok, occurrences} ->
-              Map.put(acc, date, length(occurrences))
+          # Filter showtimes for this date
+          matching_showtimes =
+            all_showtimes
+            |> Enum.filter(fn showtime ->
+              showtime["date"] == date_string
+            end)
+            |> maybe_filter_by_time_preferences(time_preferences)
 
-            {:error, _} ->
-              Map.put(acc, date, 0)
-          end
+          Map.put(acc, date, length(matching_showtimes))
         end)
 
       {:ok, counts}
@@ -350,6 +373,37 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   def get_date_availability_counts(series_type, _series_id, _date_list, _filter_criteria) do
     {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue'"}
   end
+
+  # Helper functions for JSONB showtime filtering
+
+  # Filter showtimes by time preferences if specified
+  defp maybe_filter_by_time_preferences(showtimes, []), do: showtimes
+
+  defp maybe_filter_by_time_preferences(showtimes, time_preferences) do
+    Enum.filter(showtimes, fn showtime ->
+      case showtime["time"] do
+        nil ->
+          false
+
+        time_string ->
+          hour = parse_hour_from_time_string(time_string)
+          time_slot = hour_to_time_slot(hour)
+          time_slot in time_preferences
+      end
+    end)
+  end
+
+  defp parse_hour_from_time_string(time_string) do
+    case String.split(time_string, ":") do
+      [hour_str | _] -> String.to_integer(hour_str)
+      _ -> 0
+    end
+  end
+
+  defp hour_to_time_slot(hour) when hour >= 6 and hour < 12, do: "morning"
+  defp hour_to_time_slot(hour) when hour >= 12 and hour < 17, do: "afternoon"
+  defp hour_to_time_slot(hour) when hour >= 17 and hour < 22, do: "evening"
+  defp hour_to_time_slot(_hour), do: "late_night"
 
   # Private filter application functions
 

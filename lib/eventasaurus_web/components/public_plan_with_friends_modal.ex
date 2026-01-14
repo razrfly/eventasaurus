@@ -529,8 +529,12 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
         </div>
       </details>
 
-      <!-- Filter Preview Count -->
-      <%= if @filter_preview_count != nil do %>
+      <!-- Filter Preview Count - only show when user has selected filters -->
+      <%
+        has_selected_filters = Enum.any?(Map.get(@filter_criteria, :selected_dates, [])) ||
+                               Enum.any?(Map.get(@filter_criteria, :time_preferences, []))
+      %>
+      <%= if @filter_preview_count != nil and has_selected_filters do %>
         <div class={[
           "p-4 rounded-lg border",
           if(@filter_preview_count > 0,
@@ -787,10 +791,10 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
   defp format_occurrence_title(_, _is_movie_event), do: "Showtime"
 
-  defp format_occurrence_datetime_full(%{starts_at: starts_at}) when not is_nil(starts_at) do
+  defp format_occurrence_datetime_full(%{datetime: datetime}) when not is_nil(datetime) do
     # Parse ISO8601 datetime if it's a string
-    datetime =
-      case starts_at do
+    parsed_datetime =
+      case datetime do
         %DateTime{} = dt ->
           dt
 
@@ -804,7 +808,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
           DateTime.utc_now()
       end
 
-    Calendar.strftime(datetime, "%A, %B %d at %I:%M %p")
+    Calendar.strftime(parsed_datetime, "%A, %B %d at %I:%M %p")
   end
 
   defp format_occurrence_datetime_full(_), do: "Time TBD"

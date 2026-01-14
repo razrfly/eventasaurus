@@ -61,9 +61,10 @@ defmodule EventasaurusWeb.PublicPollLive do
                  :meta_image,
                  EventasaurusWeb.PollHelpers.generate_social_image_url(event, poll)
                )
+               # canonical_url will be set correctly in handle_params with request URI
                |> assign(
                  :canonical_url,
-                 "#{EventasaurusWeb.Endpoint.url()}/#{event.slug}/polls/#{poll.number}"
+                 UrlHelper.build_url("/#{event.slug}/polls/#{poll.number}")
                )
                # Anonymous voting state
                |> assign(:show_anonymous_voter, false)

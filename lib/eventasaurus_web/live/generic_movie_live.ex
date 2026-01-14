@@ -27,13 +27,24 @@ defmodule EventasaurusWeb.GenericMovieLive do
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.JsonLd.MovieSchema
   alias EventasaurusWeb.Services.TmdbService
+  alias EventasaurusWeb.UrlHelper
   alias Eventasaurus.CDN
   alias EventasaurusApp.Images.MovieImages
   import Ecto.Query
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, socket}
+    # CRITICAL: Capture request URI for correct URL generation (ngrok/Cloudflare support)
+    raw_uri = get_connect_info(socket, :uri)
+
+    request_uri =
+      cond do
+        match?(%URI{}, raw_uri) -> raw_uri
+        is_binary(raw_uri) -> URI.parse(raw_uri)
+        true -> nil
+      end
+
+    {:ok, assign(socket, :request_uri, request_uri)}
   end
 
   @impl true
@@ -75,8 +86,9 @@ defmodule EventasaurusWeb.GenericMovieLive do
           # Generate JSON-LD structured data
           json_ld = MovieSchema.generate_generic(movie_with_metadata, cities_with_screenings)
 
-          # Generate Open Graph meta tags
-          og_tags = build_movie_open_graph(movie, cities_with_screenings)
+          # Generate Open Graph meta tags with request URI for correct URL generation
+          og_tags =
+            build_movie_open_graph(movie, cities_with_screenings, socket.assigns.request_uri)
 
           {:noreply,
            socket
@@ -418,8 +430,9 @@ defmodule EventasaurusWeb.GenericMovieLive do
   end
 
   # Build Open Graph meta tags for generic movie page
-  defp build_movie_open_graph(movie, cities_with_screenings) do
-    base_url = EventasaurusWeb.Layouts.get_base_url()
+  defp build_movie_open_graph(movie, cities_with_screenings, request_uri) do
+    # Build canonical URL using UrlHelper for correct HTTPS handling with Cloudflare
+    canonical_url = UrlHelper.build_url("/movies/#{movie.slug}", request_uri)
 
     # Get movie poster image - use cached URL with fallback to original
     poster_url = MovieImages.get_poster_url(movie.id, movie.poster_url)
@@ -459,7 +472,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
         image_url: cdn_image_url,
         image_width: 500,
         image_height: 750,
-        url: "#{base_url}/movies/#{movie.slug}",
+        url: canonical_url,
         site_name: "Wombie",
         locale: "en_US",
         twitter_card: "summary_large_image"

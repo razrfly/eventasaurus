@@ -105,8 +105,16 @@ defmodule EventasaurusWeb.UrlHelper do
   end
 
   # Private helper to build base URL from URI components
+  # IMPORTANT: Forces HTTPS for external domains (production, ngrok, etc.)
+  # Only allows HTTP for localhost development
   defp build_base_url_from_uri(scheme, host, port) do
-    scheme = scheme || "https"
+    # Force HTTPS for external domains, allow HTTP for localhost only
+    # This handles Cloudflare SSL termination where internal requests use HTTP
+    scheme =
+      cond do
+        host in ["localhost", "127.0.0.1"] -> scheme || "https"
+        true -> "https"
+      end
 
     # Only include port if not standard (80 for http, 443 for https)
     if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) || is_nil(port) do

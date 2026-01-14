@@ -547,11 +547,20 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   # Get base URL from request_uri or fallback to config
+  # IMPORTANT: Forces HTTPS for external domains (production, ngrok, etc.)
+  # Only allows HTTP for localhost development
   defp get_base_url_from_request(nil), do: UrlHelper.get_base_url()
 
   defp get_base_url_from_request(%URI{} = uri) do
-    scheme = uri.scheme || "https"
-    host = uri.host || UrlHelper.get_base_url()
+    host = uri.host || "wombie.com"
+
+    # Force HTTPS for external domains, allow HTTP for localhost only
+    # This handles Cloudflare SSL termination where internal requests use HTTP
+    scheme =
+      cond do
+        host in ["localhost", "127.0.0.1"] -> uri.scheme || "https"
+        true -> "https"
+      end
 
     port_string =
       case uri.port do
