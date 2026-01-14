@@ -20,6 +20,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.ReservedSlugs
   alias EventasaurusWeb.EventAttendeesModalComponent
   alias EventasaurusWeb.ConnectWithContextModalComponent
+  alias EventasaurusWeb.UrlHelper
 
   import EventasaurusWeb.EventComponents, only: [ticket_selection_component: 1]
 
@@ -215,8 +216,8 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   @impl true
   def handle_params(_params, uri, socket) do
-    # Extract base URL from the current request URI for Open Graph tags
-    base_url = get_base_url_from_uri(uri)
+    # Parse URI for consistent URL building with UrlHelper (ngrok/Cloudflare support)
+    request_uri = URI.parse(uri)
 
     # Update meta_image and canonical_url with correct base URL if event exists
     socket =
@@ -227,29 +228,13 @@ defmodule EventasaurusWeb.PublicEventLive do
         hash_path = EventasaurusWeb.SocialCardView.social_card_url(event)
 
         socket
-        |> assign(:meta_image, "#{base_url}#{hash_path}")
-        |> assign(:canonical_url, "#{base_url}/#{event.slug}")
+        |> assign(:meta_image, UrlHelper.build_url(hash_path, request_uri))
+        |> assign(:canonical_url, UrlHelper.build_url("/#{event.slug}", request_uri))
       else
         socket
       end
 
     {:noreply, assign(socket, :current_uri, uri)}
-  end
-
-  # Extract base URL from URI, forcing HTTPS for non-localhost hosts
-  # This works with ngrok, Cloudflare, and other proxies that terminate SSL
-  defp get_base_url_from_uri(uri) when is_binary(uri) do
-    parsed = URI.parse(uri)
-
-    if parsed.scheme && parsed.host do
-      # Force HTTPS for external domains (ngrok, production), allow HTTP for localhost
-      scheme = if parsed.host in ["localhost", "127.0.0.1"], do: parsed.scheme, else: "https"
-      port_part = if parsed.port && parsed.port not in [80, 443], do: ":#{parsed.port}", else: ""
-      "#{scheme}://#{parsed.host}#{port_part}"
-    else
-      # Fallback to endpoint URL
-      EventasaurusWeb.Endpoint.url()
-    end
   end
 
   @impl true

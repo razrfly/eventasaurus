@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.PublicPollsLive do
   alias EventasaurusApp.Events
   alias EventasaurusWeb.PublicGenericPollComponent
   alias EventasaurusWeb.ReservedSlugs
+  alias EventasaurusWeb.UrlHelper
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.PollHelpers
@@ -47,7 +48,8 @@ defmodule EventasaurusWeb.PublicPollsLive do
            |> assign(:meta_title, "#{event.title} - Polls")
            |> assign(:meta_description, "View and participate in polls for #{event.title}")
            |> assign(:meta_image, EventasaurusWeb.PollHelpers.generate_social_image_url(event))
-           |> assign(:canonical_url, "#{EventasaurusWeb.Endpoint.url()}/#{event.slug}/polls")
+           # canonical_url will be updated in handle_params with request URI for ngrok support
+           |> assign(:canonical_url, UrlHelper.build_url("/#{event.slug}/polls"))
            # Anonymous voting state
            |> assign(:show_anonymous_voter, false)
            |> assign(:selected_poll_for_voting, nil)
@@ -59,6 +61,20 @@ defmodule EventasaurusWeb.PublicPollsLive do
 
   @impl true
   def handle_params(_params, uri, socket) do
+    # Parse URI for consistent URL building with UrlHelper (ngrok support)
+    request_uri = URI.parse(uri)
+
+    # Update canonical_url with correct base URL if event exists
+    socket =
+      if socket.assigns[:event] do
+        event = socket.assigns.event
+        canonical_path = "/#{event.slug}/polls"
+
+        assign(socket, :canonical_url, UrlHelper.build_url(canonical_path, request_uri))
+      else
+        socket
+      end
+
     {:noreply, assign(socket, :current_uri, uri)}
   end
 
