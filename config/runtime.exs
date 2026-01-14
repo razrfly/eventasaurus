@@ -264,7 +264,9 @@ config :eventasaurus, :http_strategies, %{
   # Week.pl: direct only
   week_pl: [:direct],
   # Kupbilecik: always use Zyte (React SPA requiring JS rendering)
-  kupbilecik: [:zyte]
+  kupbilecik: [:zyte],
+  # IMDB: always use Crawlbase (JS rendering for search results)
+  imdb: [:crawlbase]
 }
 
 # Configure Clerk authentication

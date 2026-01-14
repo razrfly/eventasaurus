@@ -1,6 +1,6 @@
 defmodule EventasaurusDiscovery.Movies.ImdbService do
   @moduledoc """
-  Service for searching IMDB via web scraping using the Zyte adapter.
+  Service for searching IMDB via web scraping using Crawlbase.
 
   IMDB's web search supports AKA (Also Known As) data, making it effective
   for matching Polish movie titles to their original English titles.
@@ -13,13 +13,14 @@ defmodule EventasaurusDiscovery.Movies.ImdbService do
   ## How It Works
 
   1. Constructs IMDB search URL with the Polish title
-  2. Uses Zyte browser rendering to fetch the search results page
+  2. Uses Crawlbase JavaScript rendering to fetch the search results page
   3. Parses the HTML to extract IMDB IDs and English titles
   4. Returns results that can be bridged to TMDB via the find endpoint
 
   ## Configuration
 
-  Requires `ZYTE_API_KEY` environment variable to be set.
+  Requires `CRAWLBASE_JS_API_KEY` environment variable to be set.
+  Uses the HTTP abstraction layer with `:imdb` source configuration.
 
   ## Usage
 
@@ -33,18 +34,19 @@ defmodule EventasaurusDiscovery.Movies.ImdbService do
 
   ## Limitations
 
-  - Requires Zyte API (costs per request)
+  - Requires Crawlbase API (costs per request)
   - Only finds movies that exist in IMDB database
   - Obscure local content may not have IMDB entries
-  - Rate limited by Zyte API
+  - Rate limited by Crawlbase API
   """
 
   require Logger
 
-  alias EventasaurusDiscovery.Http.Adapters.Zyte
+  alias EventasaurusDiscovery.Http.Client, as: HttpClient
+  alias EventasaurusDiscovery.Http.Adapters.Crawlbase
 
   @imdb_search_url "https://www.imdb.com/find/"
-  # Zyte browser rendering can take 30-60 seconds for IMDB
+  # Crawlbase browser rendering can take 30-60 seconds for IMDB
   @timeout 60_000
 
   @doc """
@@ -74,19 +76,19 @@ defmodule EventasaurusDiscovery.Movies.ImdbService do
       {:ok, [%{imdb_id: "tt0038650", title: "It's a Wonderful Life", year: 1946, type: :movie}]}
   """
   def search(title, opts \\ []) when is_binary(title) do
-    if Zyte.available?() do
+    if Crawlbase.available_for_mode?(:javascript) do
       do_search(title, opts)
     else
-      Logger.warning("ImdbService: Zyte API not configured, skipping IMDB search")
-      {:error, :zyte_not_configured}
+      Logger.warning("ImdbService: Crawlbase JS API not configured, skipping IMDB search")
+      {:error, :crawlbase_not_configured}
     end
   end
 
   @doc """
-  Check if the IMDB service is available (Zyte API configured).
+  Check if the IMDB service is available (Crawlbase JS API configured).
   """
   def available? do
-    Zyte.available?()
+    Crawlbase.available_for_mode?(:javascript)
   end
 
   # Private implementation
@@ -101,10 +103,17 @@ defmodule EventasaurusDiscovery.Movies.ImdbService do
       "🔍 ImdbService: Searching IMDB for \"#{title}\"#{if year, do: " (#{year})", else: ""}"
     )
 
-    case Zyte.fetch(url, timeout: @timeout, recv_timeout: @timeout) do
+    # Use HTTP abstraction layer with :imdb source configuration
+    # This routes through Crawlbase with JavaScript rendering
+    case HttpClient.fetch(url,
+           source: :imdb,
+           timeout: @timeout,
+           recv_timeout: @timeout,
+           mode: :javascript
+         ) do
       {:ok, html, metadata} ->
         Logger.debug(
-          "ImdbService: Received #{byte_size(html)} bytes in #{metadata[:duration_ms]}ms"
+          "ImdbService: Received #{byte_size(html)} bytes in #{metadata[:duration_ms]}ms via #{metadata[:adapter]}"
         )
 
         results =
@@ -119,7 +128,7 @@ defmodule EventasaurusDiscovery.Movies.ImdbService do
         {:ok, results}
 
       {:error, :not_configured} ->
-        {:error, :zyte_not_configured}
+        {:error, :crawlbase_not_configured}
 
       {:error, {:rate_limit, retry_after}} ->
         Logger.warning("ImdbService: Rate limited, retry after #{retry_after}s")
@@ -129,9 +138,13 @@ defmodule EventasaurusDiscovery.Movies.ImdbService do
         Logger.warning("ImdbService: Request timeout for \"#{title}\"")
         {:error, :timeout}
 
-      {:error, {:zyte_error, status, message}} ->
-        Logger.error("ImdbService: Zyte error #{status}: #{message}")
-        {:error, {:zyte_error, status, message}}
+      {:error, {:crawlbase_error, status, message}} ->
+        Logger.error("ImdbService: Crawlbase error #{status}: #{message}")
+        {:error, {:crawlbase_error, status, message}}
+
+      {:error, {:all_adapters_failed, blocked_by}} ->
+        Logger.error("ImdbService: All adapters failed: #{inspect(blocked_by)}")
+        {:error, {:all_adapters_failed, blocked_by}}
 
       {:error, reason} ->
         Logger.error("ImdbService: Request failed: #{inspect(reason)}")

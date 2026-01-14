@@ -114,17 +114,17 @@ defmodule EventasaurusDiscovery.Movies.ImdbServiceTest do
   describe "search/2" do
     @tag :integration
     @tag :external
-    test "returns error when Zyte is not configured" do
-      # This test will pass if ZYTE_API_KEY is not set
-      unless EventasaurusDiscovery.Http.Adapters.Zyte.available?() do
+    test "returns error when Crawlbase is not configured" do
+      # This test will pass if CRAWLBASE_JS_API_KEY is not set
+      unless EventasaurusDiscovery.Http.Adapters.Crawlbase.available_for_mode?(:javascript) do
         result = ImdbService.search("Seven Samurai")
-        assert {:error, :zyte_not_configured} = result
+        assert {:error, :crawlbase_not_configured} = result
       end
     end
   end
 
   describe "available?/0" do
-    test "returns boolean indicating Zyte availability" do
+    test "returns boolean indicating Crawlbase availability" do
       result = ImdbService.available?()
       assert is_boolean(result)
     end
