@@ -17,57 +17,156 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   alias EventasaurusDiscovery.Monitoring.Errors
   alias EventasaurusDiscovery.Monitoring.Scheduler
   alias EventasaurusDiscovery.Monitoring.Coverage
+  alias EventasaurusDiscovery.Monitoring.Chain
+  alias EventasaurusDiscovery.Monitoring.Collisions
+  alias EventasaurusDiscovery.Sources.SourceRegistry
   alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Workers.ObanJobSanitizerWorker
   alias EventasaurusWeb.Components.Sparkline
   import Ecto.Query
 
-  # Source configuration with display names
-  @source_config %{
-    "cinema_city" => %{display_name: "Cinema City", slug: "cinema-city"},
-    "repertuary" => %{display_name: "Repertuary", slug: "repertuary"},
-    "kino_krakow" => %{display_name: "Kino Kraków", slug: "kino-krakow"},
-    "karnet" => %{display_name: "Karnet", slug: "karnet"},
-    "week_pl" => %{display_name: "Week.pl", slug: "week-pl"},
-    "bandsintown" => %{display_name: "Bandsintown", slug: "bandsintown"},
-    "resident_advisor" => %{display_name: "Resident Advisor", slug: "resident-advisor"},
-    "sortiraparis" => %{display_name: "Sortir à Paris", slug: "sortiraparis"},
-    "inquizition" => %{display_name: "Inquizition", slug: "inquizition"},
-    "waw4free" => %{display_name: "Waw4Free", slug: "waw4free"}
-  }
-
   @impl true
   def mount(%{"source_key" => source_key}, _session, socket) do
-    source_config = Map.get(@source_config, source_key)
+    # Validate source exists in SourceRegistry (convert underscores to hyphens for lookup)
+    registry_key = String.replace(source_key, "_", "-")
 
-    if source_config do
-      socket =
-        socket
-        |> assign(:source_key, source_key)
-        |> assign(:source_config, source_config)
-        |> assign(:page_title, "#{source_config.display_name} - Monitoring")
-        |> assign(:active_tab, "overview")
-        |> assign(:time_range, 24)
-        |> assign(:loading, true)
-        |> assign(:selected_execution, nil)
-        |> assign(:expanded_sync_runs, MapSet.new())
-        |> load_source_data()
-        |> assign(:loading, false)
+    case SourceRegistry.get_sync_job(registry_key) do
+      {:ok, _module} ->
+        source_config = build_source_config(source_key)
 
-      {:ok, socket}
-    else
-      # Unknown source - redirect to main dashboard
-      {:ok,
-       socket
-       |> put_flash(:error, "Unknown source: #{source_key}")
-       |> push_navigate(to: ~p"/admin/monitoring")}
+        socket =
+          socket
+          |> assign(:source_key, source_key)
+          |> assign(:source_config, source_config)
+          |> assign(:page_title, "#{source_config.display_name} - Monitoring")
+          |> assign(:active_tab, "overview")
+          |> assign(:time_range, 24)
+          |> assign(:loading, true)
+          |> assign(:selected_execution, nil)
+          |> assign(:expanded_sync_runs, MapSet.new())
+          # Phase 1: New assigns for queue health, chains, collisions
+          |> assign(:queue_health_data, nil)
+          |> assign(:chain_data, [])
+          |> assign(:collisions_data, nil)
+          |> assign(:jobs_view_mode, "list")
+          |> assign(:show_collision_matrix, false)
+          |> load_source_data()
+          |> assign(:loading, false)
+
+        {:ok, socket}
+
+      {:error, :not_found} ->
+        # Unknown source - redirect to main dashboard
+        {:ok,
+         socket
+         |> put_flash(:error, "Unknown source: #{source_key}")
+         |> push_navigate(to: ~p"/admin/monitoring")}
     end
+  end
+
+  # Build source config dynamically from source_key
+  defp build_source_config(source_key) do
+    display_name =
+      source_key
+      |> String.split("_")
+      |> Enum.map(&String.capitalize/1)
+      |> Enum.join(" ")
+
+    slug = String.replace(source_key, "_", "-")
+
+    %{display_name: display_name, slug: slug}
   end
 
   @impl true
   def handle_event("change_tab", %{"tab" => tab}, socket)
-      when tab in ~w(overview scheduler coverage history) do
+      when tab in ~w(overview scheduler coverage history queue_health) do
     {:noreply, assign(socket, :active_tab, tab)}
+  end
+
+  @impl true
+  def handle_event("change_jobs_view", %{"mode" => mode}, socket)
+      when mode in ~w(list chain) do
+    {:noreply, assign(socket, :jobs_view_mode, mode)}
+  end
+
+  @impl true
+  def handle_event("show_collision_matrix", _params, socket) do
+    {:noreply, assign(socket, :show_collision_matrix, true)}
+  end
+
+  @impl true
+  def handle_event("hide_collision_matrix", _params, socket) do
+    {:noreply, assign(socket, :show_collision_matrix, false)}
+  end
+
+  @impl true
+  def handle_event("run_sanitizer", _params, socket) do
+    case ObanJobSanitizerWorker.new(%{}) |> Oban.insert() do
+      {:ok, _job} ->
+        socket =
+          socket
+          |> put_flash(:info, "Sanitizer job enqueued successfully")
+          |> assign(:loading, true)
+          |> load_source_data()
+          |> assign(:loading, false)
+
+        {:noreply, socket}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to enqueue sanitizer job")}
+    end
+  end
+
+  # Phase 2: Retry a zombie job by resetting its attempt count
+  @impl true
+  def handle_event("retry_job", %{"id" => id}, socket) do
+    case safe_to_integer(id) do
+      {:ok, job_id} ->
+        # Reset the job to be retried by Oban
+        case retry_oban_job(job_id) do
+          {:ok, _} ->
+            socket =
+              socket
+              |> put_flash(:info, "Job #{job_id} queued for retry")
+              |> assign(:loading, true)
+              |> load_source_data()
+              |> assign(:loading, false)
+
+            {:noreply, socket}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to retry job: #{reason}")}
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid job ID")}
+    end
+  end
+
+  # Phase 2: Cancel/discard a zombie job
+  @impl true
+  def handle_event("cancel_job", %{"id" => id}, socket) do
+    case safe_to_integer(id) do
+      {:ok, job_id} ->
+        case cancel_oban_job(job_id) do
+          {:ok, _} ->
+            socket =
+              socket
+              |> put_flash(:info, "Job #{job_id} cancelled")
+              |> assign(:loading, true)
+              |> load_source_data()
+              |> assign(:loading, false)
+
+            {:noreply, socket}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to cancel job: #{reason}")}
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid job ID")}
+    end
   end
 
   @impl true
@@ -161,6 +260,11 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     recent_executions = load_recent_executions(source_key)
     sync_runs = load_sync_runs(source_key)
 
+    # Phase 1: Load new monitoring data
+    queue_health_data = load_queue_health_data(source_key)
+    chain_data = load_chain_data(source_key, hours)
+    collisions_data = load_collisions_data(source_key, hours)
+
     socket
     |> assign(:health_data, health_data)
     |> assign(:error_analysis, error_analysis)
@@ -169,6 +273,9 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     |> assign(:coverage_data, coverage_data)
     |> assign(:recent_executions, recent_executions)
     |> assign(:sync_runs, sync_runs)
+    |> assign(:queue_health_data, queue_health_data)
+    |> assign(:chain_data, chain_data)
+    |> assign(:collisions_data, collisions_data)
   end
 
   defp load_health_data(source_key, hours) do
@@ -321,6 +428,156 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     end)
   end
 
+  # Phase 1: Queue Health Data Loading
+  defp load_queue_health_data(source_key) do
+    # Get all queue health data from ObanJobSanitizerWorker
+    detection = ObanJobSanitizerWorker.detect_all()
+
+    # Filter to jobs matching this source's workers
+    source_module = source_key_to_module(source_key)
+    worker_pattern = "#{source_module}"
+
+    filter_by_source = fn jobs ->
+      Enum.filter(jobs, fn job ->
+        String.contains?(job.worker || "", worker_pattern)
+      end)
+    end
+
+    # Phase 2: Load queue statistics (counts by queue and state)
+    queue_stats = load_queue_statistics()
+
+    %{
+      zombie_available: filter_by_source.(detection.zombie_available),
+      priority_zero_blockers: filter_by_source.(detection.priority_zero_blockers),
+      stuck_executing: filter_by_source.(detection.stuck_executing),
+      # Phase 2: Queue statistics by queue name
+      queue_stats: queue_stats,
+      # Also keep global counts for context
+      global: %{
+        zombie_count: length(detection.zombie_available),
+        blocker_count: length(detection.priority_zero_blockers),
+        stuck_count: length(detection.stuck_executing)
+      }
+    }
+  end
+
+  # Phase 2: Load queue statistics showing counts by queue and state
+  defp load_queue_statistics do
+    repo = EventasaurusApp.ObanRepo
+
+    query =
+      from(j in "oban_jobs",
+        where: j.state in ["available", "executing", "scheduled", "retryable"],
+        group_by: [j.queue, j.state],
+        select: {j.queue, j.state, count(j.id)}
+      )
+
+    stats = repo.all(query)
+
+    # Group by queue and build counts map
+    stats
+    |> Enum.group_by(fn {queue, _state, _count} -> queue end)
+    |> Enum.map(fn {queue, rows} ->
+      counts =
+        Enum.reduce(rows, %{available: 0, executing: 0, scheduled: 0, retryable: 0}, fn {_q, state, count}, acc ->
+          Map.put(acc, String.to_atom(state), count)
+        end)
+
+      %{queue: queue, counts: counts}
+    end)
+    |> Enum.sort_by(fn %{queue: queue} -> queue end)
+  end
+
+  # Phase 1: Chain Data Loading
+  defp load_chain_data(source_key, _hours) do
+    case Chain.recent_chains(source_key, limit: 5) do
+      {:ok, chains} ->
+        # Enrich each chain with statistics
+        Enum.map(chains, fn chain ->
+          stats = Chain.statistics(chain)
+          Map.put(chain, :stats, stats)
+        end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  # Phase 1: Collisions Data Loading
+  defp load_collisions_data(source_key, hours) do
+    case Collisions.stats(source: source_key, hours: hours) do
+      {:ok, stats} ->
+        # Also get confidence distribution for this source
+        confidence_dist =
+          case Collisions.confidence_distribution(source: source_key, hours: hours) do
+            {:ok, dist} -> dist
+            {:error, _} -> %{histogram: []}
+          end
+
+        # Phase 2: Also get overlap matrix for the modal
+        overlap_matrix =
+          case Collisions.overlap_matrix(hours: hours) do
+            {:ok, matrix} -> matrix
+            {:error, _} -> %{sources: [], overlaps: []}
+          end
+
+        stats
+        |> Map.put(:confidence_distribution, confidence_dist)
+        |> Map.put(:overlap_matrix, overlap_matrix)
+
+      {:error, _} ->
+        nil
+    end
+  end
+
+  # Phase 2: Retry an Oban job by resetting its state
+  defp retry_oban_job(job_id) do
+    repo = EventasaurusApp.ObanRepo
+
+    case repo.query(
+           """
+           UPDATE oban_jobs
+           SET state = 'available',
+               attempt = 0,
+               scheduled_at = NOW(),
+               attempted_at = NULL,
+               errors = '[]'::jsonb
+           WHERE id = $1
+           RETURNING id
+           """,
+           [job_id]
+         ) do
+      {:ok, %{num_rows: 1}} -> {:ok, job_id}
+      {:ok, %{num_rows: 0}} -> {:error, "Job not found"}
+      {:error, error} -> {:error, Exception.message(error)}
+    end
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  # Phase 2: Cancel/discard an Oban job
+  defp cancel_oban_job(job_id) do
+    repo = EventasaurusApp.ObanRepo
+
+    case repo.query(
+           """
+           UPDATE oban_jobs
+           SET state = 'discarded',
+               discarded_at = NOW(),
+               errors = array_append(errors, $2::jsonb)
+           WHERE id = $1
+           RETURNING id
+           """,
+           [job_id, Jason.encode!(%{at: DateTime.utc_now(), error: "Manually cancelled via admin UI"})]
+         ) do
+      {:ok, %{num_rows: 1}} -> {:ok, job_id}
+      {:ok, %{num_rows: 0}} -> {:error, "Job not found"}
+      {:error, error} -> {:error, Exception.message(error)}
+    end
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
   defp calculate_child_stats(child_jobs) do
     child_jobs
     |> Enum.group_by(&extract_job_name(&1.worker))
@@ -442,7 +699,19 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
               phx-value-tab="history"
               class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "history", do: "border-blue-500 text-blue-600 dark:text-blue-400", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"}"}
             >
-              Job History
+              Jobs
+            </button>
+            <button
+              phx-click="change_tab"
+              phx-value-tab="queue_health"
+              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "queue_health", do: "border-blue-500 text-blue-600 dark:text-blue-400", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"}"}
+            >
+              Queue Health
+              <%= if @queue_health_data && queue_health_issue_count(@queue_health_data) > 0 do %>
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                  <%= queue_health_issue_count(@queue_health_data) %>
+                </span>
+              <% end %>
             </button>
           </nav>
         </div>
@@ -464,6 +733,8 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
               <%= render_coverage_tab(assigns) %>
             <% "history" -> %>
               <%= render_history_tab(assigns) %>
+            <% "queue_health" -> %>
+              <%= render_queue_health_tab(assigns) %>
           <% end %>
         <% end %>
       </div>
@@ -606,6 +877,244 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
               </ul>
             </div>
           <% end %>
+        </div>
+      <% end %>
+
+      <!-- Deduplication Metrics (Phase 1) -->
+      <%= if @collisions_data do %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Deduplication Metrics</h3>
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+              Last <%= @time_range %> hours
+            </div>
+          </div>
+
+          <!-- Summary Stats -->
+          <div class="grid grid-cols-4 gap-4 mb-6">
+            <div class="text-center">
+              <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                <%= @collisions_data.total_processed %>
+              </div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Events Processed</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                <%= @collisions_data.total_collisions %>
+              </div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Duplicates Rejected</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                <%= @collisions_data.same_source_count %>
+              </div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Same Source</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                <%= @collisions_data.cross_source_count %>
+              </div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Cross Source</div>
+            </div>
+          </div>
+
+          <!-- Rejection Rate Bar -->
+          <%= if @collisions_data.total_processed > 0 do %>
+            <div class="mb-6">
+              <div class="flex items-center justify-between text-sm mb-1">
+                <span class="text-gray-600 dark:text-gray-400">Rejection Rate</span>
+                <span class="font-medium text-gray-900 dark:text-white">
+                  <%= Float.round(@collisions_data.collision_rate, 1) %>%
+                </span>
+              </div>
+              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                <div
+                  class="bg-orange-500 h-3 rounded-full transition-all"
+                  style={"width: #{min(@collisions_data.collision_rate, 100)}%"}
+                >
+                </div>
+              </div>
+            </div>
+          <% end %>
+
+          <!-- Collision Type Breakdown -->
+          <%= if @collisions_data.total_collisions > 0 do %>
+            <div class="mb-6">
+              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Collision Type Breakdown</h4>
+              <div class="space-y-2">
+                <!-- Same Source -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs px-2 py-0.5 rounded font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                      Same Source
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm text-gray-600 dark:text-gray-300"><%= @collisions_data.same_source_count %></span>
+                    <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div
+                        class="h-2 rounded-full bg-blue-500"
+                        style={"width: #{min(@collisions_data.same_source_count / max(@collisions_data.total_collisions, 1) * 100, 100)}%"}
+                      >
+                      </div>
+                    </div>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 w-10 text-right">
+                      <%= Float.round(@collisions_data.same_source_count / @collisions_data.total_collisions * 100, 0) %>%
+                    </span>
+                  </div>
+                </div>
+                <!-- Cross Source -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs px-2 py-0.5 rounded font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                      Cross Source
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm text-gray-600 dark:text-gray-300"><%= @collisions_data.cross_source_count %></span>
+                    <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div
+                        class="h-2 rounded-full bg-purple-500"
+                        style={"width: #{min(@collisions_data.cross_source_count / max(@collisions_data.total_collisions, 1) * 100, 100)}%"}
+                      >
+                      </div>
+                    </div>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 w-10 text-right">
+                      <%= Float.round(@collisions_data.cross_source_count / @collisions_data.total_collisions * 100, 0) %>%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% end %>
+
+          <!-- Confidence Distribution -->
+          <% histogram = get_in(@collisions_data, [:confidence_distribution, :histogram]) || [] %>
+          <%= if length(histogram) > 0 do %>
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Match Confidence Distribution</h4>
+              <div class="flex items-end gap-1 h-16">
+                <% max_count = Enum.max(Enum.map(histogram, fn bucket -> bucket.count end)) %>
+                <%= for bucket <- histogram do %>
+                  <div class="flex-1 flex flex-col items-center group relative">
+                    <div
+                      class={"w-full rounded-t transition-all #{confidence_bar_color(bucket.range)}"}
+                      style={"height: #{if max_count > 0, do: bucket.count / max_count * 100, else: 0}%"}
+                    >
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1"><%= bucket.range %></div>
+                    <!-- Tooltip -->
+                    <div class="absolute bottom-full mb-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      <%= bucket.count %> matches
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+
+          <!-- Cross-Source Matrix Link -->
+          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button
+              phx-click="show_collision_matrix"
+              class="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+              View Cross-Source Overlap Matrix →
+            </button>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Collision Matrix Modal -->
+      <%= if @show_collision_matrix do %>
+        <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              phx-click="hide_collision_matrix"
+            ></div>
+            <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+              <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-lg font-medium text-gray-900 dark:text-white">Cross-Source Overlap Matrix</h3>
+                  <button
+                    phx-click="hide_collision_matrix"
+                    class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                  >
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Shows which sources have duplicate events detected across them (cross-source matches only).
+                </p>
+                <%= if @collisions_data && @collisions_data.overlap_matrix && length(@collisions_data.overlap_matrix.overlaps) > 0 do %>
+                  <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead>
+                        <tr>
+                          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Source</th>
+                          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Matched With</th>
+                          <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Count</th>
+                          <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Avg Confidence</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <%= for overlap <- @collisions_data.overlap_matrix.overlaps do %>
+                          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="px-4 py-3 text-sm">
+                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                <%= format_source_name(overlap.source) %>
+                              </span>
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                <%= format_source_name(overlap.matched_source) %>
+                              </span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-right font-medium text-gray-900 dark:text-white">
+                              <%= overlap.count %>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-right">
+                              <%= if overlap.avg_confidence do %>
+                                <span class={"inline-flex items-center px-2 py-0.5 rounded text-xs font-medium #{confidence_level_color(overlap.avg_confidence)}"}>
+                                  <%= Float.round(overlap.avg_confidence * 100, 0) %>%
+                                </span>
+                              <% else %>
+                                <span class="text-gray-400">--</span>
+                              <% end %>
+                            </td>
+                          </tr>
+                        <% end %>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                    Period: Last <%= @collisions_data.overlap_matrix.period_hours %> hours
+                  </div>
+                <% else %>
+                  <div class="text-center text-gray-500 dark:text-gray-400 py-8">
+                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    No cross-source overlaps detected in the selected time period.
+                  </div>
+                <% end %>
+              </div>
+              <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6">
+                <button
+                  phx-click="hide_collision_matrix"
+                  class="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 sm:w-auto sm:text-sm"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       <% end %>
 
@@ -1147,20 +1656,58 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   defp render_history_tab(assigns) do
     ~H"""
     <div class="space-y-4">
-      <!-- Header -->
+      <!-- Header with View Mode Toggle -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Sync Run History</h3>
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Jobs</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Recent orchestration runs with child job breakdown
+              <%= if @jobs_view_mode == "list" do %>
+                Recent orchestration runs with child job breakdown
+              <% else %>
+                Job execution chains with cascade impact
+              <% end %>
             </p>
           </div>
-          <div class="text-sm text-gray-500 dark:text-gray-400">
-            <%= length(@sync_runs) %> runs in last 7 days
+          <div class="flex items-center gap-4">
+            <!-- View Mode Toggle -->
+            <div class="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                phx-click="change_jobs_view"
+                phx-value-mode="list"
+                class={"px-3 py-1.5 text-sm font-medium rounded-md transition-colors #{if @jobs_view_mode == "list", do: "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow", else: "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"}"}
+              >
+                <span class="flex items-center gap-1">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                  List
+                </span>
+              </button>
+              <button
+                phx-click="change_jobs_view"
+                phx-value-mode="chain"
+                class={"px-3 py-1.5 text-sm font-medium rounded-md transition-colors #{if @jobs_view_mode == "chain", do: "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow", else: "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"}"}
+              >
+                <span class="flex items-center gap-1">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  Chain
+                </span>
+              </button>
+            </div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+              <%= length(@sync_runs) %> runs in last 7 days
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Conditional View Rendering -->
+      <%= if @jobs_view_mode == "chain" do %>
+        <%= render_chain_view(assigns) %>
+      <% else %>
 
       <!-- Sync Runs List -->
       <%= if Enum.empty?(@sync_runs) do %>
@@ -1317,8 +1864,460 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
           <% end %>
         </div>
       <% end %>
+      <% end %><!-- End of list/chain conditional -->
     </div>
     """
+  end
+
+  # Chain View Component (Phase 1)
+  defp render_chain_view(assigns) do
+    ~H"""
+    <div class="space-y-4">
+      <%= if Enum.empty?(@chain_data) do %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+          <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+          <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No job chains found</h3>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            No recent job execution chains available for this source.
+          </p>
+        </div>
+      <% else %>
+        <%= for chain <- @chain_data do %>
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <!-- Chain Header -->
+            <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <span class={chain_state_color(chain.state)}>
+                    <%= chain_state_icon(chain.state) %>
+                  </span>
+                  <div>
+                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                      Chain #<%= chain.job_id %>
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                      <%= format_relative_time(chain.attempted_at) %>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-4">
+                  <!-- Chain Statistics -->
+                  <div class="flex items-center gap-2 text-sm">
+                    <span class="text-green-600 dark:text-green-400">
+                      <%= chain.stats.completed %> ✓
+                    </span>
+                    <span class="text-red-600 dark:text-red-400">
+                      <%= chain.stats.failed %> ✗
+                    </span>
+                    <span class="text-gray-500 dark:text-gray-400">
+                      / <%= chain.stats.total %>
+                    </span>
+                  </div>
+                  <span class={"inline-flex items-center px-2 py-0.5 rounded text-xs font-medium #{chain_success_rate_color(chain.stats.success_rate)}"}>
+                    <%= Float.round(chain.stats.success_rate, 1) %>%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chain Tree Visualization -->
+            <div class="p-4">
+              <div class="font-mono text-sm">
+                <%= render_chain_tree_node(assigns, chain, 0) %>
+              </div>
+
+              <!-- Cascade Impact Summary -->
+              <%= if length(chain.stats.cascade_failures) > 0 do %>
+                <div class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                  <div class="flex items-start gap-2">
+                    <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <div class="text-sm font-medium text-red-800 dark:text-red-200">
+                        Cascade Impact
+                      </div>
+                      <div class="text-sm text-red-700 dark:text-red-300 mt-1">
+                        <%= length(chain.stats.cascade_failures) %> failure(s) blocked
+                        <%= Enum.sum(Enum.map(chain.stats.cascade_failures, & &1.prevented_count)) %> downstream job(s)
+                      </div>
+                      <ul class="mt-2 space-y-1 text-xs text-red-600 dark:text-red-400">
+                        <%= for cascade <- chain.stats.cascade_failures do %>
+                          <li class="flex items-center gap-1">
+                            <span>•</span>
+                            <span><%= cascade.worker %></span>
+                            <%= if cascade.error_category do %>
+                              <span class="text-red-500">(<%= cascade.error_category %>)</span>
+                            <% end %>
+                            <span>→ blocked <%= cascade.prevented_count %> job(s)</span>
+                          </li>
+                        <% end %>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+    """
+  end
+
+  # Recursive tree node renderer
+  defp render_chain_tree_node(assigns, node, depth) do
+    assigns = assign(assigns, :node, node)
+    assigns = assign(assigns, :depth, depth)
+
+    ~H"""
+    <div class="flex items-start">
+      <!-- Indentation and tree lines -->
+      <div class="flex items-center">
+        <%= if @depth > 0 do %>
+          <span class="text-gray-300 dark:text-gray-600 select-none">
+            <%= String.duplicate("│  ", @depth - 1) %><%= if length(@node.children) > 0, do: "├── ", else: "└── " %>
+          </span>
+        <% end %>
+      </div>
+
+      <!-- Node content -->
+      <div class="flex items-center gap-2">
+        <span class={chain_node_state_color(@node.state)}>
+          <%= chain_node_state_icon(@node.state) %>
+        </span>
+        <span class="text-gray-900 dark:text-white">
+          <%= extract_job_name(@node.worker) %>
+        </span>
+        <%= if @node.results["error_category"] do %>
+          <span class="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+            <%= @node.results["error_category"] %>
+          </span>
+        <% end %>
+      </div>
+    </div>
+    <!-- Render children recursively -->
+    <%= for child <- @node.children do %>
+      <%= render_chain_tree_node(assigns, child, @depth + 1) %>
+    <% end %>
+    """
+  end
+
+  # Chain visualization helpers
+  defp chain_state_color("completed"), do: "text-green-500"
+  defp chain_state_color("discarded"), do: "text-red-500"
+  defp chain_state_color("cancelled"), do: "text-red-500"
+  defp chain_state_color(_), do: "text-gray-500"
+
+  defp chain_state_icon("completed"), do: "✅"
+  defp chain_state_icon("discarded"), do: "❌"
+  defp chain_state_icon("cancelled"), do: "❌"
+  defp chain_state_icon(_), do: "⏳"
+
+  defp chain_node_state_color("completed"), do: "text-green-500"
+  defp chain_node_state_color("discarded"), do: "text-red-500"
+  defp chain_node_state_color("cancelled"), do: "text-red-500"
+  defp chain_node_state_color(_), do: "text-yellow-500"
+
+  defp chain_node_state_icon("completed"), do: "✓"
+  defp chain_node_state_icon("discarded"), do: "✗"
+  defp chain_node_state_icon("cancelled"), do: "✗"
+  defp chain_node_state_icon(_), do: "○"
+
+  defp chain_success_rate_color(rate) when rate >= 90, do: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+  defp chain_success_rate_color(rate) when rate >= 70, do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+  defp chain_success_rate_color(_), do: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+
+  # Queue Health Tab (Phase 1)
+  defp render_queue_health_tab(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <!-- Status Summary -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white">Queue Health Status</h3>
+          <button
+            phx-click="run_sanitizer"
+            class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Run Sanitizer
+          </button>
+        </div>
+
+        <%= if @queue_health_data do %>
+          <% issue_count = queue_health_issue_count(@queue_health_data) %>
+          <div class={"p-4 rounded-lg #{if issue_count == 0, do: "bg-green-50 dark:bg-green-900/20", else: "bg-yellow-50 dark:bg-yellow-900/20"}"}>
+            <div class="flex items-center">
+              <%= if issue_count == 0 do %>
+                <svg class="w-6 h-6 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-green-800 dark:text-green-200 font-medium">All queues healthy - no issues detected</span>
+              <% else %>
+                <svg class="w-6 h-6 text-yellow-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span class="text-yellow-800 dark:text-yellow-200 font-medium">
+                  <%= issue_count %> issue(s) detected for this source
+                </span>
+              <% end %>
+            </div>
+          </div>
+
+          <!-- Global Queue Stats -->
+          <div class="mt-4 grid grid-cols-3 gap-4 text-center border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div>
+              <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                <%= @queue_health_data.global.zombie_count %>
+              </div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Global Zombies</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                <%= @queue_health_data.global.blocker_count %>
+              </div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Global Blockers</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                <%= @queue_health_data.global.stuck_count %>
+              </div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Global Stuck</div>
+            </div>
+          </div>
+        <% else %>
+          <p class="text-gray-500 dark:text-gray-400">Queue health data not available.</p>
+        <% end %>
+      </div>
+
+      <!-- Zombie Available Jobs -->
+      <%= if @queue_health_data && length(@queue_health_data.zombie_available) > 0 do %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-medium text-red-600 dark:text-red-400 mb-4">
+            🧟 Zombie Available Jobs (<%= length(@queue_health_data.zombie_available) %>)
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Jobs with exhausted attempts stuck in 'available' state - should be discarded
+          </p>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead>
+                <tr>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ID</th>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Queue</th>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Worker</th>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Attempt</th>
+                  <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <%= for job <- @queue_health_data.zombie_available do %>
+                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-white"><%= job.id %></td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"><%= job.queue %></td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"><%= extract_job_name(job.worker) %></td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"><%= job.attempt %></td>
+                    <td class="px-4 py-2 text-sm text-right">
+                      <div class="flex justify-end gap-2">
+                        <button
+                          phx-click="retry_job"
+                          phx-value-id={job.id}
+                          class="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800"
+                          title="Retry this job"
+                        >
+                          <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Retry
+                        </button>
+                        <button
+                          phx-click="cancel_job"
+                          phx-value-id={job.id}
+                          class="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"
+                          title="Cancel this job"
+                        >
+                          <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          Cancel
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Priority Zero Blockers -->
+      <%= if @queue_health_data && length(@queue_health_data.priority_zero_blockers) > 0 do %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-medium text-yellow-600 dark:text-yellow-400 mb-4">
+            🚧 Priority 0 Blockers (<%= length(@queue_health_data.priority_zero_blockers) %>)
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            High-priority jobs that may be blocking queues
+          </p>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead>
+                <tr>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ID</th>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Queue</th>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Worker</th>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Attempt</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <%= for job <- @queue_health_data.priority_zero_blockers do %>
+                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-white"><%= job.id %></td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"><%= job.queue %></td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"><%= extract_job_name(job.worker) %></td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"><%= job.attempt %></td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Stuck Executing Jobs -->
+      <%= if @queue_health_data && length(@queue_health_data.stuck_executing) > 0 do %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-medium text-orange-600 dark:text-orange-400 mb-4">
+            ⏳ Stuck Executing Jobs (<%= length(@queue_health_data.stuck_executing) %>)
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Jobs executing longer than Lifeline's 5-minute rescue_after - Lifeline should handle these
+          </p>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead>
+                <tr>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ID</th>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Queue</th>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Worker</th>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Attempted At</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <%= for job <- @queue_health_data.stuck_executing do %>
+                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-white"><%= job.id %></td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"><%= job.queue %></td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"><%= extract_job_name(job.worker) %></td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                      <%= if job.attempted_at, do: format_datetime(job.attempted_at), else: "--" %>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Phase 2: Queue Statistics Table -->
+      <%= if @queue_health_data && length(@queue_health_data.queue_stats) > 0 do %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-medium text-blue-600 dark:text-blue-400 mb-4">
+            📊 Queue Statistics
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Current job counts by queue and state across all sources
+          </p>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead>
+                <tr>
+                  <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Queue</th>
+                  <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Available</th>
+                  <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Executing</th>
+                  <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Scheduled</th>
+                  <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Retryable</th>
+                  <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <%= for queue_stat <- @queue_health_data.queue_stats do %>
+                  <% counts = queue_stat.counts %>
+                  <% total = counts.available + counts.executing + counts.scheduled + counts.retryable %>
+                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td class="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                      <%= queue_stat.queue %>
+                    </td>
+                    <td class={"px-4 py-2 text-sm text-right #{if counts.available > 100, do: "text-yellow-600 dark:text-yellow-400 font-medium", else: "text-gray-500 dark:text-gray-400"}"}>
+                      <%= counts.available %>
+                    </td>
+                    <td class={"px-4 py-2 text-sm text-right #{if counts.executing > 10, do: "text-yellow-600 dark:text-yellow-400 font-medium", else: "text-gray-500 dark:text-gray-400"}"}>
+                      <%= counts.executing %>
+                    </td>
+                    <td class="px-4 py-2 text-sm text-right text-gray-500 dark:text-gray-400">
+                      <%= counts.scheduled %>
+                    </td>
+                    <td class={"px-4 py-2 text-sm text-right #{if counts.retryable > 50, do: "text-yellow-600 dark:text-yellow-400 font-medium", else: "text-gray-500 dark:text-gray-400"}"}>
+                      <%= counts.retryable %>
+                    </td>
+                    <td class="px-4 py-2 text-sm text-right font-medium text-gray-900 dark:text-white">
+                      <%= total %>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+              <tfoot class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <td class="px-4 py-2 text-sm font-bold text-gray-900 dark:text-white">Total</td>
+                  <td class="px-4 py-2 text-sm text-right font-bold text-gray-900 dark:text-white">
+                    <%= Enum.reduce(@queue_health_data.queue_stats, 0, fn qs, acc -> acc + qs.counts.available end) %>
+                  </td>
+                  <td class="px-4 py-2 text-sm text-right font-bold text-gray-900 dark:text-white">
+                    <%= Enum.reduce(@queue_health_data.queue_stats, 0, fn qs, acc -> acc + qs.counts.executing end) %>
+                  </td>
+                  <td class="px-4 py-2 text-sm text-right font-bold text-gray-900 dark:text-white">
+                    <%= Enum.reduce(@queue_health_data.queue_stats, 0, fn qs, acc -> acc + qs.counts.scheduled end) %>
+                  </td>
+                  <td class="px-4 py-2 text-sm text-right font-bold text-gray-900 dark:text-white">
+                    <%= Enum.reduce(@queue_health_data.queue_stats, 0, fn qs, acc -> acc + qs.counts.retryable end) %>
+                  </td>
+                  <td class="px-4 py-2 text-sm text-right font-bold text-gray-900 dark:text-white">
+                    <%= Enum.reduce(@queue_health_data.queue_stats, 0, fn qs, acc -> acc + qs.counts.available + qs.counts.executing + qs.counts.scheduled + qs.counts.retryable end) %>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- No Issues Message -->
+      <%= if @queue_health_data && queue_health_issue_count(@queue_health_data) == 0 do %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+          <svg class="mx-auto h-12 w-12 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No queue issues for this source</h3>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            All jobs for this source are executing normally.
+          </p>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp queue_health_issue_count(nil), do: 0
+
+  defp queue_health_issue_count(data) do
+    length(data.zombie_available) + length(data.priority_zero_blockers) + length(data.stuck_executing)
   end
 
   defp sync_run_status_color("completed"), do: "text-green-500"
@@ -1428,6 +2427,51 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
   end
+
+  # Collision metrics helpers (Phase 1)
+  defp confidence_bar_color(range) when is_binary(range) do
+    # Range format is like "90%-100%" - extract the starting percentage
+    case String.split(range, "-") do
+      [start_str | _] ->
+        start_pct = start_str |> String.replace("%", "") |> String.to_integer()
+
+        cond do
+          start_pct >= 90 -> "bg-green-500"
+          start_pct >= 80 -> "bg-green-400"
+          start_pct >= 70 -> "bg-yellow-500"
+          start_pct >= 60 -> "bg-yellow-400"
+          start_pct >= 50 -> "bg-orange-500"
+          true -> "bg-gray-400"
+        end
+
+      _ ->
+        "bg-gray-400"
+    end
+  end
+
+  defp confidence_bar_color(_), do: "bg-gray-400"
+
+  # Phase 2: Matrix visualization helpers
+  defp format_source_name(nil), do: "unknown"
+
+  defp format_source_name(source) when is_binary(source) do
+    source
+    |> String.split("_")
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
+
+  defp confidence_level_color(confidence) when is_number(confidence) do
+    cond do
+      confidence >= 0.9 -> "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+      confidence >= 0.8 -> "bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300"
+      confidence >= 0.7 -> "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+      confidence >= 0.6 -> "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+      true -> "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+    end
+  end
+
+  defp confidence_level_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
 
   # Helper to convert DateTime or NaiveDateTime to Date
   defp datetime_to_date(%DateTime{} = dt), do: DateTime.to_date(dt)
