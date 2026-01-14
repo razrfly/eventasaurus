@@ -91,6 +91,9 @@ defmodule Mix.Tasks.Monitor.Health do
         System.halt(1)
       end
 
+      # Normalize source key (handles both underscores and hyphens)
+      source = SourcePatterns.normalize_cli_key(source)
+
       unless SourcePatterns.valid_source?(source) do
         IO.puts(IO.ANSI.red() <> "❌ Error: Unknown source '#{source}'" <> IO.ANSI.reset())
         SourcePatterns.print_available_sources()
@@ -225,7 +228,17 @@ defmodule Mix.Tasks.Monitor.Health do
   end
 
   defp calculate_health(source, hours) do
-    {:ok, worker_pattern} = SourcePatterns.get_worker_pattern(source)
+    case SourcePatterns.get_worker_pattern(source) do
+      {:ok, worker_pattern} ->
+        calculate_health_with_pattern(worker_pattern, hours)
+
+      {:error, _reason} ->
+        # Return empty health data if worker pattern cannot be resolved
+        return_empty_health()
+    end
+  end
+
+  defp calculate_health_with_pattern(worker_pattern, hours) do
     from_time = DateTime.add(DateTime.utc_now(), -hours, :hour)
 
     # Get all executions
@@ -433,4 +446,19 @@ defmodule Mix.Tasks.Monitor.Health do
   end
 
   defp format_number(num), do: to_string(num)
+
+  defp return_empty_health do
+    %{
+      total_executions: 0,
+      success_rate: 0,
+      avg_duration: 0,
+      overall_status: :unknown,
+      target_success_rate: nil,
+      target_avg_duration: nil,
+      job_performance: [],
+      trend: [],
+      active_issues: [],
+      action_items: []
+    }
+  end
 end

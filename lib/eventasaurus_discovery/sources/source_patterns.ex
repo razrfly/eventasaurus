@@ -70,11 +70,33 @@ defmodule EventasaurusDiscovery.Sources.SourcePatterns do
   end
 
   @doc """
+  Normalize a source key to CLI format (underscores).
+
+  Accepts both CLI format (underscores) and registry format (hyphens).
+
+  ## Examples
+
+      iex> normalize_cli_key("cinema_city")
+      "cinema_city"
+
+      iex> normalize_cli_key("cinema-city")
+      "cinema_city"
+  """
+  def normalize_cli_key(key) when is_binary(key) do
+    String.replace(key, "-", "_")
+  end
+
+  @doc """
   Get a human-readable display name for a source.
+
+  Accepts both CLI format (underscores) and registry format (hyphens).
 
   ## Examples
 
       iex> get_display_name("cinema_city")
+      "Cinema City"
+
+      iex> get_display_name("cinema-city")
       "Cinema City"
 
       iex> get_display_name("geeks_who_drink")
@@ -82,6 +104,7 @@ defmodule EventasaurusDiscovery.Sources.SourcePatterns do
   """
   def get_display_name(cli_key) when is_binary(cli_key) do
     cli_key
+    |> normalize_cli_key()
     |> String.split("_")
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
@@ -151,16 +174,24 @@ defmodule EventasaurusDiscovery.Sources.SourcePatterns do
   @doc """
   Check if a CLI key is valid (maps to a registered source).
 
+  Accepts both CLI format (underscores) and registry format (hyphens).
+
   ## Examples
 
       iex> valid_source?("cinema_city")
+      true
+
+      iex> valid_source?("cinema-city")
       true
 
       iex> valid_source?("unknown")
       false
   """
   def valid_source?(cli_key) when is_binary(cli_key) do
-    lookup_in_registry(cli_key) != {:error, :not_found}
+    case lookup_in_registry(cli_key) do
+      {:ok, _module} -> true
+      _ -> false
+    end
   end
 
   @doc """
