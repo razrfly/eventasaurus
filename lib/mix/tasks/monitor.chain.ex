@@ -121,13 +121,29 @@ defmodule Mix.Tasks.Monitor.Chain do
   end
 
   defp display_chains_for_source(source, failed_only, max_depth, limit) do
+    # Normalize source key
+    source = SourcePatterns.normalize_cli_key(source)
+
     unless SourcePatterns.valid_source?(source) do
       IO.puts(IO.ANSI.red() <> "❌ Error: Unknown source '#{source}'" <> IO.ANSI.reset())
       SourcePatterns.print_available_sources()
       System.halt(1)
     end
 
-    {:ok, sync_worker} = SourcePatterns.get_sync_worker(source)
+    sync_worker =
+      case SourcePatterns.get_sync_worker(source) do
+        {:ok, worker} ->
+          worker
+
+        {:error, reason} ->
+          IO.puts(
+            IO.ANSI.red() <>
+              "❌ Error: Could not resolve sync worker for '#{source}': #{inspect(reason)}" <>
+              IO.ANSI.reset()
+          )
+
+          System.halt(1)
+      end
 
     # Get recent sync jobs
     query =

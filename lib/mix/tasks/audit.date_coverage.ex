@@ -36,7 +36,7 @@ defmodule Mix.Tasks.Audit.DateCoverage do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
 
-  @shortdoc "Audit date coverage for cinema scrapers"
+  @shortdoc "Audit date coverage for all scrapers"
 
   # Source-specific threshold configuration
   # Sources not listed here use default thresholds

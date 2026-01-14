@@ -63,14 +63,26 @@ defmodule EventasaurusDiscovery.Sources.SourcePatternsTest do
       assert SourcePatterns.get_display_name("") == ""
       assert SourcePatterns.get_display_name("a") == "A"
     end
+
+    test "normalizes hyphenated input to underscored format" do
+      # Hyphenated input (registry format) should produce same result as underscored (CLI format)
+      assert SourcePatterns.get_display_name("cinema-city") == "Cinema City"
+      assert SourcePatterns.get_display_name("resident-advisor") == "Resident Advisor"
+      assert SourcePatterns.get_display_name("geeks-who-drink") == "Geeks Who Drink"
+
+      # Both formats should produce identical results
+      assert SourcePatterns.get_display_name("cinema-city") ==
+               SourcePatterns.get_display_name("cinema_city")
+    end
   end
 
   describe "all_cli_keys/0" do
     test "returns all sources in CLI format (underscores)" do
       keys = SourcePatterns.all_cli_keys()
 
-      # Should have 16 sources
-      assert length(keys) == 16
+      # Should match the number of sources in SourceRegistry
+      expected_count = length(SourceRegistry.all_sources())
+      assert length(keys) == expected_count
 
       # Most keys should use underscores, not hyphens (except edge cases in registry)
       keys_with_hyphens = Enum.filter(keys, &String.contains?(&1, "-"))
@@ -100,7 +112,8 @@ defmodule EventasaurusDiscovery.Sources.SourcePatternsTest do
       patterns = SourcePatterns.all_patterns()
 
       assert is_map(patterns)
-      assert map_size(patterns) == 16
+      expected_count = length(SourceRegistry.all_sources())
+      assert map_size(patterns) == expected_count
 
       # Check structure
       Enum.each(patterns, fn {key, pattern} ->
@@ -126,7 +139,8 @@ defmodule EventasaurusDiscovery.Sources.SourcePatternsTest do
       workers = SourcePatterns.all_sync_workers()
 
       assert is_map(workers)
-      assert map_size(workers) == 16
+      expected_count = length(SourceRegistry.all_sources())
+      assert map_size(workers) == expected_count
 
       # Check structure
       Enum.each(workers, fn {key, worker} ->

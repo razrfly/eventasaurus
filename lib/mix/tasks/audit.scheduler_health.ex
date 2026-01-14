@@ -55,12 +55,21 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
     days = opts[:days] || 7
     source = opts[:source]
 
-    # Validate source if provided
-    if source && !SourcePatterns.valid_source?(source) do
-      IO.puts(IO.ANSI.red() <> "❌ Unknown source: #{source}" <> IO.ANSI.reset())
-      SourcePatterns.print_available_sources()
-      System.halt(1)
-    end
+    # Validate and normalize source if provided
+    source =
+      if source do
+        normalized = SourcePatterns.normalize_cli_key(source)
+
+        if !SourcePatterns.valid_source?(normalized) do
+          IO.puts(IO.ANSI.red() <> "❌ Unknown source: #{source}" <> IO.ANSI.reset())
+          SourcePatterns.print_available_sources()
+          System.halt(1)
+        end
+
+        normalized
+      else
+        nil
+      end
 
     sources_to_check =
       if source do
@@ -93,7 +102,21 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
 
   defp display_source_health(source_key, days) do
     display_name = SourcePatterns.get_display_name(source_key)
-    {:ok, sync_worker} = SourcePatterns.get_sync_worker(source_key)
+
+    case SourcePatterns.get_sync_worker(source_key) do
+      {:ok, sync_worker} ->
+        display_source_health_with_worker(source_key, display_name, sync_worker, days)
+
+      {:error, _reason} ->
+        IO.puts(IO.ANSI.blue() <> "📊 #{display_name}" <> IO.ANSI.reset())
+        IO.puts(String.duplicate("─", 70))
+        IO.puts(IO.ANSI.red() <> "  ❌ Could not resolve worker for source" <> IO.ANSI.reset())
+        IO.puts("")
+        [{source_key, :worker_not_found, "Could not resolve worker module"}]
+    end
+  end
+
+  defp display_source_health_with_worker(source_key, display_name, sync_worker, days) do
     child_job_key = Map.get(@child_job_keys, source_key, "jobs_scheduled")
 
     IO.puts(IO.ANSI.blue() <> "📊 #{display_name}" <> IO.ANSI.reset())

@@ -84,6 +84,9 @@ defmodule Mix.Tasks.Monitor.Errors do
       System.halt(1)
     end
 
+    # Normalize source key (handles both underscores and hyphens)
+    source = SourcePatterns.normalize_cli_key(source)
+
     unless SourcePatterns.valid_source?(source) do
       IO.puts(IO.ANSI.red() <> "❌ Error: Unknown source '#{source}'" <> IO.ANSI.reset())
       SourcePatterns.print_available_sources()
@@ -94,7 +97,20 @@ defmodule Mix.Tasks.Monitor.Errors do
     limit = opts[:limit] || 20
     category_filter = opts[:category]
 
-    {:ok, worker_pattern} = SourcePatterns.get_worker_pattern(source)
+    worker_pattern =
+      case SourcePatterns.get_worker_pattern(source) do
+        {:ok, pattern} ->
+          pattern
+
+        {:error, reason} ->
+          IO.puts(
+            IO.ANSI.red() <>
+              "❌ Error: Could not resolve worker pattern for '#{source}': #{inspect(reason)}" <>
+              IO.ANSI.reset()
+          )
+
+          System.halt(1)
+      end
 
     # Query failed executions
     from_time = DateTime.add(DateTime.utc_now(), -hours, :hour)
