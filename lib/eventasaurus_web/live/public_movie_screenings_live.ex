@@ -45,12 +45,15 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       |> assign(:current_email_input, "")
       |> assign(:bulk_email_input, "")
       |> assign(:invitation_message, "")
-      |> assign(:planning_mode, :flexible_filters)
+      |> assign(:planning_mode, :selection)
       |> assign(:filter_criteria, %{})
       |> assign(:matching_occurrences, [])
-      |> assign(:filter_preview_count, 0)
+      |> assign(:filter_preview_count, nil)
       |> assign(:modal_organizer, nil)
       |> assign(:date_availability, %{})
+      |> assign(:entry_context, :generic_movie)
+      |> assign(:is_single_occurrence, false)
+      |> assign(:selected_occurrence, nil)
 
     {:ok, socket}
   end
@@ -347,6 +350,9 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             filter_preview_count={@filter_preview_count}
             is_movie_event={true}
             is_venue_event={false}
+            entry_context={@entry_context}
+            is_single_occurrence={@is_single_occurrence}
+            selected_occurrence={@selected_occurrence}
             movie_id={@movie.id}
             city_id={@city.id}
             movie={@movie}
@@ -465,6 +471,23 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   @impl true
   def handle_event("submit_plan_with_friends", _params, socket) do
     {:noreply, assign(socket, :show_plan_with_friends_modal, false)}
+  end
+
+  @impl true
+  def handle_event("select_planning_mode", %{"mode" => mode}, socket) do
+    planning_mode =
+      case mode do
+        "quick" -> :quick
+        "flexible" -> :flexible_filters
+        "selection" -> :selection
+        "flexible_filters" -> :flexible_filters
+        _ -> :selection
+      end
+
+    {:noreply,
+     socket
+     |> assign(:planning_mode, planning_mode)
+     |> assign(:filter_preview_count, nil)}
   end
 
   @impl true
