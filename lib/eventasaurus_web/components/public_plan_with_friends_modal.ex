@@ -150,6 +150,9 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                   </p>
                 </div>
               </div>
+
+              <!-- Progress Indicators - Phase 4 -->
+              <%= render_progress_indicator(assigns) %>
             </div>
 
             <!-- Form Content (Scrollable) -->
@@ -169,6 +172,115 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
         </div>
       </div>
     <% end %>
+    """
+  end
+
+  # Progress Indicator Component - Phase 4
+  # Shows current step in the flow with visual indicators
+  defp render_progress_indicator(assigns) do
+    # Determine the flow type and current step
+    # Quick Plan: 1. Choose Mode -> 2. Invite Friends -> Done
+    # Flexible Plan: 1. Choose Mode -> 2. Select Options -> 3. Invite Friends -> Done
+    # Single-occurrence: Skip step 1, go straight to step 2
+
+    ~H"""
+    <div class="mt-4">
+      <%= case @planning_mode do %>
+        <% :selection -> %>
+          <!-- Step 1 of flow - mode selection -->
+          <div class="flex items-center justify-center gap-2">
+            <div class="flex items-center gap-1">
+              <span class="flex items-center justify-center w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-semibold">1</span>
+              <span class="text-sm font-medium text-purple-600">Choose Plan</span>
+            </div>
+            <div class="w-8 h-0.5 bg-gray-200"></div>
+            <div class="flex items-center gap-1">
+              <span class="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-500 text-xs font-semibold">2</span>
+              <span class="text-sm text-gray-500">Invite Friends</span>
+            </div>
+          </div>
+
+        <% :quick -> %>
+          <!-- Quick Plan: Step 2 (final step for quick plan) -->
+          <div class="flex items-center justify-center gap-2">
+            <%= if @is_single_occurrence do %>
+              <!-- Single occurrence skips step 1 -->
+              <div class="flex items-center gap-1">
+                <span class="flex items-center justify-center w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-semibold">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+                <span class="text-sm font-medium text-purple-600">Invite Friends</span>
+              </div>
+            <% else %>
+              <div class="flex items-center gap-1">
+                <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white text-xs">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+                <span class="text-sm text-green-600">Choose Plan</span>
+              </div>
+              <div class="w-8 h-0.5 bg-green-400"></div>
+              <div class="flex items-center gap-1">
+                <span class="flex items-center justify-center w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-semibold">2</span>
+                <span class="text-sm font-medium text-purple-600">Invite Friends</span>
+              </div>
+            <% end %>
+          </div>
+
+        <% :flexible_filters -> %>
+          <!-- Flexible Plan: Step 2 of 3 (select options) -->
+          <div class="flex items-center justify-center gap-2">
+            <div class="flex items-center gap-1">
+              <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white text-xs">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
+              <span class="text-sm text-green-600">Choose Plan</span>
+            </div>
+            <div class="w-8 h-0.5 bg-green-400"></div>
+            <div class="flex items-center gap-1">
+              <span class="flex items-center justify-center w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-semibold">2</span>
+              <span class="text-sm font-medium text-purple-600">Select Options</span>
+            </div>
+            <div class="w-8 h-0.5 bg-gray-200"></div>
+            <div class="flex items-center gap-1">
+              <span class="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-500 text-xs font-semibold">3</span>
+              <span class="text-sm text-gray-500">Invite Friends</span>
+            </div>
+          </div>
+
+        <% :flexible_review -> %>
+          <!-- Flexible Plan: Step 3 of 3 (invite friends) -->
+          <div class="flex items-center justify-center gap-2">
+            <div class="flex items-center gap-1">
+              <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white text-xs">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
+              <span class="text-sm text-green-600">Choose Plan</span>
+            </div>
+            <div class="w-8 h-0.5 bg-green-400"></div>
+            <div class="flex items-center gap-1">
+              <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white text-xs">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
+              <span class="text-sm text-green-600">Select Options</span>
+            </div>
+            <div class="w-8 h-0.5 bg-green-400"></div>
+            <div class="flex items-center gap-1">
+              <span class="flex items-center justify-center w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-semibold">3</span>
+              <span class="text-sm font-medium text-purple-600">Invite Friends</span>
+            </div>
+          </div>
+      <% end %>
+    </div>
     """
   end
 
@@ -220,7 +332,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
               <%= if @is_single_occurrence do %>
                 This event has a single date/time
               <% else %>
-                Best for: When you already know which theater and time works for your group
+                Best for: When you already know which <%= if @is_movie_event, do: "theater", else: "venue" %> and time works for your group
               <% end %>
             </p>
           </div>
@@ -373,7 +485,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                 <!-- Theater/Venue -->
                 <%= if Map.get(@selected_occurrence, :venue_name) do %>
                   <div class="mb-2">
-                    <p class="text-xs text-gray-600 uppercase tracking-wide mb-0.5">Theater</p>
+                    <p class="text-xs text-gray-600 uppercase tracking-wide mb-0.5"><%= if @is_movie_event, do: "Theater", else: "Venue" %></p>
                     <p class="text-sm text-gray-900 font-semibold">
                       <%= @selected_occurrence.venue_name %>
                     </p>
@@ -407,16 +519,36 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
       <!-- Actions -->
       <div class="flex justify-end gap-4 pt-4 border-t">
-        <!-- Hide back button for single-occurrence events (auto-skipped to Quick Plan) -->
-        <%= if @public_event && !@is_single_occurrence do %>
-          <button
-            type="button"
-            phx-click="select_planning_mode"
-            phx-value-mode="selection"
-            class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-          >
-            Back to Mode Selection
-          </button>
+        <!-- Back/Cancel button - Phase 4: Consistent back navigation -->
+        <%= cond do %>
+          <% @is_single_occurrence -> %>
+            <!-- Single-occurrence: just show Cancel to close modal -->
+            <button
+              type="button"
+              phx-click={@on_close}
+              class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          <% @public_event || @movie -> %>
+            <!-- Multi-showtime: allow going back to mode selection -->
+            <button
+              type="button"
+              phx-click="select_planning_mode"
+              phx-value-mode="selection"
+              class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+            >
+              Back to Mode Selection
+            </button>
+          <% true -> %>
+            <!-- Fallback: just Cancel -->
+            <button
+              type="button"
+              phx-click={@on_close}
+              class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+            >
+              Cancel
+            </button>
         <% end %>
         <button
           type="submit"
@@ -616,16 +748,27 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
       <!-- Actions -->
       <div class="flex justify-end gap-4 pt-4 border-t">
-        <!-- Hide back button for single-occurrence events (auto-skipped to Quick Plan) -->
-        <%= if @public_event && !@is_single_occurrence do %>
-          <button
-            type="button"
-            phx-click="select_planning_mode"
-            phx-value-mode="selection"
-            class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-          >
-            Back to Mode Selection
-          </button>
+        <!-- Back/Cancel button - Phase 4: Consistent back navigation -->
+        <%= cond do %>
+          <% @public_event || @movie -> %>
+            <!-- Has context: allow going back to mode selection -->
+            <button
+              type="button"
+              phx-click="select_planning_mode"
+              phx-value-mode="selection"
+              class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+            >
+              Back to Mode Selection
+            </button>
+          <% true -> %>
+            <!-- Fallback: just Cancel -->
+            <button
+              type="button"
+              phx-click={@on_close}
+              class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+            >
+              Cancel
+            </button>
         <% end %>
         <button
           type="submit"
