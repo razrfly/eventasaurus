@@ -45,7 +45,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       |> assign(:current_email_input, "")
       |> assign(:bulk_email_input, "")
       |> assign(:invitation_message, "")
-      |> assign(:planning_mode, :selection)
+      |> assign(:planning_mode, :flexible_filters)
       |> assign(:filter_criteria, %{})
       |> assign(:matching_occurrences, [])
       |> assign(:filter_preview_count, nil)
