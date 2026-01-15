@@ -299,13 +299,19 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
   end
 
   defp format_datetime_description(datetime, timezone, format) do
-    shifted = DateTime.shift_zone!(datetime, timezone)
+    case datetime do
+      nil ->
+        "Time to be determined"
 
-    day_name = Calendar.strftime(shifted, "%A")
-    date_str = format_date(shifted, format)
-    time_str = Calendar.strftime(shifted, "%I:%M %p")
+      dt ->
+        shifted = DateTime.shift_zone!(dt, timezone)
 
-    "#{day_name}, #{date_str} at #{time_str}"
+        day_name = Calendar.strftime(shifted, "%A")
+        date_str = format_date(shifted, format)
+        time_str = Calendar.strftime(shifted, "%I:%M %p")
+
+        "#{day_name}, #{date_str} at #{time_str}"
+    end
   end
 
   defp format_date(datetime, :short) do
