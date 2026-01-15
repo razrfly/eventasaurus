@@ -610,7 +610,12 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   # Gets date availability counts from an event's occurrences JSONB field.
   # This handles standard events (like trivia nights) that have actual occurrence
   # data, as opposed to venue-based meal period generation.
-  def get_date_availability_counts("event", event_id, date_list, _filter_criteria)
+  #
+  # Supports dynamic filtering: when time_preferences are provided in filter_criteria,
+  # only showtimes matching those time preferences are counted for each date.
+  # This enables the "dynamic counts" UX where selecting "Afternoon" updates
+  # the date counts to show only afternoon showtimes per date.
+  def get_date_availability_counts("event", event_id, date_list, filter_criteria)
       when is_integer(event_id) do
     try do
       # Get the event's occurrences JSONB
@@ -622,8 +627,11 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
 
       occurrences_data = Repo.one(event_query)
 
-      # Count occurrences per date
-      counts = count_event_occurrences_per_date(occurrences_data, date_list)
+      # Extract time_preferences from filter_criteria for dynamic filtering
+      time_preferences = get_filter_value(filter_criteria, :time_preferences, [])
+
+      # Count occurrences per date, optionally filtered by time preferences
+      counts = count_event_occurrences_per_date_filtered(occurrences_data, date_list, time_preferences)
 
       {:ok, counts}
     rescue
@@ -868,20 +876,38 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
 
   # Event occurrence counting helpers
 
-  # Count occurrences per date from event's JSONB occurrences field
-  # Handles both dates arrays and pattern-based recurring events
-  defp count_event_occurrences_per_date(nil, date_list) do
+  # Count event occurrences per date with optional time preference filtering.
+  # This enables the "dynamic counts" UX where selecting a time preference
+  # updates the date counts to show only showtimes in that time period.
+  defp count_event_occurrences_per_date_filtered(nil, date_list, _time_preferences) do
     # No occurrences data - return zeros for all dates
     Enum.reduce(date_list, %{}, fn date, acc -> Map.put(acc, date, 0) end)
   end
 
-  defp count_event_occurrences_per_date(%{"dates" => dates}, date_list) when is_list(dates) do
-    # Count occurrences from dates array
+  defp count_event_occurrences_per_date_filtered(%{"dates" => dates}, date_list, time_preferences)
+       when is_list(dates) do
+    # First filter by time preferences if specified
+    filtered_dates =
+      if time_preferences == [] do
+        dates
+      else
+        Enum.filter(dates, fn showtime ->
+          case showtime["time"] do
+            nil -> false
+            time_string ->
+              hour = parse_hour_from_time_string(time_string)
+              time_slot = hour_to_time_slot(hour)
+              time_slot in time_preferences
+          end
+        end)
+      end
+
+    # Then count occurrences per date from filtered list
     Enum.reduce(date_list, %{}, fn date, acc ->
       date_string = Date.to_iso8601(date)
 
       count =
-        Enum.count(dates, fn showtime ->
+        Enum.count(filtered_dates, fn showtime ->
           showtime["date"] == date_string
         end)
 
@@ -889,28 +915,36 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     end)
   end
 
-  defp count_event_occurrences_per_date(%{"type" => "pattern", "pattern" => pattern}, date_list) do
-    # Count from recurring pattern
-    # Pattern structure: %{"frequency" => "weekly", "days" => [1, 3], "time" => "19:00", ...}
-    target_weekdays = get_pattern_weekdays(pattern)
+  defp count_event_occurrences_per_date_filtered(%{"type" => "pattern", "pattern" => pattern}, date_list, time_preferences) do
+    # For pattern-based recurring events, check if the pattern's fixed time
+    # matches the requested time preferences
+    time_string = pattern["time"] || "19:00"
+    hour = parse_hour_from_time_string(time_string)
+    period = hour_to_time_slot(hour)
 
-    Enum.reduce(date_list, %{}, fn date, acc ->
-      # Check if this date matches the pattern's weekdays
-      day_of_week = Date.day_of_week(date)
+    # If time preferences specified and pattern doesn't match, return zeros
+    if time_preferences != [] and period not in time_preferences do
+      Enum.reduce(date_list, %{}, fn date, acc -> Map.put(acc, date, 0) end)
+    else
+      # Count matching dates based on weekday pattern
+      target_weekdays = get_pattern_weekdays(pattern)
 
-      count =
-        if day_of_week in target_weekdays do
-          # Pattern events typically have 1 occurrence per matching day
-          1
-        else
-          0
-        end
+      Enum.reduce(date_list, %{}, fn date, acc ->
+        day_of_week = Date.day_of_week(date)
 
-      Map.put(acc, date, count)
-    end)
+        count =
+          if day_of_week in target_weekdays do
+            1
+          else
+            0
+          end
+
+        Map.put(acc, date, count)
+      end)
+    end
   end
 
-  defp count_event_occurrences_per_date(_occurrences_data, date_list) do
+  defp count_event_occurrences_per_date_filtered(_occurrences_data, date_list, _time_preferences) do
     # Unknown format - return zeros
     Enum.reduce(date_list, %{}, fn date, acc -> Map.put(acc, date, 0) end)
   end
@@ -1024,10 +1058,18 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     end
   end
 
+  # Gets time period availability counts from an event's occurrences JSONB field.
+  #
+  # Supports dynamic filtering: when selected_dates are provided in filter_criteria,
+  # only showtimes on those specific dates are counted for each time period.
+  # This enables the "dynamic counts" UX where selecting "Thursday" updates
+  # the time period counts to show only Thursday's distribution.
   def get_time_period_availability_counts("event", event_id, filter_criteria)
       when is_integer(event_id) do
     try do
-      date_list = get_date_list_from_criteria(filter_criteria)
+      # Check for selected_dates first (specific dates selected by user)
+      # Fall back to date_range or default 7-day range
+      date_list = get_date_list_for_time_periods(filter_criteria)
 
       # Get the event's occurrences JSONB
       event_query =
@@ -1038,7 +1080,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
 
       occurrences_data = Repo.one(event_query)
 
-      # Count occurrences by time period
+      # Count occurrences by time period, filtered to selected dates
       counts = count_event_occurrences_by_time_period(occurrences_data, date_list)
       {:ok, counts}
     rescue
@@ -1062,6 +1104,29 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     today = Date.utc_today()
     end_date = Date.add(today, 7)
     Date.range(today, end_date) |> Enum.to_list()
+  end
+
+  # Get date list for time period calculations, prioritizing selected_dates.
+  # This enables dynamic counts: when user selects specific dates, the time
+  # period counts update to show only those dates' distribution.
+  defp get_date_list_for_time_periods(filter_criteria) do
+    # First check for selected_dates (specific dates chosen by user in UI)
+    selected_dates = get_filter_value(filter_criteria, :selected_dates, [])
+
+    if selected_dates != [] do
+      # Parse date strings to Date structs
+      selected_dates
+      |> Enum.map(fn date_str ->
+        case Date.from_iso8601(date_str) do
+          {:ok, date} -> date
+          _ -> nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+    else
+      # Fall back to date_range or default
+      get_date_list_from_criteria(filter_criteria)
+    end
   end
 
   # Count showtimes by time period from JSONB showtime data
