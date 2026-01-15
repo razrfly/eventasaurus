@@ -67,6 +67,9 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
         friend_ids \\ [],
         opts \\ []
       ) do
+    # Get the organizer user upfront for invitation processing
+    organizer = Repo.get!(Accounts.User, user_id)
+
     Repo.transaction(fn ->
       with {:ok, occurrences} <- find_occurrences(series_type, series_id, filter_criteria),
            _ <-
@@ -88,7 +91,7 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
                series_id,
                filter_criteria
              ),
-           {:ok, invitations} <- invite_friends(private_event, friend_ids) do
+           {:ok, invitations} <- invite_friends(private_event, friend_ids, organizer) do
         %{
           private_event: private_event,
           poll: poll,
@@ -231,25 +234,38 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
     OccurrencePlannings.create(attrs)
   end
 
-  defp invite_friends(_event, []), do: {:ok, []}
+  defp invite_friends(_event, [], _organizer), do: {:ok, %{successful_invitations: 0}}
 
-  defp invite_friends(event, friend_ids) do
-    # Add each friend as a participant
-    results =
+  defp invite_friends(event, friend_ids, organizer) do
+    # Convert friend IDs to suggestion structs format expected by process_guest_invitations
+    # This matches the pattern used in public_event_show_live.ex send_invitations/5
+    suggestion_structs =
       Enum.map(friend_ids, fn friend_id ->
         user = Repo.get!(Accounts.User, friend_id)
-        Events.add_user_to_event(event, user, "participant")
+
+        %{
+          user_id: user.id,
+          name: user.name,
+          email: user.email,
+          username: Map.get(user, :username),
+          avatar_url: Map.get(user, :avatar_url)
+        }
       end)
 
-    # Check if any failed
-    case Enum.find(results, fn result -> match?({:error, _}, result) end) do
-      nil ->
-        memberships = Enum.map(results, fn {:ok, membership} -> membership end)
-        {:ok, memberships}
+    # Process invitations using the same function as quick mode and manager area
+    # Using :invitation mode to send invitation emails to friends
+    result =
+      Events.process_guest_invitations(
+        event,
+        organizer,
+        suggestion_structs: suggestion_structs,
+        manual_emails: [],
+        invitation_message: "",
+        mode: :invitation
+      )
 
-      {:error, reason} ->
-        {:error, {:invitation_failed, reason}}
-    end
+    # Return success with the invitation results
+    {:ok, result}
   end
 
   defp build_default_event_title("movie", _movie_id) do

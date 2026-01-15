@@ -1118,7 +1118,18 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   defp format_occurrence_title(_, _is_movie_event), do: "Showtime"
 
   defp format_occurrence_datetime_full(%{datetime: datetime}) when not is_nil(datetime) do
-    # Parse ISO8601 datetime if it's a string
+    format_datetime_value(datetime)
+  end
+
+  # Handle occurrences that use starts_at instead of datetime
+  defp format_occurrence_datetime_full(%{starts_at: starts_at}) when not is_nil(starts_at) do
+    format_datetime_value(starts_at)
+  end
+
+  defp format_occurrence_datetime_full(_), do: "Time TBD"
+
+  # Helper to parse and format datetime values
+  defp format_datetime_value(datetime) do
     parsed_datetime =
       case datetime do
         %DateTime{} = dt ->
@@ -1136,8 +1147,6 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
     Calendar.strftime(parsed_datetime, "%A, %B %d at %I:%M %p")
   end
-
-  defp format_occurrence_datetime_full(_), do: "Time TBD"
 
   # Generate list of dates for selection (7 days for movies, 14 for venues)
   defp generate_date_options(is_venue_event) do

@@ -111,12 +111,15 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
     occurrences
     |> Enum.with_index()
     |> Enum.map(fn {occurrence, index} ->
+      # Occurrence maps use :datetime field (from OccurrenceQuery)
+      datetime = occurrence[:datetime] || occurrence[:starts_at]
+
       %{
         title: format_movie_title(occurrence),
-        description: format_datetime_description(occurrence.starts_at, timezone, date_format),
+        description: format_datetime_description(datetime, timezone, date_format),
         external_id: "event:#{occurrence.public_event_id}",
-        external_data: build_external_data(occurrence),
-        metadata: build_occurrence_metadata(occurrence, "movie_showtime"),
+        external_data: build_external_data(occurrence, datetime),
+        metadata: build_occurrence_metadata(occurrence, "movie_showtime", datetime),
         order_index: index
       }
     end)
@@ -144,12 +147,15 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
     occurrences
     |> Enum.with_index()
     |> Enum.map(fn {occurrence, index} ->
+      # Occurrence maps use :datetime field (from OccurrenceQuery)
+      datetime = occurrence[:datetime] || occurrence[:starts_at]
+
       %{
         title: format_discovery_title(occurrence),
-        description: format_datetime_description(occurrence.starts_at, timezone, date_format),
+        description: format_datetime_description(datetime, timezone, date_format),
         external_id: "event:#{occurrence.public_event_id}",
-        external_data: build_external_data(occurrence),
-        metadata: build_occurrence_metadata(occurrence, "movie_showtime"),
+        external_data: build_external_data(occurrence, datetime),
+        metadata: build_occurrence_metadata(occurrence, "movie_showtime", datetime),
         order_index: index
       }
     end)
@@ -248,7 +254,9 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
 
     occurrences
     |> Enum.group_by(fn occ ->
-      occ.starts_at
+      datetime = occ[:datetime] || occ[:starts_at]
+
+      datetime
       |> DateTime.shift_zone!(timezone)
       |> DateTime.to_date()
     end)
@@ -264,13 +272,24 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
 
   # Private formatting functions
 
-  defp format_movie_title(%{movie_title: movie, venue_name: venue}) do
-    "#{movie} @ #{venue}"
+  defp format_movie_title(occurrence) do
+    movie = occurrence.movie_title
+    venue = occurrence.venue_name
+    datetime = occurrence[:datetime] || occurrence[:starts_at]
+
+    # Include time in title to make each showtime unique
+    time_str = Calendar.strftime(datetime, "%I:%M %p")
+    "#{movie} @ #{venue} - #{time_str}"
   end
 
-  defp format_discovery_title(%{movie_title: movie, venue_name: venue}) do
-    # Same as movie title for now, but could be customized
-    "#{movie} @ #{venue}"
+  defp format_discovery_title(occurrence) do
+    movie = occurrence.movie_title
+    venue = occurrence.venue_name
+    datetime = occurrence[:datetime] || occurrence[:starts_at]
+
+    # Include time in title to make each showtime unique
+    time_str = Calendar.strftime(datetime, "%I:%M %p")
+    "#{movie} @ #{venue} - #{time_str}"
   end
 
   defp format_datetime_description(datetime, timezone, format) do
@@ -296,26 +315,30 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
     Calendar.strftime(date, "%A, %B %d")
   end
 
-  defp build_external_data(occurrence) do
+  defp build_external_data(occurrence, datetime) do
+    ends_at = occurrence[:ends_at] || occurrence[:end_datetime]
+
     %{
       "public_event_id" => occurrence.public_event_id,
       "movie_id" => occurrence.movie_id,
       "movie_title" => occurrence.movie_title,
       "venue_id" => occurrence.venue_id,
       "venue_name" => occurrence.venue_name,
-      "starts_at" => DateTime.to_iso8601(occurrence.starts_at),
-      "ends_at" => occurrence.ends_at && DateTime.to_iso8601(occurrence.ends_at)
+      "starts_at" => DateTime.to_iso8601(datetime),
+      "ends_at" => ends_at && DateTime.to_iso8601(ends_at)
     }
   end
 
-  defp build_occurrence_metadata(occurrence, occurrence_type) do
+  defp build_occurrence_metadata(occurrence, occurrence_type, datetime) do
+    ends_at = occurrence[:ends_at] || occurrence[:end_datetime]
+
     %{
       occurrence_type: occurrence_type,
       public_event_id: occurrence.public_event_id,
       movie_id: occurrence.movie_id,
       venue_id: occurrence.venue_id,
-      starts_at: DateTime.to_iso8601(occurrence.starts_at),
-      ends_at: occurrence.ends_at && DateTime.to_iso8601(occurrence.ends_at)
+      starts_at: DateTime.to_iso8601(datetime),
+      ends_at: ends_at && DateTime.to_iso8601(ends_at)
     }
   end
 
