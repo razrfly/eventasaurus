@@ -53,6 +53,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       |> assign(:filter_preview_count, nil)
       |> assign(:modal_organizer, nil)
       |> assign(:date_availability, %{})
+      |> assign(:time_period_availability, %{})
       |> assign(:entry_context, :generic_movie)
       |> assign(:is_single_occurrence, false)
       |> assign(:selected_occurrence, nil)
@@ -360,6 +361,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             movie={@movie}
             city={@city}
             date_availability={@date_availability}
+            time_period_availability={@time_period_availability}
           />
         <% end %>
       </div>
@@ -395,11 +397,23 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           {:error, _} -> %{}
         end
 
+      # Fetch time period availability counts for the movie
+      time_period_availability =
+        case EventasaurusApp.Planning.OccurrenceQuery.get_time_period_availability_counts(
+               "movie",
+               movie.id,
+               %{}
+             ) do
+          {:ok, counts} -> counts
+          {:error, _} -> %{}
+        end
+
       {:noreply,
        socket
        |> assign(:show_plan_with_friends_modal, true)
        |> assign(:modal_organizer, user)
-       |> assign(:date_availability, date_availability)}
+       |> assign(:date_availability, date_availability)
+       |> assign(:time_period_availability, time_period_availability)}
     end
   end
 

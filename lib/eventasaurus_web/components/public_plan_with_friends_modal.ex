@@ -48,6 +48,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   attr :movie, :map, default: nil
   attr :city, :map, default: nil
   attr :date_availability, :map, default: %{}
+  attr :time_period_availability, :map, default: %{}
 
   def modal(assigns) do
     ~H"""
@@ -767,14 +768,42 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
       <!-- Date Selection (Adaptive UI based on available dates) -->
       <%= render_date_selection(assigns) %>
 
-      <!-- Time Preferences (for movies) or Meal Periods (for venues) -->
-      <%= if @is_movie_event do %>
+      <!-- Time Preferences (data-driven based on available showtimes) -->
+      <%
+        # Compute available time periods from the availability data
+        # Only show periods that have at least one showtime
+        all_time_periods = [
+          {"Morning", "morning"},
+          {"Afternoon", "afternoon"},
+          {"Evening", "evening"},
+          {"Late Night", "late_night"}
+        ]
+
+        available_time_periods =
+          Enum.filter(all_time_periods, fn {_label, value} ->
+            count = Map.get(@time_period_availability, value, 0)
+            count > 0
+          end)
+
+        # Only show the time filter if there are at least 2 different time periods available
+        # If there's only 1 (or 0), the filter isn't useful
+        show_time_filter = length(available_time_periods) >= 2
+      %>
+      <%= if show_time_filter do %>
         <div>
           <label class="block text-sm font-medium text-gray-900 mb-2">
             Preferred Times
           </label>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <%= for {time_label, time_value} <- [{"Morning", "morning"}, {"Afternoon", "afternoon"}, {"Evening", "evening"}, {"Late Night", "late_night"}] do %>
+          <div class={[
+            "grid gap-3",
+            case length(available_time_periods) do
+              2 -> "grid-cols-2"
+              3 -> "grid-cols-3"
+              _ -> "grid-cols-2 sm:grid-cols-4"
+            end
+          ]}>
+            <%= for {time_label, time_value} <- available_time_periods do %>
+              <% count = Map.get(@time_period_availability, time_value, 0) %>
               <label class="flex items-center p-3 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
                 <input
                   type="checkbox"
@@ -783,37 +812,15 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                   checked={time_value in Map.get(@filter_criteria, :time_preferences, [])}
                   class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                 />
-                <span class="ml-2 text-sm text-gray-700"><%= time_label %></span>
+                <span class="ml-2 text-sm text-gray-700">
+                  <%= time_label %>
+                  <span class="text-gray-400 text-xs">(<%= count %>)</span>
+                </span>
               </label>
             <% end %>
           </div>
           <p class="mt-1 text-xs text-gray-500">
             Select one or more time slots (leave empty for all times)
-          </p>
-        </div>
-      <% end %>
-
-      <%= if @is_venue_event do %>
-        <div>
-          <label class="block text-sm font-medium text-gray-900 mb-2">
-            Meal Periods
-          </label>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <%= for {period_label, period_value} <- [{"Breakfast", "breakfast"}, {"Lunch", "lunch"}, {"Dinner", "dinner"}, {"Brunch", "brunch"}, {"Late Night", "late_night"}] do %>
-              <label class="flex items-center p-3 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
-                <input
-                  type="checkbox"
-                  name="meal_periods[]"
-                  value={period_value}
-                  checked={period_value in Map.get(@filter_criteria, :meal_periods, [])}
-                  class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                />
-                <span class="ml-2 text-sm text-gray-700"><%= period_label %></span>
-              </label>
-            <% end %>
-          </div>
-          <p class="mt-1 text-xs text-gray-500">
-            Select preferred dining times (leave empty for all periods)
           </p>
         </div>
       <% end %>
@@ -843,10 +850,12 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
       <!-- Filter Preview Count - only show when user has selected filters -->
       <%
-        # Check for date selections, time preferences (movies), and meal periods (venues)
+        # Check for date selections and time preferences
         has_selected_filters = Enum.any?(Map.get(@filter_criteria, :selected_dates, [])) ||
-                               Enum.any?(Map.get(@filter_criteria, :time_preferences, [])) ||
-                               Enum.any?(Map.get(@filter_criteria, :meal_periods, []))
+                               Enum.any?(Map.get(@filter_criteria, :time_preferences, []))
+        # Get limit for truncation warning
+        current_limit = Map.get(@filter_criteria, :limit, 10)
+        will_be_truncated = @filter_preview_count != nil and @filter_preview_count > current_limit
       %>
       <%= if @filter_preview_count != nil and has_selected_filters do %>
         <div class={[
@@ -861,11 +870,17 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
               <svg class="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p class="text-sm font-medium text-green-800">
-                <%= @filter_preview_count %>
-                <%= if @is_venue_event, do: "time slots", else: "showtimes" %>
-                available with your selected filters
-              </p>
+              <div>
+                <p class="text-sm font-medium text-green-800">
+                  <%= @filter_preview_count %> options available with your selected filters
+                </p>
+                <%= if will_be_truncated do %>
+                  <p class="text-xs text-green-700 mt-1">
+                    <span class="font-medium">Note:</span> Showing <%= current_limit %> of <%= @filter_preview_count %> options, distributed across your selected dates.
+                    Adjust "Maximum Options" in Advanced Options to see more.
+                  </p>
+                <% end %>
+              </div>
             </div>
           <% else %>
             <div class="flex items-center gap-2">
@@ -874,7 +889,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
               </svg>
               <div>
                 <p class="text-sm font-medium text-yellow-800">
-                  No <%= if @is_venue_event, do: "time slots", else: "showtimes" %> match your selected filters
+                  No options match your selected filters
                 </p>
                 <p class="text-xs text-yellow-700 mt-1">
                   Try selecting different dates or times to find availability

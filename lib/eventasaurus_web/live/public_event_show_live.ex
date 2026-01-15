@@ -88,6 +88,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:is_single_occurrence, false)
       |> assign(:filter_preview_count, nil)
       |> assign(:date_availability, %{})
+      |> assign(:time_period_availability, %{})
 
     {:ok, socket}
   end
@@ -605,6 +606,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         # Fetch date availability counts based on event type
         date_availability = fetch_date_availability(event, is_movie, is_venue)
 
+        # Fetch time period availability for data-driven time filter
+        time_period_availability = fetch_time_period_availability(event, is_movie)
+
         # Phase 3: Adaptive Modal Behavior
         # - Single-occurrence events → Skip directly to Quick Plan
         # - Multi-showtime events → Show mode selection
@@ -624,7 +628,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
          |> assign(:entry_context, entry_context)
          |> assign(:is_single_occurrence, is_single_occurrence)
          |> assign(:planning_mode, initial_planning_mode)
-         |> assign(:date_availability, date_availability)}
+         |> assign(:date_availability, date_availability)
+         |> assign(:time_period_availability, time_period_availability)}
     end
   end
 
@@ -886,16 +891,20 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     }
 
     # Query for matching occurrences
+    # IMPORTANT: Always use event.id to constrain to THIS specific venue's event,
+    # not movie.id which would return showtimes from ALL venues (fixes issue #3245)
     event = socket.assigns.event
-    movie = get_movie_data(event)
     venue = get_venue_data(event)
 
     matching_occurrences =
       cond do
-        movie ->
-          query_movie_occurrences(movie.id, filter_criteria)
+        # For events with occurrence data (movies, trivia, etc.), use event.id
+        # This constrains results to this specific venue's showtimes
+        has_occurrence_data?(event) ->
+          query_event_occurrences(event.id, filter_criteria)
 
-        venue && !movie ->
+        # For venue-based planning (restaurants, etc.)
+        venue ->
           query_venue_occurrences(venue.id, filter_criteria)
 
         true ->
@@ -1206,6 +1215,23 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
+  # Query occurrences for a specific event (constrains to this venue's showtimes only)
+  # This is used when on a specific event page to avoid showing showtimes from other venues
+  defp query_event_occurrences(event_id, filter_criteria) do
+    alias EventasaurusApp.Planning.OccurrenceQuery
+
+    query_criteria = %{
+      date_range: PlanWithFriendsHelpers.parse_date_range(filter_criteria),
+      time_preferences: Map.get(filter_criteria, :time_preferences, []),
+      limit: Map.get(filter_criteria, :limit, 10)
+    }
+
+    case OccurrenceQuery.find_occurrences("event", event_id, query_criteria) do
+      {:ok, occurrences} -> occurrences
+      {:error, _reason} -> []
+    end
+  end
+
   defp get_venue_data(event) do
     # Extract venue data from event's venue association
     case event.venue do
@@ -1463,6 +1489,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           entry_context={@entry_context}
           is_single_occurrence={@is_single_occurrence}
           date_availability={@date_availability}
+          time_period_availability={@time_period_availability}
         />
       <% end %>
     </div>
@@ -2006,30 +2033,15 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   # Helper to fetch date availability counts based on event type
-  defp fetch_date_availability(event, is_movie, is_venue) do
+  # Always uses "event" with event.id to get counts for THIS specific event/venue,
+  # not aggregated across all venues showing the same movie (fixes issue #3245)
+  defp fetch_date_availability(event, _is_movie, is_venue) do
     date_list = generate_date_list(is_venue)
 
     cond do
-      is_movie ->
-        movie = get_movie_data(event)
-
-        if movie do
-          case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
-                 "movie",
-                 movie.id,
-                 date_list,
-                 %{}
-               ) do
-            {:ok, counts} -> counts
-            {:error, _} -> %{}
-          end
-        else
-          %{}
-        end
-
-      # For venue events with occurrence data (like trivia nights),
-      # count from actual event occurrences instead of generating meal periods
-      is_venue && has_occurrence_data?(event) ->
+      # For events with occurrence data (movies, trivia, etc.), use event.id
+      # This constrains counts to this specific venue's showtimes
+      has_occurrence_data?(event) ->
         case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
                "event",
                event.id,
@@ -2067,6 +2079,24 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp has_occurrence_data?(%{occurrences: %{"dates" => dates}}) when is_list(dates), do: true
   defp has_occurrence_data?(%{occurrences: %{"type" => "pattern"}}), do: true
   defp has_occurrence_data?(_), do: false
+
+  # Helper to fetch time period availability counts based on event type
+  # Always uses "event" with event.id to get counts for THIS specific event/venue,
+  # not aggregated across all venues showing the same movie (fixes issue #3245)
+  defp fetch_time_period_availability(event, _is_movie) do
+    if has_occurrence_data?(event) do
+      case EventasaurusApp.Planning.OccurrenceQuery.get_time_period_availability_counts(
+             "event",
+             event.id,
+             %{}
+           ) do
+        {:ok, counts} -> counts
+        {:error, _} -> %{}
+      end
+    else
+      %{}
+    end
+  end
 
   # Helper to generate date list matching modal's generate_date_options logic
   defp generate_date_list(is_venue_event) do
