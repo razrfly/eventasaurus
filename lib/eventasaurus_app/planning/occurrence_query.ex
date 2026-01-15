@@ -143,18 +143,140 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
       limit = get_filter_value(filter_criteria, :limit, @default_limit)
 
       # Build list of individual showtimes with proper datetime field
-      showtimes =
+      all_showtimes =
         events
         |> Enum.flat_map(fn event ->
           extract_showtimes_from_event(event, date_range, time_preferences)
         end)
         |> Enum.sort_by(fn showtime -> showtime.datetime end, DateTime)
-        |> Enum.take(limit)
 
-      {:ok, showtimes}
+      # Apply smart sampling: distribute limit evenly across dates instead of
+      # just taking first N chronologically (fixes issue #3245 bug #2)
+      sampled_showtimes = smart_sample_across_dates(all_showtimes, limit)
+
+      {:ok, sampled_showtimes}
     rescue
       e ->
         {:error, "Failed to query movie occurrences: #{Exception.message(e)}"}
+    end
+  end
+
+  @doc """
+  Finds occurrences for a specific event (single venue).
+
+  This is used when viewing a specific event page to constrain results
+  to only that venue's showtimes, rather than all venues showing the same movie.
+
+  ## Parameters
+
+  - `event_id` - Integer ID of the public_event
+  - `filter_criteria` - Map with optional filters (date_range, time_preferences, limit)
+
+  ## Returns
+
+  - `{:ok, occurrences}` - List of occurrence maps for this specific event
+  - `{:error, reason}` - If query fails
+  """
+  def find_event_occurrences(event_id, filter_criteria \\ %{}) do
+    try do
+      # Query the specific event with its JSONB occurrences field
+      event_query =
+        from(pe in PublicEvent,
+          left_join: v in Venue,
+          on: pe.venue_id == v.id,
+          left_join: em in EventMovie,
+          on: em.event_id == pe.id,
+          left_join: m in Movie,
+          on: em.movie_id == m.id,
+          where: pe.id == ^event_id,
+          select: %{
+            public_event_id: pe.id,
+            movie_id: m.id,
+            venue_id: pe.venue_id,
+            title: pe.title,
+            movie_title: m.title,
+            venue_name: v.name,
+            venue_city_id: v.city_id,
+            occurrences: pe.occurrences
+          }
+        )
+
+      case Repo.one(event_query) do
+        nil ->
+          {:ok, []}
+
+        event ->
+          # Extract individual showtimes from JSONB occurrences field
+          date_range = get_date_range(filter_criteria)
+          time_preferences = get_filter_value(filter_criteria, :time_preferences, [])
+          limit = get_filter_value(filter_criteria, :limit, @default_limit)
+
+          # Build list of individual showtimes with proper datetime field
+          all_showtimes =
+            extract_showtimes_from_event(event, date_range, time_preferences)
+            |> Enum.sort_by(fn showtime -> showtime.datetime end, DateTime)
+
+          # Apply smart sampling
+          sampled_showtimes = smart_sample_across_dates(all_showtimes, limit)
+
+          {:ok, sampled_showtimes}
+      end
+    rescue
+      e ->
+        {:error, "Failed to query event occurrences: #{Exception.message(e)}"}
+    end
+  end
+
+  # Smart sampling: distribute the limit evenly across dates instead of
+  # just taking the first N chronologically. This ensures users see options
+  # across their entire selected date range, not just the first day or two.
+  #
+  # Algorithm:
+  # 1. Group showtimes by date
+  # 2. Calculate how many to take per date (round-robin distribution)
+  # 3. Take proportionally from each date, preserving chronological order within each date
+  # 4. Sort final result chronologically
+  defp smart_sample_across_dates(showtimes, limit) when length(showtimes) <= limit do
+    # No sampling needed - return all
+    showtimes
+  end
+
+  defp smart_sample_across_dates(showtimes, limit) do
+    # Group by date
+    by_date =
+      showtimes
+      |> Enum.group_by(fn showtime ->
+        case showtime.datetime do
+          %DateTime{} = dt -> DateTime.to_date(dt)
+          _ -> showtime.date
+        end
+      end)
+      |> Enum.sort_by(fn {date, _} -> date end, Date)
+
+    num_dates = length(by_date)
+
+    if num_dates == 0 do
+      []
+    else
+      # Base allocation: how many per date minimum
+      base_per_date = div(limit, num_dates)
+      # Remainder to distribute to earlier dates
+      remainder = rem(limit, num_dates)
+
+      # Take from each date proportionally
+      {sampled, _} =
+        Enum.reduce(by_date, {[], remainder}, fn {_date, date_showtimes}, {acc, extra} ->
+          # Give extra 1 to first 'remainder' dates
+          take_count = if extra > 0, do: base_per_date + 1, else: base_per_date
+
+          # Take from this date's showtimes (already sorted chronologically)
+          taken = Enum.take(date_showtimes, take_count)
+
+          {acc ++ taken, max(0, extra - 1)}
+        end)
+
+      # Sort final result chronologically
+      Enum.sort_by(sampled, fn showtime -> showtime.datetime end, DateTime)
     end
   end
 
@@ -336,12 +458,16 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     find_venue_occurrences(venue_id, filter_criteria)
   end
 
+  def find_occurrences("event", event_id, filter_criteria) when is_integer(event_id) do
+    find_event_occurrences(event_id, filter_criteria)
+  end
+
   def find_occurrences(nil, nil, filter_criteria) do
     find_discovery_occurrences(filter_criteria)
   end
 
   def find_occurrences(series_type, _series_id, _filter_criteria) do
-    {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue'"}
+    {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue', 'event'"}
   end
 
   @doc """
@@ -820,5 +946,189 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
       "sunday" -> 7
       _ -> 0
     end
+  end
+
+  # =============================================================================
+  # Time Period Availability Counts
+  # =============================================================================
+
+  @doc """
+  Returns counts of occurrences grouped by time period (morning, afternoon, evening, late_night).
+
+  This enables data-driven time preference filtering in the Plan with Friends modal,
+  showing only time periods that have actual occurrences.
+
+  ## Parameters
+
+  - `series_type` - "movie", "event", or "venue"
+  - `series_id` - ID of the movie, event, or venue
+  - `filter_criteria` - Optional filter criteria (date range, etc.)
+
+  ## Returns
+
+  `{:ok, %{"morning" => 0, "afternoon" => 3, "evening" => 15, "late_night" => 5}}`
+
+  ## Time Period Mapping
+
+  - `"morning"`: 06:00-12:00
+  - `"afternoon"`: 12:00-17:00
+  - `"evening"`: 17:00-22:00
+  - `"late_night"`: 22:00-06:00
+  """
+  def get_time_period_availability_counts(series_type, series_id, filter_criteria \\ %{})
+
+  def get_time_period_availability_counts("movie", movie_id, filter_criteria)
+      when is_integer(movie_id) do
+    try do
+      # Get date range from filter_criteria or default to 7 days
+      date_list = get_date_list_from_criteria(filter_criteria)
+
+      # Get all events linked to this movie
+      events_query =
+        from(pe in PublicEvent,
+          join: em in EventMovie,
+          on: em.event_id == pe.id,
+          where: em.movie_id == ^movie_id,
+          select: pe.occurrences
+        )
+
+      all_occurrences = Repo.all(events_query)
+
+      # Extract all showtimes from the JSONB occurrences field
+      all_showtimes =
+        all_occurrences
+        |> Enum.flat_map(fn occurrences ->
+          case occurrences do
+            %{"dates" => dates} when is_list(dates) -> dates
+            _ -> []
+          end
+        end)
+        |> Enum.filter(fn showtime ->
+          # Filter by date range if specified
+          case showtime["date"] do
+            nil -> false
+            date_str ->
+              case Date.from_iso8601(date_str) do
+                {:ok, date} -> date in date_list
+                _ -> false
+              end
+          end
+        end)
+
+      # Count by time period
+      counts = count_showtimes_by_time_period(all_showtimes)
+      {:ok, counts}
+    rescue
+      e ->
+        {:error, "Failed to get time period availability counts: #{Exception.message(e)}"}
+    end
+  end
+
+  def get_time_period_availability_counts("event", event_id, filter_criteria)
+      when is_integer(event_id) do
+    try do
+      date_list = get_date_list_from_criteria(filter_criteria)
+
+      # Get the event's occurrences JSONB
+      event_query =
+        from(pe in PublicEvent,
+          where: pe.id == ^event_id,
+          select: pe.occurrences
+        )
+
+      occurrences_data = Repo.one(event_query)
+
+      # Count occurrences by time period
+      counts = count_event_occurrences_by_time_period(occurrences_data, date_list)
+      {:ok, counts}
+    rescue
+      e ->
+        {:error, "Failed to get event time period availability counts: #{Exception.message(e)}"}
+    end
+  end
+
+  def get_time_period_availability_counts(_series_type, _series_id, _filter_criteria) do
+    # Default: return empty counts (no time filtering needed)
+    {:ok, %{"morning" => 0, "afternoon" => 0, "evening" => 0, "late_night" => 0}}
+  end
+
+  # Helper to get date list from filter criteria or default to 7 days
+  defp get_date_list_from_criteria(%{date_range: %{start: start_date, end: end_date}}) do
+    Date.range(start_date, end_date) |> Enum.to_list()
+  end
+
+  defp get_date_list_from_criteria(_) do
+    # Default: next 7 days
+    today = Date.utc_today()
+    end_date = Date.add(today, 7)
+    Date.range(today, end_date) |> Enum.to_list()
+  end
+
+  # Count showtimes by time period from JSONB showtime data
+  defp count_showtimes_by_time_period(showtimes) do
+    initial_counts = %{"morning" => 0, "afternoon" => 0, "evening" => 0, "late_night" => 0}
+
+    Enum.reduce(showtimes, initial_counts, fn showtime, acc ->
+      case showtime["time"] do
+        nil -> acc
+        time_string ->
+          hour = parse_hour_from_time_string(time_string)
+          period = hour_to_time_slot(hour)
+          Map.update!(acc, period, &(&1 + 1))
+      end
+    end)
+  end
+
+  # Count event occurrences by time period
+  defp count_event_occurrences_by_time_period(nil, _date_list) do
+    %{"morning" => 0, "afternoon" => 0, "evening" => 0, "late_night" => 0}
+  end
+
+  defp count_event_occurrences_by_time_period(%{"dates" => dates}, date_list) when is_list(dates) do
+    initial_counts = %{"morning" => 0, "afternoon" => 0, "evening" => 0, "late_night" => 0}
+
+    dates
+    |> Enum.filter(fn showtime ->
+      case showtime["date"] do
+        nil -> false
+        date_str ->
+          case Date.from_iso8601(date_str) do
+            {:ok, date} -> date in date_list
+            _ -> false
+          end
+      end
+    end)
+    |> Enum.reduce(initial_counts, fn showtime, acc ->
+      case showtime["time"] do
+        nil -> acc
+        time_string ->
+          hour = parse_hour_from_time_string(time_string)
+          period = hour_to_time_slot(hour)
+          Map.update!(acc, period, &(&1 + 1))
+      end
+    end)
+  end
+
+  defp count_event_occurrences_by_time_period(%{"type" => "pattern", "pattern" => pattern}, date_list) do
+    # For pattern-based recurring events, count based on the fixed time
+    initial_counts = %{"morning" => 0, "afternoon" => 0, "evening" => 0, "late_night" => 0}
+
+    time_string = pattern["time"] || "19:00"
+    hour = parse_hour_from_time_string(time_string)
+    period = hour_to_time_slot(hour)
+
+    # Count matching dates
+    target_weekdays = get_pattern_weekdays(pattern)
+
+    matching_count =
+      Enum.count(date_list, fn date ->
+        Date.day_of_week(date) in target_weekdays
+      end)
+
+    Map.put(initial_counts, period, matching_count)
+  end
+
+  defp count_event_occurrences_by_time_period(_occurrences_data, _date_list) do
+    %{"morning" => 0, "afternoon" => 0, "evening" => 0, "late_night" => 0}
   end
 end
