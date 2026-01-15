@@ -191,7 +191,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   defp parse_showtime_datetime(%{"date" => date_str, "time" => time_str})
        when is_binary(date_str) and is_binary(time_str) do
     with {:ok, date} <- Date.from_iso8601(date_str),
-         {:ok, time} <- Time.from_iso8601(time_str <> ":00") do
+         {:ok, time} <- parse_time_string(time_str) do
       DateTime.new!(date, time, "Etc/UTC")
     else
       _ -> nil
@@ -199,6 +199,19 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   end
 
   defp parse_showtime_datetime(_), do: nil
+
+  # Parse time string, handling both HH:MM and HH:MM:SS formats
+  defp parse_time_string(time_str) do
+    # If already has seconds (HH:MM:SS), use as-is; otherwise append :00
+    normalized =
+      case String.split(time_str, ":") do
+        [_h, _m, _s] -> time_str
+        [_h, _m] -> time_str <> ":00"
+        _ -> time_str
+      end
+
+    Time.from_iso8601(normalized)
+  end
 
   # Filter showtimes by date range if specified
   defp maybe_filter_by_date_range(showtimes, []), do: showtimes

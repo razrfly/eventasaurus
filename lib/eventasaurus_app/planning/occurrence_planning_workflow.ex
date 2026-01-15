@@ -91,7 +91,8 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
                series_id,
                filter_criteria
              ),
-           {:ok, invitations} <- invite_friends(private_event, friend_ids, organizer) do
+           manual_emails <- Keyword.get(opts, :manual_emails, []),
+           {:ok, invitations} <- invite_friends(private_event, friend_ids, manual_emails, organizer) do
         %{
           private_event: private_event,
           poll: poll,
@@ -234,32 +235,41 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
     OccurrencePlannings.create(attrs)
   end
 
-  defp invite_friends(_event, [], _organizer), do: {:ok, %{successful_invitations: 0}}
+  defp invite_friends(_event, [], [], _organizer), do: {:ok, %{successful_invitations: 0}}
 
-  defp invite_friends(event, friend_ids, organizer) do
+  defp invite_friends(event, friend_ids, manual_emails, organizer) do
     # Convert friend IDs to suggestion structs format expected by process_guest_invitations
     # This matches the pattern used in public_event_show_live.ex send_invitations/5
+    # Use Repo.get/2 instead of get!/2 for safer error handling
     suggestion_structs =
-      Enum.map(friend_ids, fn friend_id ->
-        user = Repo.get!(Accounts.User, friend_id)
+      friend_ids
+      |> Enum.map(fn friend_id ->
+        case Repo.get(Accounts.User, friend_id) do
+          nil ->
+            Logger.warning("Friend ID #{friend_id} not found in database, skipping")
+            nil
 
-        %{
-          user_id: user.id,
-          name: user.name,
-          email: user.email,
-          username: Map.get(user, :username),
-          avatar_url: Map.get(user, :avatar_url)
-        }
+          user ->
+            %{
+              user_id: user.id,
+              name: user.name,
+              email: user.email,
+              username: Map.get(user, :username),
+              avatar_url: Map.get(user, :avatar_url)
+            }
+        end
       end)
+      |> Enum.reject(&is_nil/1)
 
     # Process invitations using the same function as quick mode and manager area
     # Using :invitation mode to send invitation emails to friends
+    # Now also processes manual_emails for non-user email addresses
     result =
       Events.process_guest_invitations(
         event,
         organizer,
         suggestion_structs: suggestion_structs,
-        manual_emails: [],
+        manual_emails: manual_emails,
         invitation_message: "",
         mode: :invitation
       )
