@@ -57,6 +57,36 @@ defmodule EventasaurusWeb.Helpers.SourceAttribution do
   end
 
   @doc """
+  Get the logo URL for a source.
+
+  Returns the source's logo_url if available, otherwise nil.
+  """
+  def get_source_logo_url(source) do
+    if source.source do
+      source.source.logo_url
+    else
+      nil
+    end
+  end
+
+  @doc """
+  Get the first letter initial for a source name.
+
+  Used as fallback when logo is not available.
+  """
+  def get_source_initial(source) do
+    name = get_source_name(source)
+
+    name
+    |> String.trim()
+    |> String.first()
+    |> case do
+      nil -> "?"
+      char -> String.upcase(char)
+    end
+  end
+
+  @doc """
   Format a relative time string from a datetime.
 
   Examples:
