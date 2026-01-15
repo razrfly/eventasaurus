@@ -1984,6 +1984,20 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           %{}
         end
 
+      # For venue events with occurrence data (like trivia nights),
+      # count from actual event occurrences instead of generating meal periods
+      is_venue && has_occurrence_data?(event) ->
+        case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
+               "event",
+               event.id,
+               date_list,
+               %{}
+             ) do
+          {:ok, counts} -> counts
+          {:error, _} -> %{}
+        end
+
+      # For venue-only events (no occurrence data), use venue meal periods
       is_venue ->
         venue = event.venue
 
@@ -2005,6 +2019,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         %{}
     end
   end
+
+  # Check if event has actual occurrence data (dates array or pattern)
+  defp has_occurrence_data?(%{occurrences: %{"dates" => dates}}) when is_list(dates), do: true
+  defp has_occurrence_data?(%{occurrences: %{"type" => "pattern"}}), do: true
+  defp has_occurrence_data?(_), do: false
 
   # Helper to generate date list matching modal's generate_date_options logic
   defp generate_date_list(is_venue_event) do

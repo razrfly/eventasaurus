@@ -16,6 +16,11 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
   alias EventasaurusApp.Images.MovieImages
 
+  # Configuration for adaptive date selection UI
+  # Dates with availability <= this threshold use simple list UI
+  # Dates > threshold use full grid UI
+  @simple_list_max_days 5
+
   attr :id, :string, required: true
   attr :show, :boolean, default: false
   attr :public_event, :map, default: nil
@@ -572,61 +577,195 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
     """
   end
 
-  # Filter Selection Form (for flexible planning)
-  defp render_filter_selection(assigns) do
+  # Adaptive Date Selection rendering based on number of available dates
+  # Mode :no_dates - No dates with availability
+  defp render_date_selection(%{date_mode: :no_dates} = assigns) do
     ~H"""
-    <form phx-submit="apply_flexible_filters" phx-change="preview_filter_results" class="space-y-6">
-      <!-- Date Selection -->
-      <div>
-        <label class="block text-sm font-medium text-gray-900 mb-2">
-          Select Dates
-        </label>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-          <%= for date <- generate_date_options(@is_venue_event) do %>
-            <%
-              availability_count = Map.get(@date_availability, date, 0)
-              has_availability = availability_count > 0
-              label_class = if has_availability do
-                "flex items-center p-3 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50"
-              else
-                "flex items-center p-3 border border-gray-200 rounded-md cursor-not-allowed bg-gray-50 opacity-60"
-              end
-            %>
-            <label class={label_class}>
-              <input
-                type="checkbox"
-                name="selected_dates[]"
-                value={Date.to_iso8601(date)}
-                checked={Date.to_iso8601(date) in Map.get(@filter_criteria, :selected_dates, [])}
-                disabled={!has_availability}
-                class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <span class="ml-2 flex-1 text-sm text-gray-700">
-                <div class="font-medium flex items-center justify-between">
-                  <span><%= Calendar.strftime(date, "%a") %></span>
-                  <%= if has_availability do %>
-                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                      <%= availability_count %>
-                    </span>
-                  <% else %>
-                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">
-                      0
-                    </span>
-                  <% end %>
-                </div>
-                <div class="text-xs text-gray-500"><%= Calendar.strftime(date, "%b %d") %></div>
-              </span>
-            </label>
-          <% end %>
+    <div>
+      <label class="block text-sm font-medium text-gray-900 mb-2">
+        Select Dates
+      </label>
+      <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <div class="flex items-center gap-2 text-yellow-800">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span class="text-sm font-medium">No available dates found</span>
         </div>
-        <p class="mt-1 text-xs text-gray-500">
+        <p class="mt-2 text-xs text-yellow-700">
           <%= if @is_venue_event do %>
-            Select one or more dates to see available time slots
+            There are no scheduled time slots in the upcoming days.
           <% else %>
-            Select one or more dates to see available showtimes
+            There are no showtimes available in the upcoming days.
           <% end %>
         </p>
       </div>
+    </div>
+    """
+  end
+
+  # Mode :single_day - Exactly 1 date with availability (auto-select it)
+  defp render_date_selection(%{date_mode: :single_day, available_dates: [{date, count}]} = assigns) do
+    assigns = assign(assigns, :single_date, date)
+    assigns = assign(assigns, :single_count, count)
+
+    ~H"""
+    <div>
+      <label class="block text-sm font-medium text-gray-900 mb-2">
+        Available Date
+      </label>
+      <div class="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+        <!-- Hidden input to auto-select the single date -->
+        <input type="hidden" name="selected_dates[]" value={Date.to_iso8601(@single_date)} />
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="flex-shrink-0 w-12 h-12 bg-purple-600 text-white rounded-lg flex flex-col items-center justify-center">
+              <span class="text-xs font-medium uppercase"><%= Calendar.strftime(@single_date, "%b") %></span>
+              <span class="text-lg font-bold"><%= Calendar.strftime(@single_date, "%d") %></span>
+            </div>
+            <div>
+              <div class="font-medium text-gray-900">
+                <%= Calendar.strftime(@single_date, "%A, %B %d") %>
+              </div>
+              <div class="text-sm text-gray-600">
+                <%= @single_count %> <%= if @is_venue_event, do: "time slot", else: "showtime" %><%= if @single_count > 1, do: "s", else: "" %> available
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 text-purple-600">
+            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+            </svg>
+            <span class="text-sm font-medium">Auto-selected</span>
+          </div>
+        </div>
+      </div>
+      <p class="mt-1 text-xs text-gray-500">
+        Only one date is available, so it's been automatically selected for you.
+      </p>
+    </div>
+    """
+  end
+
+  # Mode :simple_list - 2-5 dates with availability (simple buttons)
+  defp render_date_selection(%{date_mode: :simple_list, available_dates: available_dates} = assigns) do
+    assigns = assign(assigns, :available_dates_list, available_dates)
+
+    ~H"""
+    <div>
+      <label class="block text-sm font-medium text-gray-900 mb-2">
+        Select Dates
+      </label>
+      <div class="space-y-2">
+        <%= for {date, count} <- @available_dates_list do %>
+          <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-purple-300 transition-colors">
+            <input
+              type="checkbox"
+              name="selected_dates[]"
+              value={Date.to_iso8601(date)}
+              checked={Date.to_iso8601(date) in Map.get(@filter_criteria, :selected_dates, [])}
+              class="h-5 w-5 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+            />
+            <div class="ml-3 flex-1 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-lg flex flex-col items-center justify-center">
+                  <span class="text-xs font-medium text-gray-500 uppercase"><%= Calendar.strftime(date, "%b") %></span>
+                  <span class="text-sm font-bold text-gray-900"><%= Calendar.strftime(date, "%d") %></span>
+                </div>
+                <div>
+                  <div class="font-medium text-gray-900">
+                    <%= Calendar.strftime(date, "%A") %>
+                  </div>
+                  <div class="text-sm text-gray-500">
+                    <%= Calendar.strftime(date, "%B %d, %Y") %>
+                  </div>
+                </div>
+              </div>
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <%= count %> <%= if @is_venue_event, do: "slot", else: "time" %><%= if count > 1, do: "s", else: "" %>
+              </span>
+            </div>
+          </label>
+        <% end %>
+      </div>
+      <p class="mt-2 text-xs text-gray-500">
+        <%= if @is_venue_event do %>
+          Select one or more dates to see available time slots
+        <% else %>
+          Select one or more dates to see available showtimes
+        <% end %>
+      </p>
+    </div>
+    """
+  end
+
+  # Mode :date_grid - 6+ dates (full grid view, original UI)
+  defp render_date_selection(assigns) do
+    ~H"""
+    <div>
+      <label class="block text-sm font-medium text-gray-900 mb-2">
+        Select Dates
+      </label>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+        <%= for date <- generate_date_options(@is_venue_event) do %>
+          <%
+            availability_count = Map.get(@date_availability, date, 0)
+            has_availability = availability_count > 0
+            label_class = if has_availability do
+              "flex items-center p-3 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50"
+            else
+              "flex items-center p-3 border border-gray-200 rounded-md cursor-not-allowed bg-gray-50 opacity-60"
+            end
+          %>
+          <label class={label_class}>
+            <input
+              type="checkbox"
+              name="selected_dates[]"
+              value={Date.to_iso8601(date)}
+              checked={Date.to_iso8601(date) in Map.get(@filter_criteria, :selected_dates, [])}
+              disabled={!has_availability}
+              class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <span class="ml-2 flex-1 text-sm text-gray-700">
+              <div class="font-medium flex items-center justify-between">
+                <span><%= Calendar.strftime(date, "%a") %></span>
+                <%= if has_availability do %>
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    <%= availability_count %>
+                  </span>
+                <% else %>
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">
+                    0
+                  </span>
+                <% end %>
+              </div>
+              <div class="text-xs text-gray-500"><%= Calendar.strftime(date, "%b %d") %></div>
+            </span>
+          </label>
+        <% end %>
+      </div>
+      <p class="mt-1 text-xs text-gray-500">
+        <%= if @is_venue_event do %>
+          Select one or more dates to see available time slots
+        <% else %>
+          Select one or more dates to see available showtimes
+        <% end %>
+      </p>
+    </div>
+    """
+  end
+
+  # Filter Selection Form (for flexible planning)
+  defp render_filter_selection(assigns) do
+    # Determine adaptive date selection mode
+    {date_mode, available_dates} = determine_date_selection_mode(assigns.date_availability)
+    assigns = assign(assigns, :date_mode, date_mode)
+    assigns = assign(assigns, :available_dates, available_dates)
+
+    ~H"""
+    <form phx-submit="apply_flexible_filters" phx-change="preview_filter_results" class="space-y-6">
+      <!-- Date Selection (Adaptive UI based on available dates) -->
+      <%= render_date_selection(assigns) %>
 
       <!-- Time Preferences (for movies) or Meal Periods (for venues) -->
       <%= if @is_movie_event do %>
@@ -1009,6 +1148,29 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
       Date.add(today, offset)
     end)
   end
+
+  # Determine the appropriate UI mode for date selection based on available dates
+  # Returns:
+  #   :no_dates - 0 days with availability (show message)
+  #   :single_day - 1 day with availability (auto-select and skip to time)
+  #   :simple_list - 2-5 days with availability (show simple buttons)
+  #   :date_grid - 6+ days with availability (show full grid)
+  defp determine_date_selection_mode(date_availability) when is_map(date_availability) do
+    dates_with_availability =
+      date_availability
+      |> Enum.filter(fn {_date, count} -> count > 0 end)
+      |> Enum.map(fn {date, count} -> {date, count} end)
+      |> Enum.sort_by(fn {date, _count} -> Date.to_iso8601(date) end)
+
+    case length(dates_with_availability) do
+      0 -> {:no_dates, []}
+      1 -> {:single_day, dates_with_availability}
+      n when n in 2..@simple_list_max_days -> {:simple_list, dates_with_availability}
+      _ -> {:date_grid, dates_with_availability}
+    end
+  end
+
+  defp determine_date_selection_mode(_), do: {:date_grid, []}
 
   # Get event image URL (cover_image_url or thumbnail_url)
   defp get_event_image(event) do

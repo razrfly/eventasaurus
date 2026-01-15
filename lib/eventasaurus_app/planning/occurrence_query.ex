@@ -386,8 +386,33 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     end
   end
 
+  # Gets date availability counts from an event's occurrences JSONB field.
+  # This handles standard events (like trivia nights) that have actual occurrence
+  # data, as opposed to venue-based meal period generation.
+  def get_date_availability_counts("event", event_id, date_list, _filter_criteria)
+      when is_integer(event_id) do
+    try do
+      # Get the event's occurrences JSONB
+      event_query =
+        from(pe in PublicEvent,
+          where: pe.id == ^event_id,
+          select: pe.occurrences
+        )
+
+      occurrences_data = Repo.one(event_query)
+
+      # Count occurrences per date
+      counts = count_event_occurrences_per_date(occurrences_data, date_list)
+
+      {:ok, counts}
+    rescue
+      e ->
+        {:error, "Failed to get event date availability counts: #{Exception.message(e)}"}
+    end
+  end
+
   def get_date_availability_counts(series_type, _series_id, _date_list, _filter_criteria) do
-    {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue'"}
+    {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue', 'event'"}
   end
 
   # Helper functions for JSONB showtime filtering
@@ -617,6 +642,88 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
       Map.has_key?(filter_criteria, key) -> Map.get(filter_criteria, key)
       Map.has_key?(filter_criteria, string_key) -> Map.get(filter_criteria, string_key)
       true -> default
+    end
+  end
+
+  # Event occurrence counting helpers
+
+  # Count occurrences per date from event's JSONB occurrences field
+  # Handles both dates arrays and pattern-based recurring events
+  defp count_event_occurrences_per_date(nil, date_list) do
+    # No occurrences data - return zeros for all dates
+    Enum.reduce(date_list, %{}, fn date, acc -> Map.put(acc, date, 0) end)
+  end
+
+  defp count_event_occurrences_per_date(%{"dates" => dates}, date_list) when is_list(dates) do
+    # Count occurrences from dates array
+    Enum.reduce(date_list, %{}, fn date, acc ->
+      date_string = Date.to_iso8601(date)
+
+      count =
+        Enum.count(dates, fn showtime ->
+          showtime["date"] == date_string
+        end)
+
+      Map.put(acc, date, count)
+    end)
+  end
+
+  defp count_event_occurrences_per_date(%{"type" => "pattern", "pattern" => pattern}, date_list) do
+    # Count from recurring pattern
+    # Pattern structure: %{"frequency" => "weekly", "days" => [1, 3], "time" => "19:00", ...}
+    target_weekdays = get_pattern_weekdays(pattern)
+
+    Enum.reduce(date_list, %{}, fn date, acc ->
+      # Check if this date matches the pattern's weekdays
+      day_of_week = Date.day_of_week(date)
+
+      count =
+        if day_of_week in target_weekdays do
+          # Pattern events typically have 1 occurrence per matching day
+          1
+        else
+          0
+        end
+
+      Map.put(acc, date, count)
+    end)
+  end
+
+  defp count_event_occurrences_per_date(_occurrences_data, date_list) do
+    # Unknown format - return zeros
+    Enum.reduce(date_list, %{}, fn date, acc -> Map.put(acc, date, 0) end)
+  end
+
+  # Extract target weekdays from pattern
+  # Returns list of day-of-week integers (1=Monday, 7=Sunday)
+  defp get_pattern_weekdays(%{"days" => days}) when is_list(days), do: days
+
+  defp get_pattern_weekdays(%{"day" => day}) when is_integer(day), do: [day]
+
+  defp get_pattern_weekdays(%{"day_of_week" => dow}) when is_integer(dow), do: [dow]
+
+  # Handle string day names in a list (e.g., ["monday", "wednesday"])
+  defp get_pattern_weekdays(%{"days_of_week" => days}) when is_list(days) do
+    Enum.map(days, &day_name_to_number/1) |> Enum.filter(&(&1 > 0))
+  end
+
+  # Handle single string day name
+  defp get_pattern_weekdays(%{"day" => day_name}) when is_binary(day_name) do
+    [day_name_to_number(day_name)]
+  end
+
+  defp get_pattern_weekdays(_), do: []
+
+  defp day_name_to_number(name) do
+    case String.downcase(name) do
+      "monday" -> 1
+      "tuesday" -> 2
+      "wednesday" -> 3
+      "thursday" -> 4
+      "friday" -> 5
+      "saturday" -> 6
+      "sunday" -> 7
+      _ -> 0
     end
   end
 end
