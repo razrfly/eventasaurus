@@ -629,7 +629,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
          |> assign(:is_single_occurrence, is_single_occurrence)
          |> assign(:planning_mode, initial_planning_mode)
          |> assign(:date_availability, date_availability)
-         |> assign(:time_period_availability, time_period_availability)}
+         |> assign(:time_period_availability, time_period_availability)
+         # Store original unfiltered counts for restoration when filters are cleared
+         |> assign(:original_date_availability, date_availability)
+         |> assign(:original_time_period_availability, time_period_availability)}
     end
   end
 
@@ -826,11 +829,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         value -> String.to_integer(value)
       end
 
+    time_preferences = Map.get(params, "time_preferences", [])
+
     filter_criteria = %{
       selected_dates: selected_dates,
       date_from: Date.to_iso8601(date_from),
       date_to: Date.to_iso8601(date_to),
-      time_preferences: Map.get(params, "time_preferences", []),
+      time_preferences: time_preferences,
       meal_periods: Map.get(params, "meal_periods", []),
       limit: limit
     }
@@ -839,11 +844,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     event = socket.assigns.event
     movie = get_movie_data(event)
     venue = get_venue_data(event)
+    is_venue = venue != nil && !movie
 
     count =
       cond do
-        movie ->
-          query_movie_occurrences(movie.id, filter_criteria) |> length()
+        # For events with occurrence data, use event.id to constrain to this venue
+        has_occurrence_data?(event) ->
+          query_event_occurrences(event.id, filter_criteria) |> length()
 
         venue && !movie ->
           query_venue_occurrences(venue.id, filter_criteria) |> length()
@@ -852,10 +859,74 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           0
       end
 
+    # === DYNAMIC COUNTS: Recalculate availability counts based on current filters ===
+    # When user selects dates, update time period counts for just those dates
+    # When user selects time preferences, update date counts for just those periods
+    # Use original_* assigns to restore unfiltered counts when filters are cleared
+
+    {updated_date_availability, updated_time_period_availability} =
+      if has_occurrence_data?(event) do
+        # Get original unfiltered counts (stored when modal opened)
+        original_date_availability =
+          Map.get(socket.assigns, :original_date_availability, socket.assigns.date_availability)
+
+        original_time_period_availability =
+          Map.get(
+            socket.assigns,
+            :original_time_period_availability,
+            socket.assigns.time_period_availability
+          )
+
+        # Build filter criteria for dynamic counts
+        date_filter_criteria = %{time_preferences: time_preferences}
+        time_filter_criteria = %{selected_dates: selected_dates}
+        date_list = generate_date_list(is_venue)
+
+        # Recalculate date availability (filtered by time preferences if any selected)
+        new_date_availability =
+          if time_preferences != [] do
+            case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
+                   "event",
+                   event.id,
+                   date_list,
+                   date_filter_criteria
+                 ) do
+              {:ok, counts} -> counts
+              {:error, _} -> original_date_availability
+            end
+          else
+            # No time preferences selected, restore original unfiltered counts
+            original_date_availability
+          end
+
+        # Recalculate time period availability (filtered by selected dates if any)
+        new_time_period_availability =
+          if selected_dates != [] do
+            case EventasaurusApp.Planning.OccurrenceQuery.get_time_period_availability_counts(
+                   "event",
+                   event.id,
+                   time_filter_criteria
+                 ) do
+              {:ok, counts} -> counts
+              {:error, _} -> original_time_period_availability
+            end
+          else
+            # No dates selected, restore original unfiltered counts
+            original_time_period_availability
+          end
+
+        {new_date_availability, new_time_period_availability}
+      else
+        # Non-occurrence event, keep existing counts
+        {socket.assigns.date_availability, socket.assigns.time_period_availability}
+      end
+
     {:noreply,
      socket
      |> assign(:filter_criteria, filter_criteria)
-     |> assign(:filter_preview_count, count)}
+     |> assign(:filter_preview_count, count)
+     |> assign(:date_availability, updated_date_availability)
+     |> assign(:time_period_availability, updated_time_period_availability)}
   end
 
   @impl true
