@@ -30,6 +30,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Helpers.LanguageDiscovery
+  alias EventasaurusWeb.Helpers.PlanWithFriendsHelpers
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.PublicEventSchema
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
@@ -651,7 +652,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     # Check total showtimes for next 7 days (no time preference filter)
     # This handles both movie events and regular events
     movie = socket.assigns[:movie]
-    public_event = socket.assigns[:public_event]
+    # Note: In this LiveView, the event is stored under :event, not :public_event
+    event = socket.assigns[:event]
 
     cond do
       # Movie event - check showtimes
@@ -685,19 +687,29 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         end
 
       # Event with JSONB occurrences - check occurrences count
-      public_event != nil && Map.has_key?(public_event, :occurrences) ->
-        occurrences = public_event.occurrences || %{}
+      event != nil && Map.has_key?(event, :occurrences) ->
+        occurrences = event.occurrences || %{}
         dates = Map.get(occurrences, "dates", [])
         total_count = length(dates)
 
+        today = Date.utc_today()
+
+        default_criteria = %{
+          date_from: Date.to_iso8601(today),
+          date_to: Date.to_iso8601(Date.add(today, 7)),
+          time_preferences: [],
+          limit: 50
+        }
+
         if total_count <= @small_showtime_threshold and total_count > 0 do
           # Build occurrence maps from JSONB for direct display
-          matching = build_occurrences_from_jsonb(public_event, dates)
+          matching = build_occurrences_from_jsonb(event, dates)
 
           {:noreply,
            socket
            |> assign(:planning_mode, :flexible_review)
            |> assign(:matching_occurrences, matching)
+           |> assign(:filter_criteria, default_criteria)
            |> assign(:filter_preview_count, total_count)}
         else
           {:noreply,
@@ -731,8 +743,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   # Build occurrence maps from JSONB dates for direct display
-  defp build_occurrences_from_jsonb(public_event, dates) do
-    venue = public_event.venue
+  defp build_occurrences_from_jsonb(event, dates) do
+    venue = event.venue
 
     Enum.map(dates, fn date_entry ->
       date_str = date_entry["date"]
@@ -740,18 +752,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
       datetime =
         with {:ok, date} <- Date.from_iso8601(date_str),
-             {:ok, time} <- Time.from_iso8601(time_str <> ":00") do
+             {:ok, time} <- parse_time_string(time_str) do
           DateTime.new!(date, time, "Etc/UTC")
         else
           _ -> nil
         end
 
       %{
-        public_event_id: public_event.id,
+        public_event_id: event.id,
         datetime: datetime,
         date: date_str,
         time: time_str,
-        title: public_event.title,
+        title: event.title,
         venue_id: if(venue, do: venue.id),
         venue_name: if(venue, do: venue.name),
         venue_city_id: if(venue, do: venue.city_id)
@@ -760,6 +772,21 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     |> Enum.filter(fn occ -> occ.datetime != nil end)
     |> Enum.sort_by(fn occ -> occ.datetime end, DateTime)
   end
+
+  # Parse time string, handling both HH:MM and HH:MM:SS formats
+  defp parse_time_string(time_str) when is_binary(time_str) do
+    # If already has seconds (HH:MM:SS), use as-is; otherwise append :00
+    normalized =
+      case String.split(time_str, ":") do
+        [_h, _m, _s] -> time_str
+        [_h, _m] -> time_str <> ":00"
+        _ -> time_str
+      end
+
+    Time.from_iso8601(normalized)
+  end
+
+  defp parse_time_string(_), do: {:error, :invalid_time}
 
   @impl true
   def handle_event("preview_filter_results", params, socket) do
@@ -1036,14 +1063,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
+  # Handle flexible planning submission - delegates to shared helper
   defp handle_flexible_plan_submit(socket) do
-    alias EventasaurusApp.Planning.OccurrencePlanningWorkflow
-
     user = get_authenticated_user(socket)
     event = socket.assigns.event
     movie = get_movie_data(event)
 
-    # Ensure we have movie data
+    # Ensure we have movie data (flexible planning is movie-specific)
     if is_nil(movie) do
       {:noreply,
        socket
@@ -1055,71 +1081,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
          )
        )}
     else
-      # Get friend IDs from selected users
-      friend_ids = Enum.map(socket.assigns.selected_users, & &1.id)
-
-      # Convert filter criteria to workflow format
-      filter_criteria = %{
-        date_range: parse_date_range(socket.assigns.filter_criteria),
-        time_preferences: socket.assigns.filter_criteria[:time_preferences] || [],
-        limit: socket.assigns.filter_criteria[:limit] || 10
-      }
-
-      # Create flexible planning with poll
-      case OccurrencePlanningWorkflow.start_flexible_planning(
-             "movie",
-             movie.id,
-             user.id,
-             filter_criteria,
-             friend_ids,
-             event_title: "#{movie.title} - Group Planning",
-             poll_title: "Which showtime works best?"
-           ) do
-        {:ok, result} ->
-          # Send email invitations to non-user emails
-          if socket.assigns.selected_emails != [] do
-            # Note: Would need to implement email invitation logic for polls
-            # For now, just log that we would send emails
-            require Logger
-
-            Logger.info(
-              "Would send poll invitations to emails: #{inspect(socket.assigns.selected_emails)}"
-            )
-          end
-
-          {:noreply,
-           socket
-           |> put_flash(
-             :info,
-             gettext("Poll created! Your friends can now vote on their preferred showtime.")
-           )
-           |> redirect(to: ~p"/events/#{result.private_event.slug}")}
-
-        {:error, :no_occurrences_found} ->
-          {:noreply,
-           socket
-           |> put_flash(
-             :error,
-             gettext("No showtimes found matching your filters. Please try different criteria.")
-           )}
-
-        {:error, reason} ->
-          require Logger
-          Logger.error("Flexible planning failed: #{inspect(reason)}")
-
-          # Show detailed error in development
-          error_message =
-            if Mix.env() == :dev do
-              "Error creating poll: #{inspect(reason)}"
-            else
-              gettext("Sorry, there was an error creating your poll. Please try again.")
-            end
-
-          {:noreply,
-           socket
-           |> assign(:show_plan_with_friends_modal, false)
-           |> put_flash(:error, error_message)}
-      end
+      PlanWithFriendsHelpers.execute_flexible_plan(socket, movie, user)
     end
   end
 
@@ -1233,7 +1195,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
     # Convert filter criteria to format expected by OccurrenceQuery
     query_criteria = %{
-      date_range: parse_date_range(filter_criteria),
+      date_range: PlanWithFriendsHelpers.parse_date_range(filter_criteria),
       time_preferences: Map.get(filter_criteria, :time_preferences, []),
       limit: Map.get(filter_criteria, :limit, 10)
     }
@@ -1260,7 +1222,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
     # Convert filter criteria to format expected by OccurrenceQuery
     query_criteria = %{
-      date_range: parse_date_range(filter_criteria),
+      date_range: PlanWithFriendsHelpers.parse_date_range(filter_criteria),
       meal_periods: Map.get(filter_criteria, :meal_periods, []),
       limit: Map.get(filter_criteria, :limit, 10)
     }
@@ -1269,26 +1231,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       {:ok, occurrences} -> occurrences
       {:error, _reason} -> []
     end
-  end
-
-  defp parse_date_range(%{date_from: date_from_str, date_to: date_to_str})
-       when is_binary(date_from_str) and is_binary(date_to_str) do
-    with {:ok, date_from} <- Date.from_iso8601(date_from_str),
-         {:ok, date_to} <- Date.from_iso8601(date_to_str) do
-      # Return map format for JSON compatibility
-      %{start: date_from, end: date_to}
-    else
-      _ ->
-        # Fallback to default date range (today + 7 days)
-        today = Date.utc_today()
-        %{start: today, end: Date.add(today, 7)}
-    end
-  end
-
-  defp parse_date_range(_filter_criteria) do
-    # Fallback for missing or invalid date range
-    today = Date.utc_today()
-    %{start: today, end: Date.add(today, 7)}
   end
 
   @impl true

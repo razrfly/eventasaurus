@@ -278,8 +278,11 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
     datetime = occurrence[:datetime] || occurrence[:starts_at]
 
     # Include time in title to make each showtime unique
-    time_str = Calendar.strftime(datetime, "%I:%M %p")
-    "#{movie} @ #{venue} - #{time_str}"
+    # Guard against nil datetime to prevent FunctionClauseError
+    case datetime do
+      nil -> "#{movie} @ #{venue}"
+      dt -> "#{movie} @ #{venue} - #{Calendar.strftime(dt, "%I:%M %p")}"
+    end
   end
 
   defp format_discovery_title(occurrence) do
@@ -288,8 +291,11 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
     datetime = occurrence[:datetime] || occurrence[:starts_at]
 
     # Include time in title to make each showtime unique
-    time_str = Calendar.strftime(datetime, "%I:%M %p")
-    "#{movie} @ #{venue} - #{time_str}"
+    # Guard against nil datetime to prevent FunctionClauseError
+    case datetime do
+      nil -> "#{movie} @ #{venue}"
+      dt -> "#{movie} @ #{venue} - #{Calendar.strftime(dt, "%I:%M %p")}"
+    end
   end
 
   defp format_datetime_description(datetime, timezone, format) do

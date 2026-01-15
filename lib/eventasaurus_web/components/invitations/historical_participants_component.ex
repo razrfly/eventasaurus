@@ -60,12 +60,8 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
         |> assign(:participants, participants)
         |> assign(:loading, false)
       else
-        # If we already have participants, filter out any that are now selected
-        filtered_participants =
-          filter_selected_participants(socket.assigns.participants, selected_ids)
-
+        # Keep all participants visible - selected state shown via checkmarks
         socket
-        |> assign(:participants, filtered_participants)
       end
 
     {:ok, socket}
@@ -286,9 +282,4 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
     EventasaurusApp.Avatars.generate_user_avatar(participant, size: 40)
   end
 
-  defp filter_selected_participants(participants, selected_ids) do
-    Enum.reject(participants, fn participant ->
-      MapSet.member?(selected_ids, participant.user_id)
-    end)
-  end
 end
