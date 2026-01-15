@@ -17,7 +17,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusWeb.UrlHelper
   alias EventasaurusApp.Images.MovieImages
+  alias EventasaurusApp.Planning.OccurrencePlanningWorkflow
   import Ecto.Query
+
+  require Logger
 
   @impl true
   def mount(_params, session, socket) do
@@ -461,16 +464,112 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   end
 
   @impl true
-  def handle_event("submit_plan_with_friends", %{"mode" => _mode}, socket) do
-    # Handle plan submission
-    # For now, just close the modal
-    # Full implementation would create the plan and redirect
-    {:noreply, assign(socket, :show_plan_with_friends_modal, false)}
+  def handle_event("submit_plan_with_friends", %{"mode" => mode}, socket) do
+    case mode do
+      "flexible" -> handle_flexible_plan_submit(socket)
+      _ -> handle_flexible_plan_submit(socket)
+    end
   end
 
   @impl true
   def handle_event("submit_plan_with_friends", _params, socket) do
-    {:noreply, assign(socket, :show_plan_with_friends_modal, false)}
+    # Default to flexible planning
+    handle_flexible_plan_submit(socket)
+  end
+
+  # Handle flexible planning submission - creates private event with poll
+  defp handle_flexible_plan_submit(socket) do
+    user = get_authenticated_user(socket)
+    movie = socket.assigns.movie
+
+    # Ensure we have movie data
+    if is_nil(movie) do
+      {:noreply,
+       socket
+       |> assign(:show_plan_with_friends_modal, false)
+       |> put_flash(:error, gettext("Movie not found. Please try again."))}
+    else
+      # Get friend IDs from selected users
+      friend_ids = Enum.map(socket.assigns.selected_users, & &1.id)
+
+      # Convert filter criteria to workflow format
+      filter_criteria = %{
+        date_range: parse_date_range(socket.assigns.filter_criteria),
+        time_preferences: socket.assigns.filter_criteria[:time_preferences] || [],
+        limit: socket.assigns.filter_criteria[:limit] || 50
+      }
+
+      # Create flexible planning with poll
+      case OccurrencePlanningWorkflow.start_flexible_planning(
+             "movie",
+             movie.id,
+             user.id,
+             filter_criteria,
+             friend_ids,
+             event_title: "#{movie.title} - Group Planning",
+             poll_title: gettext("Which showtime works best?")
+           ) do
+        {:ok, result} ->
+          # Log email invitations that would be sent (for non-user emails)
+          if socket.assigns.selected_emails != [] do
+            Logger.info(
+              "Would send poll invitations to emails: #{inspect(socket.assigns.selected_emails)}"
+            )
+          end
+
+          {:noreply,
+           socket
+           |> put_flash(
+             :info,
+             gettext("Poll created! Your friends can now vote on their preferred showtime.")
+           )
+           |> redirect(to: ~p"/events/#{result.private_event.slug}")}
+
+        {:error, :no_occurrences_found} ->
+          {:noreply,
+           socket
+           |> put_flash(
+             :error,
+             gettext("No showtimes found matching your filters. Please try different criteria.")
+           )}
+
+        {:error, reason} ->
+          Logger.error("Flexible planning failed: #{inspect(reason)}")
+
+          # Show detailed error in development
+          error_message =
+            if Application.get_env(:eventasaurus, :env) == :dev do
+              "Error creating poll: #{inspect(reason)}"
+            else
+              gettext("Sorry, there was an error creating your poll. Please try again.")
+            end
+
+          {:noreply,
+           socket
+           |> assign(:show_plan_with_friends_modal, false)
+           |> put_flash(:error, error_message)}
+      end
+    end
+  end
+
+  # Parse date range from filter criteria into workflow format
+  defp parse_date_range(%{date_from: date_from_str, date_to: date_to_str})
+       when is_binary(date_from_str) and is_binary(date_to_str) do
+    with {:ok, date_from} <- Date.from_iso8601(date_from_str),
+         {:ok, date_to} <- Date.from_iso8601(date_to_str) do
+      %{start: date_from, end: date_to}
+    else
+      _ ->
+        # Fallback to default date range (today + 7 days)
+        today = Date.utc_today()
+        %{start: today, end: Date.add(today, 7)}
+    end
+  end
+
+  defp parse_date_range(_filter_criteria) do
+    # Fallback for missing or invalid date range
+    today = Date.utc_today()
+    %{start: today, end: Date.add(today, 7)}
   end
 
   @impl true
@@ -631,26 +730,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       {:ok, occurrences} -> occurrences
       {:error, _reason} -> []
     end
-  end
-
-  defp parse_date_range(%{date_from: date_from_str, date_to: date_to_str})
-       when is_binary(date_from_str) and is_binary(date_to_str) do
-    with {:ok, date_from} <- Date.from_iso8601(date_from_str),
-         {:ok, date_to} <- Date.from_iso8601(date_to_str) do
-      # Return map format for JSON compatibility
-      %{start: date_from, end: date_to}
-    else
-      _ ->
-        # Fallback to default date range (today + 7 days)
-        today = Date.utc_today()
-        %{start: today, end: Date.add(today, 7)}
-    end
-  end
-
-  defp parse_date_range(_filter_criteria) do
-    # Fallback for missing or invalid date range
-    today = Date.utc_today()
-    %{start: today, end: Date.add(today, 7)}
   end
 
   # Find movie by identifier, trying multiple lookup strategies:
