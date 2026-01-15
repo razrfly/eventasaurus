@@ -474,11 +474,53 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   end
 
   @impl true
+  # Threshold for skipping filter UI - if <= this many showtimes, show them all directly
+  @small_showtime_threshold 15
+
+  def handle_event("select_planning_mode", %{"mode" => "flexible"}, socket) do
+    # Check total showtimes for next 7 days (no time preference filter)
+    movie = socket.assigns.movie
+
+    if movie do
+      today = Date.utc_today()
+
+      default_criteria = %{
+        date_from: Date.to_iso8601(today),
+        date_to: Date.to_iso8601(Date.add(today, 7)),
+        time_preferences: [],
+        limit: 50
+      }
+
+      all_showtimes = query_movie_occurrences(movie.id, default_criteria)
+      total_count = length(all_showtimes)
+
+      if total_count <= @small_showtime_threshold and total_count > 0 do
+        # Small number of showtimes - skip filters, show them all directly
+        {:noreply,
+         socket
+         |> assign(:planning_mode, :flexible_review)
+         |> assign(:matching_occurrences, all_showtimes)
+         |> assign(:filter_criteria, default_criteria)
+         |> assign(:filter_preview_count, total_count)}
+      else
+        # Many showtimes - show filter UI
+        {:noreply,
+         socket
+         |> assign(:planning_mode, :flexible_filters)
+         |> assign(:filter_preview_count, nil)}
+      end
+    else
+      {:noreply,
+       socket
+       |> assign(:planning_mode, :flexible_filters)
+       |> assign(:filter_preview_count, nil)}
+    end
+  end
+
   def handle_event("select_planning_mode", %{"mode" => mode}, socket) do
     planning_mode =
       case mode do
         "quick" -> :quick
-        "flexible" -> :flexible_filters
         "selection" -> :selection
         "flexible_filters" -> :flexible_filters
         _ -> :selection

@@ -644,11 +644,81 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
+  # Threshold for skipping filter UI - if <= this many showtimes, show them all directly
+  @small_showtime_threshold 15
+
+  def handle_event("select_planning_mode", %{"mode" => "flexible"}, socket) do
+    # Check total showtimes for next 7 days (no time preference filter)
+    # This handles both movie events and regular events
+    movie = socket.assigns[:movie]
+    public_event = socket.assigns[:public_event]
+
+    cond do
+      # Movie event - check showtimes
+      movie != nil ->
+        today = Date.utc_today()
+
+        default_criteria = %{
+          date_from: Date.to_iso8601(today),
+          date_to: Date.to_iso8601(Date.add(today, 7)),
+          time_preferences: [],
+          limit: 50
+        }
+
+        all_showtimes = query_movie_occurrences(movie.id, default_criteria)
+        total_count = length(all_showtimes)
+
+        if total_count <= @small_showtime_threshold and total_count > 0 do
+          # Small number of showtimes - skip filters, show them all directly
+          {:noreply,
+           socket
+           |> assign(:planning_mode, :flexible_review)
+           |> assign(:matching_occurrences, all_showtimes)
+           |> assign(:filter_criteria, default_criteria)
+           |> assign(:filter_preview_count, total_count)}
+        else
+          # Many showtimes - show filter UI
+          {:noreply,
+           socket
+           |> assign(:planning_mode, :flexible_filters)
+           |> assign(:filter_preview_count, nil)}
+        end
+
+      # Event with JSONB occurrences - check occurrences count
+      public_event != nil && Map.has_key?(public_event, :occurrences) ->
+        occurrences = public_event.occurrences || %{}
+        dates = Map.get(occurrences, "dates", [])
+        total_count = length(dates)
+
+        if total_count <= @small_showtime_threshold and total_count > 0 do
+          # Build occurrence maps from JSONB for direct display
+          matching = build_occurrences_from_jsonb(public_event, dates)
+
+          {:noreply,
+           socket
+           |> assign(:planning_mode, :flexible_review)
+           |> assign(:matching_occurrences, matching)
+           |> assign(:filter_preview_count, total_count)}
+        else
+          {:noreply,
+           socket
+           |> assign(:planning_mode, :flexible_filters)
+           |> assign(:filter_preview_count, nil)}
+        end
+
+      # Fallback - show filter UI
+      true ->
+        {:noreply,
+         socket
+         |> assign(:planning_mode, :flexible_filters)
+         |> assign(:filter_preview_count, nil)}
+    end
+  end
+
   def handle_event("select_planning_mode", %{"mode" => mode}, socket) do
     planning_mode =
       case mode do
         "quick" -> :quick
-        "flexible" -> :flexible_filters
         "selection" -> :selection
         "flexible_filters" -> :flexible_filters
         _ -> :selection
@@ -658,6 +728,37 @@ defmodule EventasaurusWeb.PublicEventShowLive do
      socket
      |> assign(:planning_mode, planning_mode)
      |> assign(:filter_preview_count, nil)}
+  end
+
+  # Build occurrence maps from JSONB dates for direct display
+  defp build_occurrences_from_jsonb(public_event, dates) do
+    venue = public_event.venue
+
+    Enum.map(dates, fn date_entry ->
+      date_str = date_entry["date"]
+      time_str = date_entry["time"]
+
+      datetime =
+        with {:ok, date} <- Date.from_iso8601(date_str),
+             {:ok, time} <- Time.from_iso8601(time_str <> ":00") do
+          DateTime.new!(date, time, "Etc/UTC")
+        else
+          _ -> nil
+        end
+
+      %{
+        public_event_id: public_event.id,
+        datetime: datetime,
+        date: date_str,
+        time: time_str,
+        title: public_event.title,
+        venue_id: if(venue, do: venue.id),
+        venue_name: if(venue, do: venue.name),
+        venue_city_id: if(venue, do: venue.city_id)
+      }
+    end)
+    |> Enum.filter(fn occ -> occ.datetime != nil end)
+    |> Enum.sort_by(fn occ -> occ.datetime end, DateTime)
   end
 
   @impl true

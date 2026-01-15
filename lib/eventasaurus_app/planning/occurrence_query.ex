@@ -92,7 +92,11 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   """
   def find_movie_occurrences(movie_id, filter_criteria \\ %{}) do
     try do
-      query =
+      # Get venue_ids from filter_criteria
+      venue_ids = get_filter_value(filter_criteria, :venue_ids, [])
+
+      # Query events with their JSONB occurrences field
+      events_query =
         from(pe in PublicEvent,
           join: em in EventMovie,
           on: em.event_id == pe.id,
@@ -105,28 +109,106 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
             public_event_id: pe.id,
             movie_id: m.id,
             venue_id: pe.venue_id,
-            starts_at: pe.starts_at,
-            ends_at: pe.ends_at,
             title: pe.title,
             movie_title: m.title,
             venue_name: v.name,
-            venue_city_id: v.city_id
-          },
-          order_by: [asc: pe.starts_at]
+            venue_city_id: v.city_id,
+            occurrences: pe.occurrences
+          }
         )
 
-      query
-      |> apply_date_range_filter(filter_criteria)
-      |> apply_time_preferences_filter(filter_criteria)
-      |> apply_venue_filter(filter_criteria)
-      |> apply_city_filter(filter_criteria)
-      |> apply_limit(filter_criteria)
-      |> Repo.all()
-      |> then(&{:ok, &1})
+      # Apply venue filter if specified
+      events_query =
+        if is_list(venue_ids) and length(venue_ids) > 0 do
+          from([pe, em, m, v] in events_query, where: pe.venue_id in ^venue_ids)
+        else
+          events_query
+        end
+
+      # Apply city filter if specified
+      city_ids = get_filter_value(filter_criteria, :city_ids, [])
+
+      events_query =
+        if is_list(city_ids) and length(city_ids) > 0 do
+          from([pe, em, m, v] in events_query, where: v.city_id in ^city_ids)
+        else
+          events_query
+        end
+
+      events = Repo.all(events_query)
+
+      # Extract individual showtimes from JSONB occurrences field
+      date_range = get_date_range(filter_criteria)
+      time_preferences = get_filter_value(filter_criteria, :time_preferences, [])
+      limit = get_filter_value(filter_criteria, :limit, @default_limit)
+
+      # Build list of individual showtimes with proper datetime field
+      showtimes =
+        events
+        |> Enum.flat_map(fn event ->
+          extract_showtimes_from_event(event, date_range, time_preferences)
+        end)
+        |> Enum.sort_by(fn showtime -> showtime.datetime end, DateTime)
+        |> Enum.take(limit)
+
+      {:ok, showtimes}
     rescue
       e ->
         {:error, "Failed to query movie occurrences: #{Exception.message(e)}"}
     end
+  end
+
+  # Extract individual showtimes from an event's JSONB occurrences field
+  defp extract_showtimes_from_event(event, date_range, time_preferences) do
+    case event.occurrences do
+      %{"dates" => dates} when is_list(dates) ->
+        dates
+        |> maybe_filter_by_date_range(date_range)
+        |> maybe_filter_by_time_preferences(time_preferences)
+        |> Enum.map(fn showtime ->
+          datetime = parse_showtime_datetime(showtime)
+
+          %{
+            public_event_id: event.public_event_id,
+            movie_id: event.movie_id,
+            venue_id: event.venue_id,
+            datetime: datetime,
+            date: showtime["date"],
+            time: showtime["time"],
+            title: event.title,
+            movie_title: event.movie_title,
+            venue_name: event.venue_name,
+            venue_city_id: event.venue_city_id
+          }
+        end)
+
+      _ ->
+        []
+    end
+  end
+
+  # Parse date and time strings into a DateTime
+  defp parse_showtime_datetime(%{"date" => date_str, "time" => time_str})
+       when is_binary(date_str) and is_binary(time_str) do
+    with {:ok, date} <- Date.from_iso8601(date_str),
+         {:ok, time} <- Time.from_iso8601(time_str <> ":00") do
+      DateTime.new!(date, time, "Etc/UTC")
+    else
+      _ -> nil
+    end
+  end
+
+  defp parse_showtime_datetime(_), do: nil
+
+  # Filter showtimes by date range if specified
+  defp maybe_filter_by_date_range(showtimes, []), do: showtimes
+
+  defp maybe_filter_by_date_range(showtimes, date_range) when is_list(date_range) do
+    date_strings = Enum.map(date_range, &Date.to_iso8601/1)
+
+    Enum.filter(showtimes, fn showtime ->
+      showtime["date"] in date_strings
+    end)
   end
 
   @doc """
