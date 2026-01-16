@@ -668,9 +668,16 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
-  def handle_event("toggle_venue_scope", _params, socket) do
+  def handle_event("toggle_venue_scope", params, socket) do
     # Toggle between single venue and all venues mode
-    new_include_all = !socket.assigns[:include_all_venues]
+    # Supports both button-based (scope param) and checkbox-based toggling
+    # See: https://github.com/razrfly/eventasaurus/issues/3258
+    new_include_all =
+      case params do
+        %{"scope" => "all"} -> true
+        %{"scope" => "single"} -> false
+        _ -> !socket.assigns[:include_all_venues]
+      end
 
     # Recalculate availability counts based on new venue scope
     event = socket.assigns.event
@@ -731,20 +738,35 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         all_showtimes = query_movie_occurrences(movie.id, default_criteria, city)
         total_count = length(all_showtimes)
 
-        if total_count <= @small_showtime_threshold and total_count > 0 do
+        cond do
+          # Single occurrence - skip filters and polls, offer Quick Plan with pre-selected showtime
+          # See: https://github.com/razrfly/eventasaurus/issues/3258
+          total_count == 1 ->
+            [single_occurrence] = all_showtimes
+
+            {:noreply,
+             socket
+             |> assign(:planning_mode, :quick)
+             |> assign(:selected_occurrence, single_occurrence)
+             |> assign(:matching_occurrences, all_showtimes)
+             |> assign(:filter_criteria, default_criteria)
+             |> assign(:filter_preview_count, 1)}
+
           # Small number of showtimes - skip filters, show them all directly
-          {:noreply,
-           socket
-           |> assign(:planning_mode, :flexible_review)
-           |> assign(:matching_occurrences, all_showtimes)
-           |> assign(:filter_criteria, default_criteria)
-           |> assign(:filter_preview_count, total_count)}
-        else
-          # Many showtimes - show filter UI
-          {:noreply,
-           socket
-           |> assign(:planning_mode, :flexible_filters)
-           |> assign(:filter_preview_count, nil)}
+          total_count <= @small_showtime_threshold and total_count > 0 ->
+            {:noreply,
+             socket
+             |> assign(:planning_mode, :flexible_review)
+             |> assign(:matching_occurrences, all_showtimes)
+             |> assign(:filter_criteria, default_criteria)
+             |> assign(:filter_preview_count, total_count)}
+
+          true ->
+            # Many showtimes - show filter UI
+            {:noreply,
+             socket
+             |> assign(:planning_mode, :flexible_filters)
+             |> assign(:filter_preview_count, nil)}
         end
 
       # Event with JSONB occurrences - check occurrences count
@@ -762,21 +784,37 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           limit: 50
         }
 
-        if total_count <= @small_showtime_threshold and total_count > 0 do
-          # Build occurrence maps from JSONB for direct display
-          matching = build_occurrences_from_jsonb(event, dates)
+        cond do
+          # Single occurrence - skip filters and polls, offer Quick Plan
+          # See: https://github.com/razrfly/eventasaurus/issues/3258
+          total_count == 1 ->
+            matching = build_occurrences_from_jsonb(event, dates)
+            [single_occurrence] = matching
 
-          {:noreply,
-           socket
-           |> assign(:planning_mode, :flexible_review)
-           |> assign(:matching_occurrences, matching)
-           |> assign(:filter_criteria, default_criteria)
-           |> assign(:filter_preview_count, total_count)}
-        else
-          {:noreply,
-           socket
-           |> assign(:planning_mode, :flexible_filters)
-           |> assign(:filter_preview_count, nil)}
+            {:noreply,
+             socket
+             |> assign(:planning_mode, :quick)
+             |> assign(:selected_occurrence, single_occurrence)
+             |> assign(:matching_occurrences, matching)
+             |> assign(:filter_criteria, default_criteria)
+             |> assign(:filter_preview_count, 1)}
+
+          # Small number of showtimes - skip filters, show them all directly
+          total_count <= @small_showtime_threshold and total_count > 0 ->
+            matching = build_occurrences_from_jsonb(event, dates)
+
+            {:noreply,
+             socket
+             |> assign(:planning_mode, :flexible_review)
+             |> assign(:matching_occurrences, matching)
+             |> assign(:filter_criteria, default_criteria)
+             |> assign(:filter_preview_count, total_count)}
+
+          true ->
+            {:noreply,
+             socket
+             |> assign(:planning_mode, :flexible_filters)
+             |> assign(:filter_preview_count, nil)}
         end
 
       # Fallback - show filter UI
@@ -901,18 +939,22 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     is_venue = venue != nil && !movie
     include_all_venues = socket.assigns[:include_all_venues] || false
 
+    # Remove limit for count query - we want total matching, not capped results
+    # The limit only applies to how many poll options are created, not the preview count
+    count_criteria = Map.delete(filter_criteria, :limit)
+
     count =
       cond do
         # All venues mode - use movie-level query (constrained to current city)
         include_all_venues && movie != nil ->
-          query_movie_occurrences(movie.id, filter_criteria, city) |> length()
+          query_movie_occurrences(movie.id, count_criteria, city) |> length()
 
         # For events with occurrence data, use event.id to constrain to this venue
         has_occurrence_data?(event) ->
-          query_event_occurrences(event.id, filter_criteria) |> length()
+          query_event_occurrences(event.id, count_criteria) |> length()
 
         venue && !movie ->
-          query_venue_occurrences(venue.id, filter_criteria) |> length()
+          query_venue_occurrences(venue.id, count_criteria) |> length()
 
         true ->
           0
@@ -1364,12 +1406,19 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     # See: https://github.com/razrfly/eventasaurus/issues/3252
     city_ids = if city && city.id, do: [city.id], else: []
 
-    query_criteria = %{
+    # Build base criteria - only include limit if explicitly provided
+    # This allows count queries to get full results (no limit) vs display queries (with limit)
+    base_criteria = %{
       date_range: PlanWithFriendsHelpers.parse_date_range(filter_criteria),
       time_preferences: Map.get(filter_criteria, :time_preferences, []),
-      city_ids: city_ids,
-      limit: Map.get(filter_criteria, :limit, 10)
+      city_ids: city_ids
     }
+
+    query_criteria =
+      case Map.get(filter_criteria, :limit) do
+        nil -> base_criteria
+        limit -> Map.put(base_criteria, :limit, limit)
+      end
 
     case OccurrenceQuery.find_movie_occurrences(movie_id, query_criteria) do
       {:ok, occurrences} -> occurrences
@@ -1382,11 +1431,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp query_event_occurrences(event_id, filter_criteria) do
     alias EventasaurusApp.Planning.OccurrenceQuery
 
-    query_criteria = %{
+    # Build base criteria - only include limit if explicitly provided
+    # This allows count queries to get full results (no limit) vs display queries (with limit)
+    base_criteria = %{
       date_range: PlanWithFriendsHelpers.parse_date_range(filter_criteria),
-      time_preferences: Map.get(filter_criteria, :time_preferences, []),
-      limit: Map.get(filter_criteria, :limit, 10)
+      time_preferences: Map.get(filter_criteria, :time_preferences, [])
     }
+
+    query_criteria =
+      case Map.get(filter_criteria, :limit) do
+        nil -> base_criteria
+        limit -> Map.put(base_criteria, :limit, limit)
+      end
 
     case OccurrenceQuery.find_occurrences("event", event_id, query_criteria) do
       {:ok, occurrences} -> occurrences
@@ -1408,12 +1464,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp query_venue_occurrences(venue_id, filter_criteria) do
     alias EventasaurusApp.Planning.OccurrenceQuery
 
-    # Convert filter criteria to format expected by OccurrenceQuery
-    query_criteria = %{
+    # Build base criteria - only include limit if explicitly provided
+    # This allows count queries to get full results (no limit) vs display queries (with limit)
+    base_criteria = %{
       date_range: PlanWithFriendsHelpers.parse_date_range(filter_criteria),
-      meal_periods: Map.get(filter_criteria, :meal_periods, []),
-      limit: Map.get(filter_criteria, :limit, 10)
+      meal_periods: Map.get(filter_criteria, :meal_periods, [])
     }
+
+    query_criteria =
+      case Map.get(filter_criteria, :limit) do
+        nil -> base_criteria
+        limit -> Map.put(base_criteria, :limit, limit)
+      end
 
     case OccurrenceQuery.find_venue_occurrences(venue_id, query_criteria) do
       {:ok, occurrences} -> occurrences

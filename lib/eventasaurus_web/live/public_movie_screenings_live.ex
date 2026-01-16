@@ -424,7 +424,11 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
        |> assign(:show_plan_with_friends_modal, true)
        |> assign(:modal_organizer, user)
        |> assign(:date_availability, date_availability)
-       |> assign(:time_period_availability, time_period_availability)}
+       |> assign(:time_period_availability, time_period_availability)
+       # Store original unfiltered counts for dynamic count restoration
+       # See: https://github.com/razrfly/eventasaurus/issues/3258
+       |> assign(:original_date_availability, date_availability)
+       |> assign(:original_time_period_availability, time_period_availability)}
     end
   end
 
@@ -540,20 +544,36 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       all_showtimes = query_movie_occurrences(movie.id, default_criteria, city)
       total_count = length(all_showtimes)
 
-      if total_count <= @small_showtime_threshold and total_count > 0 do
+      cond do
+        # Single occurrence - skip filters and polls, offer Quick Plan with pre-selected showtime
+        # This provides a streamlined experience when there's only one option
+        # See: https://github.com/razrfly/eventasaurus/issues/3258
+        total_count == 1 ->
+          [single_occurrence] = all_showtimes
+
+          {:noreply,
+           socket
+           |> assign(:planning_mode, :quick)
+           |> assign(:selected_occurrence, single_occurrence)
+           |> assign(:matching_occurrences, all_showtimes)
+           |> assign(:filter_criteria, default_criteria)
+           |> assign(:filter_preview_count, 1)}
+
         # Small number of showtimes - skip filters, show them all directly
-        {:noreply,
-         socket
-         |> assign(:planning_mode, :flexible_review)
-         |> assign(:matching_occurrences, all_showtimes)
-         |> assign(:filter_criteria, default_criteria)
-         |> assign(:filter_preview_count, total_count)}
-      else
-        # Many showtimes - show filter UI
-        {:noreply,
-         socket
-         |> assign(:planning_mode, :flexible_filters)
-         |> assign(:filter_preview_count, nil)}
+        total_count <= @small_showtime_threshold and total_count > 0 ->
+          {:noreply,
+           socket
+           |> assign(:planning_mode, :flexible_review)
+           |> assign(:matching_occurrences, all_showtimes)
+           |> assign(:filter_criteria, default_criteria)
+           |> assign(:filter_preview_count, total_count)}
+
+        true ->
+          # Many showtimes - show filter UI
+          {:noreply,
+           socket
+           |> assign(:planning_mode, :flexible_filters)
+           |> assign(:filter_preview_count, nil)}
       end
     else
       {:noreply,
@@ -635,10 +655,84 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
         0
       end
 
+    # === Dynamic Count Updates ===
+    # Recalculate availability counts based on current filters
+    # This enables the "cross-filter" UX where selecting dates updates time period counts
+    # and selecting time preferences updates date counts
+    # When filters are cleared, restore original unfiltered counts
+    # See: https://github.com/razrfly/eventasaurus/issues/3258
+
+    # Get original unfiltered counts (stored when modal opened)
+    original_date_availability =
+      Map.get(socket.assigns, :original_date_availability, socket.assigns.date_availability)
+
+    original_time_period_availability =
+      Map.get(socket.assigns, :original_time_period_availability, socket.assigns.time_period_availability)
+
+    # Build filter criteria with city_ids
+    city_ids =
+      case socket.assigns[:city] do
+        %{id: city_id} when not is_nil(city_id) -> [city_id]
+        _ -> []
+      end
+
+    date_list = generate_date_list(false)
+    time_preferences = filter_criteria.time_preferences
+    selected_dates = filter_criteria.selected_dates
+
+    # Recalculate date availability with time_preferences filter
+    # When user selects "evening", date pills should show only evening showtimes per date
+    # When no time preferences selected, restore original unfiltered counts
+    date_availability =
+      if time_preferences != [] do
+        date_filter_criteria = %{
+          city_ids: city_ids,
+          time_preferences: time_preferences
+        }
+
+        case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
+               "movie",
+               movie.id,
+               date_list,
+               date_filter_criteria
+             ) do
+          {:ok, counts} -> counts
+          {:error, _} -> original_date_availability
+        end
+      else
+        # No time preferences selected, restore original unfiltered counts
+        original_date_availability
+      end
+
+    # Recalculate time period availability with selected_dates filter
+    # When user selects specific dates, time period buttons should show only those dates' distribution
+    # When no dates selected, restore original unfiltered counts
+    time_period_availability =
+      if selected_dates != [] do
+        time_filter_criteria = %{
+          city_ids: city_ids,
+          selected_dates: selected_dates
+        }
+
+        case EventasaurusApp.Planning.OccurrenceQuery.get_time_period_availability_counts(
+               "movie",
+               movie.id,
+               time_filter_criteria
+             ) do
+          {:ok, counts} -> counts
+          {:error, _} -> original_time_period_availability
+        end
+      else
+        # No dates selected, restore original unfiltered counts
+        original_time_period_availability
+      end
+
     {:noreply,
      socket
      |> assign(:filter_criteria, filter_criteria)
-     |> assign(:filter_preview_count, count)}
+     |> assign(:filter_preview_count, count)
+     |> assign(:date_availability, date_availability)
+     |> assign(:time_period_availability, time_period_availability)}
   end
 
   @impl true

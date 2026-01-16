@@ -1021,8 +1021,10 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   def get_time_period_availability_counts("movie", movie_id, filter_criteria)
       when is_integer(movie_id) do
     try do
-      # Get date range from filter_criteria or default to 7 days
-      date_list = get_date_list_from_criteria(filter_criteria)
+      # Get date list from filter_criteria, prioritizing selected_dates for dynamic counts
+      # This enables the "dynamic counts" UX where selecting specific dates updates
+      # the time period counts to show only those dates' distribution
+      date_list = get_date_list_for_time_periods(filter_criteria)
 
       # Get venue_ids and city_ids from filter_criteria
       venue_ids = get_filter_value(filter_criteria, :venue_ids, [])
