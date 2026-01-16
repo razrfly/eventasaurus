@@ -937,8 +937,20 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           )
 
         # Build filter criteria for dynamic counts
-        date_filter_criteria = %{time_preferences: time_preferences}
-        time_filter_criteria = %{selected_dates: selected_dates}
+        # Include city_ids when in movie mode on city page to maintain city-scoped filtering
+        # See: https://github.com/razrfly/eventasaurus/issues/3252
+        city_ids =
+          if include_all_venues && movie != nil do
+            case socket.assigns[:city] do
+              %{id: city_id} when not is_nil(city_id) -> [city_id]
+              _ -> []
+            end
+          else
+            []
+          end
+
+        date_filter_criteria = %{time_preferences: time_preferences, city_ids: city_ids}
+        time_filter_criteria = %{selected_dates: selected_dates, city_ids: city_ids}
         date_list = generate_date_list(is_venue)
 
         # Determine series type and ID based on venue scope

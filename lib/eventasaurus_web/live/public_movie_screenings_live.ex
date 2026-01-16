@@ -386,12 +386,23 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       # false = movie event (7 days)
       date_list = generate_date_list(false)
 
+      # Build filter criteria with city_ids to constrain results to current city
+      # Without this, counts would include venues from ALL cities globally
+      # See: https://github.com/razrfly/eventasaurus/issues/3252
+      city_ids =
+        case socket.assigns[:city] do
+          %{id: city_id} when not is_nil(city_id) -> [city_id]
+          _ -> []
+        end
+
+      filter_criteria = %{city_ids: city_ids}
+
       date_availability =
         case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
                "movie",
                movie.id,
                date_list,
-               %{}
+               filter_criteria
              ) do
           {:ok, counts} -> counts
           {:error, _} -> %{}
@@ -402,7 +413,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
         case EventasaurusApp.Planning.OccurrenceQuery.get_time_period_availability_counts(
                "movie",
                movie.id,
-               %{}
+               filter_criteria
              ) do
           {:ok, counts} -> counts
           {:error, _} -> %{}
@@ -610,12 +621,16 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     }
 
     # Query for matching occurrences count only (not full data)
+    # Use a separate query WITHOUT the limit to get the true total count
+    # The limit only applies to how many poll options are created, not the preview count
     movie = socket.assigns.movie
     city = socket.assigns[:city]
 
     count =
       if movie do
-        query_movie_occurrences(movie.id, filter_criteria, city) |> length()
+        # Remove limit for count query - we want total matching, not capped results
+        count_criteria = Map.delete(filter_criteria, :limit)
+        query_movie_occurrences(movie.id, count_criteria, city) |> length()
       else
         0
       end
@@ -661,12 +676,19 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     # See: https://github.com/razrfly/eventasaurus/issues/3252
     city_ids = if city && city.id, do: [city.id], else: []
 
-    query_criteria = %{
+    # Build base query criteria
+    # Only include limit if explicitly provided - omitting it means no limit (for counting)
+    base_criteria = %{
       date_range: PlanWithFriendsHelpers.parse_date_range(filter_criteria),
       time_preferences: Map.get(filter_criteria, :time_preferences, []),
-      city_ids: city_ids,
-      limit: Map.get(filter_criteria, :limit, 10)
+      city_ids: city_ids
     }
+
+    query_criteria =
+      case Map.get(filter_criteria, :limit) do
+        nil -> base_criteria
+        limit -> Map.put(base_criteria, :limit, limit)
+      end
 
     case OccurrenceQuery.find_movie_occurrences(movie_id, query_criteria) do
       {:ok, occurrences} -> occurrences
