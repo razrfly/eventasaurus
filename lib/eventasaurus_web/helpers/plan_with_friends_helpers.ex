@@ -42,9 +42,15 @@ defmodule EventasaurusWeb.Helpers.PlanWithFriendsHelpers do
     friend_ids = Enum.map(socket.assigns.selected_users, & &1.id)
 
     # Convert filter criteria to workflow format
+    # CRITICAL: Include city_ids to constrain results to the current city only
+    # Without this, "all venues" would return venues from ALL cities globally
+    # See: https://github.com/razrfly/eventasaurus/issues/3252
+    city_ids = get_city_ids_from_socket(socket)
+
     filter_criteria = %{
       date_range: parse_date_range(socket.assigns.filter_criteria),
       time_preferences: socket.assigns.filter_criteria[:time_preferences] || [],
+      city_ids: city_ids,
       limit: socket.assigns.filter_criteria[:limit] || default_limit
     }
 
@@ -137,5 +143,14 @@ defmodule EventasaurusWeb.Helpers.PlanWithFriendsHelpers do
   defp default_date_range do
     today = Date.utc_today()
     %{start: today, end: Date.add(today, 7)}
+  end
+
+  # Private helper to extract city_ids from socket assigns
+  # Used to constrain occurrence searches to the current city only
+  defp get_city_ids_from_socket(socket) do
+    case socket.assigns[:city] do
+      %{id: city_id} when not is_nil(city_id) -> [city_id]
+      _ -> []
+    end
   end
 end
