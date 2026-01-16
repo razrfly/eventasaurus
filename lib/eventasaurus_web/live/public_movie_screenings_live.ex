@@ -653,7 +653,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
   # Helper functions
 
-  defp query_movie_occurrences(movie_id, filter_criteria, city \\ nil) do
+  defp query_movie_occurrences(movie_id, filter_criteria, city) do
     alias EventasaurusApp.Planning.OccurrenceQuery
 
     # Convert filter criteria to format expected by OccurrenceQuery

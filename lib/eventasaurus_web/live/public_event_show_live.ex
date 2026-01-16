@@ -1344,7 +1344,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # Removed duplicate get_movie_data/1 - see line 1861 for the canonical version
 
-  defp query_movie_occurrences(movie_id, filter_criteria, city \\ nil) do
+  defp query_movie_occurrences(movie_id, filter_criteria, city) do
     alias EventasaurusApp.Planning.OccurrenceQuery
 
     # Convert filter criteria to format expected by OccurrenceQuery
@@ -2187,8 +2187,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # Helper to fetch date availability counts for a movie across ALL venues
   # Used when "include all venues" toggle is enabled
-  defp fetch_movie_date_availability(movie, city \\ nil)
-
   defp fetch_movie_date_availability(movie, city) when not is_nil(movie) do
     date_list = generate_date_list(false)
 
@@ -2217,8 +2215,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   # Helper to fetch time period availability counts for a movie across venues in a city
   # Used when "include all venues" toggle is enabled
   # When city is provided, constrains results to venues within that city
-  defp fetch_movie_time_period_availability(movie, city \\ nil)
-
   defp fetch_movie_time_period_availability(movie, city) when not is_nil(movie) do
     # Build filter criteria with city_ids if city is provided
     # This constrains "all venues" to only venues within the current city
