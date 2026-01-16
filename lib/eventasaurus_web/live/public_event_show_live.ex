@@ -676,12 +676,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     event = socket.assigns.event
     movie = socket.assigns[:movie]
     is_movie = socket.assigns[:is_movie_event]
+    city = socket.assigns[:city]
 
     {new_date_availability, new_time_availability} =
       if new_include_all && movie do
-        # Use movie-level queries (all venues)
-        date_avail = fetch_movie_date_availability(movie)
-        time_avail = fetch_movie_time_period_availability(movie)
+        # Use movie-level queries (all venues IN THIS CITY)
+        # Pass city to constrain results to current city only
+        date_avail = fetch_movie_date_availability(movie, city)
+        time_avail = fetch_movie_time_period_availability(movie, city)
         {date_avail, time_avail}
       else
         # Use event-level queries (specific venue)
@@ -2177,36 +2179,59 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # Helper to fetch date availability counts for a movie across ALL venues
   # Used when "include all venues" toggle is enabled
-  defp fetch_movie_date_availability(movie) when not is_nil(movie) do
+  defp fetch_movie_date_availability(movie, city \\ nil)
+
+  defp fetch_movie_date_availability(movie, city) when not is_nil(movie) do
     date_list = generate_date_list(false)
+
+    # Build filter criteria with city_ids if city is provided
+    # This constrains "all venues" to only venues within the current city
+    filter_criteria =
+      if city && city.id do
+        %{city_ids: [city.id]}
+      else
+        %{}
+      end
 
     case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
            "movie",
            movie.id,
            date_list,
-           %{}
+           filter_criteria
          ) do
       {:ok, counts} -> counts
       {:error, _} -> %{}
     end
   end
 
-  defp fetch_movie_date_availability(_), do: %{}
+  defp fetch_movie_date_availability(_, _), do: %{}
 
-  # Helper to fetch time period availability counts for a movie across ALL venues
+  # Helper to fetch time period availability counts for a movie across venues in a city
   # Used when "include all venues" toggle is enabled
-  defp fetch_movie_time_period_availability(movie) when not is_nil(movie) do
+  # When city is provided, constrains results to venues within that city
+  defp fetch_movie_time_period_availability(movie, city \\ nil)
+
+  defp fetch_movie_time_period_availability(movie, city) when not is_nil(movie) do
+    # Build filter criteria with city_ids if city is provided
+    # This constrains "all venues" to only venues within the current city
+    filter_criteria =
+      if city && city.id do
+        %{city_ids: [city.id]}
+      else
+        %{}
+      end
+
     case EventasaurusApp.Planning.OccurrenceQuery.get_time_period_availability_counts(
            "movie",
            movie.id,
-           %{}
+           filter_criteria
          ) do
       {:ok, counts} -> counts
       {:error, _} -> %{}
     end
   end
 
-  defp fetch_movie_time_period_availability(_), do: %{}
+  defp fetch_movie_time_period_availability(_, _), do: %{}
 
   # Helper to fetch date availability counts based on event type
   # Always uses "event" with event.id to get counts for THIS specific event/venue,
