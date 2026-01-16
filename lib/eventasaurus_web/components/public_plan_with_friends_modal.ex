@@ -49,6 +49,8 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   attr :city, :map, default: nil
   attr :date_availability, :map, default: %{}
   attr :time_period_availability, :map, default: %{}
+  # Venue scope toggle (for movie events accessed from specific venue)
+  attr :include_all_venues, :boolean, default: false
 
   def modal(assigns) do
     ~H"""
@@ -765,6 +767,52 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
     ~H"""
     <form phx-submit="apply_flexible_filters" phx-change="preview_filter_results" class="space-y-6">
+      <!-- Venue Scope Indicator (for movie events accessed from specific venue) -->
+      <%= if @is_movie_event && @public_event && @public_event.venue && @movie do %>
+        <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 mt-0.5">
+              <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-gray-900">
+                <%= if @include_all_venues do %>
+                  Showing showtimes at <span class="font-semibold">all venues</span> in <%= @city && @city.name || "this city" %>
+                <% else %>
+                  Showing showtimes at <span class="font-semibold"><%= @public_event.venue.name %></span>
+                <% end %>
+              </p>
+              <p class="text-xs text-gray-500 mt-0.5">
+                <%= if @include_all_venues do %>
+                  Including all theaters showing <%= @movie.title %>
+                <% else %>
+                  Only this theater's showtimes
+                <% end %>
+              </p>
+            </div>
+          </div>
+          <!-- Toggle for venue scope -->
+          <div class="mt-3 pt-3 border-t border-gray-200">
+            <label class="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                name="include_all_venues"
+                value="true"
+                checked={@include_all_venues}
+                phx-click="toggle_venue_scope"
+                class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+              />
+              <span class="ml-2 text-sm text-gray-700">
+                Include all venues showing this movie
+              </span>
+            </label>
+          </div>
+        </div>
+      <% end %>
+
       <!-- Date Selection (Adaptive UI based on available dates) -->
       <%= render_date_selection(assigns) %>
 
