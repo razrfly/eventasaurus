@@ -787,17 +787,27 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         cond do
           # Single occurrence - skip filters and polls, offer Quick Plan
           # See: https://github.com/razrfly/eventasaurus/issues/3258
+          # Guard against parsing failures - if parsing yields 0 or >1 results, fall back
           total_count == 1 ->
             matching = build_occurrences_from_jsonb(event, dates)
-            [single_occurrence] = matching
 
-            {:noreply,
-             socket
-             |> assign(:planning_mode, :quick)
-             |> assign(:selected_occurrence, single_occurrence)
-             |> assign(:matching_occurrences, matching)
-             |> assign(:filter_criteria, default_criteria)
-             |> assign(:filter_preview_count, 1)}
+            case matching do
+              [single_occurrence] ->
+                {:noreply,
+                 socket
+                 |> assign(:planning_mode, :quick)
+                 |> assign(:selected_occurrence, single_occurrence)
+                 |> assign(:matching_occurrences, matching)
+                 |> assign(:filter_criteria, default_criteria)
+                 |> assign(:filter_preview_count, 1)}
+
+              # Parsing failed or returned unexpected count - fall back to filters
+              _ ->
+                {:noreply,
+                 socket
+                 |> assign(:planning_mode, :flexible_filters)
+                 |> assign(:filter_preview_count, nil)}
+            end
 
           # Small number of showtimes - skip filters, show them all directly
           total_count <= @small_showtime_threshold and total_count > 0 ->
