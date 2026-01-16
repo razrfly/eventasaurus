@@ -497,27 +497,34 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   def get_date_availability_counts("movie", movie_id, date_list, filter_criteria)
       when is_integer(movie_id) do
     try do
-      # Get venue_ids from filter_criteria (handle both atom and string keys)
+      # Get venue_ids and city_ids from filter_criteria (handle both atom and string keys)
       venue_ids = get_filter_value(filter_criteria, :venue_ids, [])
+      city_ids = get_filter_value(filter_criteria, :city_ids, [])
 
       # Get all events linked to this movie with their occurrences JSONB
-      # Optionally filtered by venue_ids if provided
+      # Optionally filtered by venue_ids and/or city_ids if provided
       events_query =
         from(pe in PublicEvent,
           join: em in EventMovie,
           on: em.event_id == pe.id,
+          left_join: v in Venue,
+          on: pe.venue_id == v.id,
           where: em.movie_id == ^movie_id,
           select: pe.occurrences
         )
 
+      # Apply venue filter if specified
       events_query =
         if is_list(venue_ids) and length(venue_ids) > 0 do
-          from(pe in PublicEvent,
-            join: em in EventMovie,
-            on: em.event_id == pe.id,
-            where: em.movie_id == ^movie_id and pe.venue_id in ^venue_ids,
-            select: pe.occurrences
-          )
+          from([pe, em, v] in events_query, where: pe.venue_id in ^venue_ids)
+        else
+          events_query
+        end
+
+      # Apply city filter if specified (constrains to venues in specified cities)
+      events_query =
+        if is_list(city_ids) and length(city_ids) > 0 do
+          from([pe, em, v] in events_query, where: v.city_id in ^city_ids)
         else
           events_query
         end
@@ -1017,14 +1024,36 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
       # Get date range from filter_criteria or default to 7 days
       date_list = get_date_list_from_criteria(filter_criteria)
 
-      # Get all events linked to this movie
+      # Get venue_ids and city_ids from filter_criteria
+      venue_ids = get_filter_value(filter_criteria, :venue_ids, [])
+      city_ids = get_filter_value(filter_criteria, :city_ids, [])
+
+      # Get all events linked to this movie, optionally filtered by venue/city
       events_query =
         from(pe in PublicEvent,
           join: em in EventMovie,
           on: em.event_id == pe.id,
+          left_join: v in Venue,
+          on: pe.venue_id == v.id,
           where: em.movie_id == ^movie_id,
           select: pe.occurrences
         )
+
+      # Apply venue filter if specified
+      events_query =
+        if is_list(venue_ids) and length(venue_ids) > 0 do
+          from([pe, em, v] in events_query, where: pe.venue_id in ^venue_ids)
+        else
+          events_query
+        end
+
+      # Apply city filter if specified (constrains to venues in specified cities)
+      events_query =
+        if is_list(city_ids) and length(city_ids) > 0 do
+          from([pe, em, v] in events_query, where: v.city_id in ^city_ids)
+        else
+          events_query
+        end
 
       all_occurrences = Repo.all(events_query)
 
