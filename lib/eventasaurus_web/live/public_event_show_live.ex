@@ -727,7 +727,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           limit: 50
         }
 
-        all_showtimes = query_movie_occurrences(movie.id, default_criteria)
+        city = socket.assigns[:city]
+        all_showtimes = query_movie_occurrences(movie.id, default_criteria, city)
         total_count = length(all_showtimes)
 
         if total_count <= @small_showtime_threshold and total_count > 0 do
@@ -896,14 +897,15 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     event = socket.assigns.event
     movie = get_movie_data(event)
     venue = get_venue_data(event)
+    city = socket.assigns[:city]
     is_venue = venue != nil && !movie
     include_all_venues = socket.assigns[:include_all_venues] || false
 
     count =
       cond do
-        # All venues mode - use movie-level query
+        # All venues mode - use movie-level query (constrained to current city)
         include_all_venues && movie != nil ->
-          query_movie_occurrences(movie.id, filter_criteria) |> length()
+          query_movie_occurrences(movie.id, filter_criteria, city) |> length()
 
         # For events with occurrence data, use event.id to constrain to this venue
         has_occurrence_data?(event) ->
@@ -1032,13 +1034,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     event = socket.assigns.event
     venue = get_venue_data(event)
     movie = get_movie_data(event)
+    city = socket.assigns[:city]
     include_all_venues = socket.assigns[:include_all_venues] || false
 
     matching_occurrences =
       cond do
-        # All venues mode - use movie-level query
+        # All venues mode - use movie-level query (constrained to current city)
         include_all_venues && movie != nil ->
-          query_movie_occurrences(movie.id, filter_criteria)
+          query_movie_occurrences(movie.id, filter_criteria, city)
 
         # For events with occurrence data (movies, trivia, etc.), use event.id
         # This constrains results to this specific venue's showtimes
@@ -1341,13 +1344,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # Removed duplicate get_movie_data/1 - see line 1861 for the canonical version
 
-  defp query_movie_occurrences(movie_id, filter_criteria) do
+  defp query_movie_occurrences(movie_id, filter_criteria, city \\ nil) do
     alias EventasaurusApp.Planning.OccurrenceQuery
 
     # Convert filter criteria to format expected by OccurrenceQuery
+    # Include city_ids to constrain results to current city only
+    # See: https://github.com/razrfly/eventasaurus/issues/3252
+    city_ids = if city && city.id, do: [city.id], else: []
+
     query_criteria = %{
       date_range: PlanWithFriendsHelpers.parse_date_range(filter_criteria),
       time_preferences: Map.get(filter_criteria, :time_preferences, []),
+      city_ids: city_ids,
       limit: Map.get(filter_criteria, :limit, 10)
     }
 

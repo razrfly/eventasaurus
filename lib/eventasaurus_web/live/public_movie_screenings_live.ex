@@ -465,9 +465,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       limit: limit
     }
 
-    # Query for matching movie occurrences
+    # Query for matching movie occurrences (constrained to current city)
     movie = socket.assigns.movie
-    matching_occurrences = query_movie_occurrences(movie.id, filter_criteria)
+    city = socket.assigns[:city]
+    matching_occurrences = query_movie_occurrences(movie.id, filter_criteria, city)
 
     {:noreply,
      socket
@@ -524,7 +525,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
         limit: 50
       }
 
-      all_showtimes = query_movie_occurrences(movie.id, default_criteria)
+      city = socket.assigns[:city]
+      all_showtimes = query_movie_occurrences(movie.id, default_criteria, city)
       total_count = length(all_showtimes)
 
       if total_count <= @small_showtime_threshold and total_count > 0 do
@@ -609,10 +611,11 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
     # Query for matching occurrences count only (not full data)
     movie = socket.assigns.movie
+    city = socket.assigns[:city]
 
     count =
       if movie do
-        query_movie_occurrences(movie.id, filter_criteria) |> length()
+        query_movie_occurrences(movie.id, filter_criteria, city) |> length()
       else
         0
       end
@@ -650,13 +653,18 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
   # Helper functions
 
-  defp query_movie_occurrences(movie_id, filter_criteria) do
+  defp query_movie_occurrences(movie_id, filter_criteria, city \\ nil) do
     alias EventasaurusApp.Planning.OccurrenceQuery
 
     # Convert filter criteria to format expected by OccurrenceQuery
+    # Include city_ids to constrain results to current city only
+    # See: https://github.com/razrfly/eventasaurus/issues/3252
+    city_ids = if city && city.id, do: [city.id], else: []
+
     query_criteria = %{
       date_range: PlanWithFriendsHelpers.parse_date_range(filter_criteria),
       time_preferences: Map.get(filter_criteria, :time_preferences, []),
+      city_ids: city_ids,
       limit: Map.get(filter_criteria, :limit, 10)
     }
 
