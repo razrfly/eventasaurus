@@ -851,52 +851,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
      |> assign(:filter_preview_count, nil)}
   end
 
-  # Build occurrence maps from JSONB dates for direct display
-  defp build_occurrences_from_jsonb(event, dates) do
-    venue = event.venue
-
-    Enum.map(dates, fn date_entry ->
-      date_str = date_entry["date"]
-      time_str = date_entry["time"]
-
-      datetime =
-        with {:ok, date} <- Date.from_iso8601(date_str),
-             {:ok, time} <- parse_time_string(time_str) do
-          DateTime.new!(date, time, "Etc/UTC")
-        else
-          _ -> nil
-        end
-
-      %{
-        public_event_id: event.id,
-        datetime: datetime,
-        date: date_str,
-        time: time_str,
-        title: event.title,
-        venue_id: if(venue, do: venue.id),
-        venue_name: if(venue, do: venue.name),
-        venue_city_id: if(venue, do: venue.city_id)
-      }
-    end)
-    |> Enum.filter(fn occ -> occ.datetime != nil end)
-    |> Enum.sort_by(fn occ -> occ.datetime end, DateTime)
-  end
-
-  # Parse time string, handling both HH:MM and HH:MM:SS formats
-  defp parse_time_string(time_str) when is_binary(time_str) do
-    # If already has seconds (HH:MM:SS), use as-is; otherwise append :00
-    normalized =
-      case String.split(time_str, ":") do
-        [_h, _m, _s] -> time_str
-        [_h, _m] -> time_str <> ":00"
-        _ -> time_str
-      end
-
-    Time.from_iso8601(normalized)
-  end
-
-  defp parse_time_string(_), do: {:error, :invalid_time}
-
   @impl true
   def handle_event("preview_filter_results", params, socket) do
     # Parse selected dates and convert to date range (same as apply_flexible_filters)
@@ -1234,6 +1188,52 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     # Fallback for old submit events without mode parameter
     handle_quick_plan_submit(socket)
   end
+
+  # Build occurrence maps from JSONB dates for direct display
+  defp build_occurrences_from_jsonb(event, dates) do
+    venue = event.venue
+
+    Enum.map(dates, fn date_entry ->
+      date_str = date_entry["date"]
+      time_str = date_entry["time"]
+
+      datetime =
+        with {:ok, date} <- Date.from_iso8601(date_str),
+             {:ok, time} <- parse_time_string(time_str) do
+          DateTime.new!(date, time, "Etc/UTC")
+        else
+          _ -> nil
+        end
+
+      %{
+        public_event_id: event.id,
+        datetime: datetime,
+        date: date_str,
+        time: time_str,
+        title: event.title,
+        venue_id: if(venue, do: venue.id),
+        venue_name: if(venue, do: venue.name),
+        venue_city_id: if(venue, do: venue.city_id)
+      }
+    end)
+    |> Enum.filter(fn occ -> occ.datetime != nil end)
+    |> Enum.sort_by(fn occ -> occ.datetime end, DateTime)
+  end
+
+  # Parse time string, handling both HH:MM and HH:MM:SS formats
+  defp parse_time_string(time_str) when is_binary(time_str) do
+    # If already has seconds (HH:MM:SS), use as-is; otherwise append :00
+    normalized =
+      case String.split(time_str, ":") do
+        [_h, _m, _s] -> time_str
+        [_h, _m] -> time_str <> ":00"
+        _ -> time_str
+      end
+
+    Time.from_iso8601(normalized)
+  end
+
+  defp parse_time_string(_), do: {:error, :invalid_time}
 
   defp handle_quick_plan_submit(socket) do
     case create_plan_from_public_event(socket) do
