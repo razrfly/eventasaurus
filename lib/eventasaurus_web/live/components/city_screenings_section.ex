@@ -5,6 +5,10 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
   This component shows available screenings for a movie in a specific city,
   with venues listed as cards showing showtimes, dates, and format information.
 
+  Supports two view modes:
+  - **By Venue** (default): Showtimes grouped by cinema
+  - **By Day**: Showtimes organized chronologically with horizontal day picker
+
   ## Props
 
   - `city` - City struct with name and slug (required)
@@ -13,9 +17,17 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
   - `variant` - `:card` | `:dark` (default: `:card`)
   - `compact` - Boolean for compact display mode (default: false)
   - `show_empty_state` - Boolean to show empty state message (default: true)
+
+  ## View Mode Props (optional, enables toggle)
+
+  - `view_mode` - Current mode: `:by_venue` or `:by_day` (default: nil, hides toggle)
+  - `selected_day` - Currently selected Date for By Day view
+  - `showtimes_by_day` - Map of Date => list of showtime maps
+  - `available_days` - Sorted list of dates with showtimes
   """
 
   use EventasaurusWeb, :live_component
+  alias EventasaurusWeb.Components.Movies.{ViewModeToggle, ShowtimesByDay}
 
   @impl true
   def update(assigns, socket) do
@@ -28,6 +40,11 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
       |> assign_new(:total_showtimes, fn -> 0 end)
       |> assign_new(:venues_with_info, fn -> [] end)
       |> assign_new(:recently_missed_expanded, fn -> false end)
+      # View mode toggle props (optional)
+      |> assign_new(:view_mode, fn -> nil end)
+      |> assign_new(:selected_day, fn -> nil end)
+      |> assign_new(:showtimes_by_day, fn -> %{} end)
+      |> assign_new(:available_days, fn -> [] end)
 
     # Separate venues into upcoming and recent-past-only groups
     venues_with_info = socket.assigns.venues_with_info
@@ -64,32 +81,59 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
           <.empty_state city={@city} variant={@variant} />
         <% end %>
       <% else %>
-        <!-- Upcoming Showtimes Section -->
-        <%= if @upcoming_venues != [] do %>
-          <div class="mb-8">
-            <div class="flex items-center justify-between mb-6">
-              <h2 class={section_title_classes(@variant)}>
-                <Heroicons.calendar class="w-6 h-6 inline mr-2 text-green-600" />
-                <%= gettext("Upcoming Showtimes") %>
-                <span class={showtime_count_classes(@variant)}>
-                  (<%= ngettext("1 showtime", "%{count} showtimes", @total_upcoming) %>)
-                </span>
-              </h2>
-            </div>
-
-            <div class={venues_grid_classes(@compact)}>
-              <%= for {venue, info} <- @upcoming_venues do %>
-                <.venue_card
-                  venue={venue}
-                  info={info}
-                  variant={@variant}
-                  compact={@compact}
-                  show_recent_past_note={Map.get(info, :recent_past_count, 0) > 0}
-                />
-              <% end %>
-            </div>
+        <!-- View Mode Toggle (only shown when view_mode is set) -->
+        <%= if @view_mode do %>
+          <div class="flex items-center justify-between mb-6">
+            <h2 class={section_title_classes(@variant)}>
+              <Heroicons.calendar class="w-6 h-6 inline mr-2 text-green-600" />
+              <%= gettext("Showtimes") %>
+              <span class={showtime_count_classes(@variant)}>
+                (<%= ngettext("1 showtime", "%{count} showtimes", @total_upcoming) %>)
+              </span>
+            </h2>
+            <ViewModeToggle.view_mode_toggle view_mode={@view_mode} />
           </div>
         <% end %>
+
+        <!-- By Day View -->
+        <%= if @view_mode == :by_day do %>
+          <ShowtimesByDay.showtimes_by_day
+            showtimes_by_day={@showtimes_by_day}
+            available_days={@available_days}
+            selected_day={@selected_day}
+            variant={@variant}
+          />
+        <% else %>
+          <!-- By Venue View (default) -->
+          <!-- Upcoming Showtimes Section -->
+          <%= if @upcoming_venues != [] do %>
+            <div class="mb-8">
+              <!-- Header only shown when no view toggle (legacy mode) -->
+              <%= if is_nil(@view_mode) do %>
+                <div class="flex items-center justify-between mb-6">
+                  <h2 class={section_title_classes(@variant)}>
+                    <Heroicons.calendar class="w-6 h-6 inline mr-2 text-green-600" />
+                    <%= gettext("Upcoming Showtimes") %>
+                    <span class={showtime_count_classes(@variant)}>
+                      (<%= ngettext("1 showtime", "%{count} showtimes", @total_upcoming) %>)
+                    </span>
+                  </h2>
+                </div>
+              <% end %>
+
+              <div class={venues_grid_classes(@compact)}>
+                <%= for {venue, info} <- @upcoming_venues do %>
+                  <.venue_card
+                    venue={venue}
+                    info={info}
+                    variant={@variant}
+                    compact={@compact}
+                    show_recent_past_note={Map.get(info, :recent_past_count, 0) > 0}
+                  />
+                <% end %>
+              </div>
+            </div>
+          <% end %>
 
         <!-- Recently Missed Section -->
         <%= if @recent_past_only_venues != [] do %>
@@ -147,6 +191,7 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
               </div>
             </div>
           </div>
+        <% end %>
         <% end %>
       <% end %>
     </div>

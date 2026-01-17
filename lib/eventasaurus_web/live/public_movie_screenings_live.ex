@@ -57,6 +57,11 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       |> assign(:entry_context, :generic_movie)
       |> assign(:is_single_occurrence, false)
       |> assign(:selected_occurrence, nil)
+      # View mode toggle state for By Venue / By Day switching
+      |> assign(:view_mode, :by_venue)
+      |> assign(:selected_day, nil)
+      |> assign(:showtimes_by_day, %{})
+      |> assign(:available_days, [])
 
     {:ok, socket}
   end
@@ -196,6 +201,12 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       |> Enum.map(fn {_venue, info} -> info.count end)
       |> Enum.sum()
 
+    # Transform data for "By Day" view - group all showtimes chronologically by date
+    {showtimes_by_day, available_days} = transform_to_by_day_view(venues_with_info)
+
+    # Auto-select first available day for By Day view
+    first_available_day = List.first(available_days)
+
     # Get available languages for this city (dynamic based on country + DB translations)
     available_languages =
       if city && city.slug do
@@ -244,7 +255,11 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
      |> assign(:open_graph, og_tags)
      |> assign(:rich_data, rich_data)
      |> assign(:cast, cast)
-     |> assign(:crew, crew)}
+     |> assign(:crew, crew)
+     # By Day view data
+     |> assign(:showtimes_by_day, showtimes_by_day)
+     |> assign(:available_days, available_days)
+     |> assign(:selected_day, first_available_day)}
   end
 
   @impl true
@@ -331,6 +346,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             variant={:card}
             compact={false}
             show_empty_state={true}
+            view_mode={@view_mode}
+            selected_day={@selected_day}
+            showtimes_by_day={@showtimes_by_day}
+            available_days={@available_days}
           />
         </div>
 
@@ -504,22 +523,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   def handle_event("submit_plan_with_friends", _params, socket) do
     # Default to flexible planning
     handle_flexible_plan_submit(socket)
-  end
-
-  # Handle flexible planning submission - delegates to shared helper
-  defp handle_flexible_plan_submit(socket) do
-    user = get_authenticated_user(socket)
-    movie = socket.assigns.movie
-
-    # Ensure we have movie data
-    if is_nil(movie) do
-      {:noreply,
-       socket
-       |> assign(:show_plan_with_friends_modal, false)
-       |> put_flash(:error, gettext("Movie not found. Please try again."))}
-    else
-      PlanWithFriendsHelpers.execute_flexible_plan(socket, movie, user, default_limit: 50)
-    end
   end
 
   @impl true
@@ -735,6 +738,35 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
      |> assign(:time_period_availability, time_period_availability)}
   end
 
+  # View mode toggle handlers for By Venue / By Day switching
+  @impl true
+  def handle_event("change_view_mode", %{"mode" => "by_day"}, socket) do
+    # When switching to By Day, auto-select first available day if none selected
+    selected_day =
+      socket.assigns.selected_day || List.first(socket.assigns.available_days)
+
+    {:noreply,
+     socket
+     |> assign(:view_mode, :by_day)
+     |> assign(:selected_day, selected_day)}
+  end
+
+  @impl true
+  def handle_event("change_view_mode", %{"mode" => "by_venue"}, socket) do
+    {:noreply, assign(socket, :view_mode, :by_venue)}
+  end
+
+  @impl true
+  def handle_event("select_day", %{"date" => date_string}, socket) do
+    case Date.from_iso8601(date_string) do
+      {:ok, date} ->
+        {:noreply, assign(socket, :selected_day, date)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
   @impl true
   def handle_info({:language_changed, _language}, socket) do
     # Language is already updated by the hook, no need to reload data
@@ -761,6 +793,59 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   end
 
   # Helper functions
+
+  # Handle flexible planning submission - delegates to shared helper
+  defp handle_flexible_plan_submit(socket) do
+    user = get_authenticated_user(socket)
+    movie = socket.assigns.movie
+
+    # Ensure we have movie data
+    if is_nil(movie) do
+      {:noreply,
+       socket
+       |> assign(:show_plan_with_friends_modal, false)
+       |> put_flash(:error, gettext("Movie not found. Please try again."))}
+    else
+      PlanWithFriendsHelpers.execute_flexible_plan(socket, movie, user, default_limit: 50)
+    end
+  end
+
+  # Transform venues_with_info to a day-grouped view for "By Day" toggle
+  # Returns {showtimes_by_day_map, sorted_available_days_list}
+  defp transform_to_by_day_view(venues_with_info) do
+    # Flatten all upcoming occurrences and attach venue info
+    all_showtimes =
+      venues_with_info
+      |> Enum.flat_map(fn {venue, info} ->
+        info.upcoming_occurrences
+        |> Enum.map(fn occ ->
+          Map.merge(occ, %{
+            venue: venue,
+            slug: info.slug,
+            formats: info.formats
+          })
+        end)
+      end)
+
+    # Group by date
+    by_day =
+      all_showtimes
+      |> Enum.group_by(& &1.date)
+      |> Enum.map(fn {date, showtimes} ->
+        # Sort showtimes by time within each day
+        sorted = Enum.sort_by(showtimes, & &1.datetime, {:asc, DateTime})
+        {date, sorted}
+      end)
+      |> Map.new()
+
+    # Get sorted list of available days (only days with showtimes)
+    available_days =
+      by_day
+      |> Map.keys()
+      |> Enum.sort(Date)
+
+    {by_day, available_days}
+  end
 
   defp query_movie_occurrences(movie_id, filter_criteria, city) do
     alias EventasaurusApp.Planning.OccurrenceQuery
