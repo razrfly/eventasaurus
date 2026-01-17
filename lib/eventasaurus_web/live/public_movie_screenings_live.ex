@@ -103,7 +103,15 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       {city, movie} ->
         # Redirect to canonical URL if not already there
         if movie_slug != movie.slug do
-          {:noreply, redirect(socket, to: ~p"/c/#{city.slug}/movies/#{movie.slug}")}
+          # Preserve view mode query param on redirect
+          redirect_to =
+            if view_mode == :by_day do
+              ~p"/c/#{city.slug}/movies/#{movie.slug}?#{[view: "by_day"]}"
+            else
+              ~p"/c/#{city.slug}/movies/#{movie.slug}"
+            end
+
+          {:noreply, redirect(socket, to: redirect_to)}
         else
           handle_movie_screenings(socket, city, movie)
         end
