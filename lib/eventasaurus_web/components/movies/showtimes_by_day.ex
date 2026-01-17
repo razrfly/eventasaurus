@@ -133,13 +133,13 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
 
   # Individual showtime card
   defp showtime_card(assigns) do
-    # Defensive access for venue data - extract with nil safety
-    venue = assigns.showtime[:venue] || %{}
+    # Defensive access for venue data - Map.get works on both maps and structs
+    venue = assigns.showtime[:venue]
 
     assigns =
       assigns
-      |> assign(:venue_name, venue[:name] || gettext("Unknown venue"))
-      |> assign(:venue_address, venue[:address])
+      |> assign(:venue_name, (venue && Map.get(venue, :name)) || gettext("Unknown venue"))
+      |> assign(:venue_address, venue && Map.get(venue, :address))
 
     ~H"""
     <.link
