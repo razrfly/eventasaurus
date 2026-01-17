@@ -74,7 +74,11 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
   defp day_picker(assigns) do
     ~H"""
     <div class="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-      <div class="flex space-x-2 min-w-max pb-2">
+      <div
+        role="tablist"
+        aria-label={gettext("Select day to view showtimes")}
+        class="flex space-x-2 min-w-max pb-2"
+      >
         <%= for day <- @available_days do %>
           <.day_tab
             date={day}
@@ -94,6 +98,7 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
     ~H"""
     <button
       type="button"
+      role="tab"
       phx-click={@on_select_day}
       phx-value-date={Date.to_iso8601(@date)}
       phx-target={@target}
@@ -104,7 +109,8 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
           else: "bg-gray-100 text-gray-700 hover:bg-gray-200"
         )
       ]}
-      aria-pressed={@selected}
+      aria-selected={@selected}
+      aria-label={format_day_label(@date, @count)}
     >
       <span class={[
         "text-xs font-medium uppercase",
@@ -127,6 +133,14 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
 
   # Individual showtime card
   defp showtime_card(assigns) do
+    # Defensive access for venue data - extract with nil safety
+    venue = assigns.showtime[:venue] || %{}
+
+    assigns =
+      assigns
+      |> assign(:venue_name, venue[:name] || gettext("Unknown venue"))
+      |> assign(:venue_address, venue[:address])
+
     ~H"""
     <.link
       navigate={~p"/activities/#{@showtime.slug}"}
@@ -144,12 +158,12 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
           <!-- Venue Info -->
           <div class="min-w-0">
             <h4 class={venue_name_classes(@variant)}>
-              <%= @showtime.venue.name %>
+              <%= @venue_name %>
             </h4>
-            <%= if @showtime.venue.address do %>
+            <%= if @venue_address do %>
               <p class={venue_address_classes(@variant)}>
                 <Heroicons.map_pin class="w-3 h-3 inline mr-1 flex-shrink-0" />
-                <%= truncate_address(@showtime.venue.address, 40) %>
+                <%= truncate_address(@venue_address, 40) %>
               </p>
             <% end %>
           </div>
@@ -241,6 +255,13 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
 
   defp format_day_abbr(date) do
     Calendar.strftime(date, "%a")
+  end
+
+  # Accessible label for day tabs (e.g., "Saturday, January 18, 3 showtimes")
+  defp format_day_label(date, count) do
+    day_name = Calendar.strftime(date, "%A, %B %d")
+    showtime_text = ngettext("1 showtime", "%{count} showtimes", count)
+    "#{day_name}, #{showtime_text}"
   end
 
   defp format_day_header(date) do

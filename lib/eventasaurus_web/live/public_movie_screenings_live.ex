@@ -67,7 +67,15 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   end
 
   @impl true
-  def handle_params(%{"city_slug" => city_slug, "movie_slug" => movie_slug}, _url, socket) do
+  def handle_params(%{"city_slug" => city_slug, "movie_slug" => movie_slug} = params, _url, socket) do
+    # Parse view mode from query param for persistence (default: by_venue)
+    view_mode =
+      case params["view"] do
+        "by_day" -> :by_day
+        _ -> :by_venue
+      end
+
+    socket = assign(socket, :view_mode, view_mode)
     # Fetch city
     city =
       from(c in City,
@@ -739,21 +747,32 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   end
 
   # View mode toggle handlers for By Venue / By Day switching
+  # Uses push_patch to persist view mode in URL for shareability and browser history
   @impl true
   def handle_event("change_view_mode", %{"mode" => "by_day"}, socket) do
     # When switching to By Day, auto-select first available day if none selected
     selected_day =
       socket.assigns.selected_day || List.first(socket.assigns.available_days)
 
+    city_slug = socket.assigns.city.slug
+    movie_slug = socket.assigns.movie.slug
+
     {:noreply,
      socket
      |> assign(:view_mode, :by_day)
-     |> assign(:selected_day, selected_day)}
+     |> assign(:selected_day, selected_day)
+     |> push_patch(to: ~p"/c/#{city_slug}/movies/#{movie_slug}?view=by_day", replace: true)}
   end
 
   @impl true
   def handle_event("change_view_mode", %{"mode" => "by_venue"}, socket) do
-    {:noreply, assign(socket, :view_mode, :by_venue)}
+    city_slug = socket.assigns.city.slug
+    movie_slug = socket.assigns.movie.slug
+
+    {:noreply,
+     socket
+     |> assign(:view_mode, :by_venue)
+     |> push_patch(to: ~p"/c/#{city_slug}/movies/#{movie_slug}", replace: true)}
   end
 
   @impl true
