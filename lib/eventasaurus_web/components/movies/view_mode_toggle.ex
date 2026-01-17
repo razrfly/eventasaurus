@@ -19,7 +19,11 @@ defmodule EventasaurusWeb.Components.Movies.ViewModeToggle do
 
   def view_mode_toggle(assigns) do
     ~H"""
-    <div class="flex items-center bg-gray-100 rounded-lg p-1 gap-1">
+    <div
+      role="group"
+      aria-label={gettext("View mode selection")}
+      class="flex items-center bg-gray-100 rounded-lg p-1 gap-1"
+    >
       <button
         type="button"
         phx-click={@on_change}
