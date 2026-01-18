@@ -221,20 +221,24 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
   def extract_all_images(_, _max_count), do: []
 
   # Extract primary image URL from restaurant imageFiles array.
-  # Uses 'profile' size (900px) for optimal quality/size balance.
-  # Returns image URL string or nil if no images available.
-  defp extract_primary_image(%{"imageFiles" => [first_image | _]} = restaurant)
-       when is_map(first_image) do
+  # Uses validation-first approach: searches through all images to find the first valid URL.
+  # This ensures we find a valid image even if earlier entries have nil URLs.
+  # Returns image URL string or nil if no valid images available.
+  defp extract_primary_image(%{"imageFiles" => image_files} = restaurant)
+       when is_list(image_files) and length(image_files) > 0 do
     require Logger
 
     Logger.debug(
-      "[WeekPl.Transformer] ✅ Found imageFiles for #{restaurant["name"]}, count: #{length(restaurant["imageFiles"])}"
+      "[WeekPl.Transformer] ✅ Found imageFiles for #{restaurant["name"]}, count: #{length(image_files)}"
     )
 
+    # Search through all images to find the first valid URL
     # Priority order: profile (900px) > preview (500px) > original (1600px) > thumbnail (300px)
     image_url =
-      first_image["profile"] || first_image["preview"] || first_image["original"] ||
-        first_image["thumbnail"]
+      image_files
+      |> Enum.find_value(fn image ->
+        image["profile"] || image["preview"] || image["original"] || image["thumbnail"]
+      end)
 
     Logger.debug(
       "[WeekPl.Transformer] 📸 Extracted image URL: #{String.slice(image_url || "nil", 0..60)}"
