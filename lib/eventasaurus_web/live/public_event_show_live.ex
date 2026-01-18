@@ -1192,6 +1192,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   # Build occurrence maps from JSONB dates for direct display
   defp build_occurrences_from_jsonb(event, dates) do
     venue = event.venue
+    # Get timezone for creating local DateTimes
+    timezone = get_event_timezone(event)
 
     Enum.map(dates, fn date_entry ->
       date_str = date_entry["date"]
@@ -1200,7 +1202,17 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       datetime =
         with {:ok, date} <- Date.from_iso8601(date_str),
              {:ok, time} <- parse_time_string(time_str) do
-          DateTime.new!(date, time, "Etc/UTC")
+          # IMPORTANT: Times in occurrences.dates[].time are LOCAL times, NOT UTC.
+          # See docs/SCRAPER_QUALITY_GUIDELINES.md - "Always store times in event's local timezone"
+          # Handle DST transitions gracefully:
+          # - {:ambiguous, dt1, dt2} = fall-back (DST ends, pick earlier)
+          # - {:gap, before, after} = spring-forward (DST starts, use after)
+          case DateTime.new(date, time, timezone) do
+            {:ok, dt} -> dt
+            {:ambiguous, dt, _later} -> dt
+            {:gap, _before, after_dt} -> after_dt
+            {:error, _} -> nil
+          end
         else
           _ -> nil
         end

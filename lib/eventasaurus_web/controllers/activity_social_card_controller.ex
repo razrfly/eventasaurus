@@ -75,23 +75,37 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
 
   defp parse_occurrences(%{occurrences: %{"dates" => dates}} = event) when is_list(dates) do
     timezone = get_event_timezone(event)
-    now = DateTime.utc_now()
+
+    # Use local time for comparison since occurrence times are local
+    # Handle timezone errors gracefully
+    now =
+      case DateTime.now(timezone) do
+        {:ok, dt} -> dt
+        {:error, _} -> DateTime.utc_now()
+      end
 
     dates
     |> Enum.map(fn date_info ->
       with {:ok, date} <- Date.from_iso8601(date_info["date"]),
            {:ok, time} <- parse_time(date_info["time"]) do
-        # Create datetime in UTC (as stored in database)
-        utc_datetime = DateTime.new!(date, time, "Etc/UTC")
+        # IMPORTANT: Times in occurrences.dates are LOCAL times, NOT UTC.
+        # See docs/SCRAPER_QUALITY_GUIDELINES.md - "Always store times in event's local timezone"
+        # Handle DST transitions gracefully:
+        # - {:ambiguous, dt1, dt2} = fall-back (DST ends, pick earlier)
+        # - {:gap, before, after} = spring-forward (DST starts, use after)
+        case DateTime.new(date, time, timezone) do
+          {:ok, dt} ->
+            %{datetime: dt, date: date, time: time}
 
-        # Convert to local timezone for display
-        local_datetime = DateTime.shift_zone!(utc_datetime, timezone)
+          {:ambiguous, dt, _later} ->
+            %{datetime: dt, date: date, time: time}
 
-        %{
-          datetime: local_datetime,
-          date: DateTime.to_date(local_datetime),
-          time: DateTime.to_time(local_datetime)
-        }
+          {:gap, _before, after_dt} ->
+            %{datetime: after_dt, date: date, time: time}
+
+          {:error, _} ->
+            nil
+        end
       else
         _ -> nil
       end
@@ -142,7 +156,13 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
 
     {:ok, time} = parse_time(time_str)
 
-    now = DateTime.now!(tz)
+    # Handle timezone errors gracefully
+    now =
+      case DateTime.now(tz) do
+        {:ok, dt} -> dt
+        {:error, _} -> DateTime.utc_now()
+      end
+
     today = DateTime.to_date(now)
 
     target_weekdays =
@@ -157,14 +177,21 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
       |> Enum.map(&Date.add(today, &1))
       |> Enum.filter(fn date -> Date.day_of_week(date) in target_weekdays end)
       |> Enum.take(count)
-      |> Enum.map(fn date ->
-        dt = DateTime.new!(date, time, tz)
+      |> Enum.flat_map(fn date ->
+        # Handle DST transitions gracefully
+        case DateTime.new(date, time, tz) do
+          {:ok, dt} ->
+            [%{datetime: dt, date: date, time: time}]
 
-        %{
-          datetime: dt,
-          date: date,
-          time: time
-        }
+          {:ambiguous, dt, _later} ->
+            [%{datetime: dt, date: date, time: time}]
+
+          {:gap, _before, after_dt} ->
+            [%{datetime: after_dt, date: date, time: time}]
+
+          {:error, _} ->
+            []
+        end
       end)
       |> Enum.filter(fn occ -> DateTime.compare(occ.datetime, now) in [:gt, :eq] end)
     end

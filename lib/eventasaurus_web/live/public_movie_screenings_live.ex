@@ -956,20 +956,33 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     all_occurrences =
       events
       |> Enum.flat_map(fn event ->
+        # Get timezone for this event based on venue location
+        timezone = get_event_timezone(event)
+
         case get_in(event.occurrences, ["dates"]) do
           dates when is_list(dates) ->
             dates
             |> Enum.map(fn date_info ->
               with {:ok, date} <- Date.from_iso8601(date_info["date"]),
                    {:ok, time} <- parse_time_string(date_info["time"]) do
-                # Create datetime in UTC
-                utc_datetime = DateTime.new!(date, time, "Etc/UTC")
+                # IMPORTANT: Times in occurrences.dates[].time are LOCAL times, NOT UTC.
+                # See docs/SCRAPER_QUALITY_GUIDELINES.md - "Always store times in event's local timezone"
+                # Handle DST transitions gracefully:
+                # - {:ambiguous, dt1, dt2} = fall-back (DST ends, pick earlier)
+                # - {:gap, before, after} = spring-forward (DST starts, use after)
+                case DateTime.new(date, time, timezone) do
+                  {:ok, dt} ->
+                    %{date: date, datetime: dt, label: date_info["label"]}
 
-                %{
-                  date: date,
-                  datetime: utc_datetime,
-                  label: date_info["label"]
-                }
+                  {:ambiguous, dt, _later} ->
+                    %{date: date, datetime: dt, label: date_info["label"]}
+
+                  {:gap, _before, after_dt} ->
+                    %{date: date, datetime: after_dt, label: date_info["label"]}
+
+                  {:error, _} ->
+                    nil
+                end
               else
                 _ -> nil
               end
@@ -1288,6 +1301,17 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   defp stringify_keys(map) when is_map(map) do
     Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
+
+  # Get timezone for event based on venue location
+  defp get_event_timezone(%{venue: %{latitude: lat, longitude: lng}})
+       when not is_nil(lat) and not is_nil(lng) do
+    case TzWorld.timezone_at({lng, lat}) do
+      {:ok, tz} -> tz
+      _ -> "Europe/Warsaw"
+    end
+  end
+
+  defp get_event_timezone(_), do: "Europe/Warsaw"
 
   # Enrich movie struct with TMDB metadata for JSON-LD generation
   # This populates the virtual tmdb_metadata field with credits data
