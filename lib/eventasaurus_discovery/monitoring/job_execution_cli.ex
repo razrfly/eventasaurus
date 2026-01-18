@@ -214,8 +214,8 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
 
   defp print_summary(executions) do
     total = length(executions)
-    successes = Enum.count(executions, &(&1.state == :success))
-    failures = Enum.count(executions, &(&1.state == :failure))
+    successes = Enum.count(executions, &(&1.state == "success"))
+    failures = Enum.count(executions, &(&1.state == "failure"))
     success_rate = if total > 0, do: Float.round(successes / total * 100, 1), else: 0.0
 
     avg_duration =
@@ -238,8 +238,8 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
 
   defp print_statistics(executions, hours) do
     total = length(executions)
-    successes = Enum.count(executions, &(&1.state == :success))
-    failures = Enum.count(executions, &(&1.state == :failure))
+    successes = Enum.count(executions, &(&1.state == "success"))
+    failures = Enum.count(executions, &(&1.state == "failure"))
     success_rate = if total > 0, do: Float.round(successes / total * 100, 1), else: 0.0
 
     avg_duration =
@@ -256,7 +256,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
       executions
       |> Enum.group_by(&extract_source(&1.worker))
       |> Enum.map(fn {source, execs} ->
-        source_successes = Enum.count(execs, &(&1.state == :success))
+        source_successes = Enum.count(execs, &(&1.state == "success"))
         source_total = length(execs)
 
         source_rate =
@@ -340,10 +340,10 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     |> NaiveDateTime.to_string()
   end
 
-  defp colorize_state(:success), do: IO.ANSI.green() <> "success" <> IO.ANSI.reset()
-  defp colorize_state(:failure), do: IO.ANSI.red() <> "failure" <> IO.ANSI.reset()
-  defp colorize_state(:cancelled), do: IO.ANSI.yellow() <> "cancelled" <> IO.ANSI.reset()
-  defp colorize_state(:discarded), do: IO.ANSI.magenta() <> "discarded" <> IO.ANSI.reset()
+  defp colorize_state("success"), do: IO.ANSI.green() <> "success" <> IO.ANSI.reset()
+  defp colorize_state("failure"), do: IO.ANSI.red() <> "failure" <> IO.ANSI.reset()
+  defp colorize_state("cancelled"), do: IO.ANSI.yellow() <> "cancelled" <> IO.ANSI.reset()
+  defp colorize_state("discarded"), do: IO.ANSI.magenta() <> "discarded" <> IO.ANSI.reset()
   defp colorize_state(other), do: "#{other}"
 
   defp pad(string, width) do
