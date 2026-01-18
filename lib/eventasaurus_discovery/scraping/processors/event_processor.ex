@@ -854,8 +854,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     # Only proceed if image caching is enabled for this source
     if EventImageCaching.enabled?(source_slug) do
       # Get raw data for metadata extraction
+      # Check all standard patterns: raw_data, raw_event_data, and _raw_upstream (from metadata)
+      metadata = data[:metadata] || data["metadata"] || %{}
+
       raw_data =
         data[:raw_data] || data["raw_data"] || data[:raw_event_data] || data["raw_event_data"] ||
+          metadata["_raw_upstream"] || metadata[:_raw_upstream] ||
+          metadata["raw_data"] || metadata[:raw_data] ||
+          metadata["raw_event_data"] || metadata[:raw_event_data] ||
           %{}
 
       # Try multi-image caching first for supported sources

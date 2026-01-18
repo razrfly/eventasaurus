@@ -129,7 +129,9 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
         "phone" => venue_data[:phone],
         "description" => venue_data[:description],
         "schedule_text" => venue_data[:schedule],
-        "source_url" => venue_data["venue_url"]
+        "source_url" => venue_data["venue_url"],
+        # Raw upstream data for debugging and future processing
+        "_raw_upstream" => venue_data
       }
     }
 
