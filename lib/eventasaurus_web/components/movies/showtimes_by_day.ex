@@ -70,7 +70,7 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
 
           <div class="space-y-4">
             <%= for {venue, showtimes} <- @venues_for_day do %>
-              <.venue_card venue={venue} showtimes={showtimes} variant={@variant} />
+              <.venue_card venue={venue} showtimes={showtimes} variant={@variant} selected_day={@selected_day} />
             <% end %>
           </div>
         <% end %>
@@ -179,7 +179,7 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
       <!-- Time Chips -->
       <div class="flex flex-wrap gap-2">
         <%= for showtime <- @showtimes do %>
-          <.time_chip showtime={showtime} variant={@variant} />
+          <.time_chip showtime={showtime} variant={@variant} selected_day={@selected_day} />
         <% end %>
       </div>
     </div>
@@ -187,20 +187,34 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
   end
 
   # Individual time chip linking to the showtime
+  # Includes the selected day in the URL path so the activity page shows the correct date
   defp time_chip(assigns) do
+    # Build URL with date slug to preserve navigation context
+    # Format: /activities/slug/jan-22 (using the activity page's date format)
+    date_slug = date_to_url_slug(assigns.selected_day)
+    url = ~p"/activities/#{assigns.showtime.slug}/#{date_slug}"
+
+    assigns = assign(assigns, :url, url)
+
     ~H"""
     <.link
-      navigate={~p"/activities/#{@showtime.slug}"}
+      navigate={@url}
       class={time_chip_classes(@variant)}
     >
       <span class="font-bold"><%= format_time(@showtime.datetime) %></span>
-      <%= if @showtime.label do %>
+      <%= if format = extract_format(@showtime.label) do %>
         <span class={time_chip_label_classes(@variant)}>
-          <%= extract_format(@showtime.label) %>
+          <%= format %>
         </span>
       <% end %>
     </.link>
     """
+  end
+
+  # Convert date to URL slug format matching PublicEventShowLive
+  defp date_to_url_slug(%Date{} = date) do
+    month_abbr = Calendar.strftime(date, "%b") |> String.downcase()
+    "#{month_abbr}-#{date.day}"
   end
 
   # Empty state when no showtimes for selected day
@@ -301,6 +315,8 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
   end
 
   # Extract the primary format from a label like "IMAX 2D Napisy PL"
+  # Returns nil if no recognized format is found (we don't want to show
+  # redundant venue/title info that's already visible in the context)
   defp extract_format(label) when is_binary(label) do
     label_lower = String.downcase(label)
 
@@ -309,7 +325,7 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
       String.contains?(label_lower, "4dx") -> "4DX"
       String.contains?(label_lower, "3d") -> "3D"
       String.contains?(label_lower, "2d") -> "2D"
-      true -> label
+      true -> nil
     end
   end
 
