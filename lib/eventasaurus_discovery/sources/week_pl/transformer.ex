@@ -16,6 +16,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Sources.WeekPl.Helpers.TimeConverter
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
 
   @doc """
   Transform a restaurant time slot into an event occurrence.
@@ -91,8 +92,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
         facebook_url: restaurant["facebookUrl"],
         instagram_url: restaurant["instagramUrl"],
         menu_file_url: restaurant["menuFileUrl"],
-        # Raw upstream data for debugging
-        _raw_upstream: restaurant
+        # Raw upstream data for debugging (sanitized for JSON)
+        _raw_upstream: JsonSanitizer.sanitize(restaurant)
       }
     }
   end

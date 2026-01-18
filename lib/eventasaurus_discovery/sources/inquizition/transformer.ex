@@ -31,6 +31,7 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Transformer do
 
   alias EventasaurusDiscovery.Helpers.CityResolver
   alias EventasaurusDiscovery.Sources.Inquizition.Helpers.ScheduleHelper
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
 
   @doc """
   Transform venue data to unified event format.
@@ -125,8 +126,8 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Transformer do
         schedule_inferred: schedule_inferred,
         website: venue_data[:website],
         email: venue_data[:email],
-        # Raw upstream data for debugging
-        _raw_upstream: venue_data
+        # Raw upstream data for debugging (sanitized for JSON)
+        _raw_upstream: JsonSanitizer.sanitize(venue_data)
       },
 
       # Category

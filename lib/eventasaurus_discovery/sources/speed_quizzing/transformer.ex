@@ -29,6 +29,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
 
   alias EventasaurusDiscovery.Helpers.CityResolver
   alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
 
   @doc """
   Transform venue data to unified event format.
@@ -131,8 +132,8 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
         day_of_week: venue_data.day_of_week,
         performer: venue_data.performer,
         source_id: source_id,
-        # Raw upstream data for debugging
-        _raw_upstream: venue_data
+        # Raw upstream data for debugging (sanitized for JSON)
+        _raw_upstream: JsonSanitizer.sanitize(venue_data)
       },
 
       # Category
