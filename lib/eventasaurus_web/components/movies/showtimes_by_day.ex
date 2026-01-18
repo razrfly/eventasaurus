@@ -1,13 +1,13 @@
 defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
   @moduledoc """
-  Component for displaying movie showtimes organized by day.
+  Component for displaying movie showtimes organized by day with venue grouping.
 
   Shows a horizontal day picker at the top with showtime counts per day,
-  followed by chronologically sorted showtime cards for the selected day.
+  followed by venue cards containing time chips for the selected day.
 
   ## Props
 
-  - `showtimes_by_day` - Map of Date => list of showtime maps (required)
+  - `showtimes_by_day` - Map of Date => list of {venue, showtimes} tuples (required)
   - `available_days` - Sorted list of dates with showtimes (required)
   - `selected_day` - Currently selected Date (required)
   - `on_select_day` - Event name for day selection (default: "select_day")
@@ -27,11 +27,20 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
   attr :variant, :atom, default: :card
 
   def showtimes_by_day(assigns) do
-    # Get showtimes for selected day
-    selected_showtimes =
+    # Get venues with showtimes for selected day
+    # Data structure: [{venue, [showtimes]}, ...]
+    venues_for_day =
       Map.get(assigns.showtimes_by_day, assigns.selected_day, [])
 
-    assigns = assign(assigns, :selected_showtimes, selected_showtimes)
+    # Count total showtimes for the day
+    total_showtimes =
+      venues_for_day
+      |> Enum.reduce(0, fn {_venue, showtimes}, acc -> acc + length(showtimes) end)
+
+    assigns =
+      assigns
+      |> assign(:venues_for_day, venues_for_day)
+      |> assign(:total_showtimes, total_showtimes)
 
     ~H"""
     <div class="space-y-6">
@@ -44,9 +53,9 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
         target={@target}
       />
 
-      <!-- Showtimes for Selected Day -->
+      <!-- Venues with Showtimes for Selected Day -->
       <div>
-        <%= if @selected_showtimes == [] do %>
+        <%= if @venues_for_day == [] do %>
           <.empty_day_state />
         <% else %>
           <div class="mb-4">
@@ -54,14 +63,14 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
               <Heroicons.clock class="w-5 h-5 inline mr-2 text-blue-500" />
               <%= format_day_header(@selected_day) %>
               <span class="text-sm font-normal text-gray-500 ml-2">
-                (<%= ngettext("1 showtime", "%{count} showtimes", length(@selected_showtimes)) %>)
+                (<%= ngettext("1 showtime", "%{count} showtimes", @total_showtimes) %>)
               </span>
             </h3>
           </div>
 
-          <div class="space-y-3">
-            <%= for showtime <- @selected_showtimes do %>
-              <.showtime_card showtime={showtime} variant={@variant} />
+          <div class="space-y-4">
+            <%= for {venue, showtimes} <- @venues_for_day do %>
+              <.venue_card venue={venue} showtimes={showtimes} variant={@variant} />
             <% end %>
           </div>
         <% end %>
@@ -83,7 +92,7 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
           <.day_tab
             date={day}
             selected={day == @selected_day}
-            count={length(Map.get(@showtimes_by_day, day, []))}
+            count={count_showtimes_for_day(@showtimes_by_day, day)}
             on_select_day={@on_select_day}
             target={@target}
           />
@@ -91,6 +100,15 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
       </div>
     </div>
     """
+  end
+
+  # Count total showtimes for a day (across all venues)
+  defp count_showtimes_for_day(showtimes_by_day, day) do
+    venues_for_day = Map.get(showtimes_by_day, day, [])
+
+    Enum.reduce(venues_for_day, 0, fn {_venue, showtimes}, acc ->
+      acc + length(showtimes)
+    end)
   end
 
   # Individual day tab
@@ -131,56 +149,56 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
     """
   end
 
-  # Individual showtime card
-  defp showtime_card(assigns) do
-    # Defensive access for venue data - Map.get works on both maps and structs
-    venue = assigns.showtime[:venue]
+  # Venue card with time chips
+  defp venue_card(assigns) do
+    venue = assigns.venue
+    venue_name = (venue && Map.get(venue, :name)) || gettext("Unknown venue")
+    venue_address = venue && Map.get(venue, :address)
 
     assigns =
       assigns
-      |> assign(:venue_name, (venue && Map.get(venue, :name)) || gettext("Unknown venue"))
-      |> assign(:venue_address, venue && Map.get(venue, :address))
+      |> assign(:venue_name, venue_name)
+      |> assign(:venue_address, venue_address)
 
+    ~H"""
+    <div class={venue_card_classes(@variant)}>
+      <!-- Venue Header -->
+      <div class="mb-3">
+        <h4 class={venue_name_classes(@variant)}>
+          <Heroicons.building_storefront class="w-4 h-4 inline mr-2 text-blue-500" />
+          <%= @venue_name %>
+        </h4>
+        <%= if @venue_address do %>
+          <p class={venue_address_classes(@variant)}>
+            <Heroicons.map_pin class="w-3 h-3 inline mr-1 flex-shrink-0" />
+            <%= truncate_address(@venue_address, 50) %>
+          </p>
+        <% end %>
+      </div>
+
+      <!-- Time Chips -->
+      <div class="flex flex-wrap gap-2">
+        <%= for showtime <- @showtimes do %>
+          <.time_chip showtime={showtime} variant={@variant} />
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  # Individual time chip linking to the showtime
+  defp time_chip(assigns) do
     ~H"""
     <.link
       navigate={~p"/activities/#{@showtime.slug}"}
-      class={showtime_card_classes(@variant)}
+      class={time_chip_classes(@variant)}
     >
-      <div class="flex items-center justify-between">
-        <div class="flex items-center space-x-4">
-          <!-- Time -->
-          <div class="flex-shrink-0">
-            <span class={time_display_classes(@variant)}>
-              <%= format_time(@showtime.datetime) %>
-            </span>
-          </div>
-
-          <!-- Venue Info -->
-          <div class="min-w-0">
-            <h4 class={venue_name_classes(@variant)}>
-              <%= @venue_name %>
-            </h4>
-            <%= if @venue_address do %>
-              <p class={venue_address_classes(@variant)}>
-                <Heroicons.map_pin class="w-3 h-3 inline mr-1 flex-shrink-0" />
-                <%= truncate_address(@venue_address, 40) %>
-              </p>
-            <% end %>
-          </div>
-        </div>
-
-        <div class="flex items-center space-x-3">
-          <!-- Format Badge -->
-          <%= if @showtime.label do %>
-            <span class={format_badge_classes(@variant)}>
-              <%= extract_format(@showtime.label) %>
-            </span>
-          <% end %>
-
-          <!-- Arrow -->
-          <Heroicons.chevron_right class={arrow_classes(@variant)} />
-        </div>
-      </div>
+      <span class="font-bold"><%= format_time(@showtime.datetime) %></span>
+      <%= if @showtime.label do %>
+        <span class={time_chip_label_classes(@variant)}>
+          <%= extract_format(@showtime.label) %>
+        </span>
+      <% end %>
     </.link>
     """
   end
@@ -203,53 +221,43 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
   defp day_header_classes(:dark), do: "text-lg font-semibold text-white"
   defp day_header_classes(_), do: day_header_classes(:card)
 
-  defp showtime_card_classes(:card) do
-    "block p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all group"
+  defp venue_card_classes(:card) do
+    "p-4 bg-white border border-gray-200 rounded-xl"
   end
 
-  defp showtime_card_classes(:dark) do
-    "block p-4 bg-white/5 border border-white/10 rounded-xl hover:border-white/30 hover:bg-white/10 transition-all group"
+  defp venue_card_classes(:dark) do
+    "p-4 bg-white/5 border border-white/10 rounded-xl"
   end
 
-  defp showtime_card_classes(_), do: showtime_card_classes(:card)
-
-  defp time_display_classes(:card) do
-    "text-xl font-bold text-blue-600 group-hover:text-blue-700"
-  end
-
-  defp time_display_classes(:dark) do
-    "text-xl font-bold text-blue-400 group-hover:text-blue-300"
-  end
-
-  defp time_display_classes(_), do: time_display_classes(:card)
+  defp venue_card_classes(_), do: venue_card_classes(:card)
 
   defp venue_name_classes(:card) do
-    "font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate"
+    "font-semibold text-gray-900"
   end
 
   defp venue_name_classes(:dark) do
-    "font-semibold text-white group-hover:text-blue-400 transition-colors truncate"
+    "font-semibold text-white"
   end
 
   defp venue_name_classes(_), do: venue_name_classes(:card)
 
-  defp venue_address_classes(:card), do: "text-xs text-gray-500 truncate mt-0.5"
-  defp venue_address_classes(:dark), do: "text-xs text-gray-400 truncate mt-0.5"
+  defp venue_address_classes(:card), do: "text-xs text-gray-500 mt-1"
+  defp venue_address_classes(:dark), do: "text-xs text-gray-400 mt-1"
   defp venue_address_classes(_), do: venue_address_classes(:card)
 
-  defp format_badge_classes(:card) do
-    "px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs font-semibold border border-gray-200"
+  defp time_chip_classes(:card) do
+    "inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 hover:text-blue-800 transition-colors text-sm border border-blue-200"
   end
 
-  defp format_badge_classes(:dark) do
-    "px-2.5 py-1 bg-white/10 text-gray-300 rounded-md text-xs font-semibold border border-white/10"
+  defp time_chip_classes(:dark) do
+    "inline-flex items-center gap-1.5 px-3 py-2 bg-blue-900/30 text-blue-300 rounded-lg hover:bg-blue-900/50 hover:text-blue-200 transition-colors text-sm border border-blue-700/50"
   end
 
-  defp format_badge_classes(_), do: format_badge_classes(:card)
+  defp time_chip_classes(_), do: time_chip_classes(:card)
 
-  defp arrow_classes(:card), do: "w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors"
-  defp arrow_classes(:dark), do: "w-5 h-5 text-gray-500 group-hover:text-white transition-colors"
-  defp arrow_classes(_), do: arrow_classes(:card)
+  defp time_chip_label_classes(:card), do: "text-xs text-blue-500 font-medium"
+  defp time_chip_label_classes(:dark), do: "text-xs text-blue-400 font-medium"
+  defp time_chip_label_classes(_), do: time_chip_label_classes(:card)
 
   # Helper functions
 
