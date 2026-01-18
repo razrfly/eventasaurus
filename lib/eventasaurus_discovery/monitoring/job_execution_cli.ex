@@ -103,7 +103,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
 
     query =
       from(j in JobExecutionSummary,
-        where: j.state == :failure,
+        where: j.state == "failure",
         order_by: [desc: j.inserted_at],
         limit: ^limit
       )

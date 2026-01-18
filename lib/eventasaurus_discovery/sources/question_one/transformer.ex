@@ -132,7 +132,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
         recurring: true,
         frequency: "weekly",
         # Raw upstream data for debugging
-        _raw_upstream: Map.from_struct(venue_data)
+        _raw_upstream: venue_data
       },
 
       # Category
