@@ -8,6 +8,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Transformer do
 
   require Logger
 
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
+
   @doc """
   Transforms venue data into a PublicEvent map with recurrence_rule.
 
@@ -36,8 +38,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Transformer do
           "phone" => venue_data[:phone],
           "description" => venue_data[:description],
           "schedule_text" => venue_data[:schedule],
-          # Raw upstream data for debugging
-          "_raw_upstream" => venue_data
+          # Raw upstream data for debugging (sanitized for JSON)
+          "_raw_upstream" => JsonSanitizer.sanitize(venue_data)
         }
       }
 

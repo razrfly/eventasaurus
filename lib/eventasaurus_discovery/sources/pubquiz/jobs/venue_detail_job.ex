@@ -24,6 +24,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
     Transformer
   }
 
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
     venue_url = args["venue_url"]
@@ -130,8 +132,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
         "description" => venue_data[:description],
         "schedule_text" => venue_data[:schedule],
         "source_url" => venue_data["venue_url"],
-        # Raw upstream data for debugging and future processing
-        "_raw_upstream" => venue_data
+        # Raw upstream data for debugging (sanitized for JSON)
+        "_raw_upstream" => JsonSanitizer.sanitize(venue_data)
       }
     }
 
