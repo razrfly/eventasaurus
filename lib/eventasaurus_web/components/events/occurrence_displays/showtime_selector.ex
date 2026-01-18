@@ -52,6 +52,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
               date={date}
               selected={@selected_date == date}
               has_showtimes={Map.has_key?(@showtimes_by_date, date)}
+              count={count_showtimes_for_date(@showtimes_by_date, date)}
             />
           <% end %>
         </div>
@@ -86,6 +87,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
   attr :date, Date, required: true
   attr :selected, :boolean, default: false
   attr :has_showtimes, :boolean, default: true
+  attr :count, :integer, default: 0
 
   defp day_tab(assigns) do
     ~H"""
@@ -94,7 +96,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
       phx-value-date={Date.to_iso8601(@date)}
       disabled={!@has_showtimes}
       class={[
-        "flex-shrink-0 px-4 py-3 border-b-2 font-medium text-sm transition-colors whitespace-nowrap",
+        "flex-shrink-0 flex flex-col items-center px-4 py-3 border-b-2 font-medium text-sm transition-colors whitespace-nowrap min-w-[70px]",
         if(@selected,
           do: "border-blue-600 text-blue-600",
           else: "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
@@ -102,7 +104,13 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
         if(!@has_showtimes, do: "opacity-50 cursor-not-allowed")
       ]}
     >
-      <%= day_label(@date) %>
+      <span><%= day_label(@date) %></span>
+      <span class={[
+        "text-xs mt-0.5",
+        if(@selected, do: "text-blue-500", else: "text-gray-400")
+      ]}>
+        <%= @count %> <%= if(@count == 1, do: gettext("show"), else: gettext("shows")) %>
+      </span>
     </button>
     """
   end
@@ -178,6 +186,14 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
       fn {occurrence, _index} -> occurrence.date end,
       fn {occurrence, index} -> Map.put(occurrence, :index, index) end
     )
+  end
+
+  # Count showtimes for a specific date
+  defp count_showtimes_for_date(showtimes_by_date, date) do
+    case Map.get(showtimes_by_date, date) do
+      nil -> 0
+      showtimes -> length(showtimes)
+    end
   end
 
   defp get_available_dates(showtimes_by_date) do
