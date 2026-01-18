@@ -1,5 +1,11 @@
-// PostHog Analytics Manager with performance optimizations
-// Extracted from app.js for better organization
+// PostHog Analytics Manager with Two-Tier Tracking
+//
+// ARCHITECTURE:
+// - Tier 1 (Public/Anonymous): Cookieless mode, no consent required, GDPR compliant
+// - Tier 2 (Authenticated): Full tracking with cookies, consent via Terms of Service
+//
+// This enables tracking of ALL visitors (9,000+/day) while respecting privacy.
+// See: https://posthog.com/tutorials/cookieless-tracking
 
 export class PostHogManager {
   constructor() {
@@ -10,214 +16,272 @@ export class PostHogManager {
     this.loadAttempts = 0;
     this.maxLoadAttempts = 3;
     this.retryDelay = 2000;
-    this.privacyConsent = this.getPrivacyConsent();
     this.isOnline = navigator.onLine;
-    
+
+    // Determine tracking tier based on authentication status
+    this.isAuthenticated = !!window.currentUser;
+    this.trackingTier = this.isAuthenticated ? 'authenticated' : 'anonymous';
+
+    // Enhanced features consent (session replay, etc.) - only for authenticated users
+    this.enhancedConsent = this.getEnhancedConsent();
+
     // Listen for online/offline events
     window.addEventListener('online', () => {
       this.isOnline = true;
       this.processQueue();
     });
-    
+
     window.addEventListener('offline', () => {
       this.isOnline = false;
     });
-    
-    // Privacy event listener
+
+    // Listen for enhanced consent changes (session replay opt-in)
+    window.addEventListener('posthog:enhanced-consent', (e) => {
+      this.updateEnhancedConsent(e.detail.consent);
+    });
+
+    // Legacy privacy consent listener for backwards compatibility
     window.addEventListener('posthog:privacy-consent', (e) => {
-      this.updatePrivacyConsent(e.detail.consent);
+      // Map old consent format to new enhanced consent
+      if (e.detail.consent) {
+        this.updateEnhancedConsent({
+          sessionReplay: e.detail.consent.analytics,
+          marketing: e.detail.consent.marketing
+        });
+      }
     });
   }
-  
+
   async init() {
-    if (this.isLoaded || this.isLoading || !this.privacyConsent) {
+    if (this.isLoaded || this.isLoading) {
       console.log('PostHog init skipped:', {
         isLoaded: this.isLoaded,
-        isLoading: this.isLoading,
-        privacyConsent: this.privacyConsent
+        isLoading: this.isLoading
       });
       return;
     }
-    
+
     this.isLoading = true;
-    
+
     try {
       // Get PostHog config from window variables set by the server
       const posthogApiKey = window.POSTHOG_API_KEY;
       const posthogHost = window.POSTHOG_HOST || 'https://eu.i.posthog.com';
-      
-      // Only log initialization attempt if API key is present
-      if (posthogApiKey) {
-        console.log('PostHog initialization attempt:', {
-          apiKeyPresent: !!posthogApiKey,
-          apiKeyLength: posthogApiKey ? posthogApiKey.length : 0,
-          host: posthogHost,
-          privacyConsent: this.privacyConsent,
-          userAgent: navigator.userAgent,
-          isOnline: this.isOnline,
-          protocol: window.location.protocol,
-          domain: window.location.hostname
-        });
-      }
-      
+
       if (!posthogApiKey) {
         // Silently disable analytics when no API key is present
         this.isLoading = false;
         return;
       }
-      
-      if (!this.privacyConsent.analytics) {
-        console.log('PostHog disabled by privacy consent - analytics opt-out');
-        this.isLoading = false;
-        return;
-      }
-      
-      console.log('Attempting to load PostHog module...');
-      
+
+      // Re-check authentication status (may have changed)
+      this.isAuthenticated = !!window.currentUser;
+      this.trackingTier = this.isAuthenticated ? 'authenticated' : 'anonymous';
+
+      console.log('PostHog initialization:', {
+        trackingTier: this.trackingTier,
+        isAuthenticated: this.isAuthenticated,
+        cookielessMode: !this.isAuthenticated,
+        host: posthogHost
+      });
+
       // Dynamic import to prevent blocking page render
       const { default: posthog } = await import('posthog-js');
-      
-      console.log('PostHog module loaded, initializing with config...');
-      
-      // Initialize with privacy-focused settings
-      posthog.init(posthogApiKey, {
-        api_host: posthogHost,
-        
-        // Privacy settings
-        disable_session_recording: !this.privacyConsent.analytics,
-        // Storage/persistence aligned with consent
-        disable_persistence: !this.privacyConsent.cookies,
-        persistence: this.privacyConsent.cookies ? 'localStorage+cookie' : 'memory',
-        respect_dnt: true,
-        opt_out_capturing_by_default: !this.privacyConsent.analytics,
-        
-        // Performance settings
-        capture_pageview: this.privacyConsent.analytics,
-        capture_pageleave: this.privacyConsent.analytics,
-        
-        // Disable autocapture to prevent duplicate tracking with our custom events
-        // We track specific poll interactions manually for better control
-        autocapture: false,
-        loaded: (posthogInstance) => {
-          this.onPostHogLoaded(posthogInstance);
-        },
-        
-        // Error handling
-        on_request_error: (error) => {
-          console.warn('PostHog request failed:', error);
-        },
-        
-        // Batch settings for performance (using correct PostHog config keys)
-        request_batching: true,
-        request_queue_config: { 
-          flush_interval_ms: 5000 
-        },
-        
-        // Cross-domain settings
-        cross_subdomain_cookie: false,
-        secure_cookie: window.location.protocol === 'https:',
-        
-        // Advanced privacy
-        mask_all_element_attributes: !this.privacyConsent.analytics,
-        mask_all_text: !this.privacyConsent.analytics
+
+      // Build configuration based on tracking tier
+      const config = this.buildConfig(posthogApiKey, posthogHost);
+
+      console.log('PostHog config:', {
+        cookieless_mode: config.cookieless_mode,
+        persistence: config.persistence,
+        capture_pageview: config.capture_pageview
       });
-      
+
+      // Initialize PostHog
+      posthog.init(posthogApiKey, config);
+
       this.posthog = posthog;
       this.isLoaded = true;
       this.isLoading = false;
       this.loadAttempts = 0;
-      
-      console.log('PostHog loaded successfully with privacy settings:', this.privacyConsent);
-      
+
+      console.log(`PostHog loaded successfully (${this.trackingTier} tier)`);
+
       // Process any queued events
       this.processQueue();
-      
+
     } catch (error) {
       console.error('Failed to load PostHog:', {
         error: error.message,
-        stack: error.stack,
-        name: error.name,
-        loadAttempts: this.loadAttempts,
-        isOnline: this.isOnline,
-        userAgent: navigator.userAgent
+        loadAttempts: this.loadAttempts
       });
       this.isLoading = false;
       this.loadAttempts++;
-      
+
       // Retry loading with exponential backoff
       if (this.loadAttempts < this.maxLoadAttempts) {
         const delay = this.retryDelay * Math.pow(2, this.loadAttempts - 1);
         console.log(`Retrying PostHog load in ${delay}ms (attempt ${this.loadAttempts}/${this.maxLoadAttempts})`);
         setTimeout(() => this.init(), delay);
       } else {
-        console.warn('PostHog failed to load after multiple attempts - dropping queued events');
+        console.warn('PostHog failed to load after multiple attempts');
         this.eventQueue = [];
       }
     }
   }
-  
+
+  /**
+   * Build PostHog configuration based on tracking tier
+   *
+   * Anonymous users: Cookieless mode (GDPR compliant, no consent needed)
+   * Authenticated users: Full tracking (consent via Terms of Service)
+   */
+  buildConfig(apiKey, host) {
+    const baseConfig = {
+      api_host: host,
+
+      // Always capture pageviews - this is the core metric we need
+      capture_pageview: true,
+      capture_pageleave: true,
+
+      // Disable autocapture to prevent noise - we track specific events manually
+      autocapture: false,
+
+      // Callback when loaded
+      loaded: (posthogInstance) => {
+        this.onPostHogLoaded(posthogInstance);
+      },
+
+      // Error handling
+      on_request_error: (error) => {
+        console.warn('PostHog request failed:', error);
+      },
+
+      // Batch settings for performance
+      request_batching: true,
+      request_queue_config: {
+        flush_interval_ms: 5000
+      },
+
+      // Security
+      secure_cookie: window.location.protocol === 'https:'
+    };
+
+    if (this.isAuthenticated) {
+      // TIER 2: Full tracking for authenticated users
+      // Consent is implied via Terms of Service at signup
+      return {
+        ...baseConfig,
+
+        // Full cookie-based tracking
+        cookieless_mode: 'off',
+        persistence: 'localStorage+cookie',
+        disable_persistence: false,
+
+        // Cross-subdomain tracking for authenticated users
+        cross_subdomain_cookie: true,
+
+        // Session replay based on enhanced consent
+        disable_session_recording: !this.enhancedConsent.sessionReplay,
+
+        // No need to opt out by default - they accepted ToS
+        opt_out_capturing_by_default: false,
+        respect_dnt: false, // Authenticated users have explicit consent
+
+        // Full data capture for authenticated users
+        mask_all_element_attributes: false,
+        mask_all_text: false
+      };
+    } else {
+      // TIER 1: Cookieless tracking for anonymous users
+      // GDPR compliant without requiring consent
+      return {
+        ...baseConfig,
+
+        // COOKIELESS MODE: Uses privacy-preserving hash instead of cookies
+        // This is GDPR compliant and doesn't require consent
+        // Note: Hash rotates daily, so cross-day tracking is limited
+        cookieless_mode: 'always',
+
+        // Memory-only persistence (no cookies or localStorage)
+        persistence: 'memory',
+        disable_persistence: true,
+
+        // No cross-subdomain tracking
+        cross_subdomain_cookie: false,
+
+        // Session replay disabled for anonymous users
+        disable_session_recording: true,
+
+        // Don't need to opt out - cookieless is privacy-preserving by design
+        opt_out_capturing_by_default: false,
+        respect_dnt: true, // Still respect DNT for anonymous
+
+        // Privacy-preserving defaults
+        mask_all_element_attributes: true,
+        mask_all_text: false // Keep text for content analytics
+      };
+    }
+  }
+
   onPostHogLoaded(posthogInstance) {
-    console.log('PostHog initialized successfully');
-    
-    // Identify user if authenticated and consent given
-    if (this.privacyConsent.analytics && window.currentUser && window.currentUser.id) {
+    console.log(`PostHog initialized (${this.trackingTier} tier)`);
+
+    // Register common properties for all events
+    posthogInstance.register({
+      tracking_tier: this.trackingTier,
+      is_authenticated: this.isAuthenticated
+    });
+
+    if (this.isAuthenticated && window.currentUser) {
+      // Identify authenticated users
       const identifyProps = {
         user_type: 'authenticated',
-        privacy_consent: this.privacyConsent
+        tracking_tier: 'authenticated'
       };
-      
-      // Only include hashed email if marketing consent is given and email exists
-      if (this.privacyConsent.marketing && window.currentUser.email) {
+
+      // Add email hash if marketing consent given
+      if (this.enhancedConsent.marketing && window.currentUser.email) {
         this.hashEmail(window.currentUser.email)
           .then(hashedEmail => {
             posthogInstance.identify(window.currentUser.id, {
               ...identifyProps,
-              email_hash: hashedEmail
+              email_hash: hashedEmail,
+              name: window.currentUser.name
             });
-            console.log('PostHog user identified with hashed email:', window.currentUser.id);
+            console.log('PostHog user identified:', window.currentUser.id);
           })
-          .catch(error => {
-            console.warn('Failed to hash email for PostHog:', error);
+          .catch(() => {
             // Fall back to identifying without email hash
             posthogInstance.identify(window.currentUser.id, identifyProps);
-            console.log('PostHog user identified (fallback, no email hash):', window.currentUser.id);
           });
       } else {
         posthogInstance.identify(window.currentUser.id, identifyProps);
-        console.log('PostHog user identified (no email):', window.currentUser.id);
+        console.log('PostHog user identified:', window.currentUser.id);
       }
-    } else if (this.privacyConsent.analytics) {
-      // Set properties for anonymous users
-      posthogInstance.register({
-        user_type: 'anonymous',
-        privacy_consent: this.privacyConsent
-      });
-      console.log('PostHog tracking anonymous user');
+    } else {
+      // Anonymous user - just register properties, no identification
+      // (cookieless mode doesn't support identify() anyway)
+      console.log('PostHog tracking anonymous visitor (cookieless)');
     }
   }
-  
+
   capture(event, properties = {}) {
-    // Add privacy and performance checks
-    if (!this.privacyConsent.analytics) {
-      console.log('PostHog event blocked by privacy settings:', event);
-      return;
-    }
-    
     const eventData = {
       event,
       properties: {
         ...properties,
         timestamp: Date.now(),
-        user_agent: navigator.userAgent,
-        is_online: this.isOnline,
-        privacy_consent: this.privacyConsent
+        tracking_tier: this.trackingTier,
+        is_authenticated: this.isAuthenticated,
+        is_online: this.isOnline
       }
     };
-    
+
     if (this.isLoaded && this.posthog && this.isOnline) {
       try {
         this.posthog.capture(event, eventData.properties);
-        console.log('PostHog event captured:', event, eventData.properties);
+        console.log('PostHog event captured:', event);
       } catch (error) {
         console.warn('Failed to capture PostHog event:', error);
         this.queueEvent(eventData);
@@ -227,98 +291,111 @@ export class PostHogManager {
       this.queueEvent(eventData);
     }
   }
-  
+
   queueEvent(eventData) {
     // Limit queue size to prevent memory issues
     if (this.eventQueue.length >= 100) {
       this.eventQueue.shift(); // Remove oldest event
     }
-    
+
     this.eventQueue.push(eventData);
     console.log(`Event queued (${this.eventQueue.length} total):`, eventData.event);
   }
-  
+
   processQueue() {
-    if (!this.isLoaded || !this.posthog || !this.isOnline || !this.privacyConsent.analytics) {
+    if (!this.isLoaded || !this.posthog || !this.isOnline) {
       return;
     }
-    
+
+    if (this.eventQueue.length === 0) return;
+
     console.log(`Processing ${this.eventQueue.length} queued events`);
-    
+
     const eventsToProcess = [...this.eventQueue];
     this.eventQueue = [];
-    
+
     eventsToProcess.forEach(eventData => {
       try {
         this.posthog.capture(eventData.event, eventData.properties);
       } catch (error) {
         console.warn('Failed to process queued event:', error);
-        // Re-queue if it fails
         this.queueEvent(eventData);
       }
     });
   }
-  
-  getPrivacyConsent() {
-    try {
-      const stored = localStorage.getItem('posthog_privacy_consent');
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (error) {
-      console.warn('Failed to read privacy consent from localStorage:', error);
-    }
-    
-    // Default privacy settings (conservative)
-    return {
-      analytics: false,
-      cookies: false,
-      marketing: false, // For hashed email and marketing communications
-      essential: true // Always allow essential functionality
+
+  /**
+   * Get enhanced feature consent (session replay, marketing)
+   * Only relevant for authenticated users
+   */
+  getEnhancedConsent() {
+    // Default: session replay enabled for authenticated users, marketing opt-in
+    const defaults = {
+      sessionReplay: this.isAuthenticated, // On by default for authenticated
+      marketing: false // Off by default
     };
-  }
-  
-  updatePrivacyConsent(consent) {
-    const prev = this.privacyConsent;
-    this.privacyConsent = { ...prev, ...consent };
-    const analyticsOn  = !prev.analytics && this.privacyConsent.analytics;
-    const analyticsOff =  prev.analytics && !this.privacyConsent.analytics;
-    const cookiesChanged = prev.cookies !== this.privacyConsent.cookies;
-    
+
     try {
-      localStorage.setItem('posthog_privacy_consent', JSON.stringify(this.privacyConsent));
-    } catch (error) {
-      console.warn('Failed to save privacy consent to localStorage:', error);
-    }
-    
-    console.log('Privacy consent updated:', this.privacyConsent);
-    
-    // Apply changes
-    if (analyticsOn) {
-      if (this.isLoaded && this.posthog?.opt_in_capturing) {
-        try { this.posthog.opt_in_capturing(); } catch {}
-      } else {
-        this.init();
+      const stored = localStorage.getItem('posthog_enhanced_consent');
+      if (stored) {
+        return { ...defaults, ...JSON.parse(stored) };
       }
-    } else if (analyticsOff && this.isLoaded) {
-      this.disable();
-    } 
-    // Don't chain with else-if so cookies + analytics changes both apply
-    if (this.isLoaded && cookiesChanged) {
-      // Reconfigure persistence based on consent
-      if (this.posthog?.set_config) {
-        const cfg = this.privacyConsent.cookies
-          ? { disable_persistence: false, persistence: 'localStorage+cookie' }
-          : { disable_persistence: true,  persistence: 'memory' };
-        try { this.posthog.set_config(cfg); } catch {}
-      } else {
-        // Fallback: re-init with new config
-        this.isLoaded = false;
-        this.init();
+
+      // Check legacy consent format for migration
+      const legacyConsent = localStorage.getItem('posthog_privacy_consent');
+      if (legacyConsent) {
+        const legacy = JSON.parse(legacyConsent);
+        return {
+          sessionReplay: legacy.analytics ?? defaults.sessionReplay,
+          marketing: legacy.marketing ?? defaults.marketing
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to read enhanced consent:', error);
+    }
+
+    return defaults;
+  }
+
+  /**
+   * Update enhanced feature consent
+   * Used for session replay opt-out, marketing preferences
+   */
+  updateEnhancedConsent(consent) {
+    const prev = this.enhancedConsent;
+    this.enhancedConsent = { ...prev, ...consent };
+
+    try {
+      localStorage.setItem('posthog_enhanced_consent', JSON.stringify(this.enhancedConsent));
+    } catch (error) {
+      console.warn('Failed to save enhanced consent:', error);
+    }
+
+    console.log('Enhanced consent updated:', this.enhancedConsent);
+
+    // Apply session replay changes if PostHog is loaded
+    if (this.isLoaded && this.posthog) {
+      const replayChanged = prev.sessionReplay !== this.enhancedConsent.sessionReplay;
+
+      if (replayChanged && this.isAuthenticated) {
+        if (this.enhancedConsent.sessionReplay) {
+          // Enable session replay
+          try {
+            this.posthog.startSessionRecording?.();
+          } catch {}
+        } else {
+          // Disable session replay
+          try {
+            this.posthog.stopSessionRecording?.();
+          } catch {}
+        }
       }
     }
   }
-  
+
+  /**
+   * Disable all tracking (emergency opt-out)
+   */
   disable() {
     if (this.posthog) {
       try {
@@ -329,53 +406,105 @@ export class PostHogManager {
       }
     }
   }
-  
-  // Helper to hash email for GDPR compliance
-  async hashEmail(email) {
-    // Check if email is valid
-    if (!email || typeof email !== 'string') {
-      throw new Error('Invalid email provided for hashing');
-    }
-    
-    // Check if crypto.subtle is available (requires HTTPS or localhost)
-    if (typeof crypto?.subtle !== 'object') {
-      console.warn('Web Crypto API not available—cannot hash email securely.');
-      throw new Error('crypto.subtle is not supported in this environment');
-    }
-    
-    try {
-      const data = new TextEncoder().encode(email);
-      const digest = await crypto.subtle.digest('SHA-256', data);
-      return Array.from(new Uint8Array(digest))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-    } catch (error) {
-      console.error('Failed to hash email:', error);
-      throw new Error(`Email hashing failed: ${error.message}`);
+
+  /**
+   * Re-enable tracking after disable
+   */
+  enable() {
+    if (this.posthog) {
+      try {
+        this.posthog.opt_in_capturing();
+        console.log('PostHog tracking enabled');
+      } catch (error) {
+        console.warn('Failed to enable PostHog:', error);
+      }
     }
   }
 
-  // GDPR compliance helper
-  showPrivacyBanner() {
-    let missing = false;
-    try { 
-      missing = localStorage.getItem('posthog_privacy_consent') === null; 
+  /**
+   * Hash email for GDPR compliance
+   */
+  async hashEmail(email) {
+    if (!email || typeof email !== 'string') {
+      throw new Error('Invalid email');
+    }
+
+    if (typeof crypto?.subtle !== 'object') {
+      throw new Error('crypto.subtle not available');
+    }
+
+    const data = new TextEncoder().encode(email);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  /**
+   * Show enhanced features consent banner (for session replay opt-in)
+   * Only shown to authenticated users who haven't chosen yet
+   */
+  showEnhancedConsentBanner() {
+    if (!this.isAuthenticated) return; // Only for authenticated users
+
+    let hasChosen = false;
+    try {
+      hasChosen = localStorage.getItem('posthog_enhanced_consent') !== null;
     } catch {}
-    
-    if (missing) {
-      // Dispatch event to show privacy banner UI
-      window.dispatchEvent(new CustomEvent('posthog:show-privacy-banner'));
-      
-      // Show the privacy banner element if it exists
-      const banner = document.getElementById('privacy-banner');
+
+    if (!hasChosen) {
+      window.dispatchEvent(new CustomEvent('posthog:show-enhanced-consent'));
+
+      const banner = document.getElementById('enhanced-consent-banner');
       if (banner) {
         banner.style.display = 'block';
-        // Animate in
         setTimeout(() => {
           banner.style.transform = 'translateY(0)';
         }, 100);
       }
     }
+  }
+
+  // ============================================
+  // LEGACY COMPATIBILITY
+  // ============================================
+
+  /**
+   * @deprecated Use enhancedConsent instead
+   * Kept for backwards compatibility with existing code
+   */
+  get privacyConsent() {
+    return {
+      analytics: true, // Always true now (cookieless doesn't need consent)
+      cookies: this.isAuthenticated,
+      marketing: this.enhancedConsent.marketing,
+      essential: true
+    };
+  }
+
+  /**
+   * @deprecated Privacy consent no longer blocks basic tracking
+   */
+  getPrivacyConsent() {
+    return this.privacyConsent;
+  }
+
+  /**
+   * @deprecated Use updateEnhancedConsent instead
+   */
+  updatePrivacyConsent(consent) {
+    this.updateEnhancedConsent({
+      sessionReplay: consent.analytics,
+      marketing: consent.marketing
+    });
+  }
+
+  /**
+   * @deprecated No longer needed - basic tracking doesn't require consent
+   */
+  showPrivacyBanner() {
+    // Only show for enhanced features now
+    this.showEnhancedConsentBanner();
   }
 }
 
