@@ -3,7 +3,7 @@ defmodule EventasaurusDiscovery.Sources.Shared.JsonSanitizer do
   Shared utility for converting Elixir data structures to JSON-safe formats.
 
   Handles non-JSON-encodable types that may appear in scraper data:
-  - DateTime, Date, Time structs → ISO8601 strings
+  - DateTime, NaiveDateTime, Date, Time structs → ISO8601 strings
   - Geocoder structs (Coords, Bounds, Location) → plain maps
   - Any other structs → plain maps via Map.from_struct/1
   - Recursive handling for nested maps and lists
@@ -40,6 +40,7 @@ defmodule EventasaurusDiscovery.Sources.Shared.JsonSanitizer do
   """
   @spec sanitize(any()) :: any()
   def sanitize(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  def sanitize(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_iso8601(ndt)
   def sanitize(%Date{} = d), do: Date.to_iso8601(d)
   def sanitize(%Time{} = t), do: Time.to_iso8601(t)
 
