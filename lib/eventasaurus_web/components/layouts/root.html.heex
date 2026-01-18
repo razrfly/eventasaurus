@@ -620,59 +620,78 @@
       <!-- Toast notifications will be inserted here -->
     </div>
 
-    <!-- PostHog Privacy Consent Banner -->
-    <div id="privacy-banner" class="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-4 shadow-lg transform translate-y-full transition-transform duration-300 z-50" style="display: none;">
+    <!--
+      PostHog Analytics Notice
+
+      TWO-TIER TRACKING ARCHITECTURE:
+      - Anonymous visitors: Cookieless tracking (GDPR compliant, no consent needed)
+      - Authenticated users: Full tracking (consent via Terms of Service)
+
+      The old consent banner has been removed because:
+      1. Cookieless mode is privacy-preserving by design
+      2. Authenticated users consent via ToS at signup
+
+      See: assets/js/analytics/posthog-manager.js
+    -->
+
+    <!-- Enhanced Features Consent Banner (Session Replay - authenticated users only) -->
+    <div id="enhanced-consent-banner" class="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-4 shadow-lg transform translate-y-full transition-transform duration-300 z-50" style="display: none;">
       <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div class="flex-1">
           <p class="text-sm">
-            We use analytics to improve your experience. 
+            <strong>Help us improve!</strong> Enable session replay to help us understand how you use the app.
             <a href="/privacy" class="underline hover:text-gray-300">Learn more</a>
           </p>
         </div>
         <div class="flex gap-2">
-          <button 
-            id="privacy-accept" 
+          <button
+            id="enhanced-consent-accept"
             class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
           >
-            Accept Analytics
+            Enable
           </button>
-          <button 
-            id="privacy-decline" 
+          <button
+            id="enhanced-consent-decline"
             class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
           >
-            Essential Only
+            No thanks
           </button>
         </div>
       </div>
     </div>
 
     <script>
-      // Privacy banner functionality
+      // Enhanced consent banner functionality (for authenticated users only)
+      // Basic analytics tracking works without consent via cookieless mode
       document.addEventListener('DOMContentLoaded', function() {
-        const banner = document.getElementById('privacy-banner');
-        const acceptBtn = document.getElementById('privacy-accept');
-        const declineBtn = document.getElementById('privacy-decline');
-        
-        // Check if consent is already given
-        const hasConsent = localStorage.getItem('posthog_privacy_consent');
-        
-        if (!hasConsent) {
-          // Show banner after a short delay
+        const banner = document.getElementById('enhanced-consent-banner');
+        const acceptBtn = document.getElementById('enhanced-consent-accept');
+        const declineBtn = document.getElementById('enhanced-consent-decline');
+
+        // Only show for authenticated users who haven't chosen yet
+        const isAuthenticated = !!window.currentUser;
+        const hasChosen = localStorage.getItem('posthog_enhanced_consent') !== null;
+
+        // Don't show banner - session replay is enabled by default for authenticated users
+        // They can disable it in settings if needed
+        // Uncomment below to show banner for explicit opt-in:
+        /*
+        if (isAuthenticated && !hasChosen) {
           setTimeout(() => {
             banner.style.display = 'block';
             requestAnimationFrame(() => {
               banner.classList.remove('translate-y-full');
             });
-          }, 2000);
+          }, 5000); // Show after 5 seconds for authenticated users
         }
-        
-        // Handle accept button
-        acceptBtn.addEventListener('click', function() {
-          const consent = { analytics: true, cookies: true, essential: true };
-          localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
+        */
 
-          // Trigger PostHog consent event
-          window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
+        // Handle accept button
+        acceptBtn?.addEventListener('click', function() {
+          const consent = { sessionReplay: true, marketing: false };
+          localStorage.setItem('posthog_enhanced_consent', JSON.stringify(consent));
+
+          window.dispatchEvent(new CustomEvent('posthog:enhanced-consent', {
             detail: { consent }
           }));
 
@@ -680,18 +699,17 @@
         });
 
         // Handle decline button
-        declineBtn.addEventListener('click', function() {
-          const consent = { analytics: false, cookies: false, essential: true };
-          localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
+        declineBtn?.addEventListener('click', function() {
+          const consent = { sessionReplay: false, marketing: false };
+          localStorage.setItem('posthog_enhanced_consent', JSON.stringify(consent));
 
-          // Trigger PostHog consent event
-          window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
+          window.dispatchEvent(new CustomEvent('posthog:enhanced-consent', {
             detail: { consent }
           }));
 
           hideBanner();
         });
-        
+
         function hideBanner() {
           banner.classList.add('translate-y-full');
           setTimeout(() => {
