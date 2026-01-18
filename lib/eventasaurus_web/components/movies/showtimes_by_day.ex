@@ -188,11 +188,13 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
 
   # Individual time chip linking to the showtime
   # Includes the selected day in the URL path so the activity page shows the correct date
+  # Also includes time as query param so activity page can pre-select the showtime
   defp time_chip(assigns) do
     # Build URL with date slug to preserve navigation context
-    # Format: /activities/slug/jan-22 (using the activity page's date format)
+    # Format: /activities/slug/jan-22?time=14:10 (using the activity page's date format)
     date_slug = date_to_url_slug(assigns.selected_day)
-    url = ~p"/activities/#{assigns.showtime.slug}/#{date_slug}"
+    time_param = format_time(assigns.showtime.datetime)
+    url = ~p"/activities/#{assigns.showtime.slug}/#{date_slug}?time=#{time_param}"
 
     assigns = assign(assigns, :url, url)
 

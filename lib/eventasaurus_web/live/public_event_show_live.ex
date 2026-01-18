@@ -194,6 +194,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   @impl true
   def handle_params(%{"slug" => slug, "date_slug" => date_slug}, url, socket) do
     # Handle URL with specific date: /activities/slug/oct-10
+    # Optionally with time query param: /activities/slug/oct-10?time=14:10
     socket =
       socket
       |> fetch_event(slug)
@@ -204,7 +205,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         {:ok, date} ->
           # Successfully parsed date from URL, verify it exists in occurrences
           if has_occurrence_on_date?(socket.assigns.event, date) do
-            assign(socket, :selected_showtime_date, date)
+            socket
+            |> assign(:selected_showtime_date, date)
+            |> maybe_select_occurrence_from_time(url, date)
           else
             socket
             |> put_flash(:error, gettext("No events scheduled for this date"))
@@ -1993,6 +1996,54 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       DateTime.compare(occ.datetime, now) == :gt
     end)
   end
+
+  # Pre-select occurrence from time query param (e.g., ?time=14:10)
+  # Used when navigating from movie screenings page to activity page
+  defp maybe_select_occurrence_from_time(socket, url, target_date) when is_binary(url) do
+    uri = URI.parse(url)
+
+    case uri.query do
+      nil ->
+        socket
+
+      query ->
+        params = URI.decode_query(query)
+
+        case Map.get(params, "time") do
+          nil ->
+            socket
+
+          time_str ->
+            # Find occurrence matching date and time
+            case find_occurrence_by_date_and_time(socket.assigns.event, target_date, time_str) do
+              nil ->
+                socket
+
+              occurrence ->
+                assign(socket, :selected_occurrence, occurrence)
+            end
+        end
+    end
+  end
+
+  defp maybe_select_occurrence_from_time(socket, _url, _date), do: socket
+
+  # Find occurrence matching specific date and time (HH:MM format)
+  defp find_occurrence_by_date_and_time(%{occurrence_list: nil}, _date, _time_str), do: nil
+  defp find_occurrence_by_date_and_time(%{occurrence_list: []}, _date, _time_str), do: nil
+
+  defp find_occurrence_by_date_and_time(%{occurrence_list: occurrences}, target_date, time_str) do
+    Enum.find(occurrences, fn occ ->
+      occ.date == target_date && format_time_hhmm(occ.datetime) == time_str
+    end)
+  end
+
+  # Format datetime to HH:MM for matching against URL time param
+  defp format_time_hhmm(%DateTime{} = dt) do
+    Calendar.strftime(dt, "%H:%M")
+  end
+
+  defp format_time_hhmm(_), do: nil
 
   # Check if event has an occurrence on the specified date
   defp has_occurrence_on_date?(%{occurrence_list: nil}, _date), do: false

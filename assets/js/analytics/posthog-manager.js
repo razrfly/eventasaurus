@@ -37,13 +37,15 @@ export class PostHogManager {
 
     // Listen for enhanced consent changes (session replay opt-in)
     window.addEventListener('posthog:enhanced-consent', (e) => {
-      this.updateEnhancedConsent(e.detail.consent);
+      if (e.detail?.consent) {
+        this.updateEnhancedConsent(e.detail.consent);
+      }
     });
 
     // Legacy privacy consent listener for backwards compatibility
     window.addEventListener('posthog:privacy-consent', (e) => {
       // Map old consent format to new enhanced consent
-      if (e.detail.consent) {
+      if (e.detail?.consent) {
         this.updateEnhancedConsent({
           sessionReplay: e.detail.consent.analytics,
           marketing: e.detail.consent.marketing
@@ -298,6 +300,11 @@ export class PostHogManager {
       this.eventQueue.shift(); // Remove oldest event
     }
 
+    // Initialize retry count if not present
+    if (typeof eventData.retryCount === 'undefined') {
+      eventData.retryCount = 0;
+    }
+
     this.eventQueue.push(eventData);
     console.log(`Event queued (${this.eventQueue.length} total):`, eventData.event);
   }
@@ -314,12 +321,20 @@ export class PostHogManager {
     const eventsToProcess = [...this.eventQueue];
     this.eventQueue = [];
 
+    const maxRetries = 3;
+
     eventsToProcess.forEach(eventData => {
       try {
         this.posthog.capture(eventData.event, eventData.properties);
       } catch (error) {
         console.warn('Failed to process queued event:', error);
-        this.queueEvent(eventData);
+        // Only re-queue if under retry limit
+        if (eventData.retryCount < maxRetries) {
+          eventData.retryCount++;
+          this.queueEvent(eventData);
+        } else {
+          console.warn(`Dropping event after ${maxRetries} retries:`, eventData.event);
+        }
       }
     });
   }
