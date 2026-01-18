@@ -26,6 +26,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
   require Logger
   alias EventasaurusDiscovery.Sources.QuestionOne.Helpers.TextHelper
   alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
   alias EventasaurusDiscovery.Locations.CountryResolver
 
   @doc """
@@ -131,8 +132,8 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
         day_of_week: Atom.to_string(day_of_week),
         recurring: true,
         frequency: "weekly",
-        # Raw upstream data for debugging
-        _raw_upstream: venue_data
+        # Raw upstream data for debugging (sanitized for JSON)
+        _raw_upstream: JsonSanitizer.sanitize(venue_data)
       },
 
       # Category

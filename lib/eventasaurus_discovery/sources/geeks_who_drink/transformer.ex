@@ -31,6 +31,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
 
   alias EventasaurusDiscovery.Helpers.CityResolver
   alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
 
   @doc """
   Transform extracted venue data to unified format.
@@ -138,8 +139,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
         instagram: venue_data[:instagram],
         # Quizmaster stored in metadata (hybrid approach - not in performers table)
         quizmaster: venue_data[:performer],
-        # Raw upstream data for debugging
-        _raw_upstream: venue_data
+        # Raw upstream data for debugging (sanitized for JSON)
+        _raw_upstream: JsonSanitizer.sanitize(venue_data)
       },
 
       # Category

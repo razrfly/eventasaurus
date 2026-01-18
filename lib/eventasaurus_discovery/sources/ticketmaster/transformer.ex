@@ -6,6 +6,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Helpers.CityResolver
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
 
   @doc """
   Transforms a Ticketmaster event to our standardized event data structure.
@@ -636,8 +637,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         age_restrictions: event["ageRestrictions"],
         products: extract_products(event)
       },
-      # Raw upstream data for debugging
-      _raw_upstream: event
+      # Raw upstream data for debugging (sanitized for JSON)
+      _raw_upstream: JsonSanitizer.sanitize(event)
     }
   end
 
