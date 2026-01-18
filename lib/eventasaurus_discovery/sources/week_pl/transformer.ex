@@ -179,7 +179,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
   Extract all images from restaurant data for multi-image caching.
 
   Returns a list of image specs compatible with EventImageCaching.cache_event_images/4.
-  First image is marked as "hero", subsequent images as "gallery".
+  First valid image is marked as "hero", subsequent images as "gallery".
 
   ## Parameters
   - restaurant: Restaurant data from Week.pl API containing "imageFiles" array
@@ -187,26 +187,35 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
 
   ## Returns
   List of image specs: [%{url: String.t(), image_type: String.t(), position: integer()}]
+
+  ## Note
+  Images are filtered for valid URLs BEFORE position assignment, ensuring the first
+  valid image becomes the hero even if earlier entries had no usable URL.
   """
+  @spec extract_all_images(map(), non_neg_integer()) :: [
+          %{url: String.t(), image_type: String.t(), position: non_neg_integer()}
+        ]
   def extract_all_images(restaurant, max_count \\ 5)
 
   def extract_all_images(%{"imageFiles" => image_files}, max_count)
       when is_list(image_files) and length(image_files) > 0 do
+    # First extract URLs, filtering out nil/invalid entries
+    # This ensures first valid image becomes hero even if earlier entries had no URL
     image_files
+    |> Enum.map(fn image ->
+      # Priority order: profile (900px) > preview (500px) > original (1600px) > thumbnail (300px)
+      image["profile"] || image["preview"] || image["original"] || image["thumbnail"]
+    end)
+    |> Enum.reject(&is_nil/1)
     |> Enum.take(max_count)
     |> Enum.with_index()
-    |> Enum.map(fn {image, index} ->
-      # Priority order: profile (900px) > preview (500px) > original (1600px) > thumbnail (300px)
-      url =
-        image["profile"] || image["preview"] || image["original"] || image["thumbnail"]
-
+    |> Enum.map(fn {url, index} ->
       %{
         url: url,
         image_type: if(index == 0, do: "hero", else: "gallery"),
         position: index
       }
     end)
-    |> Enum.filter(fn spec -> spec.url != nil end)
   end
 
   def extract_all_images(_, _max_count), do: []
