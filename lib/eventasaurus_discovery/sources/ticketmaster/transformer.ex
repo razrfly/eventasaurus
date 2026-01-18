@@ -635,7 +635,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         ticket_limit: get_in(event, ["ticketLimit", "info"]),
         age_restrictions: event["ageRestrictions"],
         products: extract_products(event)
-      }
+      },
+      # Raw upstream data for debugging
+      _raw_upstream: event
     }
   end
 

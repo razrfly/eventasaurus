@@ -130,7 +130,9 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
         fee_text: venue_data.fee_text,
         day_of_week: Atom.to_string(day_of_week),
         recurring: true,
-        frequency: "weekly"
+        frequency: "weekly",
+        # Raw upstream data for debugging
+        _raw_upstream: Map.from_struct(venue_data)
       },
 
       # Category

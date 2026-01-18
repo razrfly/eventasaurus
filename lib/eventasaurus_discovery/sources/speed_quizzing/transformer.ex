@@ -130,7 +130,9 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
         start_time: venue_data.start_time,
         day_of_week: venue_data.day_of_week,
         performer: venue_data.performer,
-        source_id: source_id
+        source_id: source_id,
+        # Raw upstream data for debugging
+        _raw_upstream: venue_data
       },
 
       # Category

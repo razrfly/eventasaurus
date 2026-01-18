@@ -137,7 +137,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
         facebook: venue_data[:facebook],
         instagram: venue_data[:instagram],
         # Quizmaster stored in metadata (hybrid approach - not in performers table)
-        quizmaster: venue_data[:performer]
+        quizmaster: venue_data[:performer],
+        # Raw upstream data for debugging
+        _raw_upstream: venue_data
       },
 
       # Category

@@ -35,7 +35,9 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Transformer do
           "host" => venue_data[:host],
           "phone" => venue_data[:phone],
           "description" => venue_data[:description],
-          "schedule_text" => venue_data[:schedule]
+          "schedule_text" => venue_data[:schedule],
+          # Raw upstream data for debugging
+          "_raw_upstream" => venue_data
         }
       }
 
