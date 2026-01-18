@@ -78,8 +78,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
             format_info: fetch(raw_event, :format_info),
             genre_tags: fetch(raw_event, :genre_tags),
             cinema_website: fetch(cinema_data, :website),
-            # Raw upstream data for debugging
-            _raw_upstream: raw_event
+            # Raw upstream data for debugging (sanitized for JSON)
+            _raw_upstream: sanitize_for_json(raw_event)
           }
         }
 
@@ -283,4 +283,25 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
   end
 
   defp fetch(_, _), do: nil
+
+  # Convert data to JSON-safe format
+  # Handles DateTime structs and other non-JSON-encodable types
+  defp sanitize_for_json(data) when is_map(data) do
+    Map.new(data, fn
+      {key, %DateTime{} = dt} -> {key, DateTime.to_iso8601(dt)}
+      {key, %Date{} = d} -> {key, Date.to_iso8601(d)}
+      {key, %Time{} = t} -> {key, Time.to_iso8601(t)}
+      {key, value} when is_map(value) -> {key, sanitize_for_json(value)}
+      {key, value} when is_list(value) -> {key, Enum.map(value, &sanitize_for_json_value/1)}
+      {key, value} -> {key, value}
+    end)
+  end
+
+  defp sanitize_for_json(data), do: data
+
+  defp sanitize_for_json_value(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp sanitize_for_json_value(%Date{} = d), do: Date.to_iso8601(d)
+  defp sanitize_for_json_value(%Time{} = t), do: Time.to_iso8601(t)
+  defp sanitize_for_json_value(value) when is_map(value), do: sanitize_for_json(value)
+  defp sanitize_for_json_value(value), do: value
 end
