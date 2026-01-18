@@ -497,9 +497,18 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   """
   def next_occurrence_date(%__MODULE__{occurrences: nil, starts_at: starts_at}), do: starts_at
 
-  def next_occurrence_date(%__MODULE__{occurrences: %{"dates" => dates}, starts_at: starts_at})
+  def next_occurrence_date(%__MODULE__{occurrences: %{"dates" => dates}, starts_at: starts_at} = event)
       when is_list(dates) do
-    now = DateTime.utc_now()
+    # Get timezone for creating local DateTimes
+    timezone = get_event_timezone(event)
+
+    # Use local time for comparison since occurrence times are local
+    # Handle timezone errors gracefully
+    now =
+      case DateTime.now(timezone) do
+        {:ok, dt} -> dt
+        {:error, _} -> DateTime.utc_now()
+      end
 
     # Parse dates and find the next upcoming one
     upcoming =
@@ -507,7 +516,16 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
       |> Enum.map(fn %{"date" => date_str, "time" => time_str} ->
         with {:ok, date} <- Date.from_iso8601(date_str),
              {:ok, time} <- Time.from_iso8601(time_str <> ":00") do
-          DateTime.new!(date, time, "Etc/UTC")
+          # IMPORTANT: Times in occurrences.dates[].time are LOCAL times, NOT UTC.
+          # Handle DST transitions gracefully:
+          # - {:ambiguous, dt1, dt2} = fall-back (DST ends, pick earlier)
+          # - {:gap, before, after} = spring-forward (DST starts, use after)
+          case DateTime.new(date, time, timezone) do
+            {:ok, dt} -> dt
+            {:ambiguous, dt, _later} -> dt
+            {:gap, _before, after_dt} -> after_dt
+            {:error, _} -> nil
+          end
         else
           _ -> nil
         end
@@ -521,4 +539,15 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   end
 
   def next_occurrence_date(%__MODULE__{starts_at: starts_at}), do: starts_at
+
+  # Get timezone for event based on venue location
+  defp get_event_timezone(%{venue: %{latitude: lat, longitude: lng}})
+       when not is_nil(lat) and not is_nil(lng) do
+    case TzWorld.timezone_at({lng, lat}) do
+      {:ok, tz} -> tz
+      _ -> "Europe/Warsaw"
+    end
+  end
+
+  defp get_event_timezone(_), do: "Europe/Warsaw"
 end
