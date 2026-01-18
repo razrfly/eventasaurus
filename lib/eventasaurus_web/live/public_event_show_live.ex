@@ -1960,21 +1960,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp get_event_timezone(%{venue: %{latitude: lat, longitude: lng}})
        when not is_nil(lat) and not is_nil(lng) do
-    # For now, all venues are in Poland (Kraków coordinates: ~50.06, ~19.95)
-    # TODO: Implement proper coordinate-to-timezone lookup using a geo database
-    # when we expand to other countries
-    cond do
-      # Poland (approximate bounding box)
-      lat >= 49.0 and lat <= 55.0 and lng >= 14.0 and lng <= 24.5 ->
-        "Europe/Warsaw"
-
-      # Default fallback to Warsaw for European coordinates
-      lat >= 35.0 and lat <= 71.0 and lng >= -10.0 and lng <= 40.0 ->
-        "Europe/Warsaw"
-
-      # Outside Europe - fallback to UTC
-      true ->
-        "Etc/UTC"
+    case TzWorld.timezone_at({lng, lat}) do
+      {:ok, tz} -> tz
+      _ -> "Europe/Warsaw"
     end
   end
 
