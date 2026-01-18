@@ -57,8 +57,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       |> assign(:entry_context, :generic_movie)
       |> assign(:is_single_occurrence, false)
       |> assign(:selected_occurrence, nil)
-      # View mode toggle state for By Venue / By Day switching
-      |> assign(:view_mode, :by_venue)
+      # Day picker state for venue-grouped day view
       |> assign(:selected_day, nil)
       |> assign(:showtimes_by_day, %{})
       |> assign(:available_days, [])
@@ -67,15 +66,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   end
 
   @impl true
-  def handle_params(%{"city_slug" => city_slug, "movie_slug" => movie_slug} = params, _url, socket) do
-    # Parse view mode from query param for persistence (default: by_venue)
-    view_mode =
-      case params["view"] do
-        "by_day" -> :by_day
-        _ -> :by_venue
-      end
-
-    socket = assign(socket, :view_mode, view_mode)
+  def handle_params(%{"city_slug" => city_slug, "movie_slug" => movie_slug}, _url, socket) do
     # Fetch city
     city =
       from(c in City,
@@ -103,15 +94,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       {city, movie} ->
         # Redirect to canonical URL if not already there
         if movie_slug != movie.slug do
-          # Preserve view mode query param on redirect
-          redirect_to =
-            if view_mode == :by_day do
-              ~p"/c/#{city.slug}/movies/#{movie.slug}?#{[view: "by_day"]}"
-            else
-              ~p"/c/#{city.slug}/movies/#{movie.slug}"
-            end
-
-          {:noreply, redirect(socket, to: redirect_to)}
+          {:noreply, redirect(socket, to: ~p"/c/#{city.slug}/movies/#{movie.slug}")}
         else
           handle_movie_screenings(socket, city, movie)
         end
@@ -362,7 +345,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             variant={:card}
             compact={false}
             show_empty_state={true}
-            view_mode={@view_mode}
             selected_day={@selected_day}
             showtimes_by_day={@showtimes_by_day}
             available_days={@available_days}
@@ -686,7 +668,11 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       Map.get(socket.assigns, :original_date_availability, socket.assigns.date_availability)
 
     original_time_period_availability =
-      Map.get(socket.assigns, :original_time_period_availability, socket.assigns.time_period_availability)
+      Map.get(
+        socket.assigns,
+        :original_time_period_availability,
+        socket.assigns.time_period_availability
+      )
 
     # Build filter criteria with city_ids
     city_ids =
@@ -754,35 +740,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
      |> assign(:time_period_availability, time_period_availability)}
   end
 
-  # View mode toggle handlers for By Venue / By Day switching
-  # Uses push_patch to persist view mode in URL for shareability and browser history
-  @impl true
-  def handle_event("change_view_mode", %{"mode" => "by_day"}, socket) do
-    # When switching to By Day, auto-select first available day if none selected
-    selected_day =
-      socket.assigns.selected_day || List.first(socket.assigns.available_days)
-
-    city_slug = socket.assigns.city.slug
-    movie_slug = socket.assigns.movie.slug
-
-    {:noreply,
-     socket
-     |> assign(:view_mode, :by_day)
-     |> assign(:selected_day, selected_day)
-     |> push_patch(to: ~p"/c/#{city_slug}/movies/#{movie_slug}?view=by_day", replace: true)}
-  end
-
-  @impl true
-  def handle_event("change_view_mode", %{"mode" => "by_venue"}, socket) do
-    city_slug = socket.assigns.city.slug
-    movie_slug = socket.assigns.movie.slug
-
-    {:noreply,
-     socket
-     |> assign(:view_mode, :by_venue)
-     |> push_patch(to: ~p"/c/#{city_slug}/movies/#{movie_slug}", replace: true)}
-  end
-
+  # Day picker handler for selecting a day
   @impl true
   def handle_event("select_day", %{"date" => date_string}, socket) do
     case Date.from_iso8601(date_string) do
@@ -837,8 +795,9 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     end
   end
 
-  # Transform venues_with_info to a day-grouped view for "By Day" toggle
+  # Transform venues_with_info to a day-grouped view with venue grouping within each day
   # Returns {showtimes_by_day_map, sorted_available_days_list}
+  # Each day maps to a list of {venue_info, sorted_showtimes} tuples
   defp transform_to_by_day_view(venues_with_info) do
     # Flatten all upcoming occurrences and attach venue info
     all_showtimes =
@@ -854,14 +813,33 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
         end)
       end)
 
-    # Group by date
+    # Group by date, then by venue within each date
     by_day =
       all_showtimes
       |> Enum.group_by(& &1.date)
-      |> Enum.map(fn {date, showtimes} ->
-        # Sort showtimes by time within each day
-        sorted = Enum.sort_by(showtimes, & &1.datetime, {:asc, DateTime})
-        {date, sorted}
+      |> Enum.map(fn {date, showtimes_for_day} ->
+        # Group showtimes by venue within this day
+        venues_with_showtimes =
+          showtimes_for_day
+          |> Enum.group_by(& &1.venue)
+          |> Enum.map(fn {venue, venue_showtimes} ->
+            # Sort showtimes by time within each venue
+            sorted = Enum.sort_by(venue_showtimes, & &1.datetime, {:asc, DateTime})
+            # Return tuple of {venue_info, showtimes}
+            {venue, sorted}
+          end)
+          # Sort venues by earliest showtime
+          |> Enum.sort_by(
+            fn {_venue, showtimes} ->
+              case showtimes do
+                [first | _] -> first.datetime
+                [] -> DateTime.utc_now()
+              end
+            end,
+            {:asc, DateTime}
+          )
+
+        {date, venues_with_showtimes}
       end)
       |> Map.new()
 
