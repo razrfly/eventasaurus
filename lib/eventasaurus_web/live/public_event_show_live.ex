@@ -1755,25 +1755,22 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp parse_occurrences(%{occurrences: %{"dates" => dates}} = event) when is_list(dates) do
     # Get timezone for this venue (defaults to Poland timezone)
     timezone = get_event_timezone(event)
-    require Logger
-    Logger.info("Timezone for event: #{inspect(timezone)}")
 
-    now = DateTime.utc_now()
+    # Get current time in the local timezone for comparison
+    now = DateTime.now!(timezone)
 
     dates
     |> Enum.map(fn date_info ->
       with {:ok, date} <- Date.from_iso8601(date_info["date"]),
            {:ok, time} <- parse_time(date_info["time"]) do
-        # Create datetime in UTC (as stored in database)
-        utc_datetime = DateTime.new!(date, time, "Etc/UTC")
-
-        # Convert to local timezone for display
-        local_datetime = DateTime.shift_zone!(utc_datetime, timezone)
+        # Times stored in occurrences are LOCAL times (e.g., Polish local time from Cinema City)
+        # NOT UTC. Create datetime directly in the local timezone.
+        local_datetime = DateTime.new!(date, time, timezone)
 
         %{
           datetime: local_datetime,
-          date: DateTime.to_date(local_datetime),
-          time: DateTime.to_time(local_datetime),
+          date: date,
+          time: time,
           external_id: date_info["external_id"],
           label: date_info["label"]
         }
