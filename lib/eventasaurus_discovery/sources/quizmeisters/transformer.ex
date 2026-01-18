@@ -120,7 +120,9 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Transformer do
         recurring: true,
         frequency: "weekly",
         start_time: venue_data[:start_time],
-        quizmaster: venue_data[:performer]
+        quizmaster: venue_data[:performer],
+        # Raw upstream data for debugging
+        _raw_upstream: venue_data
       },
 
       # Category

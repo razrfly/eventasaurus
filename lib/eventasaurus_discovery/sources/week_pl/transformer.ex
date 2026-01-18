@@ -90,7 +90,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
         website_url: restaurant["webUrl"],
         facebook_url: restaurant["facebookUrl"],
         instagram_url: restaurant["instagramUrl"],
-        menu_file_url: restaurant["menuFileUrl"]
+        menu_file_url: restaurant["menuFileUrl"],
+        # Raw upstream data for debugging
+        _raw_upstream: restaurant
       }
     }
   end
@@ -172,6 +174,42 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
   defp build_url(slug) do
     "https://week.pl/#{slug}"
   end
+
+  @doc """
+  Extract all images from restaurant data for multi-image caching.
+
+  Returns a list of image specs compatible with EventImageCaching.cache_event_images/4.
+  First image is marked as "hero", subsequent images as "gallery".
+
+  ## Parameters
+  - restaurant: Restaurant data from Week.pl API containing "imageFiles" array
+  - max_count: Maximum number of images to extract (default 5)
+
+  ## Returns
+  List of image specs: [%{url: String.t(), image_type: String.t(), position: integer()}]
+  """
+  def extract_all_images(restaurant, max_count \\ 5)
+
+  def extract_all_images(%{"imageFiles" => image_files}, max_count)
+      when is_list(image_files) and length(image_files) > 0 do
+    image_files
+    |> Enum.take(max_count)
+    |> Enum.with_index()
+    |> Enum.map(fn {image, index} ->
+      # Priority order: profile (900px) > preview (500px) > original (1600px) > thumbnail (300px)
+      url =
+        image["profile"] || image["preview"] || image["original"] || image["thumbnail"]
+
+      %{
+        url: url,
+        image_type: if(index == 0, do: "hero", else: "gallery"),
+        position: index
+      }
+    end)
+    |> Enum.filter(fn spec -> spec.url != nil end)
+  end
+
+  def extract_all_images(_, _max_count), do: []
 
   # Extract primary image URL from restaurant imageFiles array.
   # Uses 'profile' size (900px) for optimal quality/size balance.

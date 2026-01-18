@@ -90,7 +90,9 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Transformer do
             movie_slug: movie_slug,
             confidence_score: get_value.(raw_event, :tmdb_confidence),
             # Store movie page URL for source link (city-specific)
-            movie_url: build_movie_url(movie_slug, city)
+            movie_url: build_movie_url(movie_slug, city),
+            # Raw upstream data for debugging
+            _raw_upstream: raw_event
           }
         }
 

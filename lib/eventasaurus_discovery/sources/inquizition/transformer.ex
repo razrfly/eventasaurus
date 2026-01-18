@@ -124,7 +124,9 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Transformer do
         timezone: venue_data[:timezone] || "Europe/London",
         schedule_inferred: schedule_inferred,
         website: venue_data[:website],
-        email: venue_data[:email]
+        email: venue_data[:email],
+        # Raw upstream data for debugging
+        _raw_upstream: venue_data
       },
 
       # Category

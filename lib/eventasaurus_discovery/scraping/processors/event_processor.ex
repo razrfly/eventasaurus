@@ -934,6 +934,30 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
+  defp maybe_cache_multiple_images(event_source, "week-pl", raw_data) do
+    alias EventasaurusDiscovery.Sources.WeekPl.Transformer, as: WeekPlTransformer
+
+    # Week.pl stores restaurant data with imageFiles array
+    # raw_data should contain the restaurant map with imageFiles
+    image_specs = WeekPlTransformer.extract_all_images(raw_data, 5)
+
+    if length(image_specs) > 0 do
+      Logger.info("""
+      📷 Multi-image caching for Week.pl event source #{event_source.id}:
+        Found #{length(image_specs)} images for caching
+      """)
+
+      EventImageCaching.cache_event_images(
+        image_specs,
+        event_source.id,
+        "week-pl",
+        raw_data
+      )
+    else
+      :not_supported
+    end
+  end
+
   # Other sources don't support multi-image yet
   defp maybe_cache_multiple_images(_event_source, _source_slug, _raw_data) do
     :not_supported

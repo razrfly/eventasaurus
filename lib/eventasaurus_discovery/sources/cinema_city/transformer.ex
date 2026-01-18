@@ -77,7 +77,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
             language_info: fetch(raw_event, :language_info),
             format_info: fetch(raw_event, :format_info),
             genre_tags: fetch(raw_event, :genre_tags),
-            cinema_website: fetch(cinema_data, :website)
+            cinema_website: fetch(cinema_data, :website),
+            # Raw upstream data for debugging
+            _raw_upstream: raw_event
           }
         }
 
