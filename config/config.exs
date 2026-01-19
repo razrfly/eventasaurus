@@ -94,11 +94,15 @@ config :hammer,
 
 # Venue matching configuration
 config :eventasaurus, :venue_matching,
-  # Proximity threshold in meters for venue deduplication
-  # Venues within this distance are considered the same location
-  # Increased from 50m to 200m to better handle geocoding variations
-  # between different data sources (e.g., Cinema City vs Kino Krakow)
-  proximity_threshold_meters: 200
+  # Proximity threshold in meters for initial venue deduplication search
+  # Venues within this distance are candidates for name similarity matching
+  # Increased from 200m to 1000m because geocoding providers can return
+  # coordinates 700m-3000m apart for the same physical venue
+  # (e.g., "here" vs "mapbox" for Cinema City Kazimierz = 2945m drift)
+  proximity_threshold_meters: 1000,
+  # Minimum name similarity score (0.0-1.0) for fuzzy matching fallback
+  # Used when no proximity candidates found but names are similar
+  fuzzy_name_threshold: 0.6
 
 # Avatar configuration
 config :eventasaurus, :avatars,

@@ -2,6 +2,29 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   @moduledoc """
   Handles finding or creating venues with deduplication logic.
   Uses PostGIS for geo-proximity matching and Ecto upserts for atomic operations.
+
+  ## Deduplication Strategy
+
+  The matching strategy uses a progressive fallback approach:
+  1. **Proximity + Name**: Find venues within threshold distance and compare names
+  2. **Fuzzy Name**: Find venues in same city with similar names (handles geocoding drift)
+  3. **Normalized Address**: Find venues in same city with same normalized address
+  4. **Exact Name**: Find venues with exact normalized name match
+  5. **Create**: Create new venue if no matches found
+
+  ## Telemetry Events
+
+  Emits telemetry events for monitoring deduplication decisions:
+  - `[:eventasaurus, :venue, :dedup, :match]` - Venue matched by a method
+  - `[:eventasaurus, :venue, :dedup, :create]` - New venue created
+
+  Metadata includes:
+  - `:method` - Matching method used (proximity, fuzzy_name, address, exact_name, create)
+  - `:venue_id` - ID of matched/created venue
+  - `:incoming_name` - Name of incoming venue attempt
+  - `:matched_name` - Name of matched venue (if applicable)
+  - `:similarity_score` - Similarity score (for fuzzy matching)
+  - `:distance_meters` - Distance in meters (for proximity matching)
   """
 
   alias EventasaurusApp.Repo
@@ -14,12 +37,38 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   @proximity_threshold_meters Application.compile_env(
                                 :eventasaurus,
                                 [:venue_matching, :proximity_threshold_meters],
-                                200
+                                1000
                               )
+
+  @fuzzy_name_threshold Application.compile_env(
+                          :eventasaurus,
+                          [:venue_matching, :fuzzy_name_threshold],
+                          0.6
+                        )
+
+  # Telemetry event names
+  @telemetry_match [:eventasaurus, :venue, :dedup, :match]
+  @telemetry_create [:eventasaurus, :venue, :dedup, :create]
+
+  # Emit telemetry for a deduplication match
+  defp emit_dedup_telemetry(:match, metadata) do
+    :telemetry.execute(@telemetry_match, %{count: 1}, metadata)
+  end
+
+  defp emit_dedup_telemetry(:create, metadata) do
+    :telemetry.execute(@telemetry_create, %{count: 1}, metadata)
+  end
 
   @doc """
   Find or create venue using progressive matching strategy.
   Uses Ecto upserts for atomic operations.
+
+  Matching order:
+  1. Proximity match (within configurable threshold) + name similarity
+  2. Fuzzy name match (same city, name similarity above threshold)
+  3. Normalized address match (same city, same normalized address)
+  4. Exact normalized name match
+  5. Create new venue
   """
   def find_or_create_venue(attrs) do
     with {:ok, normalized_attrs} <- normalize_venue_attrs(attrs) do
@@ -29,9 +78,24 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
           {:ok, venue}
 
         _ ->
-          case find_by_name_and_city(normalized_attrs) do
-            {:ok, venue} -> {:ok, venue}
-            _ -> create_venue(normalized_attrs)
+          # Try fuzzy name matching within the same city
+          case find_by_fuzzy_name(normalized_attrs) do
+            {:ok, venue} ->
+              {:ok, venue}
+
+            _ ->
+              # Try normalized address matching
+              case find_by_normalized_address(normalized_attrs) do
+                {:ok, venue} ->
+                  {:ok, venue}
+
+                _ ->
+                  # Fall back to exact name match or create
+                  case find_by_name_and_city(normalized_attrs) do
+                    {:ok, venue} -> {:ok, venue}
+                    _ -> create_venue(normalized_attrs)
+                  end
+              end
           end
       end
     else
@@ -119,10 +183,21 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
 
         %{venue: venue, distance: distance} ->
           distance_meters = to_float(distance)
+          similarity_score = VenueNameMatcher.similarity_score(name, venue.name)
 
           Logger.info(
             "📍 Found venue by proximity + name match: '#{venue.name}' (ID:#{venue.id}) matches incoming '#{name}' at #{distance_meters}m"
           )
+
+          emit_dedup_telemetry(:match, %{
+            method: :proximity,
+            venue_id: venue.id,
+            incoming_name: name,
+            matched_name: venue.name,
+            distance_meters: distance_meters,
+            similarity_score: similarity_score,
+            city_id: city_id
+          })
 
           # Decide if we should update the name based on quality
           updated_attrs = %{latitude: lat_float, longitude: lng_float}
@@ -157,7 +232,203 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
 
   defp find_by_proximity(_), do: nil
 
-  # Step 2: Try exact name + city match using upsert
+  # Step 2: Try fuzzy name matching within the same city
+  # This catches duplicates caused by geocoding drift beyond the proximity threshold
+  defp find_by_fuzzy_name(%{name: name, city_id: city_id} = attrs)
+       when not is_nil(name) and not is_nil(city_id) do
+    # Get all venues in the same city
+    query =
+      from(v in Venue,
+        where: v.city_id == ^city_id,
+        select: v
+      )
+
+    venues = Repo.all(query)
+
+    if Enum.empty?(venues) do
+      Logger.debug("No venues found in city #{city_id} for fuzzy matching")
+      nil
+    else
+      # Calculate similarity for each venue and find the best match
+      best_match =
+        venues
+        |> Enum.map(fn venue ->
+          score = VenueNameMatcher.similarity_score(name, venue.name)
+          {venue, score}
+        end)
+        |> Enum.filter(fn {_venue, score} -> score >= @fuzzy_name_threshold end)
+        |> Enum.sort_by(fn {_venue, score} -> score end, :desc)
+        |> List.first()
+
+      case best_match do
+        nil ->
+          Logger.debug(
+            "No fuzzy name match found for '#{name}' in city #{city_id} (threshold: #{@fuzzy_name_threshold * 100}%)"
+          )
+
+          nil
+
+        {venue, score} ->
+          Logger.info("""
+          🔍 Found venue by fuzzy name match:
+             Incoming: '#{name}'
+             Matched: '#{venue.name}' (ID:#{venue.id})
+             Similarity: #{Float.round(score * 100, 1)}%
+             Threshold: #{Float.round(@fuzzy_name_threshold * 100, 1)}%
+          """)
+
+          emit_dedup_telemetry(:match, %{
+            method: :fuzzy_name,
+            venue_id: venue.id,
+            incoming_name: name,
+            matched_name: venue.name,
+            similarity_score: score,
+            city_id: city_id
+          })
+
+          # Update coordinates if the new venue has them and existing doesn't
+          updated_attrs = maybe_update_coordinates(attrs, venue)
+
+          case update_venue_if_needed(venue, updated_attrs) do
+            {:ok, v} ->
+              {:ok, v}
+
+            {:error, changeset} ->
+              Logger.error(
+                "Failed to update fuzzy-matched venue #{venue.id}: #{inspect(changeset.errors)}"
+              )
+
+              # Still return the found venue
+              {:ok, venue}
+          end
+      end
+    end
+  end
+
+  defp find_by_fuzzy_name(_), do: nil
+
+  # Helper to extract coordinate updates from attrs
+  defp maybe_update_coordinates(
+         %{latitude: lat, longitude: lng} = _attrs,
+         %Venue{latitude: existing_lat, longitude: existing_lng}
+       )
+       when not is_nil(lat) and not is_nil(lng) do
+    lat_float = to_float(lat)
+    lng_float = to_float(lng)
+
+    # Only include coordinates if they're valid and venue doesn't have them
+    if lat_float && lng_float && (is_nil(existing_lat) || is_nil(existing_lng)) do
+      %{latitude: lat_float, longitude: lng_float}
+    else
+      %{}
+    end
+  end
+
+  defp maybe_update_coordinates(_, _), do: %{}
+
+  # Step 3: Try normalized address matching within the same city
+  # This catches duplicates with different names but same physical address
+  defp find_by_normalized_address(%{address: address, city_id: city_id} = attrs)
+       when is_binary(address) and byte_size(address) > 0 and not is_nil(city_id) do
+    normalized_addr = normalize_address(address)
+
+    if normalized_addr == "" do
+      nil
+    else
+      # Find venues with matching normalized address in the same city
+      query =
+        from(v in Venue,
+          where: v.city_id == ^city_id,
+          where: not is_nil(v.address),
+          select: v
+        )
+
+      matching_venue =
+        Repo.all(query)
+        |> Enum.find(fn venue ->
+          normalize_address(venue.address) == normalized_addr
+        end)
+
+      case matching_venue do
+        nil ->
+          Logger.debug(
+            "No address match found for '#{address}' (normalized: '#{normalized_addr}') in city #{city_id}"
+          )
+
+          nil
+
+        venue ->
+          Logger.info("""
+          📍 Found venue by address match:
+             Incoming: '#{attrs[:name]}' at '#{address}'
+             Matched: '#{venue.name}' (ID:#{venue.id}) at '#{venue.address}'
+             Normalized address: '#{normalized_addr}'
+          """)
+
+          emit_dedup_telemetry(:match, %{
+            method: :address,
+            venue_id: venue.id,
+            incoming_name: attrs[:name],
+            matched_name: venue.name,
+            incoming_address: address,
+            matched_address: venue.address,
+            normalized_address: normalized_addr,
+            city_id: city_id
+          })
+
+          # Update name if the incoming name is better
+          updated_attrs =
+            maybe_update_coordinates(attrs, venue)
+            |> maybe_add_name_update(venue, attrs[:name])
+
+          case update_venue_if_needed(venue, updated_attrs) do
+            {:ok, v} ->
+              {:ok, v}
+
+            {:error, changeset} ->
+              Logger.error(
+                "Failed to update address-matched venue #{venue.id}: #{inspect(changeset.errors)}"
+              )
+
+              {:ok, venue}
+          end
+      end
+    end
+  end
+
+  defp find_by_normalized_address(_), do: nil
+
+  # Normalize address for comparison
+  # Removes common Polish street prefixes and standardizes format
+  defp normalize_address(address) when is_binary(address) do
+    address
+    |> String.downcase()
+    |> String.normalize(:nfc)
+    # Remove Polish street prefixes
+    |> String.replace(~r/^(ul\.|ulica|ul|al\.|aleja|pl\.|plac)\s*/i, "")
+    # Remove building numbers with letters (e.g., "27A" -> "27")
+    |> String.replace(~r/(\d+)[a-z]/i, "\\1")
+    # Remove apartment/unit numbers (e.g., "27/5" -> "27")
+    |> String.replace(~r/\/\d+/, "")
+    # Normalize whitespace
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+
+  defp normalize_address(_), do: ""
+
+  # Helper to add name update if the new name is better
+  defp maybe_add_name_update(attrs, venue, new_name) when is_binary(new_name) do
+    if should_update_venue_name?(venue.name, new_name) do
+      Map.put(attrs, :name, new_name)
+    else
+      attrs
+    end
+  end
+
+  defp maybe_add_name_update(attrs, _venue, _name), do: attrs
+
+  # Step 4: Try exact name + city match using upsert
   defp find_by_name_and_city(%{name: name, city_id: city_id} = attrs) when not is_nil(city_id) do
     # The normalized_name will be set by the database trigger
     venue_attrs =
@@ -182,6 +453,14 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
         case Repo.insert(changeset) do
           {:ok, venue} ->
             Logger.info("🏢 Created new venue: #{venue.name} (#{venue.id})")
+
+            emit_dedup_telemetry(:create, %{
+              method: :exact_name_new,
+              venue_id: venue.id,
+              venue_name: venue.name,
+              city_id: city_id
+            })
+
             {:ok, venue}
 
           {:error, changeset} ->
@@ -190,7 +469,17 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
         end
 
       venue ->
-        # Update existing venue
+        # Update existing venue (found by exact name match)
+        Logger.info("🏢 Found venue by exact name match: #{venue.name} (#{venue.id})")
+
+        emit_dedup_telemetry(:match, %{
+          method: :exact_name,
+          venue_id: venue.id,
+          incoming_name: name,
+          matched_name: venue.name,
+          city_id: city_id
+        })
+
         case Repo.update(Venue.changeset(venue, attrs)) do
           {:ok, venue} ->
             Logger.info("🏢 Updated existing venue: #{venue.name} (#{venue.id})")
@@ -210,7 +499,7 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
 
   defp find_by_name_and_city(_), do: nil
 
-  # Step 3: Create new venue (no matches found)
+  # Step 5: Create new venue (no matches found)
   defp create_venue(attrs) do
     changeset =
       %Venue{}
@@ -219,6 +508,14 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
     case Repo.insert(changeset) do
       {:ok, venue} ->
         Logger.info("✨ Created new venue: #{venue.name} (#{venue.id})")
+
+        emit_dedup_telemetry(:create, %{
+          method: :no_match,
+          venue_id: venue.id,
+          venue_name: venue.name,
+          city_id: attrs[:city_id]
+        })
+
         {:ok, venue}
 
       {:error, changeset} ->
