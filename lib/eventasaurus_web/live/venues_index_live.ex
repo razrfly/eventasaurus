@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.VenuesIndexLive do
   Venues index page showing all public venues.
 
   Issue #3143: Part of the simplified venue routing structure.
+  Issue #3294: Uses keyset pagination to avoid O(n) OFFSET scans.
   Routes: /venues
   """
   use EventasaurusWeb, :live_view
@@ -26,13 +27,9 @@ defmodule EventasaurusWeb.VenuesIndexLive do
       |> assign(:venues, [])
       |> assign(:loading, true)
       |> assign(:search, nil)
-      |> assign(:pagination, %Pagination{
-        entries: [],
-        page_number: 1,
-        page_size: @default_page_size,
-        total_entries: 0,
-        total_pages: 0
-      })
+      |> assign(:cursor, nil)
+      |> assign(:has_more, false)
+      |> assign(:total_entries, 0)
 
     {:ok, socket}
   end
@@ -41,16 +38,18 @@ defmodule EventasaurusWeb.VenuesIndexLive do
   @spec handle_params(map(), String.t(), Phoenix.LiveView.Socket.t()) ::
           {:noreply, Phoenix.LiveView.Socket.t()}
   def handle_params(params, _url, socket) do
-    page = parse_page(params["page"])
+    cursor = params["cursor"]
     search = params["search"]
 
-    {venues, pagination} = load_venues(page, search)
+    result = load_venues(cursor, search)
 
     socket =
       socket
-      |> assign(:venues, venues)
+      |> assign(:venues, result.entries)
       |> assign(:search, search)
-      |> assign(:pagination, pagination)
+      |> assign(:cursor, result.cursor)
+      |> assign(:has_more, result.has_more?)
+      |> assign(:total_entries, result.total_entries)
       |> assign(:loading, false)
       |> SEOHelpers.assign_meta_tags(
         title: "Venues",
@@ -64,7 +63,8 @@ defmodule EventasaurusWeb.VenuesIndexLive do
 
   @impl true
   def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, push_patch(socket, to: build_path(search, 1))}
+    # Reset cursor when searching
+    {:noreply, push_patch(socket, to: build_path(search, nil))}
   end
 
   @impl true
@@ -73,19 +73,18 @@ defmodule EventasaurusWeb.VenuesIndexLive do
   end
 
   @impl true
-  def handle_event("paginate", %{"page" => page_string}, socket) do
-    page = String.to_integer(page_string)
-    {:noreply, push_patch(socket, to: build_path(socket.assigns.search, page))}
+  def handle_event("load_more", _params, socket) do
+    {:noreply, push_patch(socket, to: build_path(socket.assigns.search, socket.assigns.cursor))}
   end
 
-  defp load_venues(page, search) do
+  defp load_venues(cursor, search) do
+    # Base query without ordering (keyset pagination adds its own)
     base_query =
       from(v in Venue,
         left_join: c in assoc(v, :city_ref),
         where: v.is_public == true,
         where: not is_nil(v.slug),
-        preload: [city_ref: c],
-        order_by: [asc: v.name]
+        preload: [city_ref: c]
       )
 
     query =
@@ -99,39 +98,27 @@ defmodule EventasaurusWeb.VenuesIndexLive do
         base_query
       end
 
-    # Count total
-    total = Repo.aggregate(query, :count)
-
-    # Get page of venues
-    venues =
-      from(v in query,
-        offset: ^((page - 1) * @default_page_size),
-        limit: ^@default_page_size
+    # Use keyset pagination (O(1) vs O(n) for OFFSET)
+    result =
+      Pagination.paginate_keyset(query, Repo,
+        cursor: cursor,
+        page_size: @default_page_size,
+        sort_field: :name,
+        sort_dir: :asc
       )
-      |> Repo.all()
 
     # Batch load event counts to avoid N+1 queries
-    venue_ids = Enum.map(venues, & &1.id)
+    venue_ids = Enum.map(result.entries, & &1.id)
     event_counts = batch_count_venue_events(venue_ids)
 
     # Merge event counts into venues
     venues =
-      Enum.map(venues, fn venue ->
+      Enum.map(result.entries, fn venue ->
         count = Map.get(event_counts, venue.id, 0)
         Map.put(venue, :upcoming_event_count, count)
       end)
 
-    total_pages = ceil(total / @default_page_size)
-
-    pagination = %Pagination{
-      entries: venues,
-      page_number: page,
-      page_size: @default_page_size,
-      total_entries: total,
-      total_pages: total_pages
-    }
-
-    {venues, pagination}
+    %{result | entries: venues}
   end
 
   # Batch count upcoming events for multiple venues in a single query
@@ -154,21 +141,11 @@ defmodule EventasaurusWeb.VenuesIndexLive do
     |> Map.new()
   end
 
-  defp parse_page(nil), do: 1
-  defp parse_page(""), do: 1
-
-  defp parse_page(page_string) when is_binary(page_string) do
-    case Integer.parse(page_string) do
-      {page, _} when page > 0 -> page
-      _ -> 1
-    end
-  end
-
-  defp build_path(search, page) do
+  defp build_path(search, cursor) do
     params =
       %{}
       |> maybe_add_param("search", search)
-      |> maybe_add_param("page", if(page > 1, do: to_string(page)))
+      |> maybe_add_param("cursor", cursor)
 
     if map_size(params) > 0 do
       "/venues?#{URI.encode_query(params)}"
@@ -231,7 +208,7 @@ defmodule EventasaurusWeb.VenuesIndexLive do
         <% else %>
           <!-- Results count -->
           <div class="mb-4 text-sm text-gray-600">
-            <%= @pagination.total_entries %> venues found
+            <%= @total_entries %> venues found
           </div>
 
           <!-- Venues grid -->
@@ -275,34 +252,15 @@ defmodule EventasaurusWeb.VenuesIndexLive do
               <% end %>
             </div>
 
-            <!-- Pagination -->
-            <%= if @pagination.total_pages > 1 do %>
+            <!-- Load More (Keyset Pagination) -->
+            <%= if @has_more do %>
               <div class="mt-8 flex justify-center">
-                <nav class="flex items-center gap-2">
-                  <%= if @pagination.page_number > 1 do %>
-                    <button
-                      phx-click="paginate"
-                      phx-value-page={@pagination.page_number - 1}
-                      class="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
-                    >
-                      Previous
-                    </button>
-                  <% end %>
-
-                  <span class="px-4 py-2 text-sm text-gray-600">
-                    Page <%= @pagination.page_number %> of <%= @pagination.total_pages %>
-                  </span>
-
-                  <%= if @pagination.page_number < @pagination.total_pages do %>
-                    <button
-                      phx-click="paginate"
-                      phx-value-page={@pagination.page_number + 1}
-                      class="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
-                    >
-                      Next
-                    </button>
-                  <% end %>
-                </nav>
+                <button
+                  phx-click="load_more"
+                  class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  Load More Venues
+                </button>
               </div>
             <% end %>
           <% end %>
