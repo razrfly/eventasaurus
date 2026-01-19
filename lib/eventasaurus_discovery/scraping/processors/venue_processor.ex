@@ -959,7 +959,19 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Validate scraped name against geocoded name to prevent bad venue names
     # This uses VenueNameValidator to compare scraped vs geocoded names
     # Now this will ALWAYS work because geocoding_metadata is always populated
-    final_name = validate_and_choose_venue_name(data.name, geocoding_metadata, source_scraper)
+    #
+    # IMPORTANT: When the scraper provides GPS coordinates, we trust the scraper's name
+    # more heavily. Geocoding by address can find the wrong business at the same address
+    # (e.g., finding a pharmacy "Dr. Max" instead of "Cinema City Bonarka" - see #3307).
+    scraper_provided_coordinates = not is_nil(data.latitude) and not is_nil(data.longitude)
+
+    final_name =
+      validate_and_choose_venue_name(
+        data.name,
+        geocoding_metadata,
+        source_scraper,
+        scraper_provided_coordinates
+      )
 
     # Prefer geocoding provider's place_id over scraper's place_id
     final_place_id = geocoding_place_id || data.place_id
@@ -1470,7 +1482,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   # Validates venue name using VenueNameValidator and returns the best name to use
   # This prevents bad venue names (UI elements, image captions) from entering the database
-  defp validate_and_choose_venue_name(scraped_name, geocoding_metadata, source_scraper) do
+  defp validate_and_choose_venue_name(
+         scraped_name,
+         geocoding_metadata,
+         source_scraper,
+         scraper_provided_coordinates
+       ) do
     # Build metadata structure expected by VenueNameValidator
     # VenueNameValidator expects: %{"geocoding_metadata" => geocoding_metadata}
     # AddressGeocoder returns atom-keyed maps, but VenueNameValidator expects string keys
@@ -1502,13 +1519,30 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         chosen_name
 
       {:ok, chosen_name, :geocoded_low_similarity, similarity} ->
-        # Very different - strongly preferring geocoded name
-        Logger.warning(
-          "🏛️ 🔴 Replacing bad venue name: '#{scraped_name}' → '#{chosen_name}' " <>
-            "(similarity: #{Float.round(similarity * 100, 1)}%, scraper: #{source_scraper})"
-        )
+        # Very different names - but context matters!
+        #
+        # FIX for #3307: When scrapers provide GPS coordinates, they have authoritative
+        # venue data from their API. Geocoding by address can find the WRONG business
+        # at the same street address (e.g., Cinema City entrance is next to Dr. Max pharmacy).
+        #
+        # In this case, trust the scraper's name over the geocoded name.
+        if scraper_provided_coordinates do
+          Logger.warning(
+            "🏛️ 🟡 Trusting scraper name despite low geocoding similarity: '#{scraped_name}' " <>
+              "(geocoded: '#{chosen_name}', similarity: #{Float.round(similarity * 100, 1)}%, " <>
+              "scraper: #{source_scraper} provided GPS coordinates)"
+          )
 
-        chosen_name
+          scraped_name
+        else
+          # No GPS from scraper - geocoding is our best source, use geocoded name
+          Logger.warning(
+            "🏛️ 🔴 Replacing bad venue name: '#{scraped_name}' → '#{chosen_name}' " <>
+              "(similarity: #{Float.round(similarity * 100, 1)}%, scraper: #{source_scraper})"
+          )
+
+          chosen_name
+        end
 
       {:warning, scraped_name, :no_geocoded_name} ->
         # No geocoded name available - use scraped and log warning
