@@ -277,9 +277,11 @@ defmodule EventasaurusApp.Events.DateMetadata do
         changeset
 
       timezone when is_binary(timezone) ->
-        # Basic timezone validation - accept UTC, Europe/Warsaw (default), IANA format, or offset
+        # Timezone validation - accept UTC, common timezones, IANA format, or offset
+        # IANA format supports multi-segment names like America/Argentina/Buenos_Aires
+        # and hyphenated names like America/Port-au-Prince
         if timezone in ["UTC", "Europe/Warsaw"] or
-             Regex.match?(~r/^[A-Z][a-z]+\/[A-Z][a-z_]+$/, timezone) or
+             Regex.match?(~r/^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+)+$/, timezone) or
              Regex.match?(~r/^[+-]\d{2}:\d{2}$/, timezone) do
           changeset
         else

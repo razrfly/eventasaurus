@@ -80,6 +80,7 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
      |> assign_new(:allow_multiple, fn -> true end)
      |> assign_new(:timezone, fn -> "UTC" end)
      |> assign_new(:format, fn -> "24_hour" end)
+    |> normalize_format()
      |> assign_new(:class, fn -> "" end)
      |> assign_new(:required, fn -> false end)
      |> assign(:time_slots, time_slots)
@@ -734,5 +735,23 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
         # Return original if invalid format
         time_string
     end
+  end
+
+  # Normalize format from atom to string for consistent pattern matching
+  # Accepts both atoms (:12_hour, :24_hour) and strings ("12_hour", "24_hour")
+  defp normalize_format(socket) do
+    format = socket.assigns[:format]
+
+    normalized =
+      case format do
+        :"12_hour" -> "12_hour"
+        :"24_hour" -> "24_hour"
+        "12_hour" -> "12_hour"
+        "24_hour" -> "24_hour"
+        # Default to 24-hour format (European standard)
+        _ -> "24_hour"
+      end
+
+    assign(socket, :format, normalized)
   end
 end
