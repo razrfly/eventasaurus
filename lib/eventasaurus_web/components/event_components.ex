@@ -1438,7 +1438,9 @@ defmodule EventasaurusWeb.EventComponents do
   defp format_ticket_datetime(nil, _event), do: ""
 
   defp format_ticket_datetime(%DateTime{} = datetime, event) do
-    timezone = if event && event.timezone, do: event.timezone, else: TimezoneUtils.default_timezone()
+    timezone =
+      if event && event.timezone, do: event.timezone, else: TimezoneUtils.default_timezone()
+
     shifted = DateTimeHelper.utc_to_timezone(datetime, timezone)
 
     date_part = Calendar.strftime(shifted, "%m/%d")

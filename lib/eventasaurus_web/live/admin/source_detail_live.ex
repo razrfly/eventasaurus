@@ -479,7 +479,10 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     |> Enum.group_by(fn {queue, _state, _count} -> queue end)
     |> Enum.map(fn {queue, rows} ->
       counts =
-        Enum.reduce(rows, %{available: 0, executing: 0, scheduled: 0, retryable: 0}, fn {_q, state, count}, acc ->
+        Enum.reduce(rows, %{available: 0, executing: 0, scheduled: 0, retryable: 0}, fn {_q,
+                                                                                         state,
+                                                                                         count},
+                                                                                        acc ->
           Map.put(acc, String.to_atom(state), count)
         end)
 
@@ -568,7 +571,10 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
            WHERE id = $1
            RETURNING id
            """,
-           [job_id, Jason.encode!(%{at: DateTime.utc_now(), error: "Manually cancelled via admin UI"})]
+           [
+             job_id,
+             Jason.encode!(%{at: DateTime.utc_now(), error: "Manually cancelled via admin UI"})
+           ]
          ) do
       {:ok, %{num_rows: 1}} -> {:ok, job_id}
       {:ok, %{num_rows: 0}} -> {:error, "Job not found"}
@@ -2026,9 +2032,14 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   defp chain_node_state_icon("cancelled"), do: "✗"
   defp chain_node_state_icon(_), do: "○"
 
-  defp chain_success_rate_color(rate) when rate >= 90, do: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-  defp chain_success_rate_color(rate) when rate >= 70, do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
-  defp chain_success_rate_color(_), do: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+  defp chain_success_rate_color(rate) when rate >= 90,
+    do: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+
+  defp chain_success_rate_color(rate) when rate >= 70,
+    do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+
+  defp chain_success_rate_color(_),
+    do: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
 
   # Queue Health Tab (Phase 1)
   defp render_queue_health_tab(assigns) do
@@ -2317,7 +2328,8 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   defp queue_health_issue_count(nil), do: 0
 
   defp queue_health_issue_count(data) do
-    length(data.zombie_available) + length(data.priority_zero_blockers) + length(data.stuck_executing)
+    length(data.zombie_available) + length(data.priority_zero_blockers) +
+      length(data.stuck_executing)
   end
 
   defp sync_run_status_color("completed"), do: "text-green-500"
@@ -2469,7 +2481,8 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     end
   end
 
-  defp confidence_level_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+  defp confidence_level_color(_),
+    do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
 
   # Helper to convert DateTime or NaiveDateTime to Date
   defp datetime_to_date(%DateTime{} = dt), do: DateTime.to_date(dt)

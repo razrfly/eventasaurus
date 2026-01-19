@@ -258,7 +258,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           "open_plan_modal" ->
             # User is authenticated and wants to open Plan with Friends modal
             if socket.assigns[:auth_user] do
-              Logger.info("[PublicEventShowLive] Auto-opening Plan with Friends modal via URL param")
+              Logger.info(
+                "[PublicEventShowLive] Auto-opening Plan with Friends modal via URL param"
+              )
+
               assign(socket, :show_plan_with_friends_modal, true)
             else
               socket

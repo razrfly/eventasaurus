@@ -32,9 +32,11 @@ defmodule EventasaurusWeb.Auth.ClerkAuthController do
   # Validate return_to is a safe internal URL (prevents open redirect attacks)
   defp get_safe_return_to(nil), do: nil
   defp get_safe_return_to(""), do: nil
+
   defp get_safe_return_to(url) when is_binary(url) do
     if valid_internal_url?(url), do: url, else: nil
   end
+
   defp get_safe_return_to(_), do: nil
 
   @doc """

@@ -620,7 +620,9 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   end
 
   # Mode :single_day - Exactly 1 date with availability (auto-select it)
-  defp render_date_selection(%{date_mode: :single_day, available_dates: [{date, count}]} = assigns) do
+  defp render_date_selection(
+         %{date_mode: :single_day, available_dates: [{date, count}]} = assigns
+       ) do
     assigns = assign(assigns, :single_date, date)
     assigns = assign(assigns, :single_count, count)
 
@@ -663,7 +665,9 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   end
 
   # Mode :simple_list - 2-5 dates with availability (simple buttons)
-  defp render_date_selection(%{date_mode: :simple_list, available_dates: available_dates} = assigns) do
+  defp render_date_selection(
+         %{date_mode: :simple_list, available_dates: available_dates} = assigns
+       ) do
     assigns = assign(assigns, :available_dates_list, available_dates)
 
     ~H"""
