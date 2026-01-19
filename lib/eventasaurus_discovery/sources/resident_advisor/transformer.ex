@@ -13,6 +13,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
   alias EventasaurusDiscovery.Sources.ResidentAdvisor.{VenueEnricher, Config, UmbrellaDetector}
   alias EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.DateParser
   alias EventasaurusDiscovery.Helpers.CityResolver
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
 
   @doc """
   Transform a raw RA GraphQL event into our unified format.
@@ -91,8 +92,10 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
           # Original URL for reference
           source_url: Config.build_event_url(event["contentUrl"]),
 
-          # Raw data for debugging (including promoter info for container grouping)
-          raw_data: Map.merge(raw_event, extract_promoter_data(event))
+          # Metadata with raw upstream data for debugging (including promoter info for container grouping)
+          metadata: %{
+            "_raw_upstream" => JsonSanitizer.sanitize(Map.merge(raw_event, extract_promoter_data(event)))
+          }
         }
 
         {:ok, transformed}
@@ -522,7 +525,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
       ends_at: extract_ends_at(event, city_context),
       description: extract_description(event),
       image_url: extract_image_url(event),
-      raw_data: Map.merge(raw_event, extract_promoter_data(event)),
+      metadata: %{
+        "_raw_upstream" => JsonSanitizer.sanitize(Map.merge(raw_event, extract_promoter_data(event)))
+      },
       umbrella_metadata: metadata,
       tags: ["festival", "resident-advisor"]
     }

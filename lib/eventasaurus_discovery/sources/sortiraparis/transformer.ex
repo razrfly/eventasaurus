@@ -69,6 +69,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   alias EventasaurusDiscovery.Sources.Sortiraparis.Config
   alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
   alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
 
   @doc """
   Transform raw event data into unified format.
@@ -355,6 +356,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
       # Metadata (include occurrence_type for consistency)
       metadata: %{
+        "_raw_upstream" => JsonSanitizer.sanitize(raw_event),
         article_id: article_id,
         # Store in metadata JSONB (validated type)
         occurrence_type: "explicit",
@@ -423,6 +425,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       # Metadata - CRITICAL: Store occurrence_type = "exhibition" in JSONB
       # Events with unparseable dates are treated as exhibitions (open-ended)
       metadata: %{
+        "_raw_upstream" => JsonSanitizer.sanitize(raw_event),
         article_id: article_id,
         # JSONB storage for occurrence type (validated)
         occurrence_type: "exhibition",
@@ -495,6 +498,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
       # Metadata (include occurrence_type for consistency)
       metadata: %{
+        "_raw_upstream" => JsonSanitizer.sanitize(raw_event),
         article_id: article_id,
         # Store in metadata JSONB
         occurrence_type: "exhibition",
@@ -550,6 +554,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
       # Metadata - include recurrence pattern and occurrence_type
       metadata: %{
+        "_raw_upstream" => JsonSanitizer.sanitize(raw_event),
         article_id: article_id,
         # Store in metadata JSONB
         occurrence_type: "recurring",

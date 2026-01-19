@@ -12,6 +12,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
   require Logger
 
   alias EventasaurusDiscovery.Sources.Kupbilecik.Config
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
 
   @doc """
   Transforms a list of raw events into standardized format.
@@ -65,7 +66,10 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
         max_price: max_price,
         price_info: raw_event["price"],
         ticket_url: raw_event["ticket_url"] || raw_event["url"],
-        source_data: raw_event
+        # Metadata with raw upstream data for debugging
+        metadata: %{
+          "_raw_upstream" => JsonSanitizer.sanitize(raw_event)
+        }
       }
 
       [event]
