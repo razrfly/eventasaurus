@@ -1907,7 +1907,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   defp format_datetime(nil), do: "Never"
 
   defp format_datetime(%DateTime{} = dt) do
-    Calendar.strftime(dt, "%b %d, %Y %I:%M %p")
+    Calendar.strftime(dt, "%b %d, %Y %H:%M")
   end
 
   defp format_datetime(%NaiveDateTime{} = dt) do

@@ -2,6 +2,14 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
   @moduledoc """
   Formats occurrence query results into poll option attributes.
 
+  All times are displayed in 24-hour format (European standard) using TimeUtils.
+
+  ## Time Format
+
+  This module uses 24-hour format consistently:
+  - "14:30" instead of "2:30 PM"
+  - "19:00" instead of "7:00 PM"
+
   Converts raw occurrence data (movie showtimes, venue slots, etc.) into structured
   poll option maps that can be inserted as PollOption records.
 
@@ -9,12 +17,12 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
 
   ### Movie Occurrences
 
-  **Title Format**: `"{Movie Title} @ {Venue Name}"`
+  **Title Format**: `"{Movie Title} @ {Venue Name} - {Time}"`
   **Description Format**: `"{Day of Week}, {Date} at {Time}"`
 
   Example:
-  - Title: "Dune: Part Two @ Cinema City Arkadia"
-  - Description: "Friday, Nov 25 at 7:00 PM"
+  - Title: "Dune: Part Two @ Cinema City Arkadia - 19:00"
+  - Description: "Friday, Nov 25 at 19:00"
 
   ### Venue Time Slot Occurrences
 
@@ -23,7 +31,7 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
 
   Example:
   - Title: "La Forchetta - Dinner"
-  - Description: "Friday, Nov 25 from 6:00 PM to 10:00 PM"
+  - Description: "Friday, Nov 25 from 18:00 to 22:00"
 
   ### External ID Formats
 
@@ -70,14 +78,16 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
       ...> ]
       iex> OccurrenceFormatter.format_movie_options(occurrences)
       [%{
-        title: "Dune: Part Two @ Cinema City Arkadia",
-        description: "Friday, Nov 25 at 7:00 PM",
+        title: "Dune: Part Two @ Cinema City Arkadia - 19:00",
+        description: "Friday, Nov 25 at 19:00",
         external_id: "event:456",
         external_data: %{...},
         metadata: %{...},
         order_index: 0
       }]
   """
+
+  alias EventasaurusWeb.Utils.TimeUtils
 
   @doc """
   Formats movie occurrence query results into poll option attributes.
@@ -281,7 +291,7 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
     # Guard against nil datetime to prevent FunctionClauseError
     case datetime do
       nil -> "#{movie} @ #{venue}"
-      dt -> "#{movie} @ #{venue} - #{Calendar.strftime(dt, "%I:%M %p")}"
+      dt -> "#{movie} @ #{venue} - #{TimeUtils.format_time(dt)}"
     end
   end
 
@@ -294,7 +304,7 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
     # Guard against nil datetime to prevent FunctionClauseError
     case datetime do
       nil -> "#{movie} @ #{venue}"
-      dt -> "#{movie} @ #{venue} - #{Calendar.strftime(dt, "%I:%M %p")}"
+      dt -> "#{movie} @ #{venue} - #{TimeUtils.format_time(dt)}"
     end
   end
 
@@ -308,7 +318,7 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
 
         day_name = Calendar.strftime(shifted, "%A")
         date_str = format_date(shifted, format)
-        time_str = Calendar.strftime(shifted, "%I:%M %p")
+        time_str = TimeUtils.format_time(shifted)
 
         "#{day_name}, #{date_str} at #{time_str}"
     end
@@ -383,8 +393,8 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatter do
 
     day_name = Calendar.strftime(starts, "%A")
     date_str = format_date(starts, date_format)
-    start_time = Calendar.strftime(starts, "%I:%M %p")
-    end_time = Calendar.strftime(ends, "%I:%M %p")
+    start_time = TimeUtils.format_time(starts)
+    end_time = TimeUtils.format_time(ends)
 
     "#{day_name}, #{date_str} from #{start_time} to #{end_time}"
   end

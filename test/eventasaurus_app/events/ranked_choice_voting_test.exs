@@ -11,17 +11,19 @@ defmodule EventasaurusApp.Events.RankedChoiceVotingTest do
       event = event_fixture(%{creator_id: user.id})
 
       poll =
-        poll_fixture(event, %{
+        poll_fixture(%{
+          event: event,
+          user: user,
           title: "Test Ranked Choice Poll",
           voting_system: "ranked",
           poll_type: "generic"
         })
 
       # Create poll options
-      option_a = poll_option_fixture(poll, %{title: "Option A"})
-      option_b = poll_option_fixture(poll, %{title: "Option B"})
-      option_c = poll_option_fixture(poll, %{title: "Option C"})
-      option_d = poll_option_fixture(poll, %{title: "Option D"})
+      option_a = poll_option_fixture(%{poll: poll, user: user, title: "Option A"})
+      option_b = poll_option_fixture(%{poll: poll, user: user, title: "Option B"})
+      option_c = poll_option_fixture(%{poll: poll, user: user, title: "Option C"})
+      option_d = poll_option_fixture(%{poll: poll, user: user, title: "Option D"})
 
       %{
         poll: poll,
@@ -177,15 +179,17 @@ defmodule EventasaurusApp.Events.RankedChoiceVotingTest do
       event = event_fixture(%{creator_id: user.id})
 
       poll =
-        poll_fixture(event, %{
+        poll_fixture(%{
+          event: event,
+          user: user,
           title: "Test Leaderboard Poll",
           voting_system: "ranked",
           poll_type: "generic"
         })
 
-      option_a = poll_option_fixture(poll, %{title: "Leader"})
-      option_b = poll_option_fixture(poll, %{title: "Runner Up"})
-      option_c = poll_option_fixture(poll, %{title: "Eliminated"})
+      option_a = poll_option_fixture(%{poll: poll, user: user, title: "Leader"})
+      option_b = poll_option_fixture(%{poll: poll, user: user, title: "Runner Up"})
+      option_c = poll_option_fixture(%{poll: poll, user: user, title: "Eliminated"})
 
       %{poll: poll, options: %{a: option_a, b: option_b, c: option_c}, user: user}
     end

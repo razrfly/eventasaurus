@@ -138,7 +138,7 @@ defmodule EventasaurusWeb.Components.Activity.ConcertHeroCard do
               <div class="flex items-center text-white/90 mb-3">
                 <Heroicons.calendar class="w-5 h-5 mr-2" />
                 <span class="text-lg">
-                  <%= HeroCardHelpers.format_datetime(@event.starts_at, "%A, %B %d, %Y · %I:%M %p") %>
+                  <%= HeroCardHelpers.format_datetime(@event.starts_at, "%A, %B %d, %Y · %H:%M") %>
                 </span>
               </div>
             <% end %>

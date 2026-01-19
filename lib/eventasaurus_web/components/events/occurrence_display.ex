@@ -13,6 +13,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
   use Gettext, backend: EventasaurusWeb.Gettext
   alias EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector
   alias EventasaurusWeb.Helpers.PublicEventDisplayHelpers
+  alias EventasaurusWeb.Utils.TimeUtils
 
   attr :event, :map, required: true
   attr :occurrence_list, :list, required: true
@@ -223,10 +224,12 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
   defp format_occurrence_datetime(nil), do: gettext("Select a date")
 
   defp format_occurrence_datetime(%{datetime: datetime}) do
-    Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
+    date_part = Calendar.strftime(datetime, "%A, %B %d, %Y")
+    time_part = TimeUtils.format_time(datetime)
+    "#{date_part} at #{time_part}"
   end
 
   defp format_time_only(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%I:%M %p")
+    TimeUtils.format_time(datetime)
   end
 end

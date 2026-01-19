@@ -152,11 +152,8 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
         gettext("Date TBD")
 
       date ->
-        # Format as "Dec 25, 2024 at 7:00 PM"
-        # Note: %I is 12-hour format with leading zeros, we'll trim them
-        formatted = Calendar.strftime(date, "%b %d, %Y at %I:%M %p")
-        # Remove leading zero from hour if present
-        String.replace(formatted, ~r/at 0(\d)/, "at \\1")
+        # Format as "Dec 25, 2024 at 19:00" (24-hour format)
+        Calendar.strftime(date, "%b %d, %Y at %H:%M")
     end
   end
 

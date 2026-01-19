@@ -42,7 +42,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Poll
-  alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.Utils.MovieUtils
   alias EventasaurusWeb.EmbeddedProgressBarComponent
   import EventasaurusWeb.VoterCountDisplay
@@ -1988,10 +1987,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   defp format_time_slot_display(slot) when is_map(slot) do
     case {slot["start_time"], slot["end_time"]} do
       {start_time, end_time} when is_binary(start_time) and is_binary(end_time) ->
-        # Convert 24-hour format to 12-hour format for display
-        start_display = TimeUtils.format_time_12hour(start_time)
-        end_display = TimeUtils.format_time_12hour(end_time)
-        "#{start_display} - #{end_display}"
+        # Use 24-hour format for display (European standard)
+        "#{start_time} - #{end_time}"
 
       _ ->
         "Invalid time slot"

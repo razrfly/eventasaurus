@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   import EventasaurusWeb.Components.IndividualEmailInput
 
   alias EventasaurusApp.Images.MovieImages
+  alias EventasaurusWeb.Utils.TimeUtils
 
   # Configuration for adaptive date selection UI
   # Dates with availability <= this threshold use simple list UI
@@ -1240,7 +1241,9 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
           DateTime.utc_now()
       end
 
-    Calendar.strftime(parsed_datetime, "%A, %B %d at %I:%M %p")
+    date_part = Calendar.strftime(parsed_datetime, "%A, %B %d")
+    time_part = TimeUtils.format_time(parsed_datetime)
+    "#{date_part} at #{time_part}"
   end
 
   # Generate list of dates for selection (7 days for movies, 14 for venues)

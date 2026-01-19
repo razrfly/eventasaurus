@@ -221,7 +221,7 @@ defmodule EventasaurusWeb.ProfileHTML do
   def format_join_date(nil), do: ""
 
   @doc """
-  Format event date for display in event cards
+  Format event date for display in event cards (24-hour format)
   """
   def format_event_date(datetime, timezone \\ nil)
 
@@ -231,13 +231,13 @@ defmodule EventasaurusWeb.ProfileHTML do
         try do
           datetime
           |> DateTime.shift_zone!(tz)
-          |> Calendar.strftime("%a, %b %d, %I:%M %p")
+          |> Calendar.strftime("%a, %b %d, %H:%M")
         rescue
-          _ -> Calendar.strftime(datetime, "%a, %b %d, %I:%M %p UTC")
+          _ -> Calendar.strftime(datetime, "%a, %b %d, %H:%M UTC")
         end
 
       _ ->
-        Calendar.strftime(datetime, "%a, %b %d, %I:%M %p UTC")
+        Calendar.strftime(datetime, "%a, %b %d, %H:%M UTC")
     end
   end
 

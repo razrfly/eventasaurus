@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
 
   alias EventasaurusApp.DateTimeHelper
   alias EventasaurusWeb.Helpers.PublicEventDisplayHelpers
+  alias EventasaurusWeb.Utils.{TimeUtils, TimezoneUtils}
   import EventasaurusWeb.Helpers.LanguageHelpers
 
   attr :event, :map, required: true
@@ -209,17 +210,15 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   defp format_time(nil, _timezone), do: "Time TBD"
 
   defp format_time(%DateTime{} = datetime, timezone) do
-    timezone = timezone || "UTC"
+    timezone = timezone || TimezoneUtils.default_timezone()
     converted_dt = DateTimeHelper.utc_to_timezone(datetime, timezone)
 
-    Calendar.strftime(converted_dt, "%I:%M %p")
-    |> String.replace(" 0", " ")
+    TimeUtils.format_time(converted_dt)
   end
 
   defp format_time(%NaiveDateTime{} = datetime, _timezone) do
     # NaiveDateTime doesn't have timezone info, format as-is
-    Calendar.strftime(datetime, "%I:%M %p")
-    |> String.replace(" 0", " ")
+    TimeUtils.format_time(%Time{hour: datetime.hour, minute: datetime.minute, second: 0})
   end
 
   defp format_time(_, _), do: "Time TBD"

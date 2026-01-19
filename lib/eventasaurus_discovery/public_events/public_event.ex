@@ -347,6 +347,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   use Ecto.Schema
   import Ecto.Changeset
   alias EventasaurusDiscovery.PublicEvents.PublicEvent.Slug
+  alias EventasaurusWeb.Utils.TimezoneUtils
 
   schema "public_events" do
     field(:title, :string)
@@ -500,7 +501,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   def next_occurrence_date(%__MODULE__{occurrences: %{"dates" => dates}, starts_at: starts_at} = event)
       when is_list(dates) do
     # Get timezone for creating local DateTimes
-    timezone = get_event_timezone(event)
+    timezone = TimezoneUtils.get_event_timezone(event)
 
     # Use local time for comparison since occurrence times are local
     # Handle timezone errors gracefully
@@ -539,15 +540,4 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   end
 
   def next_occurrence_date(%__MODULE__{starts_at: starts_at}), do: starts_at
-
-  # Get timezone for event based on venue location
-  defp get_event_timezone(%{venue: %{latitude: lat, longitude: lng}})
-       when not is_nil(lat) and not is_nil(lng) do
-    case TzWorld.timezone_at({lng, lat}) do
-      {:ok, tz} -> tz
-      _ -> "Europe/Warsaw"
-    end
-  end
-
-  defp get_event_timezone(_), do: "Europe/Warsaw"
 end

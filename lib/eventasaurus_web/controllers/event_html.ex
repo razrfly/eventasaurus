@@ -17,8 +17,7 @@ defmodule EventasaurusWeb.EventHTML do
         dt
       end
 
-    Calendar.strftime(converted_dt, "%A, %B %d · %I:%M %p")
-    |> String.replace(" 0", " ")
+    Calendar.strftime(converted_dt, "%A, %B %d · %H:%M")
   end
 
   def format_datetime(_, _), do: "Date not set"
@@ -34,8 +33,7 @@ defmodule EventasaurusWeb.EventHTML do
         dt
       end
 
-    Calendar.strftime(converted_dt, "%I:%M %p")
-    |> String.replace(" 0", " ")
+    Calendar.strftime(converted_dt, "%H:%M")
   end
 
   def format_time(_, _), do: ""
@@ -64,9 +62,9 @@ defmodule EventasaurusWeb.EventHTML do
       <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%A, %B %d, %Y") %>
     </p>
     <p class="text-gray-600 text-sm">
-      <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
+      <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%H:%M") %>
       <%= if @event.ends_at do %>
-        - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
+        - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%H:%M") %>
       <% end %>
       <%= if @event.timezone do %>(<%= @event.timezone %>)<% end %>
     </p>

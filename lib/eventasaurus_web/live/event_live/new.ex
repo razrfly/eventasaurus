@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusWeb.Services.SearchService
   alias EventasaurusWeb.Helpers.ImageHelpers
   alias EventasaurusApp.DateTimeHelper
+  alias EventasaurusWeb.Utils.TimezoneUtils
 
   @valid_setup_paths ~w[polling confirmed threshold]
 
@@ -1751,7 +1752,7 @@ defmodule EventasaurusWeb.EventLive.New do
         case validate_flexible_pricing(ticket_data, pricing_model, price_cents) do
           {:ok, minimum_price_cents, suggested_price_cents} ->
             # Determine timezone for ticket date parsing from form data
-            tz = Map.get(socket.assigns.form_data || %{}, "timezone", "UTC")
+            tz = Map.get(socket.assigns.form_data || %{}, "timezone") || TimezoneUtils.default_timezone()
 
             # Create ticket struct
             ticket = %{
@@ -2057,7 +2058,7 @@ defmodule EventasaurusWeb.EventLive.New do
   defp process_start_datetime(params) do
     start_date = Map.get(params, "start_date")
     start_time = Map.get(params, "start_time")
-    timezone = Map.get(params, "timezone", "UTC")
+    timezone = Map.get(params, "timezone") || TimezoneUtils.default_timezone()
 
     case DateTimeHelper.parse_user_datetime(start_date, start_time, timezone) do
       {:ok, datetime} ->
@@ -2072,7 +2073,7 @@ defmodule EventasaurusWeb.EventLive.New do
   defp process_end_datetime(params) do
     ends_date = Map.get(params, "ends_date")
     ends_time = Map.get(params, "ends_time")
-    timezone = Map.get(params, "timezone", "UTC")
+    timezone = Map.get(params, "timezone") || TimezoneUtils.default_timezone()
 
     case DateTimeHelper.parse_user_datetime(ends_date, ends_time, timezone) do
       {:ok, datetime} ->
@@ -2450,7 +2451,7 @@ defmodule EventasaurusWeb.EventLive.New do
   # Map funding_deadline or decision_deadline to polling_deadline
   # Note: The Event schema uses polling_deadline for all deadline purposes
   defp map_deadline_fields(params) do
-    timezone = Map.get(params, "timezone", "UTC")
+    timezone = Map.get(params, "timezone") || TimezoneUtils.default_timezone()
 
     # Check for funding_deadline (crowdfunding) or decision_deadline (interest)
     deadline_str = Map.get(params, "funding_deadline") || Map.get(params, "decision_deadline")

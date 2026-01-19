@@ -674,13 +674,11 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         {:error, _} -> datetime
       end
 
-    Calendar.strftime(local_datetime, "%b %d at %I:%M %p")
-    |> String.replace(" 0", " ")
+    Calendar.strftime(local_datetime, "%b %d at %H:%M")
   end
 
   defp format_datetime_with_tz(%NaiveDateTime{} = datetime, _event) do
-    Calendar.strftime(datetime, "%b %d at %I:%M %p")
-    |> String.replace(" 0", " ")
+    Calendar.strftime(datetime, "%b %d at %H:%M")
   end
 
   defp format_datetime_with_tz(_, _), do: "Date TBD"

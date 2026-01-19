@@ -38,7 +38,8 @@ defmodule EventasaurusApp.Events.DateMetadata do
     embeds_many :time_slots, TimeSlot, primary_key: false do
       field(:start_time, :string)
       field(:end_time, :string)
-      field(:timezone, :string, default: "UTC")
+      # Default to Europe/Warsaw - the primary market for this application
+      field(:timezone, :string, default: "Europe/Warsaw")
       field(:display, :string)
     end
   end
@@ -276,8 +277,8 @@ defmodule EventasaurusApp.Events.DateMetadata do
         changeset
 
       timezone when is_binary(timezone) ->
-        # Basic timezone validation - accept UTC, common timezones, and IANA format
-        if timezone in ["UTC"] or
+        # Basic timezone validation - accept UTC, Europe/Warsaw (default), IANA format, or offset
+        if timezone in ["UTC", "Europe/Warsaw"] or
              Regex.match?(~r/^[A-Z][a-z]+\/[A-Z][a-z_]+$/, timezone) or
              Regex.match?(~r/^[+-]\d{2}:\d{2}$/, timezone) do
           changeset
@@ -359,29 +360,18 @@ defmodule EventasaurusApp.Events.DateMetadata do
   end
 
   defp generate_time_display(start_time, end_time) do
-    "#{format_time_12hour(start_time)} - #{format_time_12hour(end_time)}"
+    "#{format_time_24h(start_time)} - #{format_time_24h(end_time)}"
   end
 
-  defp format_time_12hour(time_string) do
+  defp format_time_24h(time_string) do
     case parse_time_to_minutes(time_string) do
       {:ok, minutes} ->
         hour = div(minutes, 60)
         minute = rem(minutes, 60)
 
-        {display_hour, period} =
-          if hour == 0 do
-            {12, "AM"}
-          else
-            if hour < 12 do
-              {hour, "AM"}
-            else
-              display_hour = if hour == 12, do: 12, else: hour - 12
-              {display_hour, "PM"}
-            end
-          end
-
-        minute_str = ":#{String.pad_leading("#{minute}", 2, "0")}"
-        "#{display_hour}#{minute_str} #{period}"
+        hour_str = String.pad_leading("#{hour}", 2, "0")
+        minute_str = String.pad_leading("#{minute}", 2, "0")
+        "#{hour_str}:#{minute_str}"
 
       _ ->
         time_string
@@ -514,9 +504,12 @@ defmodule EventasaurusApp.Events.DateMetadata do
 
   @doc """
   Builds time slot metadata structure.
+
+  Defaults to Europe/Warsaw timezone (the primary market) if not specified.
   """
   def build_time_slot(start_time, end_time, opts \\ []) do
-    timezone = Keyword.get(opts, :timezone, "UTC")
+    # Default to Europe/Warsaw - the primary market for this application
+    timezone = Keyword.get(opts, :timezone, "Europe/Warsaw")
     display = Keyword.get(opts, :display, generate_time_display(start_time, end_time))
 
     %{

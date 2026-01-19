@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
 
   alias EventasaurusApp.Events.{Poll, PollOption, PollVote}
   alias EventasaurusApp.Repo
+  alias EventasaurusWeb.Utils.TimezoneUtils
   import Ecto.Query
   import Phoenix.HTML, only: [html_escape: 1, safe_to_string: 1]
 
@@ -101,7 +102,7 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   @doc """
   Enhanced date parsing with better error handling and timezone support.
   """
-  def parse_date_with_timezone(date_string, _timezone \\ "UTC") do
+  def parse_date_with_timezone(date_string, _timezone \\ nil) do
     with {:ok, date} <- Date.from_iso8601(date_string) do
       # For date-only polls, we use the date as-is
       # If we need timezone handling in the future, we can add it here
@@ -400,32 +401,29 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   def format_time_for_display(_), do: ""
 
   @doc """
-  Converts 24-hour time to 12-hour format with AM/PM.
+  Formats time in 24-hour format.
+
+  Legacy function name retained for compatibility.
   """
   def format_12_hour_time(hour, minute)
       when hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 do
-    {display_hour, period} =
-      case hour do
-        0 -> {12, "AM"}
-        h when h < 12 -> {h, "AM"}
-        12 -> {12, "PM"}
-        h -> {h - 12, "PM"}
-      end
-
+    hour_str = hour |> Integer.to_string() |> String.pad_leading(2, "0")
     minute_str = minute |> Integer.to_string() |> String.pad_leading(2, "0")
-    "#{display_hour}:#{minute_str} #{period}"
+    "#{hour_str}:#{minute_str}"
   end
 
   def format_12_hour_time(_, _), do: ""
 
   @doc """
   Gets the timezone from poll option metadata.
+
+  Falls back to Europe/Warsaw (the primary market) if not specified.
   """
   def get_timezone(%PollOption{metadata: metadata}) when is_map(metadata) do
-    Map.get(metadata, "timezone", "UTC")
+    Map.get(metadata, "timezone") || TimezoneUtils.default_timezone()
   end
 
-  def get_timezone(_), do: "UTC"
+  def get_timezone(_), do: TimezoneUtils.default_timezone()
 
   @doc """
   Creates a comprehensive display string for a date option including time information.

@@ -51,7 +51,7 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
      |> assign(:new_slot, %{
        "start_time" => "12:00",
        "end_time" => "13:00",
-       "display" => "12:00 PM - 1:00 PM"
+       "display" => "12:00 - 13:00"
      })
      |> assign(:errors, [])}
   end
@@ -79,14 +79,14 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
      |> assign_new(:all_day, fn -> false end)
      |> assign_new(:allow_multiple, fn -> true end)
      |> assign_new(:timezone, fn -> "UTC" end)
-     |> assign_new(:format, fn -> "12_hour" end)
+     |> assign_new(:format, fn -> "24_hour" end)
      |> assign_new(:class, fn -> "" end)
      |> assign_new(:required, fn -> false end)
      |> assign(:time_slots, time_slots)
      |> assign(:new_slot, %{
        "start_time" => "12:00",
        "end_time" => "13:00",
-       "display" => "12:00 PM - 1:00 PM"
+       "display" => "12:00 - 13:00"
      })}
   end
 
@@ -624,6 +624,7 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
   end
 
   defp format_time_for_display(time_string, "12_hour") when is_binary(time_string) do
+    # Legacy 12-hour format support
     TimeUtils.format_time_12hour(time_string)
   end
 
@@ -631,6 +632,8 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
     time_string
   end
 
+  # Default to 24-hour format (European standard)
+  defp format_time_for_display(time_string, _) when is_binary(time_string), do: time_string
   defp format_time_for_display(_, _), do: ""
 
   defp validate_time_slot(%{"start_time" => start_time, "end_time" => end_time})
@@ -690,8 +693,8 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
       time_value =
         "#{String.pad_leading(to_string(hour), 2, "0")}:#{String.pad_leading(to_string(minute), 2, "0")}"
 
-      display = TimeUtils.format_time_12hour(time_value)
-      %{value: time_value, display: display}
+      # Use 24-hour format for display (European standard)
+      %{value: time_value, display: time_value}
     end
   end
 

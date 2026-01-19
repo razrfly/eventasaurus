@@ -192,7 +192,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
   defp format_datetime(nil), do: "TBD"
 
   defp format_datetime(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
+    Calendar.strftime(datetime, "%b %d, %Y at %H:%M")
   end
 
   @impl true

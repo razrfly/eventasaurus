@@ -72,6 +72,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   alias EventasaurusDiscovery.PublicEvents.EventMovie
   alias EventasaurusDiscovery.Movies.Movie
   alias EventasaurusApp.Venues.Venue
+  alias EventasaurusWeb.Utils.TimezoneUtils
 
   @default_limit 50
 
@@ -96,6 +97,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
       venue_ids = get_filter_value(filter_criteria, :venue_ids, [])
 
       # Query events with their JSONB occurrences field
+      # Include venue coordinates for timezone calculation
       events_query =
         from(pe in PublicEvent,
           join: em in EventMovie,
@@ -113,6 +115,8 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
             movie_title: m.title,
             venue_name: v.name,
             venue_city_id: v.city_id,
+            venue_latitude: v.latitude,
+            venue_longitude: v.longitude,
             occurrences: pe.occurrences
           }
         )
@@ -180,6 +184,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   def find_event_occurrences(event_id, filter_criteria \\ %{}) do
     try do
       # Query the specific event with its JSONB occurrences field
+      # Include venue coordinates for timezone calculation
       event_query =
         from(pe in PublicEvent,
           left_join: v in Venue,
@@ -197,6 +202,8 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
             movie_title: m.title,
             venue_name: v.name,
             venue_city_id: v.city_id,
+            venue_latitude: v.latitude,
+            venue_longitude: v.longitude,
             occurrences: pe.occurrences
           }
         )
@@ -281,14 +288,20 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   end
 
   # Extract individual showtimes from an event's JSONB occurrences field
+  # Uses venue coordinates to determine the correct timezone for datetime parsing
   defp extract_showtimes_from_event(event, date_range, time_preferences) do
+    # Get timezone from venue coordinates (or use default)
+    timezone = get_venue_timezone_from_event(event)
+
     case event.occurrences do
       %{"dates" => dates} when is_list(dates) ->
         dates
         |> maybe_filter_by_date_range(date_range)
         |> maybe_filter_by_time_preferences(time_preferences)
         |> Enum.map(fn showtime ->
-          datetime = parse_showtime_datetime(showtime)
+          # IMPORTANT: Times in occurrences.dates[].time are LOCAL times,
+          # NOT UTC. They should be interpreted in the venue's timezone.
+          datetime = parse_showtime_datetime(showtime, timezone)
 
           %{
             public_event_id: event.public_event_id,
@@ -309,18 +322,41 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     end
   end
 
-  # Parse date and time strings into a DateTime
-  defp parse_showtime_datetime(%{"date" => date_str, "time" => time_str})
+  # Get timezone from venue coordinates in the event map
+  defp get_venue_timezone_from_event(%{venue_latitude: lat, venue_longitude: lng})
+       when is_number(lat) and is_number(lng) do
+    TimezoneUtils.get_timezone_from_coordinates(lat, lng)
+  end
+
+  defp get_venue_timezone_from_event(_event) do
+    # Fallback to default timezone if venue coordinates not available
+    TimezoneUtils.default_timezone()
+  end
+
+  # Parse date and time strings into a DateTime in the venue's local timezone.
+  #
+  # IMPORTANT: The times stored in occurrences.dates[].time are LOCAL times
+  # (e.g., "19:30" means 19:30 in Warsaw, not UTC). This function creates
+  # a DateTime in the correct local timezone, which can then be compared
+  # or shifted as needed.
+  defp parse_showtime_datetime(%{"date" => date_str, "time" => time_str}, timezone)
        when is_binary(date_str) and is_binary(time_str) do
     with {:ok, date} <- Date.from_iso8601(date_str),
          {:ok, time} <- parse_time_string(time_str) do
-      DateTime.new!(date, time, "Etc/UTC")
+      # Create DateTime in the venue's local timezone (not UTC!)
+      case DateTime.new(date, time, timezone) do
+        {:ok, datetime} -> datetime
+        # Handle DST gaps/overlaps by falling back to default behavior
+        {:gap, _before, after_dt} -> after_dt
+        {:ambiguous, first_dt, _second} -> first_dt
+        _ -> nil
+      end
     else
       _ -> nil
     end
   end
 
-  defp parse_showtime_datetime(_), do: nil
+  defp parse_showtime_datetime(_, _timezone), do: nil
 
   # Parse time string, handling both HH:MM and HH:MM:SS formats
   defp parse_time_string(time_str) do

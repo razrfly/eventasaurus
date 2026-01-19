@@ -6,6 +6,8 @@ defmodule EventasaurusWeb.Helpers.VoteDisplayHelper do
   vote-related data in a consistent way across the application.
   """
 
+  alias EventasaurusWeb.Utils.TimeUtils
+
   @doc """
   Formats a vote count with proper pluralization and optional percentage.
 
@@ -193,14 +195,14 @@ defmodule EventasaurusWeb.Helpers.VoteDisplayHelper do
   """
   def format_time_range(start_time, end_time, opts \\ [])
       when is_binary(start_time) and is_binary(end_time) do
-    format_24h = Keyword.get(opts, :format_24h, false)
+    format_24h = Keyword.get(opts, :format_24h, true)
 
     if format_24h do
       "#{start_time} - #{end_time}"
     else
-      # Convert to 12-hour format
-      start_display = format_time_12hour(start_time)
-      end_display = format_time_12hour(end_time)
+      # Convert to 12-hour format (legacy, not recommended)
+      start_display = TimeUtils.format_time_12hour(start_time)
+      end_display = TimeUtils.format_time_12hour(end_time)
       "#{start_display} - #{end_display}"
     end
   end
@@ -292,44 +294,6 @@ defmodule EventasaurusWeb.Helpers.VoteDisplayHelper do
       |> String.replace(~r/rating/, "rat")
     else
       base_summary
-    end
-  end
-
-  # Private helper functions
-
-  defp format_time_12hour(time_string) do
-    case String.split(time_string, ":") do
-      [hour_str, minute_str] ->
-        case {Integer.parse(hour_str), Integer.parse(minute_str)} do
-          {{hour, ""}, {minute, ""}} ->
-            {display_hour, period} =
-              if hour == 0 do
-                {12, "AM"}
-              else
-                if hour < 12 do
-                  {hour, "AM"}
-                else
-                  if hour == 12 do
-                    {12, "PM"}
-                  else
-                    {hour - 12, "PM"}
-                  end
-                end
-              end
-
-            minute_display =
-              if minute == 0,
-                do: "",
-                else: ":#{String.pad_leading(Integer.to_string(minute), 2, "0")}"
-
-            "#{display_hour}#{minute_display} #{period}"
-
-          _ ->
-            time_string
-        end
-
-      _ ->
-        time_string
     end
   end
 end

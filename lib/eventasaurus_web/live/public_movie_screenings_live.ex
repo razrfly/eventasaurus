@@ -17,6 +17,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusWeb.UrlHelper
   alias EventasaurusApp.Images.MovieImages
+  alias EventasaurusWeb.Utils.TimezoneUtils
   import Ecto.Query
 
   require Logger
@@ -957,7 +958,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       events
       |> Enum.flat_map(fn event ->
         # Get timezone for this event based on venue location
-        timezone = get_event_timezone(event)
+        timezone = TimezoneUtils.get_event_timezone(event)
 
         case get_in(event.occurrences, ["dates"]) do
           dates when is_list(dates) ->
@@ -1301,17 +1302,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   defp stringify_keys(map) when is_map(map) do
     Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
-
-  # Get timezone for event based on venue location
-  defp get_event_timezone(%{venue: %{latitude: lat, longitude: lng}})
-       when not is_nil(lat) and not is_nil(lng) do
-    case TzWorld.timezone_at({lng, lat}) do
-      {:ok, tz} -> tz
-      _ -> "Europe/Warsaw"
-    end
-  end
-
-  defp get_event_timezone(_), do: "Europe/Warsaw"
 
   # Enrich movie struct with TMDB metadata for JSON-LD generation
   # This populates the virtual tmdb_metadata field with credits data
