@@ -30,6 +30,7 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
 
   alias EventasaurusApp.{Repo, Events, Accounts}
   alias EventasaurusApp.Planning.{OccurrenceQuery, OccurrenceFormatter, OccurrencePlannings}
+  alias EventasaurusDiscovery.Movies.Movie
 
   @doc """
   Starts the flexible planning workflow.
@@ -92,7 +93,8 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
                filter_criteria
              ),
            manual_emails <- Keyword.get(opts, :manual_emails, []),
-           {:ok, invitations} <- invite_friends(private_event, friend_ids, manual_emails, organizer) do
+           {:ok, invitations} <-
+             invite_friends(private_event, friend_ids, manual_emails, organizer) do
         %{
           private_event: private_event,
           poll: poll,
@@ -147,6 +149,10 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
         [] -> nil
       end
 
+    # Load movie data for image and context when series_type is "movie"
+    {cover_image_url, external_image_data, rich_external_data} =
+      get_series_image_data(series_type, series_id)
+
     attrs = %{
       title: title,
       start_at: DateTime.utc_now() |> DateTime.add(7, :day),
@@ -154,13 +160,64 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
       timezone: "UTC",
       visibility: :private,
       status: :draft,
-      venue_id: venue_id
+      venue_id: venue_id,
+      cover_image_url: cover_image_url,
+      external_image_data: external_image_data,
+      rich_external_data: rich_external_data
     }
 
     case Events.create_event(attrs) do
       {:ok, event} -> {:ok, event}
       {:error, changeset} -> {:error, {:event_creation_failed, changeset}}
     end
+  end
+
+  # Load image data from the series entity (movie, venue, etc.)
+  defp get_series_image_data("movie", movie_id) do
+    case Repo.get(Movie, movie_id) do
+      nil ->
+        {nil, nil, nil}
+
+      movie ->
+        cover_image_url = movie.poster_url
+
+        # Build external_image_data with TMDB attribution
+        external_image_data =
+          if movie.tmdb_id && movie.poster_url do
+            %{
+              "source" => "tmdb",
+              "url" => movie.poster_url,
+              "metadata" => %{
+                "tmdb_id" => movie.tmdb_id,
+                "movie_title" => movie.title,
+                "type" => "movie_poster"
+              }
+            }
+          end
+
+        # Build rich_external_data with movie context for display
+        rich_external_data =
+          if movie.tmdb_id do
+            %{
+              "type" => "movie",
+              "movie_id" => movie.id,
+              "tmdb_id" => movie.tmdb_id,
+              "title" => movie.title,
+              "original_title" => movie.original_title,
+              "poster_url" => movie.poster_url,
+              "backdrop_url" => movie.backdrop_url,
+              "release_date" => movie.release_date && Date.to_iso8601(movie.release_date),
+              "runtime" => movie.runtime
+            }
+          end
+
+        {cover_image_url, external_image_data, rich_external_data}
+    end
+  end
+
+  defp get_series_image_data(_series_type, _series_id) do
+    # For other series types, no image data yet
+    {nil, nil, nil}
   end
 
   defp add_user_as_organizer(event, user_id) do
