@@ -8,6 +8,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
+  alias EventasaurusDiscovery.Sources.Shared.JsonSanitizer
 
   @doc """
   Transform a raw Karnet event into our unified format.
@@ -73,8 +74,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
           # Image
           image_url: raw_event[:image_url],
 
-          # Raw data for debugging
-          raw_data: raw_event
+          # Metadata with raw upstream data for debugging
+          metadata: %{
+            "_raw_upstream" => JsonSanitizer.sanitize(raw_event)
+          }
         }
 
         {:ok, transformed}

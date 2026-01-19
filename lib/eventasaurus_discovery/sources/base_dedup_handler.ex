@@ -241,17 +241,17 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
         select: %{event: e, source: s}
       )
 
-    # Add GPS proximity filter if coordinates available
+    # Add GPS proximity filter if coordinates available (using PostGIS)
     query =
       if latitude && longitude do
         from([e, v, es, s] in query,
           where:
             fragment(
-              "earth_distance(ll_to_earth(?, ?), ll_to_earth(?, ?)) < ?",
-              v.latitude,
+              "ST_DWithin(ST_SetSRID(ST_Point(?, ?), 4326)::geography, ST_SetSRID(ST_Point(?, ?), 4326)::geography, ?)",
               v.longitude,
-              ^latitude,
+              v.latitude,
               ^longitude,
+              ^latitude,
               ^proximity_meters
             )
         )
