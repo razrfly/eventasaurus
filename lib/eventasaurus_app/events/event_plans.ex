@@ -9,6 +9,7 @@ defmodule EventasaurusApp.Events.EventPlans do
   alias EventasaurusApp.Events.EventPlan
   alias EventasaurusApp.Accounts.User
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
+  alias EventasaurusDiscovery.Movies.Movie
 
   @doc """
   Creates a private event plan from a public event.
@@ -47,11 +48,11 @@ defmodule EventasaurusApp.Events.EventPlans do
 
   defp create_new_plan(public_event_id, user_id, attrs) do
     Repo.transaction(fn ->
-      # Get the public event with sources
+      # Get the public event with sources AND movies for rich data
       public_event =
         PublicEvent
         |> Repo.get!(public_event_id)
-        |> Repo.preload(:sources)
+        |> Repo.preload([:sources, :movies])
 
       # Use occurrence_datetime if provided, otherwise fall back to public_event.starts_at
       event_datetime =
@@ -72,6 +73,13 @@ defmodule EventasaurusApp.Events.EventPlans do
       # Get description from sources if available
       description = get_description_from_sources(public_event.sources)
 
+      # Determine venue_id: use occurrence's venue if provided, else public_event's venue
+      venue_id = attrs[:venue_id] || attrs["venue_id"] || public_event.venue_id
+
+      # Get movie data if this public event is linked to a movie
+      {cover_image_url, external_image_data, rich_external_data} =
+        get_movie_image_data(public_event.movies, public_event.sources)
+
       # Build attributes for the private event
       private_event_attrs = %{
         title: attrs["title"] || attrs[:title] || "#{public_event.title} - Private Group",
@@ -84,9 +92,14 @@ defmodule EventasaurusApp.Events.EventPlans do
           attrs[:timezone] || attrs["timezone"] || Map.get(public_event, :timezone) || "UTC",
         # Using atom to match Ecto.Enum
         visibility: :private,
-        venue_id: public_event.venue_id,
-        # Copy the public event's image if available
-        cover_image_url: get_image_from_sources(public_event.sources),
+        # Use occurrence venue if provided, otherwise public_event venue
+        venue_id: venue_id,
+        # Copy image from movie if available, otherwise from sources
+        cover_image_url: cover_image_url,
+        # Image attribution (TMDB for movies)
+        external_image_data: external_image_data,
+        # Rich movie context for card display
+        rich_external_data: rich_external_data,
         # Mark this as confirmed since it's based on an existing public event
         # Using atom to match Ecto.Enum
         status: :confirmed
@@ -191,6 +204,48 @@ defmodule EventasaurusApp.Events.EventPlans do
     Enum.find_value(sources, nil, fn source ->
       source.image_url
     end)
+  end
+
+  # Get movie image data with TMDB attribution and rich context
+  # Returns {cover_image_url, external_image_data, rich_external_data}
+  defp get_movie_image_data(nil, sources), do: {get_image_from_sources(sources), nil, nil}
+  defp get_movie_image_data([], sources), do: {get_image_from_sources(sources), nil, nil}
+
+  defp get_movie_image_data([movie | _], sources) do
+    # Use movie poster if available, otherwise fall back to sources
+    cover_image_url = movie.poster_url || get_image_from_sources(sources)
+
+    # Build external_image_data with TMDB attribution
+    external_image_data =
+      if movie.tmdb_id && movie.poster_url do
+        %{
+          "source" => "tmdb",
+          "url" => movie.poster_url,
+          "metadata" => %{
+            "tmdb_id" => movie.tmdb_id,
+            "movie_title" => movie.title,
+            "type" => "movie_poster"
+          }
+        }
+      end
+
+    # Build rich_external_data with movie context for card display
+    rich_external_data =
+      if movie.tmdb_id do
+        %{
+          "type" => "movie",
+          "movie_id" => movie.id,
+          "tmdb_id" => movie.tmdb_id,
+          "title" => movie.title,
+          "original_title" => movie.original_title,
+          "poster_url" => movie.poster_url,
+          "backdrop_url" => movie.backdrop_url,
+          "release_date" => movie.release_date && Date.to_iso8601(movie.release_date),
+          "runtime" => movie.runtime
+        }
+      end
+
+    {cover_image_url, external_image_data, rich_external_data}
   end
 
   defp unique_violation?(%Ecto.Changeset{errors: errors}, constraint_name) do

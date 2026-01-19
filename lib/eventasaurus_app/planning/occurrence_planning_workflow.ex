@@ -141,12 +141,17 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
   defp create_private_event(series_type, series_id, _user_id, occurrences, opts) do
     title = Keyword.get(opts, :event_title) || build_default_event_title(series_type, series_id)
 
-    # Extract venue_id from first occurrence
+    # Extract venue_id and timezone from first occurrence
     # For movie polls, all showtimes should be at the same venue typically
-    venue_id =
+    {venue_id, timezone} =
       case occurrences do
-        [first | _] -> first.venue_id
-        [] -> nil
+        [first | _] ->
+          # Extract timezone from the DateTime if available
+          tz = extract_timezone_from_occurrence(first)
+          {first.venue_id, tz}
+
+        [] ->
+          {nil, "UTC"}
       end
 
     # Load movie data for image and context when series_type is "movie"
@@ -156,8 +161,8 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
     attrs = %{
       title: title,
       start_at: DateTime.utc_now() |> DateTime.add(7, :day),
-      # TBD - will be set when poll finalizes
-      timezone: "UTC",
+      # Timezone extracted from occurrence venue location
+      timezone: timezone,
       visibility: :private,
       status: :draft,
       venue_id: venue_id,
@@ -219,6 +224,20 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
     # For other series types, no image data yet
     {nil, nil, nil}
   end
+
+  # Extract timezone from occurrence's starts_at DateTime
+  # Falls back to "UTC" if timezone not available or is generic UTC
+  defp extract_timezone_from_occurrence(%{starts_at: %DateTime{time_zone: tz}})
+       when is_binary(tz) and tz not in ["Etc/UTC", "UTC"] do
+    tz
+  end
+
+  defp extract_timezone_from_occurrence(%{timezone: tz})
+       when is_binary(tz) and tz not in ["Etc/UTC", "UTC", nil, ""] do
+    tz
+  end
+
+  defp extract_timezone_from_occurrence(_), do: "UTC"
 
   defp add_user_as_organizer(event, user_id) do
     user = Repo.get!(Accounts.User, user_id)

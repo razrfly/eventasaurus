@@ -117,7 +117,12 @@ defmodule EventasaurusWeb.UrlHelper do
       end
 
     # Only include port if not standard (80 for http, 443 for https)
-    if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) || is_nil(port) do
+    # Also strip port 80 for HTTPS - this happens when Cloudflare terminates SSL
+    # and forwards requests internally as HTTP on port 80, but we force HTTPS above.
+    # Having :80 in an HTTPS URL is invalid and breaks social cards/canonical URLs.
+    if (scheme == "http" && port == 80) ||
+         (scheme == "https" && port in [80, 443]) ||
+         is_nil(port) do
       "#{scheme}://#{host}"
     else
       "#{scheme}://#{host}:#{port}"

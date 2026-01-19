@@ -1337,9 +1337,18 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("clear_rich_data", _params, socket) do
+    # Update form_data to remove rich_external_data
+    updated_form_data = Map.put(socket.assigns.form_data, "rich_external_data", %{})
+
+    # Update the changeset to reflect the cleared data
+    changeset = Events.change_event(socket.assigns.event, updated_form_data)
+
     socket =
       socket
       |> assign(:rich_external_data, %{})
+      |> assign(:form_data, updated_form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:form, to_form(changeset))
       |> put_flash(:info, "Rich data has been removed from your event.")
 
     {:noreply, socket}
@@ -1666,6 +1675,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:rich_external_data, data)
       |> assign(:form_data, updated_form_data)
       |> assign(:changeset, changeset)
+      # CRITICAL: Must also update :form so the form component reflects the new data
+      |> assign(:form, to_form(changeset))
       |> assign(:show_rich_data_import, false)
       |> put_flash(
         :info,
@@ -1694,6 +1705,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
           |> assign(:rich_external_data, rich_data)
           |> assign(:form_data, updated_form_data)
           |> assign(:changeset, changeset)
+          # Must also update :form so the form component reflects the new data
+          |> assign(:form, to_form(changeset))
           |> put_flash(:info, "#{content_type} data imported automatically with image!")
 
         {:noreply, socket}
