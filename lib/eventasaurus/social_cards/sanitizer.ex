@@ -16,7 +16,10 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       cover_image_url: validate_image_url(Map.get(event, :cover_image_url)),
       updated_at: Map.get(event, :updated_at),
       theme: validate_theme(Map.get(event, :theme)),
-      theme_customizations: sanitize_theme_customizations(Map.get(event, :theme_customizations))
+      theme_customizations: sanitize_theme_customizations(Map.get(event, :theme_customizations)),
+      # Date/time fields for social card display
+      start_at: Map.get(event, :start_at),
+      timezone: sanitize_timezone(Map.get(event, :timezone))
     }
   end
 
@@ -49,6 +52,21 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
   end
 
   def sanitize_text(_), do: ""
+
+  @doc """
+  Sanitizes timezone string - allows valid IANA timezone identifiers.
+  """
+  @spec sanitize_timezone(any()) :: String.t() | nil
+  def sanitize_timezone(tz) when is_binary(tz) do
+    # Only allow alphanumeric, underscores, slashes, and plus/minus (common in tz names)
+    if Regex.match?(~r/^[A-Za-z0-9_\/+-]+$/, tz) do
+      tz
+    else
+      nil
+    end
+  end
+
+  def sanitize_timezone(_), do: nil
 
   @doc """
   Validates image URLs - allows HTTP/HTTPS URLs and local static file paths.

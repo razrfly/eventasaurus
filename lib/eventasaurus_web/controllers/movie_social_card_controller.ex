@@ -37,6 +37,9 @@ defmodule EventasaurusWeb.MovieSocialCardController do
     # Count total showtimes for this movie in this city
     total_showtimes = MovieStore.count_showtimes_in_city(movie.id, city.id)
 
+    # Get next upcoming screening dates (up to 3)
+    screening_dates = MovieStore.get_upcoming_screening_dates(movie.id, city.id, limit: 3)
+
     # Use cached image URLs with fallback to original
     poster_url = MovieImages.get_poster_url(movie.id, movie.poster_url)
     backdrop_url = MovieImages.get_backdrop_url(movie.id, movie.backdrop_url)
@@ -55,6 +58,7 @@ defmodule EventasaurusWeb.MovieSocialCardController do
       overview: movie.overview,
       metadata: movie.metadata,
       total_showtimes: total_showtimes,
+      screening_dates: screening_dates,
       updated_at: movie.updated_at
     }
   end

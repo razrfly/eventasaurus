@@ -67,9 +67,15 @@ defmodule EventasaurusWeb.SocialCards.MovieCardView do
     release_date = Map.get(movie, :release_date)
     year = if release_date, do: release_date.year, else: nil
     runtime = Map.get(movie, :runtime)
+    screening_dates = Map.get(movie, :screening_dates, [])
 
-    # Format metadata line (year • runtime)
-    meta_text = format_movie_meta(year, runtime)
+    # Format metadata line - prefer screening dates if available, fallback to year/runtime
+    meta_text =
+      if Enum.any?(screening_dates) do
+        format_screening_dates(screening_dates)
+      else
+        format_movie_meta(year, runtime)
+      end
 
     # Get rating from metadata if available
     rating = get_movie_rating(movie)
@@ -151,13 +157,62 @@ defmodule EventasaurusWeb.SocialCards.MovieCardView do
       runtime: Map.get(movie, :runtime),
       overview: Sanitizer.sanitize_text(Map.get(movie, :overview, "")),
       metadata: metadata,
+      screening_dates: sanitize_screening_dates(Map.get(movie, :screening_dates)),
       updated_at: Map.get(movie, :updated_at)
     }
   end
 
+  # Sanitize screening dates - ensure they are valid Date structs
+  defp sanitize_screening_dates(dates) when is_list(dates) do
+    Enum.filter(dates, &is_struct(&1, Date))
+  end
+
+  defp sanitize_screening_dates(_), do: []
+
   # ===========================================================================
   # Private Helpers
   # ===========================================================================
+
+  # Format screening dates for display
+  # Shows up to 3 dates in a compact format: "Jan 25, 26, 27" or "Jan 25 • Feb 1"
+  defp format_screening_dates([]), do: ""
+
+  defp format_screening_dates(dates) when is_list(dates) do
+    case dates do
+      [single_date] ->
+        # Single date: "Sat, Jan 25"
+        format_single_date(single_date)
+
+      multiple_dates ->
+        # Multiple dates - group by month for compact display
+        format_multiple_dates(multiple_dates)
+    end
+  end
+
+  defp format_single_date(date) do
+    day_name = Calendar.strftime(date, "%a")
+    month_day = Calendar.strftime(date, "%b %d")
+    "#{day_name}, #{month_day}"
+  end
+
+  defp format_multiple_dates(dates) do
+    # Group dates by month
+    grouped =
+      dates
+      |> Enum.group_by(fn date -> {date.year, date.month} end)
+      |> Enum.sort_by(fn {{year, month}, _} -> {year, month} end)
+
+    # Format each group
+    formatted =
+      Enum.map(grouped, fn {{_year, _month}, month_dates} ->
+        first_date = List.first(month_dates)
+        month_abbr = Calendar.strftime(first_date, "%b")
+        days = Enum.map(month_dates, fn d -> d.day end) |> Enum.join(", ")
+        "#{month_abbr} #{days}"
+      end)
+
+    Enum.join(formatted, " • ")
+  end
 
   # Format movie metadata line (year • runtime)
   defp format_movie_meta(nil, nil), do: ""

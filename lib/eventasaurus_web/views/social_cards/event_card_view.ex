@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.SocialCards.EventCardView do
 
   Handles rendering of social cards for events with:
   - Event title (multi-line, auto-sized)
+  - Date and time display
   - Cover image with gradient overlay
   - Theme-based colors
   - RSVP call-to-action button
@@ -55,10 +56,10 @@ defmodule EventasaurusWeb.SocialCards.EventCardView do
 
   @doc """
   Renders the event-specific content for a social card.
-  This includes the image, logo, title, and RSVP button.
+  This includes the image, logo, title, date/time, and RSVP button.
 
   ## Parameters
-    - event: Sanitized event map with :title, :cover_image_url fields
+    - event: Sanitized event map with :title, :cover_image_url, :start_at, :timezone fields
     - theme_suffix: Unique theme identifier for IDs
     - theme_colors: Map with theme color information
 
@@ -66,10 +67,16 @@ defmodule EventasaurusWeb.SocialCards.EventCardView do
     SVG markup string with event-specific content
   """
   def render_event_content(event, theme_suffix, theme_colors) do
-    # Build title sections - positioned lower for better balance
+    # Format date/time from event start_at
+    date_time_text = format_event_date_time(event)
+
+    # Calculate font size for title
+    title_font_size = Shared.calculate_font_size(event.title)
+
+    # Build title sections - positioned higher to make room for date/time below
     title_line_1 =
       if Shared.format_title(event.title, 0) != "" do
-        y_pos = Shared.title_line_y_position(0, Shared.calculate_font_size(event.title))
+        y_pos = event_title_y_position(0, title_font_size)
         ~s(<tspan x="32" y="#{y_pos}">#{Shared.format_title(event.title, 0)}</tspan>)
       else
         ""
@@ -77,7 +84,7 @@ defmodule EventasaurusWeb.SocialCards.EventCardView do
 
     title_line_2 =
       if Shared.format_title(event.title, 1) != "" do
-        y_pos = Shared.title_line_y_position(1, Shared.calculate_font_size(event.title))
+        y_pos = event_title_y_position(1, title_font_size)
         ~s(<tspan x="32" y="#{y_pos}">#{Shared.format_title(event.title, 1)}</tspan>)
       else
         ""
@@ -85,7 +92,7 @@ defmodule EventasaurusWeb.SocialCards.EventCardView do
 
     title_line_3 =
       if Shared.format_title(event.title, 2) != "" do
-        y_pos = Shared.title_line_y_position(2, Shared.calculate_font_size(event.title))
+        y_pos = event_title_y_position(2, title_font_size)
         ~s(<tspan x="32" y="#{y_pos}">#{Shared.format_title(event.title, 2)}</tspan>)
       else
         ""
@@ -99,11 +106,14 @@ defmodule EventasaurusWeb.SocialCards.EventCardView do
 
     <!-- Event title (left-aligned, multi-line) -->
     <text font-family="Arial, sans-serif" font-weight="bold"
-          font-size="#{Shared.calculate_font_size(event.title)}" fill="white">
+          font-size="#{title_font_size}" fill="white">
       #{title_line_1}
       #{title_line_2}
       #{title_line_3}
     </text>
+
+    <!-- Date/Time info (below title) -->
+    #{render_event_date_time(date_time_text)}
 
     #{Shared.render_cta_bubble("RSVP", theme_suffix)}
     """
@@ -115,5 +125,60 @@ defmodule EventasaurusWeb.SocialCards.EventCardView do
   """
   def sanitize_event(event) do
     Sanitizer.sanitize_event_data(event)
+  end
+
+  # ===========================================================================
+  # Private Helpers
+  # ===========================================================================
+
+  # Format date and time for event card display
+  # Converts UTC datetime to event's local timezone for display
+  defp format_event_date_time(%{start_at: nil}), do: ""
+
+  defp format_event_date_time(%{start_at: start_at, timezone: timezone})
+       when not is_nil(start_at) do
+    # Convert to local time if timezone is available
+    local_datetime =
+      if timezone do
+        case DateTime.shift_zone(start_at, timezone) do
+          {:ok, local} -> local
+          {:error, _} -> start_at
+        end
+      else
+        start_at
+      end
+
+    # Format: "Sat, Jan 25 • 8:00 PM"
+    day_name = Calendar.strftime(local_datetime, "%a")
+    month_day = Calendar.strftime(local_datetime, "%b %d")
+    time = Calendar.strftime(local_datetime, "%-I:%M %p")
+    "#{day_name}, #{month_day} • #{time}"
+  end
+
+  defp format_event_date_time(_), do: ""
+
+  # Render date/time section for event card
+  defp render_event_date_time(""), do: ""
+
+  defp render_event_date_time(date_time_text) do
+    """
+    <text x="32" y="310" font-family="Arial, sans-serif" font-weight="600"
+          font-size="20" fill="white" opacity="0.95">
+      #{Shared.svg_escape(date_time_text)}
+    </text>
+    """
+  end
+
+  # Calculate Y position for event title lines (positioned higher to make room for date)
+  defp event_title_y_position(line_number, font_size) when is_binary(font_size) do
+    event_title_y_position(line_number, String.to_integer(font_size))
+  end
+
+  defp event_title_y_position(line_number, font_size) when is_integer(font_size) do
+    # Start at y=180 (lower than event cards to leave room for logo)
+    # Then add spacing based on font size for each line
+    base_y = 180
+    line_spacing = font_size + 8
+    base_y + line_number * line_spacing
   end
 end

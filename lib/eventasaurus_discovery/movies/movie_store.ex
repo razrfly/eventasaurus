@@ -175,6 +175,45 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
     |> length()
   end
 
+  @doc """
+  Get the next upcoming screening dates for a movie in a specific city.
+
+  Returns a list of upcoming dates (as Date structs) for the movie,
+  sorted ascending, limited to `limit` results.
+
+  ## Options
+    - `:limit` - Maximum number of dates to return (default: 3)
+
+  ## Returns
+    List of Date structs for upcoming screenings
+  """
+  def get_upcoming_screening_dates(movie_id, city_id, opts \\ []) do
+    alias EventasaurusDiscovery.PublicEvents.PublicEvent
+
+    limit = Keyword.get(opts, :limit, 3)
+    today = Date.utc_today()
+
+    # Get all events for this movie in this city with their occurrences
+    events =
+      from(pe in PublicEvent,
+        join: em in "event_movies",
+        on: pe.id == em.event_id,
+        join: v in assoc(pe, :venue),
+        on: v.city_id == ^city_id,
+        where: em.movie_id == ^movie_id,
+        select: pe.occurrences
+      )
+      |> Repo.all()
+
+    # Extract dates, filter to future, sort, dedupe, and limit
+    events
+    |> Enum.flat_map(&extract_dates_from_occurrences/1)
+    |> Enum.filter(fn date -> Date.compare(date, today) in [:gt, :eq] end)
+    |> Enum.sort(Date)
+    |> Enum.uniq()
+    |> Enum.take(limit)
+  end
+
   # Extract occurrences from event occurrences JSON
   defp extract_occurrence_count(nil), do: []
 
@@ -184,4 +223,22 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
 
   defp extract_occurrence_count(%{"type" => "pattern"}), do: [1]
   defp extract_occurrence_count(_), do: []
+
+  # Extract Date structs from occurrences JSON
+  defp extract_dates_from_occurrences(nil), do: []
+
+  defp extract_dates_from_occurrences(%{"dates" => dates}) when is_list(dates) do
+    Enum.flat_map(dates, fn
+      %{"date" => date_str} when is_binary(date_str) ->
+        case Date.from_iso8601(date_str) do
+          {:ok, date} -> [date]
+          _ -> []
+        end
+
+      _ ->
+        []
+    end)
+  end
+
+  defp extract_dates_from_occurrences(_), do: []
 end
