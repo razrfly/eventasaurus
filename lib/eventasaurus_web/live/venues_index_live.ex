@@ -63,8 +63,8 @@ defmodule EventasaurusWeb.VenuesIndexLive do
 
   @impl true
   def handle_event("search", %{"search" => search}, socket) do
-    # Reset cursor when searching
-    {:noreply, push_patch(socket, to: build_path(search, nil))}
+    # Reset to first page when searching
+    {:noreply, push_patch(socket, to: build_path(search))}
   end
 
   @impl true
@@ -74,7 +74,16 @@ defmodule EventasaurusWeb.VenuesIndexLive do
 
   @impl true
   def handle_event("load_more", _params, socket) do
-    {:noreply, push_patch(socket, to: build_path(socket.assigns.search, socket.assigns.cursor))}
+    # Load next page and APPEND to existing venues (true "Load More" UX)
+    result = load_venues(socket.assigns.cursor, socket.assigns.search)
+
+    socket =
+      socket
+      |> assign(:venues, socket.assigns.venues ++ result.entries)
+      |> assign(:cursor, result.cursor)
+      |> assign(:has_more, result.has_more?)
+
+    {:noreply, socket}
   end
 
   defp load_venues(cursor, search) do
@@ -141,22 +150,15 @@ defmodule EventasaurusWeb.VenuesIndexLive do
     |> Map.new()
   end
 
-  defp build_path(search, cursor) do
-    params =
-      %{}
-      |> maybe_add_param("search", search)
-      |> maybe_add_param("cursor", cursor)
-
-    if map_size(params) > 0 do
-      "/venues?#{URI.encode_query(params)}"
+  defp build_path(search) do
+    # Note: cursor is not included in URL - "Load More" appends client-side
+    # Only search affects the URL for bookmarking/sharing
+    if search && search != "" do
+      "/venues?#{URI.encode_query(%{"search" => search})}"
     else
       "/venues"
     end
   end
-
-  defp maybe_add_param(params, _key, nil), do: params
-  defp maybe_add_param(params, _key, ""), do: params
-  defp maybe_add_param(params, key, value), do: Map.put(params, key, value)
 
   @impl true
   def render(assigns) do
