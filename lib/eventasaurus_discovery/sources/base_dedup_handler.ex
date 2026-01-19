@@ -242,12 +242,13 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
       )
 
     # Add GPS proximity filter if coordinates available (using PostGIS)
+    # Uses ST_MakePoint to match the venues_location_gist index definition
     query =
       if latitude && longitude do
         from([e, v, es, s] in query,
           where:
             fragment(
-              "ST_DWithin(ST_SetSRID(ST_Point(?, ?), 4326)::geography, ST_SetSRID(ST_Point(?, ?), 4326)::geography, ?)",
+              "ST_DWithin(ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)",
               v.longitude,
               v.latitude,
               ^longitude,

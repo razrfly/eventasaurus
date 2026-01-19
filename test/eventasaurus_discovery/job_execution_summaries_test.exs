@@ -220,7 +220,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummariesTest do
       assert metrics.total_jobs == 3
       assert metrics.completed == 2
       assert metrics.failed == 1
-      assert metrics.success_rate == 66.67
+      assert metrics.pipeline_health == 66.67
       assert metrics.avg_duration_ms == 1166.67
     end
   end
@@ -336,20 +336,110 @@ defmodule EventasaurusDiscovery.JobExecutionSummariesTest do
       assert hd(metrics).job_type == "SyncJob"
     end
 
-    test "calculates success rate correctly per job type" do
+    test "calculates pipeline health correctly per job type" do
       metrics = JobExecutionSummaries.get_source_pipeline_metrics("cinema_city", 24)
 
       cinema_date_metrics = Enum.find(metrics, &(&1.job_type == "CinemaDateJob"))
       assert cinema_date_metrics.total_runs == 2
       assert cinema_date_metrics.completed == 1
       assert cinema_date_metrics.failed == 1
-      assert cinema_date_metrics.success_rate == 50.0
+      assert cinema_date_metrics.pipeline_health == 50.0
     end
 
     test "does not include jobs from other sources" do
       metrics = JobExecutionSummaries.get_source_pipeline_metrics("cinema_city", 24)
 
       refute Enum.any?(metrics, &(&1.worker =~ "KinoKrakow"))
+    end
+
+    test "includes retryable jobs in processing_failure_rate calculation" do
+      now = DateTime.utc_now()
+
+      # Create a source with retryable jobs
+      JobExecutionSummary.record_execution(%{
+        job_id: 100,
+        worker: "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 1000
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 101,
+        worker: "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob",
+        queue: "discovery",
+        state: "retryable",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 500
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 102,
+        worker: "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob",
+        queue: "discovery",
+        state: "retryable",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 500
+      })
+
+      metrics = JobExecutionSummaries.get_source_pipeline_metrics("repertuary", 24)
+      sync_job_metrics = Enum.find(metrics, &(&1.job_type == "SyncJob"))
+
+      assert sync_job_metrics.total_runs == 3
+      assert sync_job_metrics.completed == 1
+      assert sync_job_metrics.retryable == 2
+      # Processing failure rate should include retryable jobs: 2/3 = 66.67%
+      assert sync_job_metrics.processing_failure_rate == 66.67
+      # Pipeline health should not count retryable as healthy: 1/3 = 33.33%
+      assert sync_job_metrics.pipeline_health == 33.33
+    end
+
+    test "retryable jobs count separate from failed/discarded" do
+      now = DateTime.utc_now()
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 200,
+        worker: "EventasaurusDiscovery.Sources.TestSource.Jobs.SyncJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 1000
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 201,
+        worker: "EventasaurusDiscovery.Sources.TestSource.Jobs.SyncJob",
+        queue: "discovery",
+        state: "discarded",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 500
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 202,
+        worker: "EventasaurusDiscovery.Sources.TestSource.Jobs.SyncJob",
+        queue: "discovery",
+        state: "retryable",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 500
+      })
+
+      metrics = JobExecutionSummaries.get_source_pipeline_metrics("test_source", 24)
+      sync_job_metrics = Enum.find(metrics, &(&1.job_type == "SyncJob"))
+
+      assert sync_job_metrics.completed == 1
+      assert sync_job_metrics.failed == 1
+      assert sync_job_metrics.retryable == 1
+      assert sync_job_metrics.total_runs == 3
+      # Processing failure rate: (0 cancelled_failed + 1 discarded + 1 retryable) / 3 = 66.67%
+      assert sync_job_metrics.processing_failure_rate == 66.67
     end
   end
 

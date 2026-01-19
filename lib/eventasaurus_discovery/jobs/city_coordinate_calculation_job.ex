@@ -52,6 +52,11 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
         Logger.debug("No venues with coordinates found for city #{city_id}")
         {:ok, :no_venues}
 
+      {:error, :city_not_found} ->
+        # City doesn't exist (possibly deleted or invalid ID) - don't retry
+        Logger.warning("City #{city_id} not found - skipping coordinate calculation")
+        {:ok, :city_not_found}
+
       error ->
         Logger.error("Failed to update city coordinates: #{inspect(error)}")
         error

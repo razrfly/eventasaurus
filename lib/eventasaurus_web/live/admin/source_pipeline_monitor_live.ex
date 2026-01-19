@@ -30,6 +30,7 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
     cancelled_expected_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled_expected))
     cancelled_runs = cancelled_failed_runs + cancelled_expected_runs
     failed_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.failed))
+    retryable_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.retryable))
 
     # Pipeline Health: (completed + cancelled_expected) / total
     # Only count intentional cancellations as healthy, not processing failures
@@ -38,9 +39,12 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
         do: (successful_runs + cancelled_expected_runs) / total_runs * 100,
         else: 0.0
 
-    # Processing Failure Rate: (cancelled_failed + failed) / total
+    # Processing Failure Rate: (cancelled_failed + failed + retryable) / total
+    # Includes retryable jobs since they've failed at least once
     overall_processing_failure_rate =
-      if total_runs > 0, do: (cancelled_failed_runs + failed_runs) / total_runs * 100, else: 0.0
+      if total_runs > 0,
+        do: (cancelled_failed_runs + failed_runs + retryable_runs) / total_runs * 100,
+        else: 0.0
 
     # Match Rate: completed / (completed + cancelled_expected)
     overall_match_rate =
@@ -76,6 +80,7 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
        cancelled_expected_runs: cancelled_expected_runs,
        cancelled_runs: cancelled_runs,
        failed_runs: failed_runs,
+       retryable_runs: retryable_runs,
        overall_pipeline_health: overall_pipeline_health,
        overall_processing_failure_rate: overall_processing_failure_rate,
        overall_match_rate: overall_match_rate,
@@ -100,6 +105,7 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
     cancelled_expected_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled_expected))
     cancelled_runs = cancelled_failed_runs + cancelled_expected_runs
     failed_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.failed))
+    retryable_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.retryable))
 
     # Pipeline Health: (completed + cancelled_expected) / total
     # Only count intentional cancellations as healthy, not processing failures
@@ -108,9 +114,12 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
         do: (successful_runs + cancelled_expected_runs) / total_runs * 100,
         else: 0.0
 
-    # Processing Failure Rate: (cancelled_failed + failed) / total
+    # Processing Failure Rate: (cancelled_failed + failed + retryable) / total
+    # Includes retryable jobs since they've failed at least once
     overall_processing_failure_rate =
-      if total_runs > 0, do: (cancelled_failed_runs + failed_runs) / total_runs * 100, else: 0.0
+      if total_runs > 0,
+        do: (cancelled_failed_runs + failed_runs + retryable_runs) / total_runs * 100,
+        else: 0.0
 
     # Match Rate: completed / (completed + cancelled_expected)
     overall_match_rate =
@@ -145,6 +154,7 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
        cancelled_expected_runs: cancelled_expected_runs,
        cancelled_runs: cancelled_runs,
        failed_runs: failed_runs,
+       retryable_runs: retryable_runs,
        overall_pipeline_health: overall_pipeline_health,
        overall_processing_failure_rate: overall_processing_failure_rate,
        overall_match_rate: overall_match_rate,
@@ -201,7 +211,7 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
             <%= Float.round(@overall_processing_failure_rate, 1) %>%
           </dd>
           <p class="mt-1 text-xs text-gray-500">
-            <%= @cancelled_failed_runs %> failed, <%= @failed_runs %> discarded
+            <%= @cancelled_failed_runs %> failed, <%= @failed_runs %> discarded<%= if @retryable_runs > 0, do: ", #{@retryable_runs} retrying" %>
           </p>
         </div>
 
@@ -485,6 +495,13 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
         ~H"""
         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
           discarded
+        </span>
+        """
+
+      run.state == "retryable" ->
+        ~H"""
+        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+          retrying
         </span>
         """
 
