@@ -632,6 +632,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
               )
           ),
         failed: count(s.id) |> filter(s.state == "discarded"),
+        # Retryable: jobs that failed but haven't exhausted retries yet
+        retryable: count(s.id) |> filter(s.state == "retryable"),
         avg_duration_ms: avg(s.duration_ms),
         last_run: max(s.attempted_at)
       }
@@ -658,12 +660,14 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           0.0
         end
 
-      # Processing Failure Rate: (cancelled_failed + discarded) / total
+      # Processing Failure Rate: (cancelled_failed + discarded + retryable) / total
       # Tracks actual failures excluding intentional skips
+      # Includes retryable jobs since they've failed at least once
       processing_failure_rate =
         if worker_stats.total_runs > 0 do
           Float.round(
-            (worker_stats.cancelled_failed + worker_stats.failed) / worker_stats.total_runs * 100,
+            (worker_stats.cancelled_failed + worker_stats.failed + worker_stats.retryable) /
+              worker_stats.total_runs * 100,
             2
           )
         else
