@@ -1325,17 +1325,23 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp create_plan_from_public_event(socket) do
     user = get_authenticated_user(socket)
 
-    # Get the datetime from selected occurrence, or fall back to event starts_at
-    occurrence_datetime =
+    # Get the datetime and timezone from selected occurrence
+    {occurrence_datetime, timezone} =
       case socket.assigns.selected_occurrence do
-        %{datetime: datetime} -> datetime
-        _ -> socket.assigns.event.starts_at
+        %{datetime: %DateTime{time_zone: tz} = datetime} when tz not in ["Etc/UTC", "UTC"] ->
+          {datetime, tz}
+
+        %{datetime: datetime} ->
+          {datetime, socket.assigns.event.timezone || "UTC"}
+
+        _ ->
+          {socket.assigns.event.starts_at, socket.assigns.event.timezone || "UTC"}
       end
 
     EventPlans.create_from_public_event(
       socket.assigns.event.id,
       user.id,
-      %{occurrence_datetime: occurrence_datetime}
+      %{occurrence_datetime: occurrence_datetime, timezone: timezone}
     )
     |> case do
       {:ok, {:created, _event_plan, private_event}} -> {:ok, {:created, private_event}}
