@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   attr :context, :atom, required: true, values: [:user_dashboard, :group_events, :profile]
   attr :layout, :atom, default: :desktop, values: [:desktop, :mobile, :compact]
   attr :language, :string, default: "en"
+  attr :city, :map, default: nil, doc: "City context for timezone fallback"
 
   @impl true
   def render(assigns) do
@@ -61,7 +62,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
                     <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <%= format_event_datetime(@event) %>
+                    <%= format_event_datetime(@event, @city) %>
                   </div>
                   
                   <!-- Location -->
@@ -191,7 +192,8 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   end
 
   # Format event datetime - exhibitions show date range, others show time
-  defp format_event_datetime(event) do
+  # city_context is used for context-aware timezone fallback when event has no timezone
+  defp format_event_datetime(event, city_context) do
     cond do
       # Exhibition type - show date range
       PublicEventDisplayHelpers.is_exhibition?(event) ->
@@ -199,7 +201,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
 
       # Regular events - show time
       event.start_at ->
-        format_time(event.start_at, event.timezone)
+        format_time(event.start_at, event.timezone, city_context)
 
       # Fallback
       true ->
@@ -207,21 +209,22 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
     end
   end
 
-  defp format_time(nil, _timezone), do: "Time TBD"
+  defp format_time(nil, _timezone, _city_context), do: "Time TBD"
 
-  defp format_time(%DateTime{} = datetime, timezone) do
-    timezone = timezone || TimezoneUtils.default_timezone()
+  defp format_time(%DateTime{} = datetime, timezone, city_context) do
+    # Use event's timezone if available, otherwise fall back to city context or default
+    timezone = timezone || TimezoneUtils.default_timezone_for_context(city_context)
     converted_dt = DateTimeHelper.utc_to_timezone(datetime, timezone)
 
     TimeUtils.format_time(converted_dt)
   end
 
-  defp format_time(%NaiveDateTime{} = datetime, _timezone) do
+  defp format_time(%NaiveDateTime{} = datetime, _timezone, _city_context) do
     # NaiveDateTime doesn't have timezone info, format as-is
     TimeUtils.format_time(%Time{hour: datetime.hour, minute: datetime.minute, second: 0})
   end
 
-  defp format_time(_, _), do: "Time TBD"
+  defp format_time(_, _, _), do: "Time TBD"
 
   @impl true
   def handle_event(

@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.Utils.TimezoneUtils do
   - `get_event_timezone/1` - Get timezone for an event based on venue coordinates
   - `get_venue_timezone/1` - Get timezone for a venue based on coordinates
   - `get_timezone_from_coordinates/2` - Get timezone from lat/lng coordinates
+  - `default_timezone_for_context/1` - Get timezone based on current city/country context
 
   ## Fallback Behavior
 
@@ -30,6 +31,7 @@ defmodule EventasaurusWeb.Utils.TimezoneUtils do
   """
 
   require Logger
+  alias EventasaurusDiscovery.Helpers.TimezoneMapper
 
   @default_timezone "Europe/Warsaw"
 
@@ -40,6 +42,50 @@ defmodule EventasaurusWeb.Utils.TimezoneUtils do
   """
   @spec default_timezone() :: String.t()
   def default_timezone, do: @default_timezone
+
+  @doc """
+  Returns a context-aware default timezone based on the current city/country being viewed.
+
+  When a city or country context is available, derives the timezone from the country code
+  using TimezoneMapper. Falls back to the default timezone when no context is available.
+
+  This is preferred over `default_timezone/0` when you have access to the current
+  viewing context (e.g., city page, country page).
+
+  ## Parameters
+
+  - `context` - A map that may contain `:country` with `:code`, or `:city` with nested `:country`
+
+  ## Returns
+
+  IANA timezone string derived from context, or default timezone
+
+  ## Examples
+
+      iex> default_timezone_for_context(%{country: %{code: "GB"}})
+      "Europe/London"
+
+      iex> default_timezone_for_context(%{city: %{country: %{code: "US"}}})
+      "America/New_York"
+
+      iex> default_timezone_for_context(nil)
+      "Europe/Warsaw"
+  """
+  @spec default_timezone_for_context(map() | nil) :: String.t()
+  def default_timezone_for_context(%{country: %{code: code}}) when is_binary(code) do
+    TimezoneMapper.get_timezone_for_country(code)
+  end
+
+  def default_timezone_for_context(%{city: %{country: %{code: code}}}) when is_binary(code) do
+    TimezoneMapper.get_timezone_for_country(code)
+  end
+
+  # Handle city struct directly (city belongs to country)
+  def default_timezone_for_context(%EventasaurusDiscovery.Locations.City{} = city) do
+    TimezoneMapper.get_timezone_for_city(city)
+  end
+
+  def default_timezone_for_context(_), do: @default_timezone
 
   @doc """
   Gets the timezone for an event based on its venue's coordinates.
@@ -219,6 +265,9 @@ defmodule EventasaurusWeb.Utils.TimezoneUtils do
   - `{:ok, DateTime.t()}` on success
   - `{:error, reason}` on failure
 
+  Note: Handles DST transitions by selecting the earlier time for ambiguous cases
+  and the later time for gap cases.
+
   ## Examples
 
       iex> create_datetime_for_event(~D[2024-01-15], ~T[19:30:00], %{venue: %{latitude: 50.0647, longitude: 19.9450}})
@@ -228,17 +277,35 @@ defmodule EventasaurusWeb.Utils.TimezoneUtils do
           {:ok, DateTime.t()} | {:error, atom()}
   def create_datetime_for_event(%Date{} = date, %Time{} = time, event) do
     timezone = get_event_timezone(event)
-    DateTime.new(date, time, timezone)
+
+    case DateTime.new(date, time, timezone) do
+      {:ok, datetime} ->
+        {:ok, datetime}
+
+      # DST "fall back" - time occurs twice, pick the earlier one (before DST ends)
+      {:ambiguous, dt1, _dt2} ->
+        {:ok, dt1}
+
+      # DST "spring forward" - time doesn't exist, pick the later valid time
+      {:gap, _dt_before, dt_after} ->
+        {:ok, dt_after}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc """
   Creates a DateTime from date, time, and event context, raising on error.
 
   Same as `create_datetime_for_event/3` but raises on failure.
+  Handles DST transitions by selecting appropriate times.
   """
   @spec create_datetime_for_event!(Date.t(), Time.t(), map()) :: DateTime.t()
   def create_datetime_for_event!(%Date{} = date, %Time{} = time, event) do
-    timezone = get_event_timezone(event)
-    DateTime.new!(date, time, timezone)
+    case create_datetime_for_event(date, time, event) do
+      {:ok, datetime} -> datetime
+      {:error, reason} -> raise ArgumentError, "Failed to create datetime: #{inspect(reason)}"
+    end
   end
 end

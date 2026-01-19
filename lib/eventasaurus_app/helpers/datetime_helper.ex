@@ -115,16 +115,26 @@ defmodule EventasaurusApp.DateTimeHelper do
 
   ## Parameters
     - datetime: DateTime in UTC
-    - timezone: Target IANA timezone string
+    - timezone: Target IANA timezone string (falls back to default if nil/empty)
 
   ## Returns
     - DateTime in the specified timezone
     - Original datetime if conversion fails
 
   Note: Delegates to `TimezoneUtils.shift_to_timezone/2` for consistent behavior.
+  Falls back to default timezone when timezone is nil or empty string.
   """
   def utc_to_timezone(datetime, timezone) do
-    TimezoneUtils.shift_to_timezone(datetime, timezone)
+    # Use default timezone when nil or empty string is provided
+    effective_timezone =
+      case timezone do
+        nil -> TimezoneUtils.default_timezone()
+        "" -> TimezoneUtils.default_timezone()
+        tz when is_binary(tz) -> tz
+        _ -> TimezoneUtils.default_timezone()
+      end
+
+    TimezoneUtils.shift_to_timezone(datetime, effective_timezone)
   end
 
   @doc """

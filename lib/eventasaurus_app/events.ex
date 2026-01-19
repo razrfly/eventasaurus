@@ -6971,7 +6971,10 @@ defmodule EventasaurusApp.Events do
   def minutes_to_time(_), do: {:error, "Invalid minutes value"}
 
   @doc """
-  Formats time string to 24-hour format.
+  Formats time string for display in 24-hour format.
+
+  Legacy function name retained for backward compatibility.
+  Despite the name, now returns 24-hour format as the European standard.
 
   Delegates to `EventasaurusWeb.Utils.TimeUtils.format_time_12hour/1`.
 

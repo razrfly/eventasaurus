@@ -244,20 +244,28 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
       Logger.debug("No significant tokens in name '#{name}' for fuzzy matching")
       nil
     else
-      # Build a query that pre-filters by significant tokens using ILIKE
-      # This reduces the candidate set before computing full similarity scores
-      base_query =
+      # Build token conditions using dynamic to properly AND the city filter
+      # with ORed token matches. Using or_where directly would break the city filter.
+      #
+      # Goal: WHERE city_id = ? AND (name ILIKE '%token1%' OR name ILIKE '%token2%' OR ...)
+      token_conditions =
+        tokens
+        |> Enum.map(fn token ->
+          # Escape ILIKE special characters (%, _) in tokens
+          escaped_token = escape_ilike_pattern(token)
+          pattern = "%#{escaped_token}%"
+          dynamic([v], ilike(v.name, ^pattern))
+        end)
+        |> Enum.reduce(fn condition, acc ->
+          dynamic([v], ^acc or ^condition)
+        end)
+
+      query =
         from(v in Venue,
           where: v.city_id == ^city_id,
+          where: ^token_conditions,
           select: v
         )
-
-      # Add ILIKE conditions for each token (OR logic - match any token)
-      query =
-        Enum.reduce(tokens, base_query, fn token, query ->
-          pattern = "%#{token}%"
-          from(v in query, or_where: ilike(v.name, ^pattern))
-        end)
 
       venues = Repo.all(query)
 
@@ -820,4 +828,14 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
       opts[:constraint] == :unique
     end)
   end
+
+  # Escape ILIKE special characters (%, _, \) in a pattern to match them literally
+  defp escape_ilike_pattern(pattern) when is_binary(pattern) do
+    pattern
+    |> String.replace("\\", "\\\\")
+    |> String.replace("%", "\\%")
+    |> String.replace("_", "\\_")
+  end
+
+  defp escape_ilike_pattern(pattern), do: pattern
 end
