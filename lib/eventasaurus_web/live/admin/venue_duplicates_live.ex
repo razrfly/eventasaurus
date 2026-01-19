@@ -161,15 +161,21 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
            limit: 20
          ) do
       {:ok, duplicates} ->
-        venue = Repo.get(Venues.Venue, venue_id) |> Repo.preload(:city)
-        venue = Map.put(venue, :event_count, count_events_for_venue(venue.id))
+        case Repo.get(Venues.Venue, venue_id) do
+          nil ->
+            {:noreply, put_flash(socket, :error, "Venue not found")}
 
-        {:noreply,
-         socket
-         |> assign(:selected_venue, venue)
-         |> assign(:venue_duplicates, duplicates)
-         |> assign(:search_results, [])
-         |> assign(:search_query, "")}
+          venue ->
+            venue = Repo.preload(venue, :city)
+            venue = Map.put(venue, :event_count, count_events_for_venue(venue.id))
+
+            {:noreply,
+             socket
+             |> assign(:selected_venue, venue)
+             |> assign(:venue_duplicates, duplicates)
+             |> assign(:search_results, [])
+             |> assign(:search_query, "")}
+        end
 
       {:error, _reason} ->
         {:noreply, put_flash(socket, :error, "Venue not found")}
@@ -194,17 +200,28 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
         %{"venue_a_id" => venue_a_id, "venue_b_id" => venue_b_id},
         socket
       ) do
-    venue_a = Repo.get(Venues.Venue, String.to_integer(venue_a_id)) |> Repo.preload(:city)
-    venue_b = Repo.get(Venues.Venue, String.to_integer(venue_b_id)) |> Repo.preload(:city)
+    with venue_a when not is_nil(venue_a) <-
+           Repo.get(Venues.Venue, String.to_integer(venue_a_id)),
+         venue_b when not is_nil(venue_b) <- Repo.get(Venues.Venue, String.to_integer(venue_b_id)) do
+      venue_a =
+        venue_a
+        |> Repo.preload(:city)
+        |> Map.put(:event_count, count_events_for_venue(venue_a.id))
 
-    venue_a = Map.put(venue_a, :event_count, count_events_for_venue(venue_a.id))
-    venue_b = Map.put(venue_b, :event_count, count_events_for_venue(venue_b.id))
+      venue_b =
+        venue_b
+        |> Repo.preload(:city)
+        |> Map.put(:event_count, count_events_for_venue(venue_b.id))
 
-    {:noreply,
-     socket
-     |> assign(:comparison_mode, true)
-     |> assign(:venue_a, venue_a)
-     |> assign(:venue_b, venue_b)}
+      {:noreply,
+       socket
+       |> assign(:comparison_mode, true)
+       |> assign(:venue_a, venue_a)
+       |> assign(:venue_b, venue_b)}
+    else
+      nil ->
+        {:noreply, put_flash(socket, :error, "One or both venues no longer exist")}
+    end
   end
 
   @impl true
