@@ -159,9 +159,9 @@ defmodule EventasaurusDiscovery.Pagination do
     Map with:
     - :entries - List of entries for this page
     - :cursor - Cursor for the next page (nil if no more pages)
-    - :prev_cursor - Cursor for the previous page (nil if on first page)
     - :has_more? - Boolean indicating if there are more pages
     - :total_entries - Total count of all matching entries
+    - :page_size - The page size used
 
   ## Example
 
@@ -239,7 +239,12 @@ defmodule EventasaurusDiscovery.Pagination do
     case Base.url_decode64(cursor, padding: false) do
       {:ok, binary} ->
         try do
-          :erlang.binary_to_term(binary, [:safe])
+          term = :erlang.binary_to_term(binary, [:safe])
+          # Validate the decoded term has the expected structure
+          case term do
+            %{v: _sort_value, id: _id} -> term
+            _ -> nil
+          end
         rescue
           _ -> nil
         end
