@@ -1382,9 +1382,9 @@ defmodule EventasaurusWeb.PublicEventLive do
                     <div class="text-gray-700">
                       <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%a, %b %d") %>
                       <%= if @event.ends_at do %>
-                        · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(~r/^0(\d):/, "\\1:") %> - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(~r/^0(\d):/, "\\1:") %>
+                        · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%H:%M") %> - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%H:%M") %>
                       <% else %>
-                        · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(~r/^0(\d):/, "\\1:") %>
+                        · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%H:%M") %>
                       <% end %>
                       <span class="text-gray-500"><%= @event.timezone %></span>
                     </div>

@@ -41,7 +41,7 @@ defmodule EventasaurusWeb.Helpers.EventDisplayHelpers do
   @doc """
   Formats an event datetime with timezone conversion.
 
-  Returns a formatted string like "Wed, Jan 15, 07:30 PM" or "Date TBD" for nil.
+  Returns a formatted string like "Wed, Jan 15, 19:30" or "Date TBD" for nil.
 
   ## Parameters
   - `datetime` - The DateTime to format (in UTC)
@@ -50,7 +50,7 @@ defmodule EventasaurusWeb.Helpers.EventDisplayHelpers do
   ## Examples
 
       iex> format_event_date(~U[2025-01-15 19:30:00Z], "America/New_York")
-      "Wed, Jan 15, 02:30 PM"
+      "Wed, Jan 15, 14:30"
 
       iex> format_event_date(nil, "America/New_York")
       "Date TBD"
@@ -62,13 +62,13 @@ defmodule EventasaurusWeb.Helpers.EventDisplayHelpers do
         try do
           datetime
           |> DateTimeHelper.utc_to_timezone(tz)
-          |> Calendar.strftime("%a, %b %d, %I:%M %p")
+          |> Calendar.strftime("%a, %b %d, %H:%M")
         rescue
-          ArgumentError -> Calendar.strftime(datetime, "%a, %b %d, %I:%M %p UTC")
+          ArgumentError -> Calendar.strftime(datetime, "%a, %b %d, %H:%M UTC")
         end
 
       _ ->
-        Calendar.strftime(datetime, "%a, %b %d, %I:%M %p UTC")
+        Calendar.strftime(datetime, "%a, %b %d, %H:%M UTC")
     end
   end
 

@@ -786,8 +786,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp format_time_for_display(time_value) do
     # This function is used to display the time value in a user-friendly format.
-    # It expects a string like "HH:MM" or "HH:MM:SS" and converts it to "HH:MM AM/PM".
-    # For example, "10:00" becomes "10:00 AM", "14:30" becomes "2:30 PM".
+    # It expects a string like "HH:MM" or "HH:MM:SS" and converts it to 24-hour format.
+    # For example, "10:00" stays "10:00", "14:30" stays "14:30".
     case TimeUtils.parse_time_string(time_value) do
       {:ok, {hour, minute}} ->
         TimeUtils.format_time_display(hour, minute)

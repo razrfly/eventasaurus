@@ -48,28 +48,22 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Helpers.TimeConverter do
   end
 
   @doc """
-  Convert minutes to human-readable time string.
+  Convert minutes to human-readable time string (24-hour format).
 
   ## Examples
       iex> TimeConverter.format_time(1140)
-      "7:00 PM"
+      "19:00"
 
       iex> TimeConverter.format_time(600)
-      "10:00 AM"
+      "10:00"
   """
   def format_time(minutes) do
     hours = div(minutes, 60)
     mins = rem(minutes, 60)
 
-    {hour_12, period} =
-      cond do
-        hours == 0 -> {12, "AM"}
-        hours < 12 -> {hours, "AM"}
-        hours == 12 -> {12, "PM"}
-        true -> {hours - 12, "PM"}
-      end
-
-    "#{hour_12}:#{String.pad_leading(Integer.to_string(mins), 2, "0")} #{period}"
+    hour_str = String.pad_leading(Integer.to_string(hours), 2, "0")
+    min_str = String.pad_leading(Integer.to_string(mins), 2, "0")
+    "#{hour_str}:#{min_str}"
   end
 
   @doc """

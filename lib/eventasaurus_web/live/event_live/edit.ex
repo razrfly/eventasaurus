@@ -21,6 +21,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   alias EventasaurusWeb.Services.RichDataManager
   alias EventasaurusApp.DateTimeHelper
   alias EventasaurusWeb.EventLive.FormHelpers
+  alias EventasaurusWeb.Utils.TimezoneUtils
 
   @valid_setup_paths ~w[polling confirmed threshold]
 
@@ -1100,12 +1101,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
                   starts_at:
                     parse_datetime_input(
                       Map.get(ticket_data, "starts_at"),
-                      socket.assigns.event.timezone || "UTC"
+                      socket.assigns.event.timezone || TimezoneUtils.default_timezone()
                     ),
                   ends_at:
                     parse_datetime_input(
                       Map.get(ticket_data, "ends_at"),
-                      socket.assigns.event.timezone || "UTC"
+                      socket.assigns.event.timezone || TimezoneUtils.default_timezone()
                     ),
                   tippable: Map.get(ticket_data, "tippable", false) == true
                 }
@@ -1790,7 +1791,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   # Helper function to combine date and time fields into UTC datetime
   defp combine_date_time_fields(params) do
-    timezone = Map.get(params, "timezone", "UTC")
+    timezone = Map.get(params, "timezone") || TimezoneUtils.default_timezone()
 
     # Handle polling deadline if present
     params =
@@ -2293,7 +2294,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   # Map funding_deadline or decision_deadline to polling_deadline
   # Note: The Event schema uses polling_deadline for all deadline purposes (not threshold_deadline)
   defp map_deadline_fields(params) do
-    timezone = Map.get(params, "timezone", "UTC")
+    timezone = Map.get(params, "timezone") || TimezoneUtils.default_timezone()
 
     # Check for funding_deadline (crowdfunding) or decision_deadline (interest)
     deadline_str = Map.get(params, "funding_deadline") || Map.get(params, "decision_deadline")

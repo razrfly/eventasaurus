@@ -432,17 +432,17 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
   defp format_datetime(datetime) when is_binary(datetime) do
     case DateTime.from_iso8601(datetime) do
-      {:ok, dt, _} -> Calendar.strftime(dt, "%b %d, %Y %I:%M %p")
+      {:ok, dt, _} -> Calendar.strftime(dt, "%b %d, %Y %H:%M")
       _ -> "Invalid date"
     end
   end
 
   defp format_datetime(%DateTime{} = dt) do
-    Calendar.strftime(dt, "%b %d, %Y %I:%M %p")
+    Calendar.strftime(dt, "%b %d, %Y %H:%M")
   end
 
   defp format_datetime(%NaiveDateTime{} = ndt) do
-    Calendar.strftime(ndt, "%b %d, %Y %I:%M %p")
+    Calendar.strftime(ndt, "%b %d, %Y %H:%M")
   end
 
   defp source_icon("bandsintown"), do: "🎵"

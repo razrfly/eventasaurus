@@ -9,7 +9,7 @@
         <h1 class="text-3xl font-bold text-gray-900">{@worker_display_name}</h1>
         <p class="mt-2 text-gray-600">
           <%= if @last_execution do %>
-            Last executed: {Calendar.strftime(@last_execution.attempted_at, "%B %d, %Y at %I:%M %p")}
+            Last executed: {Calendar.strftime(@last_execution.attempted_at, "%B %d, %Y at %H:%M")}
           <% else %>
             No executions recorded
           <% end %>

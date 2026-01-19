@@ -42,6 +42,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusDiscovery.EventRefresh
   alias EventasaurusWeb.Cache.EventPageCache
   alias Eventasaurus.SocialCards.HashGenerator
+  alias EventasaurusWeb.Utils.TimezoneUtils
   import Ecto.Query
 
   @impl true
@@ -1196,7 +1197,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp build_occurrences_from_jsonb(event, dates) do
     venue = event.venue
     # Get timezone for creating local DateTimes
-    timezone = get_event_timezone(event)
+    timezone = TimezoneUtils.get_event_timezone(event)
 
     Enum.map(dates, fn date_entry ->
       date_str = date_entry["date"]
@@ -1754,7 +1755,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp format_event_datetime(nil), do: gettext("TBD")
 
   defp format_event_datetime(datetime) do
-    Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
+    Calendar.strftime(datetime, "%A, %B %d, %Y at %H:%M")
   end
 
   defp format_description(nil), do: Phoenix.HTML.raw("")
@@ -1769,7 +1770,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp parse_occurrences(%{occurrences: %{"dates" => dates}} = event) when is_list(dates) do
     # Get timezone for this venue (defaults to Poland timezone)
-    timezone = get_event_timezone(event)
+    timezone = TimezoneUtils.get_event_timezone(event)
 
     # Get current time in the local timezone for comparison
     now = DateTime.now!(timezone)
@@ -1803,7 +1804,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # Handle pattern-type occurrences (e.g., "every Wednesday at 8pm")
   defp parse_occurrences(%{occurrences: %{"type" => "pattern", "pattern" => pattern}} = event) do
-    timezone = get_event_timezone(event)
+    timezone = TimezoneUtils.get_event_timezone(event)
     calculate_upcoming_from_pattern(pattern, timezone, 4)
   end
 
@@ -1904,25 +1905,25 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
-  # Format pattern description for display (e.g., "Every Wednesday at 8:00 PM").
+  # Format pattern description for display (e.g., "Every Wednesday at 20:00").
   defp format_pattern_description("weekly", days_of_week, time_str) do
     days =
       days_of_week
       |> Enum.map(&capitalize_day/1)
       |> format_day_list()
 
-    time = format_time_12h(time_str)
-    "Every #{days} at #{time}"
+    # Use 24-hour format directly (time_str is already HH:MM format)
+    "Every #{days} at #{time_str}"
   end
 
   defp format_pattern_description("daily", _days, time_str) do
-    time = format_time_12h(time_str)
-    "Daily at #{time}"
+    # Use 24-hour format directly (time_str is already HH:MM format)
+    "Daily at #{time_str}"
   end
 
   defp format_pattern_description(_frequency, _days, time_str) do
-    time = format_time_12h(time_str)
-    "Regularly at #{time}"
+    # Use 24-hour format directly (time_str is already HH:MM format)
+    "Regularly at #{time_str}"
   end
 
   defp capitalize_day(day), do: String.capitalize(day)
@@ -1934,44 +1935,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     [last | rest] = Enum.reverse(days)
     rest_str = rest |> Enum.reverse() |> Enum.join(", ")
     "#{rest_str}, and #{last}"
-  end
-
-  # Format time string to 12-hour format with AM/PM.
-  defp format_time_12h(time_str) when is_binary(time_str) do
-    case String.split(time_str, ":") do
-      [h, m | _] ->
-        hour = String.to_integer(h)
-        minute = String.to_integer(m)
-
-        {display_hour, period} =
-          cond do
-            hour == 0 -> {12, "AM"}
-            hour < 12 -> {hour, "AM"}
-            hour == 12 -> {12, "PM"}
-            true -> {hour - 12, "PM"}
-          end
-
-        minute_str = String.pad_leading("#{minute}", 2, "0")
-        "#{display_hour}:#{minute_str} #{period}"
-
-      _ ->
-        time_str
-    end
-  end
-
-  defp format_time_12h(_), do: "Time not specified"
-
-  defp get_event_timezone(%{venue: %{latitude: lat, longitude: lng}})
-       when not is_nil(lat) and not is_nil(lng) do
-    case TzWorld.timezone_at({lng, lat}) do
-      {:ok, tz} -> tz
-      _ -> "Europe/Warsaw"
-    end
-  end
-
-  defp get_event_timezone(_event) do
-    # Default to Poland timezone since all current events are there
-    "Europe/Warsaw"
   end
 
   defp parse_time(nil), do: {:ok, ~T[20:00:00]}

@@ -21,8 +21,8 @@ defmodule EventasaurusWeb.Components.Activity.HeroCardHelpers do
 
   ## Examples
 
-      iex> format_datetime(~U[2024-12-17 19:00:00Z], "%A, %B %d, %Y · %I:%M %p")
-      "Tuesday, December 17, 2024 · 07:00 PM"
+      iex> format_datetime(~U[2024-12-17 19:00:00Z], "%A, %B %d, %Y · %H:%M")
+      "Tuesday, December 17, 2024 · 19:00"
 
       iex> format_datetime(nil, "%A, %B %d")
       nil

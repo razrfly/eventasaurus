@@ -84,11 +84,11 @@ defmodule EventasaurusWeb.VenueLive.Components.EventCard do
   defp format_date_time(nil), do: "Date TBD"
 
   defp format_date_time(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%B %d, %Y at %I:%M %p")
+    Calendar.strftime(datetime, "%B %d, %Y at %H:%M")
   end
 
   defp format_date_time(%NaiveDateTime{} = datetime) do
-    Calendar.strftime(datetime, "%B %d, %Y at %I:%M %p")
+    Calendar.strftime(datetime, "%B %d, %Y at %H:%M")
   end
 
   defp format_date_time(%Date{} = date) do

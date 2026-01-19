@@ -23,15 +23,15 @@ defmodule EventasaurusWeb.Helpers.PublicEventDisplayHelpers do
 
       # Full format
       format_local_datetime(~U[2025-10-08 18:00:00Z], venue, :full)
-      # => "Wednesday, October 08, 2025 at 07:00 PM"  (UK time)
+      # => "Wednesday, October 08, 2025 at 19:00"  (UK time)
 
       # Short format
       format_local_datetime(~U[2025-10-08 18:00:00Z], venue, :short)
-      # => "Oct 08, 2025 • 07:00 PM"
+      # => "Oct 08, 2025 • 19:00"
 
       # Time only
       format_local_datetime(~U[2025-10-08 18:00:00Z], venue, :time_only)
-      # => "07:00 PM"
+      # => "19:00"
   """
   def format_local_datetime(datetime, venue, format \\ :full)
 
@@ -41,23 +41,22 @@ defmodule EventasaurusWeb.Helpers.PublicEventDisplayHelpers do
 
     case format do
       :full ->
-        Calendar.strftime(local_dt, "%A, %B %d, %Y at %I:%M %p")
+        Calendar.strftime(local_dt, "%A, %B %d, %Y at %H:%M")
         |> String.replace(" 0", " ")
 
       :short ->
-        Calendar.strftime(local_dt, "%b %d, %Y • %I:%M %p")
+        Calendar.strftime(local_dt, "%b %d, %Y • %H:%M")
         |> String.replace(" 0", " ")
 
       :time_only ->
-        Calendar.strftime(local_dt, "%I:%M %p")
-        |> String.replace(" 0", " ")
+        Calendar.strftime(local_dt, "%H:%M")
 
       :date_only ->
         Calendar.strftime(local_dt, "%A, %B %d, %Y")
         |> String.replace(" 0", " ")
 
       _ ->
-        Calendar.strftime(local_dt, "%A, %B %d, %Y at %I:%M %p")
+        Calendar.strftime(local_dt, "%A, %B %d, %Y at %H:%M")
         |> String.replace(" 0", " ")
     end
   end
@@ -66,11 +65,11 @@ defmodule EventasaurusWeb.Helpers.PublicEventDisplayHelpers do
   def format_local_datetime(%DateTime{} = datetime, nil, format) do
     formatted =
       case format do
-        :full -> Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p UTC")
-        :short -> Calendar.strftime(datetime, "%b %d, %Y • %I:%M %p UTC")
-        :time_only -> Calendar.strftime(datetime, "%I:%M %p UTC")
+        :full -> Calendar.strftime(datetime, "%A, %B %d, %Y at %H:%M UTC")
+        :short -> Calendar.strftime(datetime, "%b %d, %Y • %H:%M UTC")
+        :time_only -> Calendar.strftime(datetime, "%H:%M UTC")
         :date_only -> Calendar.strftime(datetime, "%A, %B %d, %Y")
-        _ -> Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p UTC")
+        _ -> Calendar.strftime(datetime, "%A, %B %d, %Y at %H:%M UTC")
       end
 
     formatted |> String.replace(" 0", " ")

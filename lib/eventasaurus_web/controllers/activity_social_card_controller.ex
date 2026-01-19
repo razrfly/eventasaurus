@@ -14,6 +14,7 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusWeb.Utils.TimezoneUtils
   import EventasaurusWeb.SocialCardView, only: [sanitize_activity: 1, render_activity_card_svg: 1]
 
   @doc """
@@ -74,7 +75,7 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
   defp parse_occurrences(%{occurrences: nil}), do: nil
 
   defp parse_occurrences(%{occurrences: %{"dates" => dates}} = event) when is_list(dates) do
-    timezone = get_event_timezone(event)
+    timezone = TimezoneUtils.get_event_timezone(event)
 
     # Use local time for comparison since occurrence times are local
     # Handle timezone errors gracefully
@@ -119,22 +120,11 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
   end
 
   defp parse_occurrences(%{occurrences: %{"type" => "pattern", "pattern" => pattern}} = event) do
-    timezone = get_event_timezone(event)
+    timezone = TimezoneUtils.get_event_timezone(event)
     calculate_upcoming_from_pattern(pattern, timezone, 1)
   end
 
   defp parse_occurrences(_), do: nil
-
-  # Get timezone for event based on venue location
-  defp get_event_timezone(%{venue: %{latitude: lat, longitude: lng}})
-       when not is_nil(lat) and not is_nil(lng) do
-    case TzWorld.timezone_at({lng, lat}) do
-      {:ok, tz} -> tz
-      _ -> "Europe/Warsaw"
-    end
-  end
-
-  defp get_event_timezone(_), do: "Europe/Warsaw"
 
   # Parse time string to Time struct
   defp parse_time(nil), do: {:ok, ~T[00:00:00]}

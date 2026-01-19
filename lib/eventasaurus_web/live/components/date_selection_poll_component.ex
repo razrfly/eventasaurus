@@ -38,7 +38,6 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   alias EventasaurusWeb.Adapters.DatePollAdapter
   alias EventasaurusWeb.CalendarComponent
   alias EventasaurusWeb.VotingInterfaceComponent
-  alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.Utils.PollPhaseUtils
   alias Phoenix.PubSub
 
@@ -1270,11 +1269,11 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
         case DateTime.shift_zone(datetime, timezone) do
           {:ok, shifted_datetime} ->
-            Calendar.strftime(shifted_datetime, "%-m/%-d %I:%M %p")
+            Calendar.strftime(shifted_datetime, "%-m/%-d %H:%M")
 
           {:error, _} ->
             # Fallback to UTC if timezone shift fails
-            Calendar.strftime(datetime, "%-m/%-d %I:%M %p")
+            Calendar.strftime(datetime, "%-m/%-d %H:%M")
         end
     end
   end
@@ -1414,10 +1413,8 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   defp format_time_slot_display(slot) when is_map(slot) do
     case {slot["start_time"], slot["end_time"]} do
       {start_time, end_time} when is_binary(start_time) and is_binary(end_time) ->
-        # Convert 24-hour format to 12-hour format for display
-        start_display = TimeUtils.format_time_12hour(start_time)
-        end_display = TimeUtils.format_time_12hour(end_time)
-        "#{start_display} - #{end_display}"
+        # Use 24-hour format for display (European standard)
+        "#{start_time} - #{end_time}"
 
       _ ->
         "Invalid time slot"

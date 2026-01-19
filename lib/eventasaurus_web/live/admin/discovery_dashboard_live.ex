@@ -1122,7 +1122,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   def format_datetime(nil), do: "Never"
 
   def format_datetime(%DateTime{} = dt) do
-    Calendar.strftime(dt, "%b %d, %Y %I:%M %p")
+    Calendar.strftime(dt, "%b %d, %Y %H:%M")
   end
 
   def format_datetime(%NaiveDateTime{} = dt) do

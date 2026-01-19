@@ -360,16 +360,14 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
         start_time =
           dt
           |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
-          |> Calendar.strftime("%I:%M %p")
-          |> String.replace(~r/^0(\d)/, "\\1")
+          |> Calendar.strftime("%H:%M")
 
         end_time =
           case event.ends_at do
             %DateTime{} = end_dt ->
               end_dt
               |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
-              |> Calendar.strftime("%I:%M %p")
-              |> String.replace(~r/^0(\d)/, "\\1")
+              |> Calendar.strftime("%H:%M")
 
             _ ->
               nil

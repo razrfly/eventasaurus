@@ -1379,7 +1379,7 @@ defmodule Eventasaurus.Emails do
   defp format_deadline(nil), do: "Not set"
 
   defp format_deadline(datetime) do
-    Calendar.strftime(datetime, "%B %d, %Y at %I:%M %p UTC")
+    Calendar.strftime(datetime, "%B %d, %Y at %H:%M UTC")
   end
 
   defp format_currency(cents) when is_integer(cents) do

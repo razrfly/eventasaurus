@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
   use EventasaurusWeb, :html
   import EventasaurusWeb.CoreComponents
   import EventasaurusWeb.Components.IndividualEmailInput
+  alias EventasaurusWeb.Utils.TimeUtils
 
   @doc """
   Renders a guest invitation modal with toggle between invitation and direct add modes.
@@ -328,7 +329,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
                             <p class="text-gray-600 mb-2"><%= @event.tagline %></p>
                           <% end %>
                           <div class="text-sm text-gray-500">
-                            <div>📅 Date: <%= if @event.start_at, do: Calendar.strftime(@event.start_at, "%A, %B %d, %Y at %I:%M %p"), else: "To be announced" %></div>
+                            <div>📅 Date: <%= if @event.start_at, do: "#{Calendar.strftime(@event.start_at, "%A, %B %d, %Y")} at #{TimeUtils.format_time(@event.start_at)}", else: "To be announced" %></div>
                             <%= if @event.venue do %>
                               <div>📍 Location: <%= @event.venue.name %></div>
                             <% end %>

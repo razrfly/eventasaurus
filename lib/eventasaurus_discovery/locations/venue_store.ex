@@ -236,71 +236,88 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   # This catches duplicates caused by geocoding drift beyond the proximity threshold
   defp find_by_fuzzy_name(%{name: name, city_id: city_id} = attrs)
        when not is_nil(name) and not is_nil(city_id) do
-    # Get all venues in the same city
-    query =
-      from(v in Venue,
-        where: v.city_id == ^city_id,
-        select: v
-      )
+    # Extract significant tokens from the incoming name to pre-filter candidates
+    # This avoids loading all venues in a city into memory (performance optimization)
+    tokens = VenueNameMatcher.extract_significant_tokens(name)
 
-    venues = Repo.all(query)
-
-    if Enum.empty?(venues) do
-      Logger.debug("No venues found in city #{city_id} for fuzzy matching")
+    if Enum.empty?(tokens) do
+      Logger.debug("No significant tokens in name '#{name}' for fuzzy matching")
       nil
     else
-      # Calculate similarity for each venue and find the best match
-      best_match =
-        venues
-        |> Enum.map(fn venue ->
-          score = VenueNameMatcher.similarity_score(name, venue.name)
-          {venue, score}
+      # Build a query that pre-filters by significant tokens using ILIKE
+      # This reduces the candidate set before computing full similarity scores
+      base_query =
+        from(v in Venue,
+          where: v.city_id == ^city_id,
+          select: v
+        )
+
+      # Add ILIKE conditions for each token (OR logic - match any token)
+      query =
+        Enum.reduce(tokens, base_query, fn token, query ->
+          pattern = "%#{token}%"
+          from(v in query, or_where: ilike(v.name, ^pattern))
         end)
-        |> Enum.filter(fn {_venue, score} -> score >= @fuzzy_name_threshold end)
-        |> Enum.sort_by(fn {_venue, score} -> score end, :desc)
-        |> List.first()
 
-      case best_match do
-        nil ->
-          Logger.debug(
-            "No fuzzy name match found for '#{name}' in city #{city_id} (threshold: #{@fuzzy_name_threshold * 100}%)"
-          )
+      venues = Repo.all(query)
 
-          nil
+      if Enum.empty?(venues) do
+        Logger.debug("No venue candidates found for tokens #{inspect(tokens)} in city #{city_id}")
+        nil
+      else
+        # Calculate similarity for each candidate and find the best match
+        best_match =
+          venues
+          |> Enum.map(fn venue ->
+            score = VenueNameMatcher.similarity_score(name, venue.name)
+            {venue, score}
+          end)
+          |> Enum.filter(fn {_venue, score} -> score >= @fuzzy_name_threshold end)
+          |> Enum.sort_by(fn {_venue, score} -> score end, :desc)
+          |> List.first()
 
-        {venue, score} ->
-          Logger.info("""
-          🔍 Found venue by fuzzy name match:
-             Incoming: '#{name}'
-             Matched: '#{venue.name}' (ID:#{venue.id})
-             Similarity: #{Float.round(score * 100, 1)}%
-             Threshold: #{Float.round(@fuzzy_name_threshold * 100, 1)}%
-          """)
+        case best_match do
+          nil ->
+            Logger.debug(
+              "No fuzzy name match found for '#{name}' in city #{city_id} (threshold: #{@fuzzy_name_threshold * 100}%)"
+            )
 
-          emit_dedup_telemetry(:match, %{
-            method: :fuzzy_name,
-            venue_id: venue.id,
-            incoming_name: name,
-            matched_name: venue.name,
-            similarity_score: score,
-            city_id: city_id
-          })
+            nil
 
-          # Update coordinates if the new venue has them and existing doesn't
-          updated_attrs = maybe_update_coordinates(attrs, venue)
+          {venue, score} ->
+            Logger.info("""
+            🔍 Found venue by fuzzy name match:
+               Incoming: '#{name}'
+               Matched: '#{venue.name}' (ID:#{venue.id})
+               Similarity: #{Float.round(score * 100, 1)}%
+               Threshold: #{Float.round(@fuzzy_name_threshold * 100, 1)}%
+            """)
 
-          case update_venue_if_needed(venue, updated_attrs) do
-            {:ok, v} ->
-              {:ok, v}
+            emit_dedup_telemetry(:match, %{
+              method: :fuzzy_name,
+              venue_id: venue.id,
+              incoming_name: name,
+              matched_name: venue.name,
+              similarity_score: score,
+              city_id: city_id
+            })
 
-            {:error, changeset} ->
-              Logger.error(
-                "Failed to update fuzzy-matched venue #{venue.id}: #{inspect(changeset.errors)}"
-              )
+            # Update coordinates if the new venue has them and existing doesn't
+            updated_attrs = maybe_update_coordinates(attrs, venue)
 
-              # Still return the found venue
-              {:ok, venue}
-          end
+            case update_venue_if_needed(venue, updated_attrs) do
+              {:ok, v} ->
+                {:ok, v}
+
+              {:error, changeset} ->
+                Logger.error(
+                  "Failed to update fuzzy-matched venue #{venue.id}: #{inspect(changeset.errors)}"
+                )
+
+                # Still return the found venue
+                {:ok, venue}
+            end
+        end
       end
     end
   end

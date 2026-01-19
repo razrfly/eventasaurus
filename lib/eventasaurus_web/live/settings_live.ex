@@ -395,7 +395,7 @@ defmodule EventasaurusWeb.SettingsLive do
 
                   <div class="mt-4 text-green-700">
                     <p><strong>Account ID:</strong> <%= @connect_account.stripe_user_id %></p>
-                    <p><strong>Connected on:</strong> <%= Calendar.strftime(@connect_account.connected_at, "%B %d, %Y at %I:%M %p") %></p>
+                    <p><strong>Connected on:</strong> <%= Calendar.strftime(@connect_account.connected_at, "%B %d, %Y at %H:%M") %></p>
                   </div>
 
                   <div class="mt-6">

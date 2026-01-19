@@ -12,7 +12,14 @@ defmodule EventasaurusApp.DateTimeHelper do
   - Always convert UTC to user's timezone for display
   - Handle DST transitions gracefully
   - Provide clear fallback behavior for edge cases
+
+  ## Related Modules
+  - `EventasaurusWeb.Utils.TimeUtils` - Time formatting utilities
+  - `EventasaurusWeb.Utils.TimezoneUtils` - Timezone detection and conversion
   """
+
+  alias EventasaurusWeb.Utils.TimeUtils
+  alias EventasaurusWeb.Utils.TimezoneUtils
 
   @doc """
   Parses a date and time input from a form and converts it to UTC.
@@ -109,22 +116,16 @@ defmodule EventasaurusApp.DateTimeHelper do
   ## Parameters
     - datetime: DateTime in UTC
     - timezone: Target IANA timezone string
-    
+
   ## Returns
     - DateTime in the specified timezone
     - Original datetime if conversion fails
+
+  Note: Delegates to `TimezoneUtils.shift_to_timezone/2` for consistent behavior.
   """
-  def utc_to_timezone(nil, _timezone), do: nil
-
-  def utc_to_timezone(%DateTime{} = datetime, timezone) when is_binary(timezone) do
-    case DateTime.shift_zone(datetime, timezone) do
-      {:ok, shifted} -> shifted
-      # Fallback to original
-      {:error, _} -> datetime
-    end
+  def utc_to_timezone(datetime, timezone) do
+    TimezoneUtils.shift_to_timezone(datetime, timezone)
   end
-
-  def utc_to_timezone(datetime, _), do: datetime
 
   @doc """
   Formats a UTC datetime for display in a specific timezone.
@@ -165,11 +166,11 @@ defmodule EventasaurusApp.DateTimeHelper do
     month = format_month(shifted.month)
     day = shifted.day
     year = shifted.year
-    {hour_12, period} = to_12_hour(shifted.hour)
-    minute = String.pad_leading("#{shifted.minute}", 2, "0")
+    # Use centralized time formatting
+    time_str = TimeUtils.format_time(shifted, :format_12h)
     tz_abbr = get_timezone_abbreviation(timezone, shifted)
 
-    "#{month} #{day}, #{year} at #{hour_12}:#{minute} #{period} #{tz_abbr}"
+    "#{month} #{day}, #{year} at #{time_str} #{tz_abbr}"
   end
 
   @doc """
@@ -235,30 +236,12 @@ defmodule EventasaurusApp.DateTimeHelper do
     end
   end
 
+  # Delegates to TimeUtils for consistent time parsing
   defp parse_time_string(time_str) do
-    # Handle both HH:MM and HH:MM:SS formats
-    time_with_seconds =
-      case String.split(time_str, ":") do
-        [_h, _m] -> time_str <> ":00"
-        [_h, _m, _s] -> time_str
-        _ -> nil
-      end
-
-    if time_with_seconds do
-      Time.from_iso8601(time_with_seconds)
-    else
-      {:error, :invalid_time_format}
-    end
+    TimeUtils.parse_time_to_struct(time_str)
   end
 
-  defp to_12_hour(hour) do
-    cond do
-      hour == 0 -> {12, "AM"}
-      hour < 12 -> {hour, "AM"}
-      hour == 12 -> {12, "PM"}
-      true -> {hour - 12, "PM"}
-    end
-  end
+  # to_12_hour/1 removed - now using TimeUtils.format_time/2 with :format_12h
 
   defp format_month(1), do: "Jan"
   defp format_month(2), do: "Feb"

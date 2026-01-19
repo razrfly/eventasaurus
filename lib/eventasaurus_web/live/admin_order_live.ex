@@ -168,7 +168,7 @@ defmodule EventasaurusWeb.AdminOrderLive do
 
     datetime
     |> DateTimeHelper.utc_to_timezone(timezone)
-    |> Calendar.strftime("%m/%d/%Y at %I:%M %p %Z")
+    |> Calendar.strftime("%m/%d/%Y at %H:%M %Z")
   end
 
   defp status_badge_class("confirmed"), do: "bg-green-100 text-green-800"

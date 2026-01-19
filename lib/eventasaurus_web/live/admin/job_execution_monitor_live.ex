@@ -417,7 +417,7 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
 
   # Format timeline bucket time
   defp format_timeline_time(datetime, time_range) when time_range <= 48 do
-    Calendar.strftime(datetime, "%I:%M %p")
+    Calendar.strftime(datetime, "%H:%M")
   end
 
   defp format_timeline_time(datetime, _time_range) do

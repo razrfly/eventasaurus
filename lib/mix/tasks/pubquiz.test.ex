@@ -252,7 +252,7 @@ defmodule Mix.Tasks.Pubquiz.Test do
         case Transformer.calculate_next_occurrence(recurrence_rule) do
           {:ok, next_dt} ->
             Logger.info(
-              "✓ Next occurrence: #{Calendar.strftime(next_dt, "%A, %B %d, %Y at %I:%M %p")}"
+              "✓ Next occurrence: #{Calendar.strftime(next_dt, "%A, %B %d, %Y at %H:%M")}"
             )
 
           {:error, reason} ->

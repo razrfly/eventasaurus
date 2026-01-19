@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.EventComponents do
   import EventasaurusWeb.Helpers.ImageUrlHelper
   alias EventasaurusWeb.TimezoneHelpers
   alias EventasaurusApp.DateTimeHelper
+  alias EventasaurusWeb.Utils.{TimeUtils, TimezoneUtils}
   alias Eventasaurus.Integrations.Cinegraph
   import Phoenix.HTML.Form
   alias Phoenix.LiveView.JS
@@ -45,13 +46,7 @@ defmodule EventasaurusWeb.EventComponents do
         <%= for minute <- [0, 30] do %>
           <%
             value = "#{String.pad_leading("#{hour}", 2, "0")}:#{String.pad_leading("#{minute}", 2, "0")}"
-            display_hour = case hour do
-              0 -> 12
-              h when h > 12 -> h - 12
-              h -> h
-            end
-            am_pm = if hour >= 12, do: "PM", else: "AM"
-            display = "#{display_hour}:#{String.pad_leading("#{minute}", 2, "0")} #{am_pm}"
+            display = "#{String.pad_leading("#{hour}", 2, "0")}:#{String.pad_leading("#{minute}", 2, "0")}"
           %>
           <option value={value} selected={@value == value}><%= display %></option>
         <% end %>
@@ -1443,11 +1438,14 @@ defmodule EventasaurusWeb.EventComponents do
   defp format_ticket_datetime(nil, _event), do: ""
 
   defp format_ticket_datetime(%DateTime{} = datetime, event) do
-    timezone = if event && event.timezone, do: event.timezone, else: "UTC"
+    timezone = if event && event.timezone, do: event.timezone, else: TimezoneUtils.default_timezone()
+    shifted = DateTimeHelper.utc_to_timezone(datetime, timezone)
 
-    datetime
-    |> DateTimeHelper.utc_to_timezone(timezone)
-    |> Calendar.strftime("%m/%d %I:%M %p %Z")
+    date_part = Calendar.strftime(shifted, "%m/%d")
+    time_part = TimeUtils.format_time(shifted)
+    tz_part = Calendar.strftime(shifted, "%Z")
+
+    "#{date_part} #{time_part} #{tz_part}"
   end
 
   defp format_ticket_datetime(_, _), do: ""

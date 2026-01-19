@@ -21,6 +21,7 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.GuestInvitations
   alias Eventasaurus.Jobs.EmailInvitationJob
   alias Eventasaurus.Jobs.DeadlineReminderNotificationJob
+  alias EventasaurusWeb.Utils.TimeUtils
   require Logger
 
   # Private helper for applying soft delete filtering
@@ -6970,42 +6971,19 @@ defmodule EventasaurusApp.Events do
   def minutes_to_time(_), do: {:error, "Invalid minutes value"}
 
   @doc """
-  Formats time in 24-hour format to 12-hour format with AM/PM.
+  Formats time string to 24-hour format.
+
+  Delegates to `EventasaurusWeb.Utils.TimeUtils.format_time_12hour/1`.
 
   ## Examples
       iex> format_time_12hour("14:30")
-      "2:30 PM"
+      "14:30"
 
       iex> format_time_12hour("09:00")
-      "9:00 AM"
+      "09:00"
   """
   def format_time_12hour(time_string) when is_binary(time_string) do
-    case time_to_minutes(time_string) do
-      {:ok, minutes} ->
-        hour = div(minutes, 60)
-        minute = rem(minutes, 60)
-
-        {display_hour, period} =
-          if hour == 0 do
-            {12, "AM"}
-          else
-            if hour < 12 do
-              {hour, "AM"}
-            else
-              display_hour = if hour == 12, do: 12, else: hour - 12
-              {display_hour, "PM"}
-            end
-          end
-
-        minute_str =
-          if minute == 0, do: ":00", else: ":#{String.pad_leading("#{minute}", 2, "0")}"
-
-        "#{display_hour}#{minute_str} #{period}"
-
-      {:error, _} ->
-        # Return original if parsing fails
-        time_string
-    end
+    TimeUtils.format_time_12hour(time_string)
   end
 
   def format_time_12hour(_), do: "Invalid Time"
@@ -7015,10 +6993,10 @@ defmodule EventasaurusApp.Events do
 
   ## Examples
       iex> generate_time_range_display("09:00", "17:00")
-      "9:00 AM - 5:00 PM"
+      "09:00 - 17:00"
 
       iex> generate_time_range_display("14:30", "16:45")
-      "2:30 PM - 4:45 PM"
+      "14:30 - 16:45"
   """
   def generate_time_range_display(start_time, end_time) do
     "#{format_time_12hour(start_time)} - #{format_time_12hour(end_time)}"
