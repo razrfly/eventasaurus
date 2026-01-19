@@ -304,24 +304,45 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         data[:event_type]
       )
 
+    # Check if this is a movie event - movie events have movie_id in the data
+    movie_id = data[:movie_id] || data["movie_id"]
+
     case {existing_from_source, recurring_parent} do
       # No existing event and no recurring parent - check for collision then create new
       {nil, nil} ->
-        Logger.info("📝 No existing event or recurring parent, checking for similar events...")
+        # CRITICAL FIX: Movie events should NOT use generic collision detection!
+        # The collision detector only checks venue + time window, which means different
+        # movies at the same cinema within 4 hours would incorrectly be merged.
+        # Movie events should ONLY consolidate through find_movie_event_parent which
+        # properly matches by movie_id in the event_movies table.
+        if movie_id do
+          Logger.info(
+            "🎬 Movie event (movie_id: #{movie_id}) - skipping collision detection, creating new event"
+          )
 
-        case find_similar_event(data.title, data.start_at, venue) do
-          nil ->
-            Logger.info("✨ Creating new event")
-            result = create_event(data, venue, slug)
+          result = create_event(data, venue, slug)
 
-            case result do
-              {:ok, event} -> {:ok, event, :created}
-              error -> error
-            end
+          case result do
+            {:ok, event} -> {:ok, event, :created}
+            error -> error
+          end
+        else
+          Logger.info("📝 No existing event or recurring parent, checking for similar events...")
 
-          existing ->
-            Logger.info("🔗 Found similar event ##{existing.id} at same time, linking to it")
-            {:ok, existing, :linked}
+          case find_similar_event(data.title, data.start_at, venue) do
+            nil ->
+              Logger.info("✨ Creating new event")
+              result = create_event(data, venue, slug)
+
+              case result do
+                {:ok, event} -> {:ok, event, :created}
+                error -> error
+              end
+
+            existing ->
+              Logger.info("🔗 Found similar event ##{existing.id} at same time, linking to it")
+              {:ok, existing, :linked}
+          end
         end
 
       # Existing event but found a recurring parent - need to consolidate
