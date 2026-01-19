@@ -1752,7 +1752,9 @@ defmodule EventasaurusWeb.EventLive.New do
         case validate_flexible_pricing(ticket_data, pricing_model, price_cents) do
           {:ok, minimum_price_cents, suggested_price_cents} ->
             # Determine timezone for ticket date parsing from form data
-            tz = Map.get(socket.assigns.form_data || %{}, "timezone") || TimezoneUtils.default_timezone()
+            tz =
+              Map.get(socket.assigns.form_data || %{}, "timezone") ||
+                TimezoneUtils.default_timezone()
 
             # Create ticket struct
             ticket = %{

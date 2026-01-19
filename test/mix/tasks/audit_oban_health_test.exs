@@ -119,7 +119,13 @@ defmodule Mix.Tasks.Audit.ObanHealthTest do
         set: [
           state: "retryable",
           attempt: 1,
-          errors: [%{"attempt" => 1, "at" => DateTime.utc_now() |> DateTime.to_iso8601(), "error" => "Test error"}]
+          errors: [
+            %{
+              "attempt" => 1,
+              "at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+              "error" => "Test error"
+            }
+          ]
         ]
       )
 

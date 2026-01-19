@@ -57,7 +57,10 @@ defmodule Mix.Tasks.Audit.ObanHealth do
 
     # Validate mutually exclusive flags
     if retry_job_id && cancel_job_id do
-      IO.puts(IO.ANSI.red() <> "❌ Error: --retry and --cancel are mutually exclusive" <> IO.ANSI.reset())
+      IO.puts(
+        IO.ANSI.red() <> "❌ Error: --retry and --cancel are mutually exclusive" <> IO.ANSI.reset()
+      )
+
       IO.puts("Please specify only one operation at a time.")
       System.halt(1)
     end
@@ -101,7 +104,9 @@ defmodule Mix.Tasks.Audit.ObanHealth do
     IO.puts(IO.ANSI.cyan() <> String.duplicate("━", 70) <> IO.ANSI.reset())
 
     if total_issues == 0 do
-      IO.puts(IO.ANSI.green() <> "✅ Oban queues are healthy - no issues detected" <> IO.ANSI.reset())
+      IO.puts(
+        IO.ANSI.green() <> "✅ Oban queues are healthy - no issues detected" <> IO.ANSI.reset()
+      )
     else
       IO.puts(
         IO.ANSI.yellow() <>
@@ -402,7 +407,9 @@ defmodule Mix.Tasks.Audit.ObanHealth do
       latest_error = List.first(job.errors)
 
       if is_map(latest_error) do
-        error_msg = to_string(latest_error["message"] || latest_error["error"] || inspect(latest_error))
+        error_msg =
+          to_string(latest_error["message"] || latest_error["error"] || inspect(latest_error))
+
         max_length = 60
 
         display_msg =

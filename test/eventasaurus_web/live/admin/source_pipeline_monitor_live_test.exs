@@ -111,7 +111,8 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLiveTest do
       # Pipeline health should be 70% (7 completed out of 10)
       # Retryable jobs are NOT counted as healthy
       assert html =~ "70.0%"
-      assert html =~ "10" # Total runs
+      # Total runs
+      assert html =~ "10"
     end
 
     test "handles source with no data gracefully", %{conn: conn} do

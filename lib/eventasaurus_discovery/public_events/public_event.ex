@@ -498,7 +498,9 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   """
   def next_occurrence_date(%__MODULE__{occurrences: nil, starts_at: starts_at}), do: starts_at
 
-  def next_occurrence_date(%__MODULE__{occurrences: %{"dates" => dates}, starts_at: starts_at} = event)
+  def next_occurrence_date(
+        %__MODULE__{occurrences: %{"dates" => dates}, starts_at: starts_at} = event
+      )
       when is_list(dates) do
     # Get timezone for creating local DateTimes
     timezone = TimezoneUtils.get_event_timezone(event)

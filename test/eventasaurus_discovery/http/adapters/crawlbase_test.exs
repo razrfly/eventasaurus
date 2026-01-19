@@ -131,7 +131,10 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
 
         # Should return :not_configured for javascript mode (default)
         assert {:error, :not_configured} = Crawlbase.fetch("https://example.com")
-        assert {:error, :not_configured} = Crawlbase.fetch("https://example.com", mode: :javascript)
+
+        assert {:error, :not_configured} =
+                 Crawlbase.fetch("https://example.com", mode: :javascript)
+
         assert {:error, :not_configured} = Crawlbase.fetch("https://example.com", mode: :normal)
       after
         # Restore original values

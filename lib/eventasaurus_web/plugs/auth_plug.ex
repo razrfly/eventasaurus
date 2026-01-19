@@ -144,6 +144,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
   # Build login path with return_to URL parameter (survives CDN caching)
   defp build_login_path_with_return(nil), do: ~p"/auth/login"
+
   defp build_login_path_with_return(return_to) do
     # URL encode the return_to path to handle special characters
     encoded = URI.encode(return_to, &URI.char_unreserved?/1)

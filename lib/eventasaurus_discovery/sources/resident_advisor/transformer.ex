@@ -94,7 +94,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
 
           # Metadata with raw upstream data for debugging (including promoter info for container grouping)
           metadata: %{
-            "_raw_upstream" => JsonSanitizer.sanitize(Map.merge(raw_event, extract_promoter_data(event)))
+            "_raw_upstream" =>
+              JsonSanitizer.sanitize(Map.merge(raw_event, extract_promoter_data(event)))
           }
         }
 
@@ -526,7 +527,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
       description: extract_description(event),
       image_url: extract_image_url(event),
       metadata: %{
-        "_raw_upstream" => JsonSanitizer.sanitize(Map.merge(raw_event, extract_promoter_data(event)))
+        "_raw_upstream" =>
+          JsonSanitizer.sanitize(Map.merge(raw_event, extract_promoter_data(event)))
       },
       umbrella_metadata: metadata,
       tags: ["festival", "resident-advisor"]

@@ -281,5 +281,4 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
     # Use DiceBear avatar generation with participant info
     EventasaurusApp.Avatars.generate_user_avatar(participant, size: 40)
   end
-
 end

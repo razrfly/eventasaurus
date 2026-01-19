@@ -168,7 +168,10 @@ defmodule EventasaurusWeb.Router do
 
         # Job Execution Monitor with admin authentication
         live "/job-executions", EventasaurusWeb.Admin.JobExecutionMonitorLive
-        live "/job-executions/sources/:source_slug", EventasaurusWeb.Admin.SourcePipelineMonitorLive
+
+        live "/job-executions/sources/:source_slug",
+             EventasaurusWeb.Admin.SourcePipelineMonitorLive
+
         live "/job-executions/:worker", EventasaurusWeb.Admin.JobTypeMonitorLive
 
         # Unified Monitoring Dashboard (Issue #3048)
@@ -238,7 +241,9 @@ defmodule EventasaurusWeb.Router do
         live "/cities/cleanup", EventasaurusWeb.Admin.CityCleanupLive
 
         # Venue Country Mismatches (with admin authentication)
-        live "/venues/country-mismatches", EventasaurusWeb.Admin.VenueCountryMismatchesLive, :index
+        live "/venues/country-mismatches",
+             EventasaurusWeb.Admin.VenueCountryMismatchesLive,
+             :index
 
         # Design tools (with admin authentication)
         live "/design/social-cards", EventasaurusWeb.Admin.SocialCardsPreviewLive

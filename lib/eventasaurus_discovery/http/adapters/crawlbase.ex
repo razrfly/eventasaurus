@@ -277,7 +277,8 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
 
           {:ok, body, metadata}
         else
-          {:error, {:crawlbase_error, 200, "Unexpected response format: #{inspect(Map.keys(response))}"}}
+          {:error,
+           {:crawlbase_error, 200, "Unexpected response format: #{inspect(Map.keys(response))}"}}
         end
 
       {:error, decode_error} ->
@@ -293,7 +294,8 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
 
           {:ok, response_body, metadata}
         else
-          Logger.error("Crawlbase adapter failed to decode JSON response: #{inspect(decode_error)}",
+          Logger.error(
+            "Crawlbase adapter failed to decode JSON response: #{inspect(decode_error)}",
             adapter: name()
           )
 

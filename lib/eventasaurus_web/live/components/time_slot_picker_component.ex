@@ -80,7 +80,7 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
      |> assign_new(:allow_multiple, fn -> true end)
      |> assign_new(:timezone, fn -> "UTC" end)
      |> assign_new(:format, fn -> "24_hour" end)
-    |> normalize_format()
+     |> normalize_format()
      |> assign_new(:class, fn -> "" end)
      |> assign_new(:required, fn -> false end)
      |> assign(:time_slots, time_slots)

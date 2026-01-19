@@ -167,7 +167,10 @@ defmodule EventasaurusWeb.Live.AuthHooks do
         dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] ->
           case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, session["current_user_id"]) do
             nil ->
-              Logger.warning("DEV MODE: User #{session["current_user_id"]} not found - stale session")
+              Logger.warning(
+                "DEV MODE: User #{session["current_user_id"]} not found - stale session"
+              )
+
               nil
 
             user ->

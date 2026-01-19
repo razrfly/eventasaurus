@@ -503,7 +503,8 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   end
 
   def find_occurrences(series_type, _series_id, _filter_criteria) do
-    {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue', 'event'"}
+    {:error,
+     "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue', 'event'"}
   end
 
   @doc """
@@ -674,7 +675,8 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
       time_preferences = get_filter_value(filter_criteria, :time_preferences, [])
 
       # Count occurrences per date, optionally filtered by time preferences
-      counts = count_event_occurrences_per_date_filtered(occurrences_data, date_list, time_preferences)
+      counts =
+        count_event_occurrences_per_date_filtered(occurrences_data, date_list, time_preferences)
 
       {:ok, counts}
     rescue
@@ -684,7 +686,8 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   end
 
   def get_date_availability_counts(series_type, _series_id, _date_list, _filter_criteria) do
-    {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue', 'event'"}
+    {:error,
+     "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue', 'event'"}
   end
 
   # Helper functions for JSONB showtime filtering
@@ -936,7 +939,9 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
       else
         Enum.filter(dates, fn showtime ->
           case showtime["time"] do
-            nil -> false
+            nil ->
+              false
+
             time_string ->
               hour = parse_hour_from_time_string(time_string)
               time_slot = hour_to_time_slot(hour)
@@ -958,7 +963,11 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     end)
   end
 
-  defp count_event_occurrences_per_date_filtered(%{"type" => "pattern", "pattern" => pattern}, date_list, time_preferences) do
+  defp count_event_occurrences_per_date_filtered(
+         %{"type" => "pattern", "pattern" => pattern},
+         date_list,
+         time_preferences
+       ) do
     # For pattern-based recurring events, check if the pattern's fixed time
     # matches the requested time preferences
     time_string = pattern["time"] || "19:00"
@@ -1107,7 +1116,9 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
         |> Enum.filter(fn showtime ->
           # Filter by date range if specified
           case showtime["date"] do
-            nil -> false
+            nil ->
+              false
+
             date_str ->
               case Date.from_iso8601(date_str) do
                 {:ok, date} -> date in date_list
@@ -1202,7 +1213,9 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
 
     Enum.reduce(showtimes, initial_counts, fn showtime, acc ->
       case showtime["time"] do
-        nil -> acc
+        nil ->
+          acc
+
         time_string ->
           hour = parse_hour_from_time_string(time_string)
           period = hour_to_time_slot(hour)
@@ -1216,13 +1229,16 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     %{"morning" => 0, "afternoon" => 0, "evening" => 0, "late_night" => 0}
   end
 
-  defp count_event_occurrences_by_time_period(%{"dates" => dates}, date_list) when is_list(dates) do
+  defp count_event_occurrences_by_time_period(%{"dates" => dates}, date_list)
+       when is_list(dates) do
     initial_counts = %{"morning" => 0, "afternoon" => 0, "evening" => 0, "late_night" => 0}
 
     dates
     |> Enum.filter(fn showtime ->
       case showtime["date"] do
-        nil -> false
+        nil ->
+          false
+
         date_str ->
           case Date.from_iso8601(date_str) do
             {:ok, date} -> date in date_list
@@ -1232,7 +1248,9 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     end)
     |> Enum.reduce(initial_counts, fn showtime, acc ->
       case showtime["time"] do
-        nil -> acc
+        nil ->
+          acc
+
         time_string ->
           hour = parse_hour_from_time_string(time_string)
           period = hour_to_time_slot(hour)
@@ -1241,7 +1259,10 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     end)
   end
 
-  defp count_event_occurrences_by_time_period(%{"type" => "pattern", "pattern" => pattern}, date_list) do
+  defp count_event_occurrences_by_time_period(
+         %{"type" => "pattern", "pattern" => pattern},
+         date_list
+       ) do
     # For pattern-based recurring events, count based on the fixed time
     initial_counts = %{"morning" => 0, "afternoon" => 0, "evening" => 0, "late_night" => 0}
 
