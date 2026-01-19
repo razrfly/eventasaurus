@@ -24,10 +24,18 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
 
   use Oban.Worker,
     queue: :scraper,
-    # Increased from 3 to reduce permanent failures due to race conditions (Drop Point 4 fix)
+    # Increased max_attempts since snooze doesn't count as an attempt
+    # but we want resilience for actual errors
     max_attempts: 5
 
   require Logger
+
+  # Snooze delay when waiting for MovieDetailJob to complete (30 seconds)
+  # This is much better than {:error, :movie_not_ready} because:
+  # 1. Snooze doesn't count as an attempt (preserves max_attempts for real errors)
+  # 2. Job stays in 'scheduled' state, not 'retryable' (cleaner metrics)
+  # 3. Controlled, predictable delay between checks
+  @snooze_delay_seconds 30
 
   import Ecto.Query
 
@@ -91,6 +99,13 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
         MetricsTracker.record_success(job, external_id)
         result
 
+      {:snooze, seconds} = snooze_result ->
+        # Snooze doesn't count as an attempt - just waiting for MovieDetailJob
+        # Don't record this as success or failure in metrics
+        # The job will be rescheduled and try again
+        Logger.debug("🔄 Snoozing showtime job for #{seconds}s (waiting for movie)")
+        snooze_result
+
       {:discard, reason} ->
         MetricsTracker.record_failure(job, reason, external_id)
         result
@@ -144,12 +159,16 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
              }}
 
           :not_found_or_pending ->
-            # MovieDetailJob hasn't completed yet - retry
-            Logger.warning(
-              "⏳ Movie not found in database yet, will retry: #{showtime["movie_slug"]} (#{city_config.name})"
+            # MovieDetailJob hasn't completed yet - use snooze to wait
+            # Snooze is better than {:error, :movie_not_ready} because:
+            # - Doesn't count as an attempt (preserves retries for real errors)
+            # - Job goes to 'scheduled' state, not 'retryable'
+            # - Cleaner metrics and more predictable behavior
+            Logger.info(
+              "⏳ Movie not ready yet, snoozing #{@snooze_delay_seconds}s: #{showtime["movie_slug"]} (#{city_config.name})"
             )
 
-            {:error, :movie_not_ready}
+            {:snooze, @snooze_delay_seconds}
         end
     end
   end
