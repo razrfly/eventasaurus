@@ -7,6 +7,21 @@ import Config
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
+# Configure Erlang's inet resolver to use Fly's internal DNS server
+# This is required for Fly Managed Postgres .flympg.net domains
+# Erlang's built-in inet_res resolver doesn't read /etc/resolv.conf by default
+# and fails with nxdomain on Fly.io's internal DNS
+if config_env() == :prod do
+  # Fly's internal DNS server at fdaa::3 can resolve .flympg.net domains
+  # Parse the IPv6 address into a tuple for :inet_db
+  fly_dns_server = {0xFDAA, 0, 0, 0, 0, 0, 0, 3}
+
+  # Configure Erlang's inet to use Fly's DNS server
+  # This affects all DNS resolution including Postgrex hostname lookups
+  :inet_db.set_lookup([:dns, :file, :native])
+  :inet_db.add_ns(fly_dns_server)
+end
+
 # Load .env file in development/test environments
 # This must happen BEFORE any System.get_env calls
 if config_env() in [:dev, :test] do
@@ -587,7 +602,9 @@ if config_env() == :prod do
     queue_target: 5000,
     queue_interval: 30000,
     # Disable prepared statements for PgBouncer Transaction mode
-    prepare: :unnamed
+    prepare: :unnamed,
+    # Force IPv6 for Fly.io internal network (.flympg.net resolves to IPv6)
+    socket_options: [:inet6]
 
   # SessionRepo: Direct connection for migrations and advisory locks
   # Advisory locks (used by Ecto migrations) don't work through PgBouncer
@@ -596,7 +613,9 @@ if config_env() == :prod do
     url: database_direct_url,
     pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "1"),
     queue_target: 5000,
-    queue_interval: 30000
+    queue_interval: 30000,
+    # Force IPv6 for Fly.io internal network
+    socket_options: [:inet6]
 
   # ObanRepo: Dedicated pooled connection via PgBouncer for Oban jobs
   # Isolates Oban from web traffic, preventing job stampedes from blocking requests
@@ -611,7 +630,9 @@ if config_env() == :prod do
     queue_target: 5000,
     queue_interval: 30000,
     # Disable prepared statements for PgBouncer Transaction mode
-    prepare: :unnamed
+    prepare: :unnamed,
+    # Force IPv6 for Fly.io internal network
+    socket_options: [:inet6]
 
   # ReplicaRepo: Points to primary since Fly MPG basic plan has no read replicas
   # The HA replica is for failover only, not read scaling
@@ -623,7 +644,9 @@ if config_env() == :prod do
     queue_target: 5000,
     queue_interval: 30000,
     # Disable prepared statements for PgBouncer Transaction mode
-    prepare: :unnamed
+    prepare: :unnamed,
+    # Force IPv6 for Fly.io internal network
+    socket_options: [:inet6]
 
   # Configure Cloudflare R2 storage settings
   config :eventasaurus, :r2,

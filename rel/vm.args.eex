@@ -1,0 +1,7 @@
+## Distributed Erlang configuration
+## Node naming is handled by env.sh.eex
+
+## Use native DNS resolver (getaddrinfo) instead of Erlang's built-in inet_res
+## Required for Fly Managed Postgres .flympg.net domains on Fly.io
+## Erlang's inet_res can't resolve Fly's internal DNS, but the OS resolver can
+-kernel inet_native_dns true
