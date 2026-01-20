@@ -94,6 +94,9 @@ defmodule EventasaurusDiscovery.Locations.City do
     field(:unsplash_gallery, :map)
     field(:alternate_names, {:array, :string}, default: [])
     field(:event_count, :integer, virtual: true)
+    # IANA timezone identifier (e.g., "Europe/Warsaw", "America/Chicago")
+    # Pre-computed from coordinates to eliminate runtime TzWorld calls (Issue #3334)
+    field(:timezone, :string)
 
     belongs_to(:country, EventasaurusDiscovery.Locations.Country)
     has_many(:venues, EventasaurusApp.Venues.Venue)
@@ -111,12 +114,22 @@ defmodule EventasaurusDiscovery.Locations.City do
       :longitude,
       :discovery_enabled,
       :discovery_config,
-      :alternate_names
+      :alternate_names,
+      :timezone
     ])
     |> validate_required([:name, :country_id])
     |> Slug.maybe_generate_slug()
     |> foreign_key_constraint(:country_id)
     |> unique_constraint(:slug)
+  end
+
+  @doc """
+  Changeset specifically for updating a city's timezone.
+  Used by the timezone population mix task.
+  """
+  def timezone_changeset(city, timezone) when is_binary(timezone) do
+    city
+    |> cast(%{timezone: timezone}, [:timezone])
   end
 
   @doc """
