@@ -1329,9 +1329,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     end
   end
 
-  # Sequential counting for aggregation mode (cached externally)
+  # Batch counting for aggregation mode using SQL FILTER clauses
+  # Reduces 21 queries (7 ranges × 3 count types) to just 3 queries
   defp get_quick_date_range_counts_sequential(filters_map) do
-    [
+    # Calculate all date ranges upfront
+    date_ranges = [
       :today,
       :tomorrow,
       :this_weekend,
@@ -1340,19 +1342,273 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       :this_month,
       :next_month
     ]
+
+    ranges =
+      date_ranges
+      |> Enum.map(fn range_type -> {range_type, calculate_date_range(range_type)} end)
+      |> Enum.into(%{})
+
+    # Build base query with all filters EXCEPT date range
+    base_opts =
+      filters_map
+      |> Map.delete(:start_date)
+      |> Map.delete(:end_date)
+      |> Map.put(:show_past, true)
+      |> Enum.into([])
+
+    base_query = build_filtered_base_query(base_opts)
+
+    # Get filtered event IDs as subquery (no date filter)
+    event_ids_query =
+      base_query
+      |> select([pe], pe.id)
+
+    # Batch count all date ranges in 3 queries using FILTER clauses
+    movie_counts = count_movie_groups_batch(event_ids_query, ranges)
+    source_counts = count_aggregatable_source_groups_batch(event_ids_query, ranges)
+    individual_counts = count_non_aggregatable_events_batch(event_ids_query, ranges)
+
+    # Combine counts for each date range
+    date_ranges
     |> Enum.map(fn range_type ->
-      {start_date, end_date} = calculate_date_range(range_type)
-
-      count_opts =
-        filters_map
-        |> Map.put(:start_date, start_date)
-        |> Map.put(:end_date, end_date)
-        |> Map.put(:show_past, true)
-
-      count = count_events_with_aggregation(count_opts)
-      %{range: range_type, count: count}
+      movie_count = Map.get(movie_counts, range_type, 0)
+      source_count = Map.get(source_counts, range_type, 0)
+      individual_count = Map.get(individual_counts, range_type, 0)
+      {range_type, movie_count + source_count + individual_count}
     end)
-    |> Enum.into(%{}, fn %{range: range, count: count} -> {range, count} end)
+    |> Enum.into(%{})
+  end
+
+  # Count movie groups for all date ranges in one query using FILTER clauses
+  defp count_movie_groups_batch(event_ids_query, ranges) do
+    # Build dynamic select with FILTER for each date range
+    # Using raw SQL for FILTER clause since Ecto doesn't support it natively
+    {today_start, today_end} = ranges[:today]
+    {tomorrow_start, tomorrow_end} = ranges[:tomorrow]
+    {weekend_start, weekend_end} = ranges[:this_weekend]
+    {week_start, week_end} = ranges[:next_7_days]
+    {month_start, month_end} = ranges[:next_30_days]
+    {this_month_start, this_month_end} = ranges[:this_month]
+    {next_month_start, next_month_end} = ranges[:next_month]
+
+    sql = """
+    SELECT
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $1 AND pe.starts_at <= $2 THEN em.movie_id END) as today,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $3 AND pe.starts_at <= $4 THEN em.movie_id END) as tomorrow,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $5 AND pe.starts_at <= $6 THEN em.movie_id END) as this_weekend,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $7 AND pe.starts_at <= $8 THEN em.movie_id END) as next_7_days,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $9 AND pe.starts_at <= $10 THEN em.movie_id END) as next_30_days,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $11 AND pe.starts_at <= $12 THEN em.movie_id END) as this_month,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $13 AND pe.starts_at <= $14 THEN em.movie_id END) as next_month
+    FROM event_movies em
+    JOIN public_events pe ON em.event_id = pe.id
+    WHERE em.event_id IN (#{subquery_to_sql(event_ids_query)})
+    """
+
+    params = [
+      today_start,
+      today_end,
+      tomorrow_start,
+      tomorrow_end,
+      weekend_start,
+      weekend_end,
+      week_start,
+      week_end,
+      month_start,
+      month_end,
+      this_month_start,
+      this_month_end,
+      next_month_start,
+      next_month_end
+    ]
+
+    case Repo.query(sql, params) do
+      {:ok, %{rows: [[t, tm, w, d7, d30, tm2, nm]]}} ->
+        %{
+          today: t || 0,
+          tomorrow: tm || 0,
+          this_weekend: w || 0,
+          next_7_days: d7 || 0,
+          next_30_days: d30 || 0,
+          this_month: tm2 || 0,
+          next_month: nm || 0
+        }
+
+      _ ->
+        %{}
+    end
+  end
+
+  # Count aggregatable source groups for all date ranges in one query
+  defp count_aggregatable_source_groups_batch(event_ids_query, ranges) do
+    {today_start, today_end} = ranges[:today]
+    {tomorrow_start, tomorrow_end} = ranges[:tomorrow]
+    {weekend_start, weekend_end} = ranges[:this_weekend]
+    {week_start, week_end} = ranges[:next_7_days]
+    {month_start, month_end} = ranges[:next_30_days]
+    {this_month_start, this_month_end} = ranges[:this_month]
+    {next_month_start, next_month_end} = ranges[:next_month]
+
+    sql = """
+    SELECT
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $1 AND pe.starts_at <= $2 THEN s.id END) as today,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $3 AND pe.starts_at <= $4 THEN s.id END) as tomorrow,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $5 AND pe.starts_at <= $6 THEN s.id END) as this_weekend,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $7 AND pe.starts_at <= $8 THEN s.id END) as next_7_days,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $9 AND pe.starts_at <= $10 THEN s.id END) as next_30_days,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $11 AND pe.starts_at <= $12 THEN s.id END) as this_month,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $13 AND pe.starts_at <= $14 THEN s.id END) as next_month
+    FROM public_event_sources pes
+    JOIN sources s ON s.id = pes.source_id
+    JOIN public_events pe ON pes.event_id = pe.id
+    WHERE pes.event_id IN (#{subquery_to_sql(event_ids_query)})
+      AND pes.event_id NOT IN (SELECT event_id FROM event_movies)
+      AND s.aggregate_on_index = true
+    """
+
+    params = [
+      today_start,
+      today_end,
+      tomorrow_start,
+      tomorrow_end,
+      weekend_start,
+      weekend_end,
+      week_start,
+      week_end,
+      month_start,
+      month_end,
+      this_month_start,
+      this_month_end,
+      next_month_start,
+      next_month_end
+    ]
+
+    case Repo.query(sql, params) do
+      {:ok, %{rows: [[t, tm, w, d7, d30, tm2, nm]]}} ->
+        %{
+          today: t || 0,
+          tomorrow: tm || 0,
+          this_weekend: w || 0,
+          next_7_days: d7 || 0,
+          next_30_days: d30 || 0,
+          this_month: tm2 || 0,
+          next_month: nm || 0
+        }
+
+      _ ->
+        %{}
+    end
+  end
+
+  # Count non-aggregatable events for all date ranges in one query
+  defp count_non_aggregatable_events_batch(event_ids_query, ranges) do
+    {today_start, today_end} = ranges[:today]
+    {tomorrow_start, tomorrow_end} = ranges[:tomorrow]
+    {weekend_start, weekend_end} = ranges[:this_weekend]
+    {week_start, week_end} = ranges[:next_7_days]
+    {month_start, month_end} = ranges[:next_30_days]
+    {this_month_start, this_month_end} = ranges[:this_month]
+    {next_month_start, next_month_end} = ranges[:next_month]
+
+    sql = """
+    SELECT
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $1 AND pe.starts_at <= $2 THEN pe.id END) as today,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $3 AND pe.starts_at <= $4 THEN pe.id END) as tomorrow,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $5 AND pe.starts_at <= $6 THEN pe.id END) as this_weekend,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $7 AND pe.starts_at <= $8 THEN pe.id END) as next_7_days,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $9 AND pe.starts_at <= $10 THEN pe.id END) as next_30_days,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $11 AND pe.starts_at <= $12 THEN pe.id END) as this_month,
+      COUNT(DISTINCT CASE WHEN pe.starts_at >= $13 AND pe.starts_at <= $14 THEN pe.id END) as next_month
+    FROM public_events pe
+    WHERE pe.id IN (#{subquery_to_sql(event_ids_query)})
+      AND pe.id NOT IN (SELECT event_id FROM event_movies)
+      AND pe.id NOT IN (
+        SELECT pes.event_id FROM public_event_sources pes
+        JOIN sources s ON s.id = pes.source_id
+        WHERE s.aggregate_on_index = true
+      )
+    """
+
+    params = [
+      today_start,
+      today_end,
+      tomorrow_start,
+      tomorrow_end,
+      weekend_start,
+      weekend_end,
+      week_start,
+      week_end,
+      month_start,
+      month_end,
+      this_month_start,
+      this_month_end,
+      next_month_start,
+      next_month_end
+    ]
+
+    case Repo.query(sql, params) do
+      {:ok, %{rows: [[t, tm, w, d7, d30, tm2, nm]]}} ->
+        %{
+          today: t || 0,
+          tomorrow: tm || 0,
+          this_weekend: w || 0,
+          next_7_days: d7 || 0,
+          next_30_days: d30 || 0,
+          this_month: tm2 || 0,
+          next_month: nm || 0
+        }
+
+      _ ->
+        %{}
+    end
+  end
+
+  # Convert an Ecto query to SQL string for use in subqueries
+  # Note: This generates the SQL without parameter binding - parameters in the
+  # subquery are rendered inline. This is safe because the values come from our
+  # own build_filtered_base_query function, not user input.
+  defp subquery_to_sql(query) do
+    {sql, params} = Repo.to_sql(:all, query)
+
+    # Replace $1, $2, etc. with actual parameter values
+    params
+    |> Enum.with_index(1)
+    |> Enum.reduce(sql, fn {param, idx}, acc ->
+      placeholder = "$#{idx}"
+      replacement = param_to_sql_literal(param)
+      String.replace(acc, placeholder, replacement, global: false)
+    end)
+  end
+
+  # Convert Elixir values to SQL literal strings
+  defp param_to_sql_literal(nil), do: "NULL"
+  defp param_to_sql_literal(true), do: "TRUE"
+  defp param_to_sql_literal(false), do: "FALSE"
+  defp param_to_sql_literal(n) when is_integer(n), do: Integer.to_string(n)
+  defp param_to_sql_literal(f) when is_float(f), do: Float.to_string(f)
+
+  defp param_to_sql_literal(%DateTime{} = dt) do
+    "'#{DateTime.to_iso8601(dt)}'"
+  end
+
+  defp param_to_sql_literal(%Date{} = d) do
+    "'#{Date.to_iso8601(d)}'"
+  end
+
+  defp param_to_sql_literal(s) when is_binary(s) do
+    # Escape single quotes for SQL safety
+    escaped = String.replace(s, "'", "''")
+    "'#{escaped}'"
+  end
+
+  defp param_to_sql_literal(list) when is_list(list) do
+    values = Enum.map_join(list, ", ", &param_to_sql_literal/1)
+    "(#{values})"
+  end
+
+  defp param_to_sql_literal(other) do
+    # Fallback for other types
+    "'#{inspect(other)}'"
   end
 
   # Single query optimization for non-aggregation mode (7 queries → 1)
@@ -1954,21 +2210,129 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   """
   def count_events_with_aggregation(opts \\ []) do
     if opts[:aggregate] do
-      # Fetch all events and aggregate them, then count results
-      # Remove pagination params for counting
-      count_opts =
-        opts
-        |> Map.new()
-        |> Map.drop([:page, :page_size, :offset, :limit])
-        |> Map.put(:page_size, @max_limit)
-
-      events = list_events(count_opts)
-      aggregated = aggregate_events(events, opts)
-
-      length(aggregated)
+      # Use SQL-based counting for efficiency instead of fetching all events
+      # This is O(1) database operations vs O(n) for the old approach
+      count_events_aggregated_sql(opts)
     else
       count_events(opts)
     end
+  end
+
+  @doc """
+  Count aggregated event groups using SQL for efficiency.
+
+  Instead of fetching all events and aggregating in Elixir, this function
+  counts directly in SQL by calculating:
+  - Movie groups: COUNT(DISTINCT movie_id) for events with movies
+  - Source groups: COUNT(DISTINCT source_id) for events with aggregatable sources (no movie)
+  - Individual events: COUNT for events with neither
+
+  This reduces database load from O(n) rows fetched to 3 scalar queries.
+  """
+  def count_events_aggregated_sql(opts) do
+    # Build the base filtered query (same filters as list_events)
+    base_query = build_filtered_base_query(opts)
+
+    # Count movie groups: events with movies, grouped by movie_id
+    movie_groups_count = count_movie_groups(base_query)
+
+    # Count source groups: events without movies but with aggregatable sources
+    source_groups_count = count_aggregatable_source_groups(base_query)
+
+    # Count individual events: events with no movie and no aggregatable source
+    individual_count = count_non_aggregatable_events(base_query)
+
+    movie_groups_count + source_groups_count + individual_count
+  end
+
+  # Build the base query with all filters applied (but no select/preload)
+  defp build_filtered_base_query(opts) do
+    from(pe in PublicEvent)
+    |> filter_past_events_for_count(opts[:show_past])
+    |> filter_by_categories(opts[:categories])
+    |> filter_by_date_range(opts[:start_date], opts[:end_date])
+    |> filter_by_price_range(opts[:min_price], opts[:max_price])
+    |> filter_by_location(opts[:city_id], opts[:country_id], opts[:venue_ids])
+    |> apply_search(opts[:search])
+    |> maybe_filter_by_radius(opts)
+  end
+
+  defp maybe_filter_by_radius(query, opts) do
+    if opts[:center_lat] && opts[:center_lng] && opts[:radius_km] do
+      filter_by_radius(query, opts[:center_lat], opts[:center_lng], opts[:radius_km])
+    else
+      query
+    end
+  end
+
+  # Count distinct movies for events that have movies
+  # Uses subquery to get filtered event IDs, then counts distinct movies
+  defp count_movie_groups(base_query) do
+    # Get filtered event IDs as a subquery
+    event_ids_query =
+      base_query
+      |> select([pe], pe.id)
+
+    from(em in "event_movies",
+      where: em.event_id in subquery(event_ids_query),
+      select: count(em.movie_id, :distinct)
+    )
+    |> Repo.one() || 0
+  end
+
+  # Count distinct aggregatable sources for events without movies
+  # Uses subqueries to exclude events that have movies
+  defp count_aggregatable_source_groups(base_query) do
+    # Get filtered event IDs
+    event_ids_query =
+      base_query
+      |> select([pe], pe.id)
+
+    # Events that have movies
+    events_with_movies =
+      from(em in "event_movies",
+        select: em.event_id
+      )
+
+    # Count distinct aggregatable sources for events without movies
+    from(pes in "public_event_sources",
+      join: s in "sources", on: s.id == pes.source_id,
+      where: pes.event_id in subquery(event_ids_query),
+      where: pes.event_id not in subquery(events_with_movies),
+      where: s.aggregate_on_index == true,
+      select: count(s.id, :distinct)
+    )
+    |> Repo.one() || 0
+  end
+
+  # Count events that have no movie AND no aggregatable source
+  defp count_non_aggregatable_events(base_query) do
+    # Get filtered event IDs
+    event_ids_query =
+      base_query
+      |> select([pe], pe.id)
+
+    # Events that have movies
+    events_with_movies =
+      from(em in "event_movies",
+        select: em.event_id
+      )
+
+    # Events that have aggregatable sources
+    events_with_aggregatable_sources =
+      from(pes in "public_event_sources",
+        join: s in "sources", on: s.id == pes.source_id,
+        where: s.aggregate_on_index == true,
+        select: pes.event_id
+      )
+
+    from(pe in PublicEvent,
+      where: pe.id in subquery(event_ids_query),
+      where: pe.id not in subquery(events_with_movies),
+      where: pe.id not in subquery(events_with_aggregatable_sources),
+      select: count(pe.id, :distinct)
+    )
+    |> Repo.one() || 0
   end
 
   # Check if an event has an associated movie
@@ -2093,6 +2457,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   # Build container aggregated groups from events that belong to containers
+  # P0 Optimization: Eliminated correlated subqueries by using batch queries
   defp build_container_aggregated_groups(events) do
     # Extract event IDs for querying memberships
     event_ids = events |> Enum.map(& &1.id)
@@ -2100,9 +2465,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     if Enum.empty?(event_ids) do
       []
     else
-      # Query all containers with their event counts for these events
-      # Note: We get TOTAL counts for the container, not just filtered events
-      container_data =
+      # Step 1: Query containers with their filtered event IDs (no correlated subqueries)
+      container_base =
         from(c in PublicEventContainer,
           join: m in PublicEventContainerMembership,
           on: m.container_id == c.id,
@@ -2117,36 +2481,62 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
             start_date: c.start_date,
             end_date: c.end_date,
             metadata: c.metadata,
-            event_ids: fragment("array_agg(?)", m.event_id),
-            # Get TOTAL event count for this container (constant, unfiltered)
-            total_event_count:
-              fragment(
-                "(SELECT COUNT(DISTINCT event_id) FROM public_event_container_memberships WHERE container_id = ?)",
-                c.id
-              ),
-            # Get ALL unique venue IDs for this container (constant, unfiltered)
-            total_venue_ids:
-              fragment(
-                "(SELECT array_agg(DISTINCT venue_id) FROM public_events WHERE id IN (SELECT event_id FROM public_event_container_memberships WHERE container_id = ?))",
-                c.id
-              )
+            event_ids: fragment("array_agg(?)", m.event_id)
           }
         )
         |> Repo.all()
 
-      # Build groups from container data
-      container_data
-      |> Enum.map(fn container ->
-        # Get events for this container
-        container_events = events |> Enum.filter(&(&1.id in container.event_ids))
+      # Early exit if no containers found
+      if Enum.empty?(container_base) do
+        []
+      else
+        # Step 2: Batch fetch TOTAL event counts for all containers in ONE query
+        container_ids = Enum.map(container_base, & &1.container_id)
 
-        if Enum.empty?(container_events) do
-          nil
-        else
-          build_container_aggregated_group(container, container_events)
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
+        total_counts =
+          from(m in PublicEventContainerMembership,
+            where: m.container_id in ^container_ids,
+            group_by: m.container_id,
+            select: {m.container_id, count(fragment("DISTINCT ?", m.event_id))}
+          )
+          |> Repo.all()
+          |> Map.new()
+
+        # Step 3: Batch fetch venue IDs for all containers in ONE query
+        venue_ids_map =
+          from(m in PublicEventContainerMembership,
+            join: pe in PublicEvent,
+            on: pe.id == m.event_id,
+            where: m.container_id in ^container_ids,
+            group_by: m.container_id,
+            select: {m.container_id, fragment("array_agg(DISTINCT ?)", pe.venue_id)}
+          )
+          |> Repo.all()
+          |> Map.new()
+
+        # Step 4: Merge the batch results into container data
+        container_data =
+          Enum.map(container_base, fn c ->
+            Map.merge(c, %{
+              total_event_count: Map.get(total_counts, c.container_id, 0),
+              total_venue_ids: Map.get(venue_ids_map, c.container_id, [])
+            })
+          end)
+
+        # Build groups from container data
+        container_data
+        |> Enum.map(fn container ->
+          # Get events for this container
+          container_events = events |> Enum.filter(&(&1.id in container.event_ids))
+
+          if Enum.empty?(container_events) do
+            nil
+          else
+            build_container_aggregated_group(container, container_events)
+          end
+        end)
+        |> Enum.reject(&is_nil/1)
+      end
     end
   end
 

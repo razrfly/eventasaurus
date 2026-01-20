@@ -110,7 +110,7 @@ export ZYTE_API_KEY="your-api-key-here"
 
 ```bash
 # For static HTML requests (1 credit per request)
-export CRAWLBASE_NORMAL_API_KEY="your-normal-token-here"
+export CRAWLBASE_API_KEY="your-normal-token-here"
 
 # For JavaScript-rendered requests (2 credits per request)
 export CRAWLBASE_JS_API_KEY="your-js-token-here"
@@ -573,7 +573,7 @@ The adapter requires configuration that isn't set:
 echo $ZYTE_API_KEY
 
 # Check if Crawlbase API keys are set
-echo $CRAWLBASE_NORMAL_API_KEY
+echo $CRAWLBASE_API_KEY
 echo $CRAWLBASE_JS_API_KEY
 ```
 
@@ -589,7 +589,7 @@ echo $CRAWLBASE_JS_API_KEY
 
 Crawlbase requires different tokens for different modes:
 - `:javascript` mode requires `CRAWLBASE_JS_API_KEY`
-- `:normal` mode requires `CRAWLBASE_NORMAL_API_KEY`
+- `:normal` mode requires `CRAWLBASE_API_KEY`
 
 ```elixir
 # Check which modes are available
