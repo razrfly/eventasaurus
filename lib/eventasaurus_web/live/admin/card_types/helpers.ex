@@ -29,10 +29,13 @@ defmodule EventasaurusWeb.Admin.CardTypes.Helpers do
   """
   @spec sample_datetime(integer(), integer(), integer()) :: DateTime.t()
   def sample_datetime(days_ahead \\ 3, hour \\ 20, minute \\ 0) do
-    DateTime.utc_now()
-    |> DateTime.add(days_ahead, :day)
-    |> DateTime.truncate(:second)
-    |> Map.merge(%{hour: hour, minute: minute, second: 0})
+    target_date =
+      Date.utc_today()
+      |> Date.add(days_ahead)
+
+    {:ok, time} = Time.new(hour, minute, 0)
+    {:ok, datetime} = DateTime.new(target_date, time)
+    datetime
   end
 
   @doc """
