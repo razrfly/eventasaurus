@@ -181,6 +181,9 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
   Returns a list of upcoming dates (as Date structs) for the movie,
   sorted ascending, limited to `limit` results.
 
+  Uses the city's timezone to determine "today" correctly, so screenings
+  that are still valid in the local timezone won't be incorrectly filtered out.
+
   ## Options
     - `:limit` - Maximum number of dates to return (default: 3)
 
@@ -189,9 +192,21 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
   """
   def get_upcoming_screening_dates(movie_id, city_id, opts \\ []) do
     alias EventasaurusDiscovery.PublicEvents.PublicEvent
+    alias EventasaurusDiscovery.Locations.City
+    alias EventasaurusWeb.Utils.TimezoneUtils
 
     limit = Keyword.get(opts, :limit, 3)
-    today = Date.utc_today()
+
+    # Get city for timezone-aware "today" calculation
+    # This ensures we don't filter out screenings that are still valid in the local timezone
+    city = Repo.get(City, city_id)
+    timezone = TimezoneUtils.default_timezone_for_context(city)
+
+    today =
+      case DateTime.now(timezone) do
+        {:ok, dt} -> DateTime.to_date(dt)
+        {:error, _} -> Date.utc_today()
+      end
 
     # Get all events for this movie in this city with their occurrences
     events =
