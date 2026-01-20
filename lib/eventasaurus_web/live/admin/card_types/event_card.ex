@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.Admin.CardTypes.EventCard do
 
   @behaviour EventasaurusWeb.Admin.CardTypeBehaviour
 
+  alias EventasaurusWeb.Admin.CardTypes.Helpers
   alias EventasaurusWeb.SocialCardView
 
   @impl true
@@ -14,21 +15,13 @@ defmodule EventasaurusWeb.Admin.CardTypes.EventCard do
 
   @impl true
   def generate_mock_data do
-    # Create a sample date/time - 3 days from now at 8 PM UTC
-    sample_start_at =
-      DateTime.utc_now()
-      |> DateTime.add(3, :day)
-      |> Map.put(:hour, 20)
-      |> Map.put(:minute, 0)
-      |> Map.put(:second, 0)
-
     %{
       title: "Sample Event: Testing Social Card Design Across All Themes",
       cover_image_url: "/images/events/abstract/abstract1.png",
       theme: :minimal,
       slug: "mock-event-preview",
       description: "This is a mock event for testing social card designs",
-      start_at: sample_start_at,
+      start_at: Helpers.sample_datetime(3, 20, 0),
       timezone: "Europe/Warsaw",
       updated_at: DateTime.utc_now()
     }

@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.Admin.CardTypes.CityCard do
 
   @behaviour EventasaurusWeb.Admin.CardTypeBehaviour
 
+  alias EventasaurusWeb.Admin.CardTypes.Helpers
   alias EventasaurusWeb.SocialCardView
 
   @impl true
@@ -75,10 +76,10 @@ defmodule EventasaurusWeb.Admin.CardTypes.CityCard do
       | name: Map.get(params, "name", current.name),
         stats: %{
           current.stats
-          | events_count: parse_int(Map.get(params, "events_count"), current.stats.events_count),
-            venues_count: parse_int(Map.get(params, "venues_count"), current.stats.venues_count),
+          | events_count: Helpers.parse_int(Map.get(params, "events_count"), current.stats.events_count),
+            venues_count: Helpers.parse_int(Map.get(params, "venues_count"), current.stats.venues_count),
             categories_count:
-              parse_int(Map.get(params, "categories_count"), current.stats.categories_count)
+              Helpers.parse_int(Map.get(params, "categories_count"), current.stats.categories_count)
         }
     }
   end
@@ -88,14 +89,4 @@ defmodule EventasaurusWeb.Admin.CardTypes.CityCard do
 
   @impl true
   def form_param_key, do: "city"
-
-  # Helper to parse integer with default
-  defp parse_int(value, default) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, _} -> int
-      :error -> default
-    end
-  end
-
-  defp parse_int(_, default), do: default
 end

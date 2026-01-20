@@ -7,6 +7,8 @@ defmodule EventasaurusWeb.Admin.CardTypes.SourceAggregationCard do
 
   @behaviour EventasaurusWeb.Admin.CardTypeBehaviour
 
+  alias EventasaurusWeb.Admin.CardTypes.Helpers
+
   import EventasaurusWeb.SocialCardView, only: [render_source_aggregation_card_svg: 1]
 
   @impl true
@@ -89,8 +91,8 @@ defmodule EventasaurusWeb.Admin.CardTypes.SourceAggregationCard do
         identifier: Map.get(params, "identifier", current.identifier),
         content_type: Map.get(params, "content_type", current.content_type),
         total_event_count:
-          parse_int(Map.get(params, "total_event_count"), current.total_event_count),
-        location_count: parse_int(Map.get(params, "location_count"), current.location_count),
+          Helpers.parse_int(Map.get(params, "total_event_count"), current.total_event_count),
+        location_count: Helpers.parse_int(Map.get(params, "location_count"), current.location_count),
         hero_image: Map.get(params, "hero_image", current.hero_image),
         city: %{
           current.city
@@ -104,13 +106,4 @@ defmodule EventasaurusWeb.Admin.CardTypes.SourceAggregationCard do
 
   @impl true
   def form_param_key, do: "aggregation"
-
-  defp parse_int(value, default) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, _} -> int
-      :error -> default
-    end
-  end
-
-  defp parse_int(_, default), do: default
 end
