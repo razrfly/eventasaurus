@@ -22,6 +22,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.JsonLd.CitySchema
   alias Eventasaurus.SocialCards.UrlBuilder
   alias EventasaurusWeb.Cache.CityPageCache
+  alias EventasaurusWeb.Telemetry.CityPageTelemetry
 
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.Components.EventListing
@@ -72,12 +73,16 @@ defmodule EventasaurusWeb.CityLive.Index do
           social_card_path = UrlBuilder.build_path(:city, city_with_stats)
           og_tags = build_city_open_graph(city, city_stats, social_card_path, request_uri)
 
+          # TELEMETRY: Start page load timing
+          timing_ctx = CityPageTelemetry.start_timing(city_slug)
+
           {:ok,
            socket
            |> assign(:city, city)
            |> assign(:city_slug, city_slug)
            |> assign(:language, language)
            |> assign(:request_uri, request_uri)
+           |> assign(:timing_ctx, timing_ctx)
            # Initialize with empty/loading states - will be populated by handle_info
            |> assign(:available_languages, ["en"])
            |> assign(:radius_km, @default_radius_km)
@@ -164,11 +169,17 @@ defmodule EventasaurusWeb.CityLive.Index do
     # NOTE: SEO metadata (open_graph, meta tags, json_ld) is set synchronously in mount
     # so crawlers see it in the initial HTML response (Issue #3146)
 
+    # TELEMETRY: Mark initial data loaded
+    timing_ctx =
+      socket.assigns[:timing_ctx]
+      |> CityPageTelemetry.mark(:initial_data_loaded)
+
     socket =
       socket
       |> assign(:available_languages, available_languages)
       |> assign(:categories, categories)
       |> assign(:loading, false)
+      |> assign(:timing_ctx, timing_ctx)
 
     # Trigger events loading (the expensive operation)
     send(self(), :load_events)
@@ -200,6 +211,16 @@ defmodule EventasaurusWeb.CityLive.Index do
           # Clear deferred_loading flag - initial loading is complete
           |> assign(:deferred_loading, false)
           |> assign(:fetch_in_progress, false)
+          |> then(fn socket ->
+            # TELEMETRY: Complete page load timing
+            if timing_ctx = socket.assigns[:timing_ctx] do
+              timing_ctx
+              |> CityPageTelemetry.mark(:events_loaded)
+              |> CityPageTelemetry.finish_timing()
+            end
+
+            socket
+          end)
         rescue
           e ->
             Logger.error(

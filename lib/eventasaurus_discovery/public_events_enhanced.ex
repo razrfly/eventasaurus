@@ -7,6 +7,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   require Logger
 
   alias EventasaurusApp.Repo
+  alias EventasaurusWeb.Telemetry.CityPageTelemetry
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
@@ -1618,6 +1619,15 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   - `:all_events_filters` - Filters to use for all_events_count (typically without date range)
   """
   def list_events_with_aggregation_and_counts(opts \\ []) do
+    # Extract city_slug for telemetry metadata
+    city_slug = case opts[:viewing_city] do
+      %{slug: slug} -> slug
+      _ -> "unknown"
+    end
+    radius_km = opts[:radius_km] || 50
+
+    telemetry_meta = %{city_slug: city_slug, radius_km: radius_km}
+
     if opts[:aggregate] do
       # Extract & sanitize pagination params
       page = max(opts[:page] || 1, 1)
@@ -1639,11 +1649,21 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           end
         end)
 
-      # Single database query - fetch events
-      events = list_events(opts_without_pagination)
+      # TELEMETRY: Measure list_events query time
+      {list_events_ms, events} =
+        CityPageTelemetry.measure_query(:list_events, telemetry_meta, fn ->
+          list_events(opts_without_pagination)
+        end)
 
-      # In-memory aggregation (done once, reused for both counts)
-      aggregated = aggregate_events(events, opts)
+      CityPageTelemetry.log_if_slow("list_events", list_events_ms, telemetry_meta)
+
+      # TELEMETRY: Measure aggregation time
+      {aggregation_ms, aggregated} =
+        CityPageTelemetry.measure_query(:aggregation, telemetry_meta, fn ->
+          aggregate_events(events, opts)
+        end)
+
+      CityPageTelemetry.log_if_slow("aggregate_events", aggregation_ms, telemetry_meta)
 
       # Total count for pagination (current filters)
       total_count = length(aggregated)
@@ -1679,17 +1699,40 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
                 end
               end)
 
-            count_events(count_opts)
+            # TELEMETRY: Measure count_events query time
+            {count_ms, count} =
+              CityPageTelemetry.measure_query(:count_all_events, telemetry_meta, fn ->
+                count_events(count_opts)
+              end)
+
+            CityPageTelemetry.log_if_slow("count_events (all)", count_ms, telemetry_meta)
+            count
         end
+
+      # Log overall timing breakdown
+      Logger.debug(
+        "[CityPage:TIMING] #{city_slug} - list_events=#{list_events_ms}ms, aggregation=#{aggregation_ms}ms, events=#{length(events)}, aggregated=#{total_count}"
+      )
 
       {paginated_events, total_count, all_events_count}
     else
       # Non-aggregated: use simple list with count
-      events = list_events(opts)
+      {list_ms, events} =
+        CityPageTelemetry.measure_query(:list_events, telemetry_meta, fn ->
+          list_events(opts)
+        end)
+
+      CityPageTelemetry.log_if_slow("list_events (non-agg)", list_ms, telemetry_meta)
 
       # For non-aggregated, count via efficient SQL
       count_opts = opts |> Map.new() |> Map.drop([:page, :page_size, :offset, :limit])
-      total_count = count_events(count_opts)
+
+      {count_ms, total_count} =
+        CityPageTelemetry.measure_query(:count_events, telemetry_meta, fn ->
+          count_events(count_opts)
+        end)
+
+      CityPageTelemetry.log_if_slow("count_events", count_ms, telemetry_meta)
 
       all_events_count =
         case opts[:all_events_filters] do
