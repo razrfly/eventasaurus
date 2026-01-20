@@ -17,13 +17,13 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
   ## Configuration
 
   Requires one or both environment variables:
-  - `CRAWLBASE_NORMAL_API_KEY` - For static HTML requests
+  - `CRAWLBASE_API_KEY` - For static HTML requests
   - `CRAWLBASE_JS_API_KEY` - For JavaScript-rendered requests
 
   ```elixir
   # config/runtime.exs
-  config :eventasaurus, :crawlbase_normal_api_key,
-    System.get_env("CRAWLBASE_NORMAL_API_KEY")
+  config :eventasaurus, :crawlbase_api_key,
+    System.get_env("CRAWLBASE_API_KEY")
 
   config :eventasaurus, :crawlbase_js_api_key,
     System.get_env("CRAWLBASE_JS_API_KEY")
@@ -105,7 +105,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
       true  # when CRAWLBASE_JS_API_KEY is set
 
       iex> Crawlbase.available_for_mode?(:normal)
-      true  # when CRAWLBASE_NORMAL_API_KEY is set
+      true  # when CRAWLBASE_API_KEY is set
   """
   @spec available_for_mode?(atom()) :: boolean()
   def available_for_mode?(:javascript), do: has_js_key?()
@@ -352,8 +352,8 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
   end
 
   defp get_normal_api_key do
-    Application.get_env(:eventasaurus, :crawlbase_normal_api_key) ||
-      System.get_env("CRAWLBASE_NORMAL_API_KEY") ||
+    Application.get_env(:eventasaurus, :crawlbase_api_key) ||
+      System.get_env("CRAWLBASE_API_KEY") ||
       ""
   end
 

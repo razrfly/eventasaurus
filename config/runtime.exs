@@ -245,10 +245,10 @@ config :eventasaurus, :zyte_api_key, System.get_env("ZYTE_API_KEY") || ""
 # Configure Crawlbase API for browser-rendered HTTP requests
 # Used by Http.Adapters.Crawlbase to bypass Cloudflare and other anti-bot protections
 # Two token types available:
-#   - CRAWLBASE_NORMAL_API_KEY: For static HTML requests (1 credit per request)
+#   - CRAWLBASE_API_KEY: For static HTML requests (1 credit per request)
 #   - CRAWLBASE_JS_API_KEY: For JavaScript-rendered requests (2 credits per request)
 # Optional: adapter returns {:error, :not_configured} when required key is not set
-config :eventasaurus, :crawlbase_normal_api_key, System.get_env("CRAWLBASE_NORMAL_API_KEY")
+config :eventasaurus, :crawlbase_api_key, System.get_env("CRAWLBASE_API_KEY")
 config :eventasaurus, :crawlbase_js_api_key, System.get_env("CRAWLBASE_JS_API_KEY")
 
 # Configure per-source HTTP strategies for the Http.Client fallback chain
