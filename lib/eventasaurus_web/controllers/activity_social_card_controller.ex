@@ -112,11 +112,12 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
       end
     end)
     |> Enum.reject(&is_nil/1)
-    # Filter out past occurrences
-    |> Enum.filter(fn occ ->
-      DateTime.compare(occ.datetime, now) in [:gt, :eq]
-    end)
     |> Enum.sort_by(& &1.datetime, DateTime)
+    # Select the best occurrence to display:
+    # - Prefer the first FUTURE occurrence if any exist
+    # - Otherwise show the MOST RECENT past occurrence
+    # This ensures historical events still display their date on social cards
+    |> select_best_occurrence_for_display(now)
   end
 
   defp parse_occurrences(%{occurrences: %{"type" => "pattern", "pattern" => pattern}} = event) do
@@ -125,6 +126,33 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
   end
 
   defp parse_occurrences(_), do: nil
+
+  # Select the best occurrence to display on the social card
+  # Returns a list with a single occurrence (for consistency with existing code)
+  # Prefers future occurrences, falls back to most recent past occurrence
+  defp select_best_occurrence_for_display([], _now), do: []
+
+  defp select_best_occurrence_for_display(sorted_occurrences, now) do
+    # Find first future occurrence
+    future_occurrence =
+      Enum.find(sorted_occurrences, fn occ ->
+        DateTime.compare(occ.datetime, now) in [:gt, :eq]
+      end)
+
+    case future_occurrence do
+      nil ->
+        # All occurrences are in the past - show the most recent one
+        # sorted_occurrences is already sorted ascending, so last is most recent
+        case List.last(sorted_occurrences) do
+          nil -> []
+          most_recent -> [most_recent]
+        end
+
+      occurrence ->
+        # Has future occurrence - show the first upcoming one
+        [occurrence]
+    end
+  end
 
   # Parse time string to Time struct
   defp parse_time(nil), do: {:ok, ~T[00:00:00]}
