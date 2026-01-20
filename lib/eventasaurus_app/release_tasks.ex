@@ -6,6 +6,12 @@ defmodule EventasaurusApp.ReleaseTasks do
 
   ## Usage
 
+      # Enqueue timezone jobs for cities missing timezone
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.enqueue_timezone_jobs()"
+
+      # Force enqueue for ALL cities (even those with timezone set)
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.enqueue_timezone_jobs(true)"
+
       # Fix duplicate cinema_city_film_ids (dry run)
       bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates()"
 
@@ -14,6 +20,72 @@ defmodule EventasaurusApp.ReleaseTasks do
   """
 
   require Logger
+  import Ecto.Query
+
+  alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Locations.City
+
+  @doc """
+  Enqueue Oban jobs to populate timezone for cities.
+
+  Jobs run in the background and use TzWorld to determine timezone from coordinates,
+  with country-level fallback for cities without coordinates.
+
+  See Issue #3334 for full analysis.
+
+  ## Arguments
+
+    - `force` - When true, enqueues jobs for ALL cities (even those with timezone set)
+
+  ## Examples
+
+      # Enqueue for cities missing timezone
+      EventasaurusApp.ReleaseTasks.enqueue_timezone_jobs()
+
+      # Force enqueue for ALL cities
+      EventasaurusApp.ReleaseTasks.enqueue_timezone_jobs(true)
+  """
+  def enqueue_timezone_jobs(force \\ false) do
+    start_app()
+
+    alias EventasaurusApp.Workers.PopulateCityTimezoneJob
+
+    # Get city IDs
+    id_query =
+      if force do
+        from(c in City, select: c.id, order_by: [asc: c.id])
+      else
+        from(c in City, where: is_nil(c.timezone), select: c.id, order_by: [asc: c.id])
+      end
+
+    city_ids = Repo.all(id_query, timeout: 60_000)
+
+    if Enum.empty?(city_ids) do
+      IO.puts("✅ All cities already have timezones populated!")
+    else
+      IO.puts("🌍 Enqueuing timezone jobs for #{length(city_ids)} cities...")
+
+      # Enqueue jobs in batches
+      city_ids
+      |> Enum.chunk_every(100)
+      |> Enum.with_index(1)
+      |> Enum.each(fn {batch_ids, _batch_num} ->
+        jobs =
+          Enum.map(batch_ids, fn city_id ->
+            PopulateCityTimezoneJob.new(%{city_id: city_id})
+          end)
+
+        Oban.insert_all(jobs)
+        IO.write(".")
+      end)
+
+      IO.puts("")
+      IO.puts("✅ Enqueued #{length(city_ids)} jobs. They will process in the background.")
+      IO.puts("   Monitor progress in the Oban dashboard or logs.")
+    end
+
+    :ok
+  end
 
   def fix_cinema_city_duplicates(apply_changes \\ false) do
     # Start the repo
@@ -78,9 +150,6 @@ defmodule EventasaurusApp.ReleaseTasks do
   end
 
   defp find_duplicate_film_ids do
-    import Ecto.Query
-
-    alias EventasaurusApp.Repo
     alias EventasaurusDiscovery.Movies.Movie
 
     # Find film_ids that appear on multiple movies
@@ -96,9 +165,6 @@ defmodule EventasaurusApp.ReleaseTasks do
   end
 
   defp find_movies_to_fix(duplicate_film_ids) do
-    import Ecto.Query
-
-    alias EventasaurusApp.Repo
     alias EventasaurusDiscovery.Movies.Movie
 
     # For each duplicate film_id, find movies and return all except the oldest
@@ -127,7 +193,6 @@ defmodule EventasaurusApp.ReleaseTasks do
   end
 
   defp fix_movie(movie_id) do
-    alias EventasaurusApp.Repo
     alias EventasaurusDiscovery.Movies.Movie
 
     movie = Repo.get!(Movie, movie_id)

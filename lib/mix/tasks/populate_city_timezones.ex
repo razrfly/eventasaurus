@@ -27,9 +27,16 @@ defmodule Mix.Tasks.PopulateCityTimezones do
 
   ## Production Usage
 
-  After deploying the migration, run via release task:
+  Mix tasks aren't available in production releases. Use the release task instead:
 
-      bin/eventasaurus eval "Mix.Tasks.PopulateCityTimezones.run([])"
+      # Dry run (see what would be updated)
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.populate_city_timezones()"
+
+      # Apply changes
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.populate_city_timezones(true)"
+
+      # Force repopulate ALL cities (even those with timezone set)
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.populate_city_timezones(true, true)"
   """
 
   use Mix.Task
