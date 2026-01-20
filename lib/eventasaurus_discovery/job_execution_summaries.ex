@@ -4,8 +4,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
 
   Provides query functions for the admin dashboard and analytics.
 
-  All read operations use `Repo.replica()` to route queries to PlanetScale
-  read replicas, reducing load on the primary database. This is safe because:
+  All read operations use `Repo.replica()` to route queries to the
+  read-optimized connection pool, reducing load on the primary pool. This is safe because:
   - All queries are read-only analytics/monitoring data
   - Slight replication lag (typically milliseconds) is acceptable
   - Data is historical and not time-critical

@@ -6,17 +6,22 @@ config :eventasaurus, :environment, :dev
 # =============================================================================
 # Database Configuration Toggle
 # =============================================================================
-# Set USE_PROD_DB=true to connect to production PlanetScale database
+# Set USE_PROD_DB=true to connect to production Fly Managed Postgres
 # Default: local PostgreSQL (safe for development)
 #
 # Usage:
 #   Normal dev:     mix phx.server
 #   With prod DB:   USE_PROD_DB=true mix phx.server
 #                   (or add USE_PROD_DB=true to .env temporarily)
+#
+# Prerequisites for USE_PROD_DB:
+#   1. Set DATABASE_URL in .env (get from `fly secrets list -a eventasaurus`)
+#   2. Start fly proxy: `fly proxy 5433:5432 -a eventasaurus-db`
+#   3. Or use WireGuard VPN: `fly wireguard create`
 # =============================================================================
 
 # Load .env file at compile time if it exists (needed for USE_PROD_DB mode)
-# This ensures PlanetScale credentials are available before config is evaluated
+# This ensures Fly MPG credentials are available before config is evaluated
 if File.exists?(".env") do
   File.read!(".env")
   |> String.split("\n")
@@ -54,75 +59,64 @@ if use_prod_db do
 
   """)
 
-  # PlanetScale production database configuration
-  ps_host = System.get_env("PLANETSCALE_DATABASE_HOST", "localhost")
+  # Fly Managed Postgres production database configuration
+  # Uses DATABASE_URL (PgBouncer) and DATABASE_DIRECT_URL (direct connection)
+  database_url = System.get_env("DATABASE_URL") ||
+    raise "DATABASE_URL not set. Get it from: fly secrets list -a eventasaurus"
 
-  # Repo: Pooled connection via PgBouncer (port 6432) for web requests
+  database_direct_url = System.get_env("DATABASE_DIRECT_URL") ||
+    raise "DATABASE_DIRECT_URL not set. Get it from: fly secrets list -a eventasaurus"
+
+  # Repo: Pooled connection via PgBouncer for web requests
   # Higher pool size for dev since we're the only user and need headroom for LiveView
   config :eventasaurus, EventasaurusApp.Repo,
-    username: System.get_env("PLANETSCALE_DATABASE_USERNAME"),
-    password: System.get_env("PLANETSCALE_DATABASE_PASSWORD"),
-    hostname: ps_host,
-    port: String.to_integer(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")),
-    database: System.get_env("PLANETSCALE_DATABASE", "postgres"),
+    url: database_url,
     stacktrace: true,
     show_sensitive_data_on_connection_error: true,
     pool_size: 10,
     queue_target: 5000,
     queue_interval: 10000,
-    connect_timeout: 30_000,
-    ssl: true,
-    ssl_opts: [verify: :verify_none],
+    parameters: [
+      application_name: "eventasaurus_dev"
+    ],
     prepare: :unnamed
 
-  # SessionRepo: Direct connection (port 5432) for migrations and advisory locks
+  # SessionRepo: Direct connection for migrations and advisory locks
   config :eventasaurus, EventasaurusApp.SessionRepo,
-    username: System.get_env("PLANETSCALE_DATABASE_USERNAME"),
-    password: System.get_env("PLANETSCALE_DATABASE_PASSWORD"),
-    hostname: ps_host,
-    port: String.to_integer(System.get_env("PLANETSCALE_DATABASE_PORT", "5432")),
-    database: System.get_env("PLANETSCALE_DATABASE", "postgres"),
+    url: database_direct_url,
     stacktrace: true,
     show_sensitive_data_on_connection_error: true,
     pool_size: 5,
     queue_target: 5000,
     queue_interval: 10000,
-    connect_timeout: 30_000,
-    ssl: true,
-    ssl_opts: [verify: :verify_none]
+    parameters: [
+      application_name: "eventasaurus_session_dev"
+    ]
 
   # ReplicaRepo: Pooled connection for read-heavy operations
   config :eventasaurus, EventasaurusApp.ReplicaRepo,
-    username: System.get_env("PLANETSCALE_DATABASE_USERNAME"),
-    password: System.get_env("PLANETSCALE_DATABASE_PASSWORD"),
-    hostname: ps_host,
-    port: String.to_integer(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")),
-    database: System.get_env("PLANETSCALE_DATABASE", "postgres"),
+    url: database_url,
     stacktrace: true,
     show_sensitive_data_on_connection_error: true,
     pool_size: 10,
     queue_target: 5000,
     queue_interval: 10000,
-    connect_timeout: 30_000,
-    ssl: true,
-    ssl_opts: [verify: :verify_none],
+    parameters: [
+      application_name: "eventasaurus_replica_dev"
+    ],
     prepare: :unnamed
 
   # ObanRepo: Dedicated connection pool for Oban job processing (Issue #3160)
   config :eventasaurus, EventasaurusApp.ObanRepo,
-    username: System.get_env("PLANETSCALE_DATABASE_USERNAME"),
-    password: System.get_env("PLANETSCALE_DATABASE_PASSWORD"),
-    hostname: ps_host,
-    port: String.to_integer(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")),
-    database: System.get_env("PLANETSCALE_DATABASE", "postgres"),
+    url: database_url,
     stacktrace: true,
     show_sensitive_data_on_connection_error: true,
     pool_size: 5,
     queue_target: 5000,
     queue_interval: 10000,
-    connect_timeout: 30_000,
-    ssl: true,
-    ssl_opts: [verify: :verify_none],
+    parameters: [
+      application_name: "eventasaurus_oban_dev"
+    ],
     prepare: :unnamed
 else
   # Default: Local PostgreSQL for development

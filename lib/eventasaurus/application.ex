@@ -68,7 +68,7 @@ defmodule Eventasaurus.Application do
       EventasaurusApp.Repo,
       # Start SessionRepo for migrations and advisory locks
       EventasaurusApp.SessionRepo,
-      # Start ReplicaRepo for read-heavy queries (connects to PlanetScale replicas)
+      # Start ReplicaRepo for read-heavy queries (dedicated pool for analytics/monitoring)
       # Only started in production - dev/test use primary via Repo.replica() helper
       EventasaurusApp.ReplicaRepo,
       # Start ObanRepo - dedicated connection pool for Oban job processing (Issue #3160)
