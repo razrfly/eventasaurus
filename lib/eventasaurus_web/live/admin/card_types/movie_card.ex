@@ -14,6 +14,15 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
 
   @impl true
   def generate_mock_data do
+    # Generate sample screening dates - next 3 days
+    today = Date.utc_today()
+
+    screening_dates = [
+      Date.add(today, 1),
+      Date.add(today, 2),
+      Date.add(today, 3)
+    ]
+
     %{
       id: 1,
       tmdb_id: 771,
@@ -31,6 +40,7 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
         vote_count: 10423,
         genres: ["Comedy", "Family"]
       },
+      screening_dates: screening_dates,
       updated_at: DateTime.utc_now()
     }
   end
