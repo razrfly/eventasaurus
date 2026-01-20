@@ -68,6 +68,11 @@ fi
 COPY config/config.exs config/${MIX_ENV}.exs config/clerk.exs config/
 RUN mix deps.compile
 
+# Download and install TzWorld timezone geodata
+# This creates the DETS file in deps/tz_world/priv/ which is then bundled in the release
+# Without this, TzWorld.Backend.DetsWithIndexCache will fail with :enoent errors
+RUN mix tz_world.update
+
 COPY priv priv
 
 COPY lib lib
