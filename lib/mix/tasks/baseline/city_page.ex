@@ -322,7 +322,13 @@ defmodule Mix.Tasks.Baseline.CityPage do
        when is_number(previous) and previous > 0 and is_number(current) do
     diff = current - previous
     diff_pct = (diff / previous) * 100
-    direction = if diff < 0, do: "🟢 FASTER", else: "🔴 SLOWER"
+
+    direction =
+      cond do
+        diff < 0 -> "🟢 FASTER"
+        diff > 0 -> "🔴 SLOWER"
+        true -> "⚪ SAME"
+      end
 
     IO.puts("\n  #{label}:")
     IO.puts("    Previous: #{previous}ms")
