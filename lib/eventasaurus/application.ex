@@ -163,6 +163,9 @@ defmodule Eventasaurus.Application do
     # Attach HTTP client telemetry for request monitoring
     EventasaurusDiscovery.Http.Telemetry.attach()
 
+    # Attach city page telemetry for performance monitoring (Phase 0 instrumentation)
+    EventasaurusWeb.Telemetry.CityPageTelemetry.attach_handlers()
+
     # Note: The legacy scraper-specific telemetry handler was removed in Issue #3048 Phase 3
     # All job execution logging is now handled by ObanTelemetry and MetricsTracker
   end

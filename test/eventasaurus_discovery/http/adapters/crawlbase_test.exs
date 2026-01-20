@@ -13,35 +13,35 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
   describe "available?/0" do
     test "returns true when at least one API key is set" do
       # Save original values
-      original_normal = Application.get_env(:eventasaurus, :crawlbase_normal_api_key)
+      original_normal = Application.get_env(:eventasaurus, :crawlbase_api_key)
       original_js = Application.get_env(:eventasaurus, :crawlbase_js_api_key)
-      original_env_normal = System.get_env("CRAWLBASE_NORMAL_API_KEY")
+      original_env_normal = System.get_env("CRAWLBASE_API_KEY")
       original_env_js = System.get_env("CRAWLBASE_JS_API_KEY")
 
       try do
         # Clear all keys
-        Application.put_env(:eventasaurus, :crawlbase_normal_api_key, nil)
+        Application.put_env(:eventasaurus, :crawlbase_api_key, nil)
         Application.put_env(:eventasaurus, :crawlbase_js_api_key, nil)
-        System.delete_env("CRAWLBASE_NORMAL_API_KEY")
+        System.delete_env("CRAWLBASE_API_KEY")
         System.delete_env("CRAWLBASE_JS_API_KEY")
 
         # With no keys, should return false
         assert Crawlbase.available?() == false
 
         # With just normal key, should return true
-        Application.put_env(:eventasaurus, :crawlbase_normal_api_key, "test_normal_key")
+        Application.put_env(:eventasaurus, :crawlbase_api_key, "test_normal_key")
         assert Crawlbase.available?() == true
 
         # Clear normal, set JS key
-        Application.put_env(:eventasaurus, :crawlbase_normal_api_key, nil)
+        Application.put_env(:eventasaurus, :crawlbase_api_key, nil)
         Application.put_env(:eventasaurus, :crawlbase_js_api_key, "test_js_key")
         assert Crawlbase.available?() == true
       after
         # Restore original values
         if original_normal do
-          Application.put_env(:eventasaurus, :crawlbase_normal_api_key, original_normal)
+          Application.put_env(:eventasaurus, :crawlbase_api_key, original_normal)
         else
-          Application.put_env(:eventasaurus, :crawlbase_normal_api_key, nil)
+          Application.put_env(:eventasaurus, :crawlbase_api_key, nil)
         end
 
         if original_js do
@@ -51,7 +51,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
         end
 
         if original_env_normal do
-          System.put_env("CRAWLBASE_NORMAL_API_KEY", original_env_normal)
+          System.put_env("CRAWLBASE_API_KEY", original_env_normal)
         end
 
         if original_env_js do
@@ -64,16 +64,16 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
   describe "available_for_mode?/1" do
     test "returns correct availability for each mode" do
       # Save original values
-      original_normal = Application.get_env(:eventasaurus, :crawlbase_normal_api_key)
+      original_normal = Application.get_env(:eventasaurus, :crawlbase_api_key)
       original_js = Application.get_env(:eventasaurus, :crawlbase_js_api_key)
-      original_env_normal = System.get_env("CRAWLBASE_NORMAL_API_KEY")
+      original_env_normal = System.get_env("CRAWLBASE_API_KEY")
       original_env_js = System.get_env("CRAWLBASE_JS_API_KEY")
 
       try do
         # Clear all keys (both Application config and System env)
-        Application.put_env(:eventasaurus, :crawlbase_normal_api_key, nil)
+        Application.put_env(:eventasaurus, :crawlbase_api_key, nil)
         Application.put_env(:eventasaurus, :crawlbase_js_api_key, nil)
-        System.delete_env("CRAWLBASE_NORMAL_API_KEY")
+        System.delete_env("CRAWLBASE_API_KEY")
         System.delete_env("CRAWLBASE_JS_API_KEY")
 
         # With no keys
@@ -81,7 +81,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
         assert Crawlbase.available_for_mode?(:javascript) == false
 
         # With only normal key
-        Application.put_env(:eventasaurus, :crawlbase_normal_api_key, "test_normal_key")
+        Application.put_env(:eventasaurus, :crawlbase_api_key, "test_normal_key")
         assert Crawlbase.available_for_mode?(:normal) == true
         assert Crawlbase.available_for_mode?(:javascript) == false
 
@@ -92,9 +92,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
       after
         # Restore original values
         if original_normal do
-          Application.put_env(:eventasaurus, :crawlbase_normal_api_key, original_normal)
+          Application.put_env(:eventasaurus, :crawlbase_api_key, original_normal)
         else
-          Application.put_env(:eventasaurus, :crawlbase_normal_api_key, nil)
+          Application.put_env(:eventasaurus, :crawlbase_api_key, nil)
         end
 
         if original_js do
@@ -104,7 +104,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
         end
 
         if original_env_normal do
-          System.put_env("CRAWLBASE_NORMAL_API_KEY", original_env_normal)
+          System.put_env("CRAWLBASE_API_KEY", original_env_normal)
         end
 
         if original_env_js do
@@ -117,16 +117,16 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
   describe "fetch/2 without API key" do
     test "returns :not_configured when required key is not set for mode" do
       # Save original values
-      original_normal = Application.get_env(:eventasaurus, :crawlbase_normal_api_key)
+      original_normal = Application.get_env(:eventasaurus, :crawlbase_api_key)
       original_js = Application.get_env(:eventasaurus, :crawlbase_js_api_key)
-      original_env_normal = System.get_env("CRAWLBASE_NORMAL_API_KEY")
+      original_env_normal = System.get_env("CRAWLBASE_API_KEY")
       original_env_js = System.get_env("CRAWLBASE_JS_API_KEY")
 
       try do
         # Clear all keys
-        Application.put_env(:eventasaurus, :crawlbase_normal_api_key, nil)
+        Application.put_env(:eventasaurus, :crawlbase_api_key, nil)
         Application.put_env(:eventasaurus, :crawlbase_js_api_key, nil)
-        System.delete_env("CRAWLBASE_NORMAL_API_KEY")
+        System.delete_env("CRAWLBASE_API_KEY")
         System.delete_env("CRAWLBASE_JS_API_KEY")
 
         # Should return :not_configured for javascript mode (default)
@@ -139,7 +139,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
       after
         # Restore original values
         if original_normal do
-          Application.put_env(:eventasaurus, :crawlbase_normal_api_key, original_normal)
+          Application.put_env(:eventasaurus, :crawlbase_api_key, original_normal)
         end
 
         if original_js do
@@ -147,7 +147,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
         end
 
         if original_env_normal do
-          System.put_env("CRAWLBASE_NORMAL_API_KEY", original_env_normal)
+          System.put_env("CRAWLBASE_API_KEY", original_env_normal)
         end
 
         if original_env_js do
@@ -164,7 +164,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
       if Crawlbase.available?() do
         :ok
       else
-        {:skip, "CRAWLBASE_NORMAL_API_KEY or CRAWLBASE_JS_API_KEY not configured"}
+        {:skip, "CRAWLBASE_API_KEY or CRAWLBASE_JS_API_KEY not configured"}
       end
     end
 
@@ -208,7 +208,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.CrawlbaseTest do
     @tag :external
     test "successfully fetches a URL with normal mode" do
       unless Crawlbase.available_for_mode?(:normal) do
-        IO.puts("Skipping: CRAWLBASE_NORMAL_API_KEY not configured")
+        IO.puts("Skipping: CRAWLBASE_API_KEY not configured")
         assert true
       else
         url = "https://httpbin.org/json"

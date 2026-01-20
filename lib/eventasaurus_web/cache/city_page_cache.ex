@@ -5,11 +5,15 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   Caches:
   - Categories list (30 min TTL)
   - Date range counts per city (5 min TTL)
+
+  Emits telemetry events for cache hits/misses via CityPageTelemetry.
   """
 
   use GenServer
   require Logger
   import Cachex.Spec
+
+  alias EventasaurusWeb.Telemetry.CityPageTelemetry
 
   @cache_name :city_page_cache
 
@@ -39,14 +43,27 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   TTL: 30 minutes
   """
   def get_categories(compute_fn) when is_function(compute_fn, 0) do
-    Cachex.fetch(@cache_name, "categories_list", fn ->
+    cache_key = "categories_list"
+
+    Cachex.fetch(@cache_name, cache_key, fn ->
       categories = compute_fn.()
       {:commit, categories, ttl: :timer.minutes(30)}
     end)
     |> case do
-      {:ok, categories} -> categories
-      {:commit, categories} -> categories
-      {:error, _} -> compute_fn.()
+      {:ok, categories} ->
+        # TELEMETRY: Cache hit
+        CityPageTelemetry.cache_event(:hit, %{cache_key: cache_key, city_slug: "global"})
+        categories
+
+      {:commit, categories} ->
+        # TELEMETRY: Cache miss - had to compute
+        CityPageTelemetry.cache_event(:miss, %{cache_key: cache_key, city_slug: "global"})
+        categories
+
+      {:error, _} ->
+        # TELEMETRY: Cache error - had to compute
+        CityPageTelemetry.cache_event(:miss, %{cache_key: cache_key, city_slug: "global"})
+        compute_fn.()
     end
   end
 
@@ -64,9 +81,20 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
       {:commit, counts, ttl: :timer.minutes(15)}
     end)
     |> case do
-      {:ok, counts} -> counts
-      {:commit, counts} -> counts
-      {:error, _} -> compute_fn.()
+      {:ok, counts} ->
+        # TELEMETRY: Cache hit
+        CityPageTelemetry.cache_event(:hit, %{cache_key: cache_key, city_slug: city_slug})
+        counts
+
+      {:commit, counts} ->
+        # TELEMETRY: Cache miss - had to compute
+        CityPageTelemetry.cache_event(:miss, %{cache_key: cache_key, city_slug: city_slug})
+        counts
+
+      {:error, _} ->
+        # TELEMETRY: Cache error - had to compute
+        CityPageTelemetry.cache_event(:miss, %{cache_key: cache_key, city_slug: city_slug})
+        compute_fn.()
     end
   end
 
