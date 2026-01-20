@@ -17,7 +17,7 @@ A modern event planning and management platform built with Phoenix LiveView, des
 
 - **Backend**: Elixir/Phoenix 1.7
 - **Frontend**: Phoenix LiveView, Tailwind CSS, Alpine.js
-- **Database**: PostgreSQL 14+ (via PlanetScale)
+- **Database**: PostgreSQL 14+ (via Fly Managed Postgres)
 - **Authentication**: Clerk
 - **CDN**: Cloudflare (with islands architecture for cached pages)
 - **Payments**: Stripe (optional)

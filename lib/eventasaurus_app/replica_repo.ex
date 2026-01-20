@@ -1,10 +1,9 @@
 defmodule EventasaurusApp.ReplicaRepo do
   @moduledoc """
-  Read-only Ecto Repo for direct replica connections.
+  Read-only Ecto Repo for read-heavy queries.
 
-  Uses direct connection (port 5432) with |replica suffix to route
-  queries to PlanetScale read replicas. PgBouncer does not support
-  replica routing, so direct connections are required.
+  Provides a dedicated connection pool for read-heavy operations,
+  reducing contention on the primary Repo connection pool.
 
   ## When to Use
 

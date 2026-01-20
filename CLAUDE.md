@@ -663,19 +663,25 @@ end
 
 ## Database Access
 
-### Production Database (PlanetScale)
+### Production Database (Fly Managed Postgres)
 
-**IMPORTANT**: Production database is hosted on PlanetScale (PostgreSQL), NOT Fly.io.
+**IMPORTANT**: Production database is hosted on Fly Managed Postgres (MPG).
 
-- **Organization**: `razrfly`
-- **Database**: `wombie`
-- **Branch**: `main`
+- **App**: `eventasaurus`
+- **Cluster ID**: `k1v53olmn9pr8q6p`
+- **Database**: `eventasaurus`
+- **Organization**: `teamups`
 
-Use MCP PlanetScale tools for production queries:
-```
-mcp__planetscale__run_query with org="razrfly", database="wombie", branch="main"
-mcp__planetscale__get_schema with org="razrfly", database="wombie", branch="main"
-mcp__planetscale__list_tables with org="razrfly", database="wombie", branch="main"
+Use MCP Fly tools or fly ssh console for production queries:
+```bash
+# Query via fly mpg
+fly mpg connect k1v53olmn9pr8q6p -d eventasaurus
+
+# Query via app RPC (preferred - uses running app's connection)
+fly ssh console -a eventasaurus -C '/app/bin/eventasaurus rpc "
+{:ok, result} = Ecto.Adapters.SQL.query(EventasaurusApp.ObanRepo, \"SELECT * FROM table LIMIT 10\")
+IO.inspect(result.rows)
+"'
 ```
 
 ### Via IEx (Development)

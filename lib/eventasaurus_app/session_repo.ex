@@ -17,17 +17,12 @@ defmodule EventasaurusApp.SessionRepo do
 
   ## Configuration
 
-  ### PlanetScale (Primary)
-  Uses direct port (5432) constructed from PLANETSCALE_* environment variables:
-  - PLANETSCALE_DATABASE_HOST
-  - PLANETSCALE_DATABASE
-  - PLANETSCALE_DATABASE_USERNAME
-  - PLANETSCALE_DATABASE_PASSWORD
-  - PLANETSCALE_DATABASE_PORT (default: 5432)
+  ### Fly Managed Postgres (Primary)
+  Configured via `DATABASE_DIRECT_URL` environment variable, which bypasses PgBouncer
+  and connects directly to Postgres for operations requiring persistent connections.
 
-  ### Supabase (Legacy/Fallback)
-  Configured via `SUPABASE_SESSION_DATABASE_URL` environment variable pointing to:
-  `postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres`
+  ### Development
+  Uses local PostgreSQL by default. Set `USE_PROD_DB=true` to connect to production.
 
   ## Usage
 
