@@ -1,0 +1,18 @@
+{
+  "city": "krakow",
+  "url": "https://wombie.com/krakow",
+  "iterations": 10,
+  "captured_at": "2026-01-20T17:54:39Z",
+  "ttfb": {
+    "avg_ms": 405.3,
+    "min_ms": 107.087000,
+    "max_ms": 1861.746000,
+    "p50_ms": 256.636000
+  },
+  "total": {
+    "avg_ms": 405.6,
+    "min_ms": 107.271000,
+    "max_ms": 1862.078000,
+    "p50_ms": 256.917000
+  }
+}
