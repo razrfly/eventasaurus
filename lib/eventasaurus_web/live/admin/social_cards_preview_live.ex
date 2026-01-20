@@ -10,6 +10,18 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
   alias EventasaurusWeb.Admin.Components.CardTypeForm
   alias Eventasaurus.Services.SvgConverter
 
+  # Card type modules for mock data generation (single source of truth)
+  alias EventasaurusWeb.Admin.CardTypes.{
+    ActivityCard,
+    CityCard,
+    EventCard,
+    MovieCard,
+    PerformerCard,
+    PollCard,
+    SourceAggregationCard,
+    VenueCard
+  }
+
   import EventasaurusWeb.SocialCardView,
     only: [
       render_activity_card_svg: 1,
@@ -34,7 +46,8 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    mock_event = generate_mock_event()
+    # Use card type modules as single source of truth for mock data
+    mock_event = EventCard.generate_mock_data()
 
     {:ok,
      socket
@@ -45,13 +58,13 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
      |> assign(:card_type_config, CardTypeConfig.get(:event))
      |> assign(:grouped_card_types, CardTypeConfig.grouped_for_select())
      |> assign(:mock_event, mock_event)
-     |> assign(:mock_poll, generate_mock_poll(mock_event))
-     |> assign(:mock_city, generate_mock_city())
-     |> assign(:mock_activity, generate_mock_activity())
-     |> assign(:mock_movie, generate_mock_movie())
-     |> assign(:mock_source_aggregation, generate_mock_source_aggregation())
-     |> assign(:mock_venue, generate_mock_venue())
-     |> assign(:mock_performer, generate_mock_performer())
+     |> assign(:mock_poll, PollCard.generate_mock_data(%{mock_event: mock_event}))
+     |> assign(:mock_city, CityCard.generate_mock_data())
+     |> assign(:mock_activity, ActivityCard.generate_mock_data())
+     |> assign(:mock_movie, MovieCard.generate_mock_data())
+     |> assign(:mock_source_aggregation, SourceAggregationCard.generate_mock_data())
+     |> assign(:mock_venue, VenueCard.generate_mock_data())
+     |> assign(:mock_performer, PerformerCard.generate_mock_data())
      |> assign(:generating_png, nil)
      |> assign(:png_data, %{})
      |> assign(:edit_mode, false)
@@ -346,170 +359,5 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   defp render_brand_card_svg(:source_aggregation, aggregation) do
     render_source_aggregation_card_svg(aggregation)
-  end
-
-  # Generate mock event data for preview
-  defp generate_mock_event do
-    # Create a sample date/time - 3 days from now at 8 PM UTC
-    sample_start_at =
-      DateTime.utc_now()
-      |> DateTime.add(3, :day)
-      |> Map.put(:hour, 20)
-      |> Map.put(:minute, 0)
-      |> Map.put(:second, 0)
-
-    %{
-      title: "Sample Event: Testing Social Card Design Across All Themes",
-      # Use a real image path that exists in the system
-      cover_image_url: "/images/events/abstract/abstract1.png",
-      theme: :minimal,
-      slug: "mock-event-preview",
-      # Add any other fields that render_social_card_svg might need
-      description: "This is a mock event for testing social card designs",
-      start_at: sample_start_at,
-      timezone: "Europe/Warsaw",
-      updated_at: DateTime.utc_now()
-    }
-  end
-
-  # Generate mock poll data for preview
-  defp generate_mock_poll(event) do
-    %{
-      id: 999,
-      title: "What movie should we watch for our next movie night?",
-      poll_type: "movie",
-      phase: "voting",
-      event: event,
-      event_id: 1,
-      updated_at: DateTime.utc_now()
-    }
-  end
-
-  # Generate mock city data for preview
-  defp generate_mock_city do
-    %{
-      id: 1,
-      name: "Warsaw",
-      slug: "warsaw",
-      country: %{
-        name: "Poland",
-        code: "PL"
-      },
-      stats: %{
-        events_count: 127,
-        venues_count: 45,
-        categories_count: 12
-      },
-      updated_at: DateTime.utc_now()
-    }
-  end
-
-  # Generate mock activity (public event) data for preview
-  defp generate_mock_activity do
-    %{
-      id: 1,
-      title: "Jazz Night at Blue Note",
-      slug: "jazz-night-blue-note",
-      cover_image_url: "/images/events/abstract/abstract3.png",
-      venue: %{
-        name: "Blue Note Jazz Club",
-        city_ref: %{
-          name: "Warsaw"
-        }
-      },
-      occurrence_list: [
-        %{
-          datetime: DateTime.add(DateTime.utc_now(), 2, :day),
-          date: Date.add(Date.utc_today(), 2),
-          time: ~T[20:00:00]
-        }
-      ],
-      updated_at: DateTime.utc_now()
-    }
-  end
-
-  # Generate mock movie data for preview
-  defp generate_mock_movie do
-    # Generate sample screening dates - next 3 days
-    today = Date.utc_today()
-
-    screening_dates = [
-      Date.add(today, 1),
-      Date.add(today, 2),
-      Date.add(today, 3)
-    ]
-
-    %{
-      id: 1,
-      tmdb_id: 771,
-      title: "Home Alone",
-      slug: "home-alone-771",
-      original_title: "Home Alone",
-      overview:
-        "Eight-year-old Kevin McCallister makes the most of the situation after his family unwittingly leaves him behind when they go on Christmas vacation.",
-      poster_url: "/images/events/abstract/abstract2.png",
-      # Use local image for preview - external URLs require network download
-      backdrop_url: "/images/events/abstract/abstract2.png",
-      release_date: ~D[1990-11-16],
-      runtime: 103,
-      metadata: %{
-        vote_average: 7.4,
-        vote_count: 10423,
-        genres: ["Comedy", "Family"]
-      },
-      screening_dates: screening_dates,
-      updated_at: DateTime.utc_now()
-    }
-  end
-
-  # Generate mock source aggregation data for preview
-  defp generate_mock_source_aggregation do
-    %{
-      city: %{
-        id: 1,
-        name: "Kraków",
-        slug: "krakow",
-        country: %{
-          name: "Poland",
-          code: "PL"
-        }
-      },
-      content_type: "SocialEvent",
-      identifier: "pubquiz-pl",
-      source_name: "PubQuiz Poland",
-      total_event_count: 42,
-      location_count: 15,
-      hero_image: "/images/events/abstract/abstract1.png",
-      updated_at: DateTime.utc_now()
-    }
-  end
-
-  # Generate mock venue data for preview
-  defp generate_mock_venue do
-    %{
-      id: 1,
-      name: "Blue Note Jazz Club",
-      slug: "blue-note-jazz-club",
-      address: "ul. Nowy Świat 22, 00-373 Warszawa",
-      city_ref: %{
-        name: "Warsaw",
-        slug: "warsaw"
-      },
-      event_count: 24,
-      cover_image_url: "/images/events/abstract/abstract3.png",
-      updated_at: DateTime.utc_now()
-    }
-  end
-
-  # Generate mock performer data for preview
-  defp generate_mock_performer do
-    %{
-      id: 1,
-      name: "The Jazz Quartet",
-      slug: "the-jazz-quartet",
-      event_count: 8,
-      image_url: "/images/events/abstract/abstract1.png",
-      updated_at: DateTime.utc_now()
-    }
   end
 end

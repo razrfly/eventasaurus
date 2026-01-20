@@ -7,6 +7,8 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
 
   @behaviour EventasaurusWeb.Admin.CardTypeBehaviour
 
+  alias EventasaurusWeb.Admin.CardTypes.Helpers
+
   import EventasaurusWeb.SocialCardView, only: [render_movie_card_svg: 1]
 
   @impl true
@@ -14,15 +16,6 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
 
   @impl true
   def generate_mock_data do
-    # Generate sample screening dates - next 3 days
-    today = Date.utc_today()
-
-    screening_dates = [
-      Date.add(today, 1),
-      Date.add(today, 2),
-      Date.add(today, 3)
-    ]
-
     %{
       id: 1,
       tmdb_id: 771,
@@ -40,7 +33,7 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
         vote_count: 10423,
         genres: ["Comedy", "Family"]
       },
-      screening_dates: screening_dates,
+      screening_dates: Helpers.sample_screening_dates(3, 1),
       updated_at: DateTime.utc_now()
     }
   end
@@ -81,11 +74,11 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
 
   @impl true
   def update_mock_data(current, params) do
-    runtime = parse_int(Map.get(params, "runtime"), current.runtime)
-    release_date = parse_year(Map.get(params, "year"), current.release_date)
+    runtime = Helpers.parse_int(Map.get(params, "runtime"), current.runtime)
+    release_date = Helpers.parse_year(Map.get(params, "year"), current.release_date)
 
     rating =
-      parse_float(Map.get(params, "rating"), get_in(current.metadata, [:vote_average]) || 0.0)
+      Helpers.parse_float(Map.get(params, "rating"), get_in(current.metadata, [:vote_average]) || 0.0)
 
     %{
       current
@@ -102,34 +95,4 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
 
   @impl true
   def form_param_key, do: "movie"
-
-  # Helper functions
-
-  defp parse_int(value, default) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, _} -> int
-      :error -> default
-    end
-  end
-
-  defp parse_int(value, _default) when is_integer(value), do: value
-  defp parse_int(_, default), do: default
-
-  defp parse_year(value, default) when is_binary(value) do
-    case Integer.parse(value) do
-      {year, _} when year >= 1800 and year <= 2200 -> Date.new!(year, 1, 1)
-      _ -> default
-    end
-  end
-
-  defp parse_year(_, default), do: default
-
-  defp parse_float(value, default) when is_binary(value) do
-    case Float.parse(value) do
-      {float, _} -> float
-      :error -> default
-    end
-  end
-
-  defp parse_float(_, default), do: default
 end

@@ -7,6 +7,8 @@ defmodule EventasaurusWeb.Admin.CardTypes.VenueCard do
 
   @behaviour EventasaurusWeb.Admin.CardTypeBehaviour
 
+  alias EventasaurusWeb.Admin.CardTypes.Helpers
+
   import EventasaurusWeb.SocialCardView, only: [render_venue_card_svg: 1]
 
   @impl true
@@ -60,7 +62,7 @@ defmodule EventasaurusWeb.Admin.CardTypes.VenueCard do
       current
       | name: Map.get(params, "name", current.name),
         address: Map.get(params, "address", current.address),
-        event_count: parse_int(Map.get(params, "event_count"), current.event_count),
+        event_count: Helpers.parse_int(Map.get(params, "event_count"), current.event_count),
         cover_image_url: Map.get(params, "cover_image_url", current.cover_image_url),
         city_ref: %{
           current.city_ref
@@ -74,13 +76,4 @@ defmodule EventasaurusWeb.Admin.CardTypes.VenueCard do
 
   @impl true
   def form_param_key, do: "venue"
-
-  defp parse_int(value, default) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, _} -> int
-      :error -> default
-    end
-  end
-
-  defp parse_int(_, default), do: default
 end
