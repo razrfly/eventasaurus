@@ -9,7 +9,6 @@ defmodule EventasaurusApp.Events.EventPlans do
   alias EventasaurusApp.Events.EventPlan
   alias EventasaurusApp.Accounts.User
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
-  alias EventasaurusDiscovery.Movies.Movie
 
   @doc """
   Creates a private event plan from a public event.
