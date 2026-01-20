@@ -439,16 +439,18 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         nil
       end
 
+    # Phase 2 optimization (Issue #3331): Removed :performers preload
+    # Performers are only used on individual event detail pages, not city page cards.
+    # This eliminates unnecessary data loading and improves query performance.
     preloaded_events =
       events
       |> Repo.preload([
         :categories,
-        :performers,
-        # Load nested source association for aggregate_events
+        # Load nested source association for aggregate_events and cover images
         sources: :source,
-        # Load nested venue associations for aggregate_events
+        # Load nested venue associations for timezone mapping and aggregation
         venue: [city_ref: :country],
-        # Load movies association (empty nested for now)
+        # Load movies association for movie aggregation
         movies: []
       ])
 

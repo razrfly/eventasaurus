@@ -66,8 +66,12 @@ defmodule EventasaurusWeb.CityLive.Index do
           # City stats queries are fast (COUNT queries), so we run them here.
           # Event loading remains deferred for performance.
 
-          # Generate city stats and SEO metadata synchronously (fast COUNT queries)
-          city_stats = fetch_city_stats(city)
+          # Generate city stats and SEO metadata synchronously (cached COUNT queries)
+          # Phase 3 optimization (Issue #3331): Cache city stats to avoid repeated COUNT queries
+          city_stats =
+            CityPageCache.get_city_stats(city.slug, @default_radius_km, fn ->
+              fetch_city_stats_uncached(city)
+            end)
           json_ld = CitySchema.generate(city, city_stats)
           city_with_stats = Map.put(city, :stats, city_stats)
           social_card_path = UrlBuilder.build_path(:city, city_with_stats)
@@ -150,18 +154,21 @@ defmodule EventasaurusWeb.CityLive.Index do
     # STAGE 1: Load lightweight data (categories, languages)
     city_slug = socket.assigns.city_slug
 
-    # Get dynamically available languages for this city
+    # Get dynamically available languages for this city (cached)
+    # Phase 3 optimization (Issue #3331): Cache available languages per city
     available_languages =
-      try do
-        LanguageDiscovery.get_available_languages_for_city(city_slug)
-      rescue
-        e ->
-          Logger.warning(
-            "Language discovery failed for city_slug=#{city_slug}: #{Exception.message(e)}"
-          )
+      CityPageCache.get_available_languages(city_slug, fn ->
+        try do
+          LanguageDiscovery.get_available_languages_for_city(city_slug)
+        rescue
+          e ->
+            Logger.warning(
+              "Language discovery failed for city_slug=#{city_slug}: #{Exception.message(e)}"
+            )
 
-          ["en"]
-      end
+            ["en"]
+        end
+      end)
 
     # Get categories (cached)
     categories = CityPageCache.get_categories(&Categories.list_categories/0)
@@ -1114,8 +1121,9 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp parse_boolean(false), do: false
   defp parse_boolean(_), do: false
 
-  # Fetch aggregated statistics for city JSON-LD
-  defp fetch_city_stats(city) do
+  # Fetch aggregated statistics for city JSON-LD (uncached version)
+  # Called by CityPageCache.get_city_stats when cache misses
+  defp fetch_city_stats_uncached(city) do
     lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
     lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 

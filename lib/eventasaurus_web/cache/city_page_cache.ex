@@ -2,9 +2,11 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   @moduledoc """
   Cachex-based caching for city page performance optimization.
 
-  Caches:
-  - Categories list (30 min TTL)
-  - Date range counts per city (5 min TTL)
+  Caches (Issue #3331 Phase 3):
+  - Categories list (30 min TTL) - global, rarely changes
+  - City stats (30 min TTL) - events/venues count for SEO/JSON-LD
+  - Available languages (30 min TTL) - per city, rarely changes
+  - Date range counts (15 min TTL) - per city/radius, more dynamic
 
   Emits telemetry events for cache hits/misses via CityPageTelemetry.
   """
@@ -68,6 +70,63 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   end
 
   @doc """
+  Gets city stats (events count, venues count) from cache or computes and caches them.
+
+  Used for SEO/JSON-LD metadata. These stats don't change frequently.
+  Cache key includes city_slug and radius_km for accuracy.
+  TTL: 30 minutes
+  """
+  def get_city_stats(city_slug, radius_km, compute_fn) when is_function(compute_fn, 0) do
+    cache_key = "city_stats:#{city_slug}:#{radius_km}"
+
+    Cachex.fetch(@cache_name, cache_key, fn ->
+      stats = compute_fn.()
+      {:commit, stats, ttl: :timer.minutes(30)}
+    end)
+    |> case do
+      {:ok, stats} ->
+        CityPageTelemetry.cache_event(:hit, %{cache_key: cache_key, city_slug: city_slug})
+        stats
+
+      {:commit, stats} ->
+        CityPageTelemetry.cache_event(:miss, %{cache_key: cache_key, city_slug: city_slug})
+        stats
+
+      {:error, _} ->
+        CityPageTelemetry.cache_event(:miss, %{cache_key: cache_key, city_slug: city_slug})
+        compute_fn.()
+    end
+  end
+
+  @doc """
+  Gets available languages for a city from cache or computes and caches them.
+
+  Languages for a city rarely change (based on country + DB translations).
+  TTL: 30 minutes
+  """
+  def get_available_languages(city_slug, compute_fn) when is_function(compute_fn, 0) do
+    cache_key = "languages:#{city_slug}"
+
+    Cachex.fetch(@cache_name, cache_key, fn ->
+      languages = compute_fn.()
+      {:commit, languages, ttl: :timer.minutes(30)}
+    end)
+    |> case do
+      {:ok, languages} ->
+        CityPageTelemetry.cache_event(:hit, %{cache_key: cache_key, city_slug: city_slug})
+        languages
+
+      {:commit, languages} ->
+        CityPageTelemetry.cache_event(:miss, %{cache_key: cache_key, city_slug: city_slug})
+        languages
+
+      {:error, _} ->
+        CityPageTelemetry.cache_event(:miss, %{cache_key: cache_key, city_slug: city_slug})
+        compute_fn.()
+    end
+  end
+
+  @doc """
   Gets date range counts for a city from cache or computes and caches them.
 
   Cache key includes city_slug and radius_km for accuracy.
@@ -123,6 +182,32 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
     |> Enum.each(fn {key, _entry} ->
       Cachex.del(@cache_name, key)
     end)
+  end
+
+  @doc """
+  Invalidates city stats cache for a specific city.
+  Call this when events or venues are added/modified for a city.
+  """
+  def invalidate_city_stats(city_slug) do
+    # Delete all city stats entries for this city (all radii)
+    prefix = "city_stats:#{city_slug}:"
+
+    @cache_name
+    |> Cachex.stream!()
+    |> Stream.filter(fn {key, _entry} ->
+      is_binary(key) && String.starts_with?(key, prefix)
+    end)
+    |> Enum.each(fn {key, _entry} ->
+      Cachex.del(@cache_name, key)
+    end)
+  end
+
+  @doc """
+  Invalidates available languages cache for a specific city.
+  Call this when event translations are added for a city.
+  """
+  def invalidate_languages(city_slug) do
+    Cachex.del(@cache_name, "languages:#{city_slug}")
   end
 
   @doc """
