@@ -1,12 +1,12 @@
 defmodule EventasaurusApp.Repo do
   @moduledoc """
-  Primary Ecto Repo for Eventasaurus (PgBouncer, port 6432).
+  Primary Ecto Repo for Eventasaurus.
 
-  ## Connection Architecture (Issue #3119)
+  ## Connection Architecture (Fly Managed Postgres)
 
-  - **Repo (this module)**: PgBouncer primary - DEFAULT for all traffic
-  - **SessionRepo**: Direct primary - migrations and advisory locks only
-  - **ReplicaRepo**: Direct replicas - long-running read-only background jobs
+  - **Repo (this module)**: PgBouncer pooled connection - DEFAULT for all traffic
+  - **ObanRepo**: PgBouncer pooled connection - Dedicated pool for Oban jobs
+  - **SessionRepo**: Direct connection - Migrations and advisory locks only
 
   ## Usage
 
@@ -15,11 +15,9 @@ defmodule EventasaurusApp.Repo do
       Repo.all(query)
       Repo.insert(changeset)
 
-  For long-running READ-ONLY operations (stats caches, analytics), use replica:
-
-      Repo.replica().all(heavy_aggregate_query)
-
-  This offloads heavy reads to replicas, preserving primary capacity.
+  For backwards compatibility, `Repo.replica()` returns this module.
+  Fly MPG basic plan doesn't have separate read replicas (the HA replica
+  is for failover only, not read scaling).
   """
 
   use Ecto.Repo,
@@ -29,47 +27,23 @@ defmodule EventasaurusApp.Repo do
   use Ecto.SoftDelete.Repo
 
   @doc """
-  Returns ReplicaRepo for long-running read-only operations.
+  Returns the Repo to use for read operations.
 
-  Routes to direct replica connections (port 5432) which:
-  - Have their own 25-connection limit per replica (separate from primary)
-  - Are ideal for heavy aggregates, stats caches, analytics
-  - Offload read pressure from primary
+  On Fly Managed Postgres basic plan, there are no separate read replicas
+  (the replica is for HA failover only). All reads go through the primary.
 
-  ## When to Use
+  This function exists for backwards compatibility with code that calls
+  `Repo.replica()` for heavy read operations.
 
-  Use `Repo.replica()` for:
-  - Stats cache refreshes (DiscoveryStatsCache, CityPageCache, etc.)
-  - Admin dashboard analytics
-  - Heavy aggregate queries
-  - Any long-running READ-ONLY operation
+  ## Note
 
-  Use `Repo` directly for:
-  - All writes (inserts, updates, deletes)
-  - Short reads (web requests)
-  - Reads immediately after writes
-  - Transaction-critical operations
-
-  ## Kill Switch
-
-  Set `USE_REPLICA=false` to route all replica reads to primary.
+  If you upgrade to a Fly MPG plan with read replicas in the future,
+  you can update this function to route to a ReplicaRepo.
   """
   @spec replica() :: module()
   def replica do
-    cond do
-      # Test environment: Use primary for Ecto sandbox compatibility
-      Application.get_env(:eventasaurus, :environment) == :test ->
-        __MODULE__
-
-      # Kill switch: USE_REPLICA=false routes all reads to primary
-      System.get_env("USE_REPLICA") == "false" ->
-        __MODULE__
-
-      # Production: Route to ReplicaRepo for long-running reads
-      # Uses direct connections to replicas (separate from primary's 25-connection limit)
-      # See issue #3119 for architecture details
-      true ->
-        EventasaurusApp.ReplicaRepo
-    end
+    # Fly MPG basic plan doesn't have read replicas
+    # All reads go through primary via PgBouncer
+    __MODULE__
   end
 end
