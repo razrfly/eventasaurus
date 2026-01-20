@@ -350,7 +350,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   # Generate mock event data for preview
   defp generate_mock_event do
-    # Create a sample date/time - 3 days from now at 8 PM
+    # Create a sample date/time - 3 days from now at 8 PM UTC
     sample_start_at =
       DateTime.utc_now()
       |> DateTime.add(3, :day)

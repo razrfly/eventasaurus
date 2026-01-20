@@ -14,7 +14,7 @@ defmodule EventasaurusWeb.Admin.CardTypes.EventCard do
 
   @impl true
   def generate_mock_data do
-    # Create a sample date/time - next Saturday at 8 PM in Warsaw timezone
+    # Create a sample date/time - 3 days from now at 8 PM UTC
     sample_start_at =
       DateTime.utc_now()
       |> DateTime.add(3, :day)
