@@ -350,6 +350,14 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   # Generate mock event data for preview
   defp generate_mock_event do
+    # Create a sample date/time - 3 days from now at 8 PM
+    sample_start_at =
+      DateTime.utc_now()
+      |> DateTime.add(3, :day)
+      |> Map.put(:hour, 20)
+      |> Map.put(:minute, 0)
+      |> Map.put(:second, 0)
+
     %{
       title: "Sample Event: Testing Social Card Design Across All Themes",
       # Use a real image path that exists in the system
@@ -358,6 +366,8 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
       slug: "mock-event-preview",
       # Add any other fields that render_social_card_svg might need
       description: "This is a mock event for testing social card designs",
+      start_at: sample_start_at,
+      timezone: "Europe/Warsaw",
       updated_at: DateTime.utc_now()
     }
   end
@@ -420,6 +430,15 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   # Generate mock movie data for preview
   defp generate_mock_movie do
+    # Generate sample screening dates - next 3 days
+    today = Date.utc_today()
+
+    screening_dates = [
+      Date.add(today, 1),
+      Date.add(today, 2),
+      Date.add(today, 3)
+    ]
+
     %{
       id: 1,
       tmdb_id: 771,
@@ -438,6 +457,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         vote_count: 10423,
         genres: ["Comedy", "Family"]
       },
+      screening_dates: screening_dates,
       updated_at: DateTime.utc_now()
     }
   end
