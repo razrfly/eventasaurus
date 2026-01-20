@@ -302,28 +302,12 @@ defmodule Mix.Tasks.Baseline.CityPage do
             prev_consolidated = get_in(previous, ["metrics", "consolidated", "avg"])
             curr_consolidated = current.metrics.consolidated.avg
 
-            diff = curr_consolidated - prev_consolidated
-            diff_pct = (diff / prev_consolidated) * 100
-
-            direction = if diff < 0, do: "🟢 FASTER", else: "🔴 SLOWER"
-
-            IO.puts("\n  Consolidated avg:")
-            IO.puts("    Previous: #{prev_consolidated}ms")
-            IO.puts("    Current:  #{curr_consolidated}ms")
-            IO.puts("    Change:   #{Float.round(diff, 2)}ms (#{Float.round(diff_pct, 1)}%) #{direction}")
+            print_metric_comparison("Consolidated avg", prev_consolidated, curr_consolidated)
 
             prev_p95 = get_in(previous, ["metrics", "consolidated", "p95"])
             curr_p95 = current.metrics.consolidated.p95
 
-            diff_p95 = curr_p95 - prev_p95
-            diff_p95_pct = (diff_p95 / prev_p95) * 100
-
-            direction_p95 = if diff_p95 < 0, do: "🟢 FASTER", else: "🔴 SLOWER"
-
-            IO.puts("\n  Consolidated P95:")
-            IO.puts("    Previous: #{prev_p95}ms")
-            IO.puts("    Current:  #{curr_p95}ms")
-            IO.puts("    Change:   #{Float.round(diff_p95, 2)}ms (#{Float.round(diff_p95_pct, 1)}%) #{direction_p95}")
+            print_metric_comparison("Consolidated P95", prev_p95, curr_p95)
 
           {:error, _} ->
             IO.puts("❌ Failed to parse baseline file: #{compare_file}")
@@ -332,6 +316,25 @@ defmodule Mix.Tasks.Baseline.CityPage do
       {:error, _} ->
         IO.puts("❌ Could not read baseline file: #{compare_file}")
     end
+  end
+
+  defp print_metric_comparison(label, previous, current)
+       when is_number(previous) and previous > 0 and is_number(current) do
+    diff = current - previous
+    diff_pct = (diff / previous) * 100
+    direction = if diff < 0, do: "🟢 FASTER", else: "🔴 SLOWER"
+
+    IO.puts("\n  #{label}:")
+    IO.puts("    Previous: #{previous}ms")
+    IO.puts("    Current:  #{current}ms")
+    IO.puts("    Change:   #{Float.round(diff, 2)}ms (#{Float.round(diff_pct, 1)}%) #{direction}")
+  end
+
+  defp print_metric_comparison(label, previous, current) do
+    IO.puts("\n  #{label}:")
+    IO.puts("    Previous: #{previous || "N/A"}ms")
+    IO.puts("    Current:  #{current || "N/A"}ms")
+    IO.puts("    Change:   ⚠️  Cannot calculate (missing or invalid baseline data)")
   end
 
   defp get_app_version do
