@@ -470,11 +470,11 @@ case System.get_env("SENTRY_DSN") do
 end
 
 if config_env() == :prod do
-  # Validate required PlanetScale environment variables
-  for var <-
-        ~w(PLANETSCALE_DATABASE_HOST PLANETSCALE_DATABASE PLANETSCALE_DATABASE_USERNAME PLANETSCALE_DATABASE_PASSWORD) do
-    System.fetch_env!(var)
-  end
+  # Validate required Fly Managed Postgres environment variables
+  # DATABASE_URL: PgBouncer pooled connection for web/Oban traffic
+  # DATABASE_DIRECT_URL: Direct connection for migrations (advisory locks)
+  database_url = System.fetch_env!("DATABASE_URL")
+  database_direct_url = System.fetch_env!("DATABASE_DIRECT_URL")
 
   # Validate required Cloudflare R2 credentials for file storage (uploads + sitemap)
   for var <- ~w(CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_ACCESS_KEY_ID CLOUDFLARE_SECRET_ACCESS_KEY) do
@@ -565,175 +565,64 @@ if config_env() == :prod do
   # Configure Swoosh API client
   config :swoosh, :api_client, Swoosh.ApiClient.Finch
 
-  # Configure the database for production (PlanetScale)
-  # Using hostname-based config (not URL-based) to ensure socket_options and ssl_opts
-  # are properly applied. URL-based config may not merge these options correctly.
-  # This matches the proven working configuration from cinegraph project.
-  ps_host = System.get_env("PLANETSCALE_DATABASE_HOST")
-  ps_db = System.get_env("PLANETSCALE_DATABASE")
-  ps_user = System.get_env("PLANETSCALE_DATABASE_USERNAME")
-  ps_pass = System.get_env("PLANETSCALE_DATABASE_PASSWORD")
-
-  ps_direct_port =
-    case Integer.parse(System.get_env("PLANETSCALE_DATABASE_PORT", "5432")) do
-      {port, _} when port > 0 and port <= 65535 ->
-        port
-
-      _ ->
-        require Logger
-        Logger.error("Invalid PLANETSCALE_DATABASE_PORT, using default: 5432")
-        5432
-    end
-
-  ps_pooler_port =
-    case Integer.parse(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")) do
-      {port, _} when port > 0 and port <= 65535 ->
-        port
-
-      _ ->
-        require Logger
-        Logger.error("Invalid PLANETSCALE_PG_BOUNCER_PORT, using default: 6432")
-        6432
-    end
-
-  # Force IPv4 unless IPv6 is explicitly enabled
-  # PlanetScale requires IPv4 for reliable connectivity from Fly.io
-  # This MUST be applied via hostname-based config, not URL-based
-  socket_opts = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [:inet]
-
-  # PlanetScale SSL: Standard SSL verification using CAStore
-  # (proven working configuration from cinegraph project)
-  planetscale_ssl_opts = [
-    verify: :verify_peer,
-    cacertfile: CAStore.file_path(),
-    server_name_indication: String.to_charlist(ps_host),
-    customize_hostname_check: [
-      match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-    ]
-  ]
-
-  # Repo: Pooled connection via PgBouncer (port 6432) for web requests
-  # Using hostname-based config to guarantee socket_options: [:inet] is applied
+  # Configure the database for production (Fly Managed Postgres)
   #
-  # Pool size: 10 connections for web request handling (increased from 3)
-  # PgBouncer provides additional pooling on the database side, so these are
-  # client connections TO PgBouncer, not direct DB connections.
+  # Connection Architecture:
+  # - DATABASE_URL: PgBouncer pooled connection (pgbouncer.xxx.flympg.net)
+  # - DATABASE_DIRECT_URL: Direct connection (direct.xxx.flympg.net)
   #
-  # Phase 1 optimization (Issue #3080):
-  # - Increased from 3 to 10 to better utilize PgBouncer capacity
-  # - PgBouncer can handle 400 client connections with few backend connections
-  # - This allows higher web concurrency without more direct DB connections
+  # IMPORTANT: PgBouncer MUST be set to "Transaction" mode in Fly dashboard
+  # (Ecto requires Transaction mode, not the default Session mode)
   #
-  # Total DIRECT connections per machine: SessionRepo(3) + ReplicaRepo(2) = 5
-  # (Repo uses PgBouncer, so doesn't count against direct connection limit)
+  # Pool sizing for Fly MPG:
+  # - Repo: 10 connections (web requests via PgBouncer)
+  # - ObanRepo: 5 connections (Oban jobs via PgBouncer)
+  # - SessionRepo: 1 connection (migrations only via direct)
+
+  # Repo: Pooled connection via PgBouncer for web requests
+  # PgBouncer handles connection pooling, these are client connections TO PgBouncer
   config :eventasaurus, EventasaurusApp.Repo,
-    username: ps_user,
-    password: ps_pass,
-    hostname: ps_host,
-    port: ps_pooler_port,
-    database: ps_db,
+    url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    socket_options: socket_opts,
     queue_target: 5000,
     queue_interval: 30000,
-    connect_timeout: 30_000,
-    handshake_timeout: 30_000,
-    ssl: true,
-    ssl_opts: planetscale_ssl_opts,
-    # Disable prepared statements for PgBouncer compatibility
+    # Disable prepared statements for PgBouncer Transaction mode
     prepare: :unnamed
 
-  # SessionRepo: Direct connection (port 5432) for migrations and advisory locks
-  # Using hostname-based config to guarantee socket_options: [:inet] is applied
-  #
-  # Issue #3119: SessionRepo is now ONLY used for migrations
-  # - Oban uses Repo (PgBouncer) with Notifiers.PG (no LISTEN/NOTIFY needed)
-  # - Pool size reduced to 1 since only migrations need direct connections
-  # - Migrations require direct connections for advisory locks
-  #
-  # Direct connections are the bottleneck (25 limit on PlanetScale).
-  # PgBouncer handles 95%+ of traffic; this repo is for migrations only.
+  # SessionRepo: Direct connection for migrations and advisory locks
+  # Advisory locks (used by Ecto migrations) don't work through PgBouncer
+  # in Transaction mode - they require session-scoped connections
   config :eventasaurus, EventasaurusApp.SessionRepo,
-    username: ps_user,
-    password: ps_pass,
-    hostname: ps_host,
-    port: ps_direct_port,
-    database: ps_db,
+    url: database_direct_url,
     pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "1"),
-    socket_options: socket_opts,
     queue_target: 5000,
-    queue_interval: 30000,
-    connect_timeout: 30_000,
-    handshake_timeout: 30_000,
-    ssl: true,
-    ssl_opts: planetscale_ssl_opts
+    queue_interval: 30000
 
-  # ReplicaRepo: Direct connection to read replicas (port 5432)
-  # PlanetScale routes to replicas when username has |replica suffix
-  # PgBouncer does NOT support replica routing, so direct connection is required
+  # ObanRepo: Dedicated pooled connection via PgBouncer for Oban jobs
+  # Isolates Oban from web traffic, preventing job stampedes from blocking requests
   #
-  # Issue #3119: ReplicaRepo is used for long-running read-only operations
-  # - Repo.replica() returns ReplicaRepo in production (see lib/eventasaurus_app/repo.ex)
-  # - Pool size: 3 connections (separate from primary's 25-connection limit)
-  # - Offloads heavy reads from primary, preserving capacity for writes
-  #
-  # Use for (via Repo.replica()):
-  # - DiscoveryStatsCache, CityPageCache refresh
-  # - Admin dashboard analytics
-  # - Heavy aggregate queries
-  #
-  # DO NOT use for:
-  # - Reads immediately after writes (replication lag)
-  # - Authentication or session queries
-  # - Any write operations
-  #
-  # Kill switch: Set USE_REPLICA=false to route all reads to primary
-  # See: https://planetscale.com/docs/postgres/scaling/replicas
-  ps_replica_user = "#{ps_user}|replica"
-
-  config :eventasaurus, EventasaurusApp.ReplicaRepo,
-    username: ps_replica_user,
-    password: ps_pass,
-    hostname: ps_host,
-    port: ps_direct_port,
-    database: ps_db,
-    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "3"),
-    socket_options: socket_opts,
-    queue_target: 5000,
-    queue_interval: 30000,
-    connect_timeout: 30_000,
-    handshake_timeout: 30_000,
-    ssl: true,
-    ssl_opts: planetscale_ssl_opts
-
-  # ObanRepo: Dedicated pooled connection via PgBouncer (port 6432) for Oban jobs
-  # Using hostname-based config to guarantee socket_options: [:inet] is applied
-  #
-  # Issue #3160: DEDICATED connection pool for Oban job processing
-  # - Isolates Oban from web traffic, preventing job stampedes from blocking requests
-  # - Pool size: 5 connections (configurable via OBAN_POOL_SIZE env var)
-  # - Uses PgBouncer just like Repo, but with separate client pool
-  #
-  # Architecture (see lib/eventasaurus_app/oban_repo.ex for diagram):
+  # Architecture:
   # - Web Requests → Repo (pool: 10) → PgBouncer → PostgreSQL
   # - Oban Jobs → ObanRepo (pool: 5) → PgBouncer → PostgreSQL
   # - Migrations → SessionRepo (pool: 1) → Direct → PostgreSQL
-  # - Heavy Reads → ReplicaRepo (pool: 3) → Direct → Replicas
   config :eventasaurus, EventasaurusApp.ObanRepo,
-    username: ps_user,
-    password: ps_pass,
-    hostname: ps_host,
-    port: ps_pooler_port,
-    database: ps_db,
+    url: database_url,
     pool_size: String.to_integer(System.get_env("OBAN_POOL_SIZE") || "5"),
-    socket_options: socket_opts,
     queue_target: 5000,
     queue_interval: 30000,
-    connect_timeout: 30_000,
-    handshake_timeout: 30_000,
-    ssl: true,
-    ssl_opts: planetscale_ssl_opts,
-    # Disable prepared statements for PgBouncer compatibility
+    # Disable prepared statements for PgBouncer Transaction mode
+    prepare: :unnamed
+
+  # ReplicaRepo: Points to primary since Fly MPG basic plan has no read replicas
+  # The HA replica is for failover only, not read scaling
+  # Repo.replica() returns Repo anyway, but this config is needed for module startup
+  # NOTE: If you upgrade to a Fly MPG plan with read replicas, configure a separate URL here
+  config :eventasaurus, EventasaurusApp.ReplicaRepo,
+    url: database_url,
+    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "3"),
+    queue_target: 5000,
+    queue_interval: 30000,
+    # Disable prepared statements for PgBouncer Transaction mode
     prepare: :unnamed
 
   # Configure Cloudflare R2 storage settings
