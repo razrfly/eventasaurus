@@ -79,7 +79,10 @@ defmodule Eventasaurus.Application do
       # Start the Finch HTTP client for sending emails
       {Finch, name: Eventasaurus.Finch},
       # Start TzWorld backend for timezone lookups
-      TzWorld.Backend.Memory,
+      # Using DetsWithIndexCache instead of Memory to save ~200-300MB RAM
+      # Memory backend loads entire 791MB geodata file into RAM
+      # DetsWithIndexCache uses disk-backed DETS with in-memory index
+      TzWorld.Backend.DetsWithIndexCache,
       # Start Hammer rate limiter for geocoding providers
       EventasaurusDiscovery.Geocoding.RateLimiter,
       # Start Oban background job processor
