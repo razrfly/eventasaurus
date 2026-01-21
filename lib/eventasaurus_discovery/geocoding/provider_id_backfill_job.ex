@@ -43,7 +43,9 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob do
     priority: 2
 
   require Logger
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusApp.Venues.Venue
 
   @provider_modules %{
@@ -56,7 +58,7 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob do
   def perform(%Oban.Job{args: %{"venue_id" => venue_id}}) do
     Logger.info("🔄 Backfill job starting for venue ##{venue_id}")
 
-    case Repo.get(Venue, venue_id) do
+    case JobRepo.get(Venue, venue_id) do
       nil ->
         Logger.warning("⚠️ Venue ##{venue_id} not found")
         {:error, :venue_not_found}
@@ -92,7 +94,7 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob do
         # Merge with existing and update venue
         updated_ids = Map.merge(existing_ids, new_ids)
 
-        case Repo.update(Ecto.Changeset.change(venue, provider_ids: updated_ids)) do
+        case JobRepo.update(Ecto.Changeset.change(venue, provider_ids: updated_ids)) do
           {:ok, _updated_venue} ->
             Logger.info(
               "✅ Venue ##{venue.id} updated with #{map_size(new_ids)} new provider IDs: #{inspect(Map.keys(new_ids))}"

@@ -70,7 +70,9 @@ config :eventasaurus, :environment, config_env()
 #
 # Previous (Issue #3119): Oban shared Repo with web requests → connection pool exhaustion
 # Now: ObanRepo has dedicated pool, preventing job stampedes from blocking web traffic
-oban_repo = EventasaurusApp.ObanRepo
+# JobRepo: Direct connection for ALL Oban job business logic (Issue #3353)
+# This bypasses PgBouncer to avoid 30-second query timeouts on long-running jobs
+oban_repo = EventasaurusApp.JobRepo
 
 # Base queues that run in all environments
 base_queues = [
@@ -630,13 +632,26 @@ if config_env() == :prod do
     # Force IPv6 for Fly.io internal network
     socket_options: [:inet6]
 
-  # ObanRepo: Dedicated pooled connection via PgBouncer for Oban jobs
-  # Isolates Oban from web traffic, preventing job stampedes from blocking requests
+  # JobRepo: Direct connection for ALL Oban job business logic (Issue #3353)
+  # PgBouncer in transaction mode kills queries >30 seconds. Job queries can run
+  # 30-90+ seconds (city aggregation, materialized views, heavy syncs).
+  # This repo bypasses PgBouncer for unlimited query duration.
   #
   # Architecture:
   # - Web Requests → Repo (pool: 10) → PgBouncer → PostgreSQL
-  # - Oban Jobs → ObanRepo (pool: 5) → PgBouncer → PostgreSQL
+  # - Oban Jobs → JobRepo (pool: 20) → Direct → PostgreSQL
   # - Migrations → SessionRepo (pool: 1) → Direct → PostgreSQL
+  config :eventasaurus, EventasaurusApp.JobRepo,
+    url: database_direct_url,
+    pool_size: String.to_integer(System.get_env("JOB_POOL_SIZE") || "20"),
+    queue_target: 5000,
+    queue_interval: 30000,
+    # Force IPv6 for Fly.io internal network
+    socket_options: [:inet6]
+
+  # ObanRepo: DEPRECATED - kept for backwards compatibility during migration
+  # Will be removed once all jobs use JobRepo (Issue #3353)
+  # New code should use JobRepo instead
   config :eventasaurus, EventasaurusApp.ObanRepo,
     url: database_url,
     pool_size: String.to_integer(System.get_env("OBAN_POOL_SIZE") || "5"),

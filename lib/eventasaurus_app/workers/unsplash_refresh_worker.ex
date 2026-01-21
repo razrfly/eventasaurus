@@ -55,7 +55,9 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
 
   alias EventasaurusApp.Workers.UnsplashCityRefreshWorker
   alias EventasaurusApp.Workers.UnsplashCountryRefreshWorker
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Locations.Country
   import Ecto.Query
@@ -138,7 +140,7 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
         select: %{id: c.id, name: c.name, venue_count: count(v.id)}
       )
 
-    Repo.all(query)
+    JobRepo.all(query)
   end
 
   defp get_countries do
@@ -151,6 +153,6 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
         select: %{id: c.id, name: c.name, city_count: count(cities.id)}
       )
 
-    Repo.all(query)
+    JobRepo.all(query)
   end
 end

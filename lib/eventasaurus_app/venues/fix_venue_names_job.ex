@@ -24,7 +24,9 @@ defmodule EventasaurusApp.Venues.FixVenueNamesJob do
 
   require Logger
   import Ecto.Query
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Validation.VenueNameValidator
 
@@ -64,7 +66,7 @@ defmodule EventasaurusApp.Venues.FixVenueNamesJob do
       where: not is_nil(v.metadata),
       preload: [:city_ref]
     )
-    |> Repo.all()
+    |> JobRepo.all()
   end
 
   # Assess all venues and determine which need fixing
@@ -127,7 +129,7 @@ defmodule EventasaurusApp.Venues.FixVenueNamesJob do
 
   # Fix a batch of venues in a transaction
   defp fix_venue_batch(assessments) do
-    case Repo.transaction(fn ->
+    case JobRepo.transaction(fn ->
            Enum.map(assessments, &fix_single_venue/1)
          end) do
       {:ok, results} ->
@@ -155,7 +157,7 @@ defmodule EventasaurusApp.Venues.FixVenueNamesJob do
         |> Venue.Slug.maybe_generate_slug()
 
       # Update venue
-      case Repo.update(changeset) do
+      case JobRepo.update(changeset) do
         {:ok, updated_venue} ->
           Logger.debug(
             "Fixed venue ##{venue.id}: '#{venue.name}' → '#{updated_venue.name}' " <>

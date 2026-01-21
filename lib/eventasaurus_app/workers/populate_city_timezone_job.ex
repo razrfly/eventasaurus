@@ -25,7 +25,9 @@ defmodule EventasaurusApp.Workers.PopulateCityTimezoneJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Helpers.TimezoneMapper
 
@@ -33,8 +35,8 @@ defmodule EventasaurusApp.Workers.PopulateCityTimezoneJob do
   def perform(%Oban.Job{args: %{"city_id" => city_id}}) do
     city =
       City
-      |> Repo.get(city_id)
-      |> Repo.preload(:country)
+      |> JobRepo.get(city_id)
+      |> JobRepo.preload(:country)
 
     case city do
       nil ->
@@ -143,7 +145,7 @@ defmodule EventasaurusApp.Workers.PopulateCityTimezoneJob do
   defp update_city_timezone(city, timezone) do
     city
     |> City.timezone_changeset(timezone)
-    |> Repo.update()
+    |> JobRepo.update()
   end
 
   defp to_float(%Decimal{} = decimal), do: Decimal.to_float(decimal)

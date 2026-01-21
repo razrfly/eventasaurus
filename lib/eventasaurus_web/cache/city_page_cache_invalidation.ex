@@ -149,20 +149,8 @@ defmodule EventasaurusWeb.Cache.CityPageCacheInvalidation do
 
   # Convert city name to slug (e.g., "Kraków" -> "krakow")
   defp city_name_to_slug(city_name) when is_binary(city_name) do
-    # Simple slug conversion for common Polish city names
-    slug =
-      city_name
-      |> String.downcase()
-      |> String.replace(~r/[ąà]/, "a")
-      |> String.replace(~r/[ćç]/, "c")
-      |> String.replace(~r/[ęè]/, "e")
-      |> String.replace(~r/[łł]/, "l")
-      |> String.replace(~r/[ńñ]/, "n")
-      |> String.replace(~r/[óò]/, "o")
-      |> String.replace(~r/[śş]/, "s")
-      |> String.replace(~r/[źżž]/, "z")
-      |> String.replace(~r/[^a-z0-9]+/, "-")
-      |> String.trim("-")
+    # Use the Slug library for proper Unicode transliteration
+    slug = Slug.slugify(city_name)
 
     # Verify city exists
     case Locations.get_city_by_slug(slug) do

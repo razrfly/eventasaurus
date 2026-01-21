@@ -13,7 +13,9 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
     priority: 2
 
   import Ecto.Query
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.City
 
@@ -64,7 +66,7 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
   end
 
   defp get_city(city_id) do
-    case Repo.get(City, city_id) do
+    case JobRepo.get(City, city_id) do
       nil -> {:error, :city_not_found}
       city -> {:ok, city}
     end
@@ -117,7 +119,7 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
         }
       )
 
-    case Repo.one(query) do
+    case JobRepo.one(query) do
       %{avg_lat: lat, avg_lng: lng, count: count} when not is_nil(lat) and count > 0 ->
         {:ok, %{latitude: lat, longitude: lng, venue_count: count}}
 
@@ -161,7 +163,7 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
         }
       )
 
-    case Repo.one(query) do
+    case JobRepo.one(query) do
       %{avg_lat: lat, avg_lng: lng, count: count} when not is_nil(lat) and count > 0 ->
         {:ok, %{latitude: lat, longitude: lng, venue_count: count}}
 
@@ -171,10 +173,10 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
   end
 
   defp update_city_coordinates(%City{id: city_id}, %{latitude: lat, longitude: lng}) do
-    # Update the city coordinates using Repo.update_all for efficiency
+    # Update the city coordinates using JobRepo.update_all for efficiency
     {updated_count, updated_cities} =
       from(c in City, where: c.id == ^city_id, select: c)
-      |> Repo.update_all(
+      |> JobRepo.update_all(
         [
           set: [
             latitude: lat,

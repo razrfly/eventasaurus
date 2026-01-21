@@ -12,7 +12,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Metrics.MetricsTracker
   alias EventasaurusDiscovery.Sources.Bandsintown.{Client, Config, Transformer}
@@ -26,7 +28,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
     external_id = "bandsintown_sync_city_#{city_id}_#{Date.utc_today()}"
 
     # Get city
-    case Repo.get(EventasaurusDiscovery.Locations.City, city_id) do
+    case JobRepo.get(EventasaurusDiscovery.Locations.City, city_id) do
       nil ->
         error_msg = "City not found: #{inspect(city_id)}"
         Logger.error(error_msg)
@@ -34,7 +36,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
         {:error, :city_not_found}
 
       city ->
-        city = Repo.preload(city, :country)
+        city = JobRepo.preload(city, :country)
 
         if force do
           Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
@@ -253,13 +255,13 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
   end
 
   defp get_or_create_bandsintown_source do
-    case Repo.get_by(Source, slug: "bandsintown") do
+    case JobRepo.get_by(Source, slug: "bandsintown") do
       nil ->
         config = source_config()
 
         %Source{}
         |> Source.changeset(config)
-        |> Repo.insert!()
+        |> JobRepo.insert!()
 
       source ->
         source

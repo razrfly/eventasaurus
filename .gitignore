@@ -102,3 +102,6 @@ scripts/clerk-migration/node_modules/
 # Database backups (contains sensitive data, stored locally only)
 /backups/
 *.dump
+
+# Performance baselines (development artifacts, not needed in version control)
+.baselines/

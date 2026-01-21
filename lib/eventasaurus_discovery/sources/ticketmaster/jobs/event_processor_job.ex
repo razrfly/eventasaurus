@@ -13,7 +13,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Sources.Ticketmaster
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
@@ -85,7 +87,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
   end
 
   defp get_source(source_id) do
-    case Repo.get(Source, source_id) do
+    case JobRepo.get(Source, source_id) do
       nil -> {:error, :source_not_found}
       source -> {:ok, source}
     end

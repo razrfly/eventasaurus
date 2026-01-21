@@ -17,7 +17,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   # Process events in chunks to avoid timeouts
   @chunk_size 100
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Metrics.MetricsTracker
@@ -117,11 +119,11 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     # Get city (should be Kraków)
     city =
       if city_id do
-        Repo.get(City, city_id)
+        JobRepo.get(City, city_id)
       else
         # If no city_id provided, look up Kraków by name
         import Ecto.Query
-        Repo.one(from(c in City, where: c.name in ["Kraków", "Krakow", "Cracow"], limit: 1))
+        JobRepo.one(from(c in City, where: c.name in ["Kraków", "Krakow", "Cracow"], limit: 1))
       end
 
     case city do
@@ -132,7 +134,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         {:error, :city_not_found}
 
       city ->
-        city = Repo.preload(city, :country)
+        city = JobRepo.preload(city, :country)
 
         # Verify it's Kraków (or allow other Polish cities in the future)
         unless String.downcase(city.name) in ["kraków", "krakow", "cracow"] do
@@ -474,13 +476,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   end
 
   defp get_or_create_karnet_source do
-    case Repo.get_by(Source, slug: "karnet") do
+    case JobRepo.get_by(Source, slug: "karnet") do
       nil ->
         config = source_config()
 
         %Source{}
         |> Source.changeset(config)
-        |> Repo.insert!()
+        |> JobRepo.insert!()
 
       source ->
         source

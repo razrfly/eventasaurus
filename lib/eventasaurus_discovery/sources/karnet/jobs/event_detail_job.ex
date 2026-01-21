@@ -12,7 +12,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.Karnet.{Client, DetailExtractor}
@@ -124,7 +126,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
           enriched_data = add_parsed_dates(enriched_data)
 
           # Get source and process
-          source = Repo.get!(Source, source_id)
+          source = JobRepo.get!(Source, source_id)
           process_through_pipeline(enriched_data, source)
         end
 
@@ -161,7 +163,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
           )
 
           # Get source
-          source = Repo.get!(Source, source_id)
+          source = JobRepo.get!(Source, source_id)
 
           # Process through unified pipeline
           case process_through_pipeline(enriched_data, source) do
@@ -314,7 +316,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
         limit: 1
       )
 
-    case Repo.one(query) do
+    case JobRepo.one(query) do
       nil -> "unknown"
       priority -> priority
     end

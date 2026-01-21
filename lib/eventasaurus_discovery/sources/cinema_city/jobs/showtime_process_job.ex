@@ -45,7 +45,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
 
   import Ecto.Query
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.CinemaCity
@@ -160,7 +162,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
     case Transformer.transform_event(enriched) do
       {:ok, transformed} ->
         # Get source
-        source = Repo.get!(Source, source_id)
+        source = JobRepo.get!(Source, source_id)
 
         # Check for duplicates before processing (pass source struct)
         case check_deduplication(transformed, source) do
@@ -325,7 +327,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
         limit: 1
       )
 
-    case Repo.one(array_query) do
+    case JobRepo.one(array_query) do
       nil ->
         # Fallback to legacy singular format for backward compatibility
         legacy_query =
@@ -335,7 +337,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
             limit: 1
           )
 
-        case Repo.one(legacy_query) do
+        case JobRepo.one(legacy_query) do
           nil -> {:error, :not_found}
           movie -> {:ok, movie}
         end
@@ -356,7 +358,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
         limit: 1
       )
 
-    case Repo.one(query) do
+    case JobRepo.one(query) do
       nil ->
         # MovieDetailJob hasn't been created yet
         :not_found_or_pending

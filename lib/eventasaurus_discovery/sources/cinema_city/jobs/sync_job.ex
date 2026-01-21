@@ -25,7 +25,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
@@ -214,13 +216,13 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
 
   # Get or create source
   defp get_or_create_source_id do
-    case Repo.get_by(Source, slug: "cinema-city") do
+    case JobRepo.get_by(Source, slug: "cinema-city") do
       nil ->
         config = source_config()
 
         %Source{}
         |> Source.changeset(config)
-        |> Repo.insert!()
+        |> JobRepo.insert!()
         |> Map.get(:id)
 
       source ->

@@ -64,7 +64,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
   alias EventasaurusDiscovery.Sources.Sortiraparis.Helpers.UrlFilter
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
   alias EventasaurusDiscovery.Metrics.MetricsTracker
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.Source
 
   @impl Oban.Worker
@@ -431,7 +433,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
 
   # Get source ID for sortiraparis
   defp get_source_id do
-    case Repo.get_by(Source, slug: "sortiraparis") do
+    case JobRepo.get_by(Source, slug: "sortiraparis") do
       nil ->
         Logger.warning("⚠️ Sortiraparis source not found in database")
         nil

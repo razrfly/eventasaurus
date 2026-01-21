@@ -36,7 +36,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
 
   require Logger
   import Ecto.Query
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Sources.WeekPl.Client
   alias Phoenix.PubSub
@@ -54,7 +56,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
     )
 
     # Load event with metadata
-    case Repo.get(PublicEvent, event_id) do
+    case JobRepo.get(PublicEvent, event_id) do
       nil ->
         Logger.error("[WeekPl.RefreshJob] Event #{event_id} not found")
         MetricsTracker.record_failure(job, :data_integrity_error, external_id)
@@ -113,7 +115,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
           where: pe.id == ^event.id,
           preload: [sources: :source]
         )
-        |> Repo.one()
+        |> JobRepo.one()
 
       if is_nil(event_with_sources) do
         Logger.error("[WeekPl.RefreshJob] Event #{event.id} not found when loading sources")
@@ -209,7 +211,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
              metadata: updated_metadata,
              last_seen_at: DateTime.utc_now()
            )
-           |> Repo.update() do
+           |> JobRepo.update() do
         {:ok, _updated_source} ->
           Logger.info(
             "[WeekPl.RefreshJob] ✅ Refreshed availability for event #{source.event_id}: #{availability_summary["available_dates_count"]} dates, #{availability_summary["total_timeslots"]} timeslots"

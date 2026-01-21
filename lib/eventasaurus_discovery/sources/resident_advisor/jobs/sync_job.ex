@@ -34,7 +34,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
 
@@ -121,7 +123,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
       """)
 
       # Get city with country preloaded
-      case Repo.get(City, city_id) do
+      case JobRepo.get(City, city_id) do
         nil ->
           error_msg = "City not found: #{city_id}"
           Logger.error(error_msg)
@@ -129,7 +131,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
           {:error, :city_not_found}
 
         city ->
-          city = Repo.preload(city, :country)
+          city = JobRepo.preload(city, :country)
           source = get_or_create_ra_source()
 
           case sync_events(city, area_id, start_date, end_date, page_size, source, force) do
@@ -388,7 +390,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
   end
 
   defp get_or_create_ra_source do
-    case Repo.get_by(Source, slug: "resident-advisor") do
+    case JobRepo.get_by(Source, slug: "resident-advisor") do
       nil ->
         Logger.warning("⚠️ RA source not found, creating from config")
 
@@ -405,7 +407,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
             "supports_pagination" => true
           }
         })
-        |> Repo.insert!()
+        |> JobRepo.insert!()
 
       source ->
         source

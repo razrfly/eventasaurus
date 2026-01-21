@@ -24,7 +24,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
     priority: 1
 
   require Logger
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.Source, as: SourceSchema
   alias EventasaurusDiscovery.Sources.WeekPl.{Source, Client, DeploymentConfig, FestivalManager}
   alias EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob
@@ -333,7 +335,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
 
   # Get or create week.pl source record
   defp get_or_create_week_pl_source do
-    case Repo.get_by(SourceSchema, slug: Source.key()) do
+    case JobRepo.get_by(SourceSchema, slug: Source.key()) do
       nil ->
         Logger.info("Creating week.pl source record...")
 
@@ -353,7 +355,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
             "has_coordinates" => true
           }
         })
-        |> Repo.insert!()
+        |> JobRepo.insert!()
 
       source ->
         source

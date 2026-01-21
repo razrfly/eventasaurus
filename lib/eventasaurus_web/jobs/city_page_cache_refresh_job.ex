@@ -115,10 +115,16 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
     # Need to look up city by slug and pass as viewing_city
     query_opts = build_query_opts(city_slug, radius_km, opts)
 
+    # Use JobRepo (direct connection) instead of Repo (PgBouncer) - Issue #3353
+    # PgBouncer in transaction mode kills long-running queries. The city page
+    # aggregation query can take 30-60+ seconds with 800+ events.
+    # JobRepo bypasses PgBouncer and connects directly to PostgreSQL.
+    query_opts_with_repo = Map.put(query_opts, :repo, EventasaurusApp.JobRepo)
+
     # The function returns {events, total_count, all_events_count} tuple
     try do
       {events, total_count, all_events_count} =
-        PublicEventsEnhanced.list_events_with_aggregation_and_counts(query_opts)
+        PublicEventsEnhanced.list_events_with_aggregation_and_counts(query_opts_with_repo)
 
       duration = System.monotonic_time(:millisecond) - start_time
       event_count = length(events)
@@ -159,7 +165,17 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
     alias EventasaurusWeb.Live.Helpers.EventFilters
 
     # Look up the city by slug
-    viewing_city = Locations.get_city_by_slug(city_slug)
+    case Locations.get_city_by_slug(city_slug) do
+      nil ->
+        raise "City not found: #{city_slug}"
+
+      viewing_city ->
+        build_query_opts_for_city(viewing_city, radius_km, opts)
+    end
+  end
+
+  defp build_query_opts_for_city(viewing_city, radius_km, opts) do
+    alias EventasaurusWeb.Live.Helpers.EventFilters
 
     # Extract coordinates for geographic filtering
     lat = if viewing_city.latitude, do: Decimal.to_float(viewing_city.latitude), else: nil

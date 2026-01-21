@@ -15,7 +15,9 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Apis.Ticketmaster.Client
@@ -29,7 +31,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob do
     max_pages = args["max_pages"] || 5
 
     # Get city from database
-    city = Repo.get!(City, city_id) |> Repo.preload(:country)
+    city = JobRepo.get!(City, city_id) |> JobRepo.preload(:country)
 
     Logger.info("""
     🎫 Starting Ticketmaster City Sync Job
@@ -63,10 +65,10 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob do
   end
 
   defp get_or_create_source do
-    case Repo.get_by(Source, slug: "ticketmaster") do
+    case JobRepo.get_by(Source, slug: "ticketmaster") do
       nil ->
         {:ok, source} =
-          Repo.insert(%Source{
+          JobRepo.insert(%Source{
             name: "Ticketmaster",
             slug: "ticketmaster",
             website_url: "https://www.ticketmaster.com",
@@ -86,7 +88,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob do
         if source.priority != 100 do
           source
           |> Ecto.Changeset.change(priority: 100)
-          |> Repo.update!()
+          |> JobRepo.update!()
         else
           source
         end
