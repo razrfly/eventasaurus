@@ -272,9 +272,12 @@ defmodule EventasaurusWeb.Utils.TimezoneUtils do
   def get_venue_timezone(_), do: @default_timezone
 
   @doc """
-  Gets timezone from latitude/longitude coordinates using TzWorld.
+  Gets timezone from latitude/longitude coordinates.
 
-  TzWorld expects coordinates in {longitude, latitude} order.
+  NOTE (Issue #3334 Phase 2): TzWorld runtime lookups have been disabled to prevent OOM.
+  This function now returns the default timezone. For accurate timezones, ensure:
+  1. Cities have timezone pre-populated via PopulateCityTimezoneJob
+  2. Events/venues are associated with cities (venue.city.timezone is used)
 
   ## Parameters
 
@@ -283,38 +286,24 @@ defmodule EventasaurusWeb.Utils.TimezoneUtils do
 
   ## Returns
 
-  IANA timezone string, or default timezone if lookup fails
+  Default timezone (Europe/Warsaw) - TzWorld lookups disabled for memory optimization
 
   ## Examples
 
       iex> get_timezone_from_coordinates(50.0647, 19.9450)
       "Europe/Warsaw"
-
-      iex> get_timezone_from_coordinates(40.7128, -74.0060)
-      "America/New_York"
   """
   @spec get_timezone_from_coordinates(number(), number()) :: String.t()
   def get_timezone_from_coordinates(latitude, longitude)
       when is_number(latitude) and is_number(longitude) do
-    # TzWorld expects {longitude, latitude} tuple
-    case TzWorld.timezone_at({longitude, latitude}) do
-      {:ok, timezone} ->
-        timezone
+    # TzWorld runtime lookups disabled (Issue #3334 Phase 2)
+    # The EtsWithIndexCache backend was causing OOM kills (~512MB RAM).
+    # Timezone should be resolved via city.timezone (precomputed) instead.
+    Logger.debug(
+      "[TimezoneUtils] Coordinate-based timezone lookup skipped (#{latitude}, #{longitude}), using default"
+    )
 
-      {:error, :time_zone_not_found} ->
-        Logger.debug(
-          "[TimezoneUtils] TzWorld could not find timezone for coordinates (#{latitude}, #{longitude}), using default"
-        )
-
-        @default_timezone
-
-      {:error, reason} ->
-        Logger.warning(
-          "[TimezoneUtils] TzWorld lookup failed for (#{latitude}, #{longitude}): #{inspect(reason)}, using default"
-        )
-
-        @default_timezone
-    end
+    @default_timezone
   end
 
   def get_timezone_from_coordinates(_, _), do: @default_timezone

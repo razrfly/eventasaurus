@@ -201,20 +201,14 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
       is_binary(venue_data[:timezone]) ->
         venue_data[:timezone]
 
-      # Priority 2: Calculate from coordinates using TzWorld
-      # TzWorld expects {longitude, latitude} format
+      # Priority 2: Use state-based fallback from address
+      # TzWorld runtime lookups disabled (Issue #3334 Phase 2) - OOM prevention
       venue_data[:latitude] && venue_data[:longitude] ->
-        case TzWorld.timezone_at({venue_data[:longitude], venue_data[:latitude]}) do
-          {:ok, timezone} ->
-            timezone
+        Logger.debug(
+          "TzWorld lookup skipped for venue #{venue_data[:venue_id]} at (#{venue_data[:latitude]}, #{venue_data[:longitude]}), using state-based fallback"
+        )
 
-          {:error, reason} ->
-            Logger.warning(
-              "TzWorld lookup failed for venue #{venue_data[:venue_id]} at (#{venue_data[:latitude]}, #{venue_data[:longitude]}): #{inspect(reason)}, using state-based fallback"
-            )
-
-            fallback_timezone_from_address(venue_data)
-        end
+        fallback_timezone_from_address(venue_data)
 
       # Priority 3: Fallback to Eastern (most common, but log warning)
       true ->

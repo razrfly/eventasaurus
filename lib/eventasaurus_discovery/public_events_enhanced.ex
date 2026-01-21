@@ -45,7 +45,15 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     * `:page_size` - Items per page (max: 500)
   """
   def list_events(opts \\ []) do
-    base_query = from(pe in PublicEvent)
+    # CRITICAL FIX (Issue #3334 Phase 3): Exclude occurrences from city page queries
+    # The occurrences JSONB column can contain massive data (100+ KB per event for
+    # recurring cinema showtimes), causing Jason.decode!/2 to take 15+ seconds and
+    # triggering DBConnection timeouts. City pages don't need occurrence data -
+    # only the event detail page uses it.
+    base_query =
+      from(pe in PublicEvent,
+        select_merge: %{occurrences: fragment("NULL")}
+      )
 
     base_query
     |> filter_past_events(opts[:show_past])
@@ -73,6 +81,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # Build search query
     search_query = String.trim(search_term)
 
+    # CRITICAL FIX (Issue #3334 Phase 3): Exclude occurrences from search queries
     from(pe in PublicEvent,
       where:
         fragment(
@@ -94,7 +103,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           )
       ],
       limit: ^limit,
-      offset: ^offset
+      offset: ^offset,
+      select_merge: %{occurrences: fragment("NULL")}
     )
     |> Repo.all()
     |> preload_with_sources(language)
@@ -2471,6 +2481,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
     # Use a window function to get one event per venue (most recent start time)
     # This is much more efficient than fetching all and grouping in Elixir
+    # CRITICAL FIX (Issue #3334 Phase 3): Exclude occurrences from venue list queries
     base_query =
       from(pe in PublicEvent,
         join: pes in "public_event_sources",
@@ -2485,7 +2496,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         # Use DISTINCT ON to get one event per venue (PostgreSQL specific)
         distinct: [v.id],
         order_by: [asc: v.id, asc: pe.starts_at],
-        select: pe
+        select: pe,
+        select_merge: %{occurrences: fragment("NULL")}
       )
 
     # Apply city filter if provided
@@ -2534,6 +2546,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     current_time = DateTime.utc_now()
 
     # Get one event per venue across all cities
+    # CRITICAL FIX (Issue #3334 Phase 3): Exclude occurrences from grouped queries
     events =
       from(pe in PublicEvent,
         join: pes in "public_event_sources",
@@ -2548,7 +2561,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         # One event per venue
         distinct: [v.id],
         order_by: [asc: v.id, asc: pe.starts_at],
-        select: pe
+        select: pe,
+        select_merge: %{occurrences: fragment("NULL")}
       )
       |> Repo.all()
       |> preload_with_sources(nil, browsing_city_id)

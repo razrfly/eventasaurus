@@ -181,30 +181,15 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter do
   """
   def infer_timezone_from_location(latitude, longitude)
       when not is_nil(latitude) and not is_nil(longitude) do
-    # TzWorld expects {longitude, latitude} tuple
-    case TzWorld.timezone_at({longitude, latitude}) do
-      {:ok, timezone} ->
-        timezone
+    # TzWorld runtime lookups disabled (Issue #3334 Phase 2)
+    # The EtsWithIndexCache backend was causing OOM kills (~512MB RAM).
+    # For scraping, use venue.city.timezone (precomputed) when available.
+    # This function returns UTC as a safe fallback for scrapers.
+    Logger.debug(
+      "TzWorld lookup skipped for coordinates (#{latitude}, #{longitude}), using UTC fallback"
+    )
 
-      {:error, :time_zone_not_found} ->
-        Logger.info("No timezone found for coordinates (#{latitude}, #{longitude}), using UTC")
-
-        "Etc/UTC"
-
-      {:error, :enoent} ->
-        Logger.warning(
-          "TzWorld data file not found, using UTC for coordinates (#{latitude}, #{longitude})"
-        )
-
-        "Etc/UTC"
-
-      {:error, reason} ->
-        Logger.warning(
-          "TzWorld error #{inspect(reason)} for coordinates (#{latitude}, #{longitude}), using UTC"
-        )
-
-        "Etc/UTC"
-    end
+    "Etc/UTC"
   end
 
   def infer_timezone_from_location(_, _), do: "Etc/UTC"

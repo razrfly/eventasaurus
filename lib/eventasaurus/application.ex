@@ -78,12 +78,11 @@ defmodule Eventasaurus.Application do
       {Phoenix.PubSub, name: Eventasaurus.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: Eventasaurus.Finch},
-      # Start TzWorld backend for timezone lookups
-      # Using EtsWithIndexCache - best balance of RAM and performance (Issue #3334)
-      # - EtsWithIndexCache: ~512MB RAM, fastest (40% faster than Memory), no bottleneck
-      # - DetsWithIndexCache: ~25MB but single GenServer + disk I/O = timeout under load
-      # - Memory: ~1GB RAM, fast, loads entire geodata file into RAM
-      TzWorld.Backend.EtsWithIndexCache,
+      # TzWorld backend REMOVED (Issue #3334 Phase 2)
+      # The EtsWithIndexCache backend loads ~512MB of timezone data into RAM, causing OOM kills.
+      # Since city.timezone is now pre-populated for all 2908 cities, TzWorld is no longer needed
+      # at runtime. Timezone lookups now use the precomputed city.timezone column.
+      # For new cities, run: bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.enqueue_timezone_jobs()"
       # Start Hammer rate limiter for geocoding providers
       EventasaurusDiscovery.Geocoding.RateLimiter,
       # Start Oban background job processor
