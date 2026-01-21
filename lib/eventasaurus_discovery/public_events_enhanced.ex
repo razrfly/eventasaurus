@@ -1632,10 +1632,12 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   """
   def list_events_with_aggregation_and_counts(opts \\ []) do
     # Extract city_slug for telemetry metadata
-    city_slug = case opts[:viewing_city] do
-      %{slug: slug} -> slug
-      _ -> "unknown"
-    end
+    city_slug =
+      case opts[:viewing_city] do
+        %{slug: slug} -> slug
+        _ -> "unknown"
+      end
+
     radius_km = opts[:radius_km] || 50
 
     telemetry_meta = %{city_slug: city_slug, radius_km: radius_km}

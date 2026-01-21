@@ -124,7 +124,12 @@ base_queues = [
   # Timezone queue for city timezone population (Issue #3334)
   # Concurrency 1 - TzWorld ETS backend needs time to warm up
   # Jobs have 5-minute timeout to allow full initialization
-  timezone: 1
+  timezone: 1,
+  # Cache refresh queue for city page event aggregation (Issue #3347)
+  # Runs expensive list_events_with_aggregation_and_counts queries in background
+  # to avoid OOM kills during user requests. Concurrency 2 to allow parallel
+  # refreshes for different cities without overwhelming memory.
+  cache_refresh: 2
 ]
 
 # Production-only queues (image caching uploads to R2 - must not run in dev)

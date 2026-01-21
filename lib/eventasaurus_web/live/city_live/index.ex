@@ -72,6 +72,7 @@ defmodule EventasaurusWeb.CityLive.Index do
             CityPageCache.get_city_stats(city.slug, @default_radius_km, fn ->
               fetch_city_stats_uncached(city)
             end)
+
           json_ld = CitySchema.generate(city, city_stats)
           city_with_stats = Map.put(city, :stats, city_stats)
           social_card_path = UrlBuilder.build_path(:city, city_with_stats)
@@ -95,6 +96,9 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:show_filters, false)
            |> assign(:loading, true)
            |> assign(:events_loading, true)
+           # Cache retry state for stale-while-revalidate pattern (Issue #3347)
+           |> assign(:cache_loading, false)
+           |> assign(:cache_retry_count, 0)
            |> assign(:total_events, 0)
            |> assign(:all_events_count, 0)
            |> assign(:categories, [])
@@ -291,6 +295,21 @@ defmodule EventasaurusWeb.CityLive.Index do
     # ASYNC: Show skeleton immediately, load events in background
     socket = assign(socket, :events_loading, true)
     send(self(), :load_filtered_events)
+    {:noreply, socket}
+  end
+
+  # Retry cache load after Oban job has had time to complete (Issue #3347)
+  @impl true
+  def handle_info(:retry_cache_load, socket) do
+    Logger.debug("[CityPage] Retrying cache load for #{socket.assigns.city.slug}")
+
+    # Reset loading state and retry fetch
+    socket =
+      socket
+      |> assign(:events_loading, true)
+      |> fetch_events()
+      |> assign(:events_loading, false)
+
     {:noreply, socket}
   end
 
@@ -687,26 +706,23 @@ defmodule EventasaurusWeb.CityLive.Index do
     lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
     lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 
-    # Build query filters with geographic filtering at database level
-    query_filters =
-      Map.merge(filters, %{
-        language: language,
-        sort_order: filters[:sort_order] || :asc,
-        # Use filter's page_size, default to 30 (divisible by 3 for grid layout)
-        page_size: filters[:page_size] || 30,
-        page: filters[:page] || 1,
-        # Add geographic filtering parameters
-        center_lat: lat,
-        center_lng: lng,
-        radius_km: filters[:radius_km] || @default_radius_km
-      })
+    radius_km = filters[:radius_km] || @default_radius_km
 
-    # Get events with geographic filtering done at database level
-    # PERF: Uses consolidated query that returns events + counts in single pass
-    # Previously this was 3 separate queries repeating the same geo filter
-    {geographic_events, total_count, all_events_count, date_range_counts} =
+    # Get events with geographic filtering - uses cache to prevent OOM (Issue #3347)
+    {geographic_events, total_count, all_events_count, date_range_counts, cache_status} =
       if lat && lng do
         # Build filters for "all events" count (without date restrictions)
+        query_filters =
+          Map.merge(filters, %{
+            language: language,
+            sort_order: filters[:sort_order] || :asc,
+            page_size: filters[:page_size] || 30,
+            page: filters[:page] || 1,
+            center_lat: lat,
+            center_lng: lng,
+            radius_km: radius_km
+          })
+
         count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
         date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
 
@@ -714,33 +730,33 @@ defmodule EventasaurusWeb.CityLive.Index do
         date_counts =
           CityPageCache.get_date_range_counts(
             city.slug,
-            filters[:radius_km] || @default_radius_km,
+            radius_km,
             fn ->
               PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
             end
           )
 
-        # CONSOLIDATED QUERY: Get events, total count, and all_events count in single pass
-        # This replaces 3 separate calls to list_events_with_aggregation + 2x count_events_with_aggregation
-        {events, total, all_events} =
-          PublicEventsEnhanced.list_events_with_aggregation_and_counts(
-            query_filters
-            |> Map.put(:aggregate, aggregate)
-            |> Map.put(:ignore_city_in_aggregation, true)
-            |> Map.put(:viewing_city, city)
-            |> Map.put(
-              :all_events_filters,
-              date_range_count_filters
-              |> Map.put(:aggregate, aggregate)
-              |> Map.put(:ignore_city_in_aggregation, true)
-              |> Map.put(:viewing_city, city)
-            )
-          )
+        # Build cache options from current filters
+        cache_opts = build_cache_opts(filters, aggregate)
 
-        {events, total, all_events, date_counts}
+        # Try to get events from cache (stale-while-revalidate pattern)
+        # This prevents OOM by running expensive queries in background Oban jobs
+        case CityPageCache.get_aggregated_events(city.slug, radius_km, cache_opts) do
+          {:ok, cached} ->
+            # Cache hit - use cached data (may be stale, refresh happening in background)
+            Logger.info("[CityPage] Cache HIT for #{city.slug} (cached_at: #{cached.cached_at})")
+
+            {cached.events, cached.total_count, cached.all_events_count, date_counts, :hit}
+
+          {:miss, nil} ->
+            # Cache miss - Oban job is computing data
+            # Return empty list and schedule retry
+            Logger.info("[CityPage] Cache MISS for #{city.slug} - job enqueued, will retry")
+            {[], 0, 0, date_counts, :miss}
+        end
       else
         # No coordinates, fallback to empty list
-        {[], 0, 0, %{}}
+        {[], 0, 0, %{}, :no_coords}
       end
 
     # Filter out events with nil slugs to prevent rendering crashes
@@ -777,18 +793,92 @@ defmodule EventasaurusWeb.CityLive.Index do
     Logger.info(
       "[CityPage] fetch_events for #{city.slug} completed in #{duration}ms " <>
         "(events: #{length(geographic_events)}, total: #{total_entries}, " <>
-        "radius: #{filters[:radius_km] || @default_radius_km}km)"
+        "radius: #{radius_km}km, cache: #{cache_status})"
     )
 
-    socket
-    |> assign(:events, geographic_events)
-    |> assign(:pagination, pagination)
-    # Use the total from pagination, not current page length
-    |> assign(:total_events, total_entries)
-    # Count of all events (no date filter)
-    |> assign(:all_events_count, all_events_count)
-    |> assign(:date_range_counts, date_range_counts)
-    |> assign(:loading, false)
+    socket =
+      socket
+      |> assign(:events, geographic_events)
+      |> assign(:pagination, pagination)
+      |> assign(:total_events, total_entries)
+      |> assign(:all_events_count, all_events_count)
+      |> assign(:date_range_counts, date_range_counts)
+      |> assign(:loading, false)
+
+    # If cache miss, schedule a retry to check if data is ready
+    # The Oban job typically completes in 5-20 seconds
+    if cache_status == :miss do
+      schedule_cache_retry(socket)
+    else
+      socket
+    end
+  end
+
+  # Build cache options from filter state
+  defp build_cache_opts(filters, aggregate) do
+    opts = []
+
+    # Only include non-default values to maximize cache hits
+    opts =
+      if filters[:page] && filters[:page] != 1,
+        do: Keyword.put(opts, :page, filters[:page]),
+        else: opts
+
+    opts =
+      if filters[:page_size] && filters[:page_size] != 30,
+        do: Keyword.put(opts, :page_size, filters[:page_size]),
+        else: opts
+
+    opts =
+      if filters[:categories] && filters[:categories] != [],
+        do: Keyword.put(opts, :categories, filters[:categories]),
+        else: opts
+
+    opts =
+      if filters[:date_range] && filters[:date_range] != :upcoming,
+        do: Keyword.put(opts, :date_range, filters[:date_range]),
+        else: opts
+
+    opts =
+      if filters[:sort_by],
+        do: Keyword.put(opts, :sort_by, filters[:sort_by]),
+        else: opts
+
+    opts =
+      if aggregate != true,
+        do: Keyword.put(opts, :aggregate, aggregate),
+        else: opts
+
+    opts
+  end
+
+  # Schedule a retry to check cache after Oban job completes
+  # Uses exponential backoff: 3s, 6s, 12s (max 3 retries)
+  defp schedule_cache_retry(socket) do
+    retry_count = socket.assigns[:cache_retry_count] || 0
+
+    if retry_count < 3 do
+      # Exponential backoff: 3s, 6s, 12s
+      delay_ms = (3000 * :math.pow(2, retry_count)) |> round()
+
+      Logger.debug(
+        "[CityPage] Scheduling cache retry #{retry_count + 1}/3 in #{delay_ms}ms for #{socket.assigns.city.slug}"
+      )
+
+      Process.send_after(self(), :retry_cache_load, delay_ms)
+
+      socket
+      |> assign(:cache_retry_count, retry_count + 1)
+      |> assign(:cache_loading, true)
+    else
+      Logger.warning(
+        "[CityPage] Max cache retries reached for #{socket.assigns.city.slug} - showing empty state"
+      )
+
+      socket
+      |> assign(:cache_retry_count, 0)
+      |> assign(:cache_loading, false)
+    end
   end
 
   defp fetch_nearby_cities(socket) do

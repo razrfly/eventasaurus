@@ -76,10 +76,15 @@ defmodule EventasaurusWeb.Admin.CardTypes.CityCard do
       | name: Map.get(params, "name", current.name),
         stats: %{
           current.stats
-          | events_count: Helpers.parse_int(Map.get(params, "events_count"), current.stats.events_count),
-            venues_count: Helpers.parse_int(Map.get(params, "venues_count"), current.stats.venues_count),
+          | events_count:
+              Helpers.parse_int(Map.get(params, "events_count"), current.stats.events_count),
+            venues_count:
+              Helpers.parse_int(Map.get(params, "venues_count"), current.stats.venues_count),
             categories_count:
-              Helpers.parse_int(Map.get(params, "categories_count"), current.stats.categories_count)
+              Helpers.parse_int(
+                Map.get(params, "categories_count"),
+                current.stats.categories_count
+              )
         }
     }
   end
