@@ -60,10 +60,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # PgBouncer kills connections that exceed this, causing "connection closed by pool" errors.
     query_timeout = opts[:timeout] || 90_000
 
-    # CRITICAL: Allow passing a custom repo for background jobs (Issue #3347)
+    # CRITICAL: Allow passing a custom repo for background jobs (Issue #3353)
     # PgBouncer in transaction mode kills long-running queries. Background jobs like
     # CityPageCacheRefreshJob can take 30-60+ seconds with 800+ events.
-    # Pass `repo: EventasaurusApp.SessionRepo` to bypass PgBouncer and use direct connection.
+    # Pass `repo: EventasaurusApp.JobRepo` to bypass PgBouncer and use direct connection.
     repo = opts[:repo] || Repo
 
     base_query
