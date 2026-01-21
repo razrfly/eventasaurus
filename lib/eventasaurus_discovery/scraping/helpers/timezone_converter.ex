@@ -11,6 +11,16 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter do
 
   The display layer then converts UTC times back to local timezone for presentation.
 
+  ## Timezone Resolution Strategy
+
+  For scraping operations, use this priority order:
+  1. **Precomputed city timezone** (`city.timezone`) - preferred, no runtime overhead
+  2. **Venue timezone** if explicitly provided by source
+  3. **`infer_timezone_from_location/2`** - fallback, returns UTC
+
+  > **Note**: TzWorld coordinate lookups are disabled due to memory constraints.
+  > Use `city.timezone` (precomputed during city creation) for accurate timezones.
+
   ## Usage
 
       # Convert a naive datetime from a specific timezone to UTC
@@ -23,9 +33,8 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter do
         "Europe/Warsaw"
       )
 
-      # Infer timezone from coordinates
-      timezone = TimezoneConverter.infer_timezone_from_location(50.0647, 19.9450)
-      # => "Europe/Warsaw"
+      # Get timezone from city (PREFERRED for scrapers)
+      timezone = city.timezone || "Etc/UTC"
   """
 
   require Logger
@@ -152,30 +161,26 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter do
   end
 
   @doc """
-  Infers timezone from venue location coordinates using TzWorld.
+  Returns UTC as a safe fallback for timezone inference.
 
-  Uses the IANA timezone boundary database to accurately determine timezone
-  from latitude/longitude coordinates. Covers all 400+ timezones worldwide.
+  > **IMPORTANT**: TzWorld coordinate lookups are disabled due to OOM issues (~512MB RAM).
+  > This function always returns `"Etc/UTC"`. For accurate timezone handling,
+  > use `city.timezone` (precomputed) before falling back to this function.
+
+  ## Recommended Usage
+
+      # In scrapers, prefer precomputed city timezone:
+      timezone = city.timezone || infer_timezone_from_location(lat, lng)
+
+  ## Returns
+
+      "Etc/UTC" - Always returns UTC as a safe fallback
 
   ## Examples
 
-      # Kraków, Poland
       iex> infer_timezone_from_location(50.0647, 19.9450)
-      "Europe/Warsaw"
-
-      # New York, USA
-      iex> infer_timezone_from_location(40.7128, -74.0060)
-      "America/New_York"
-
-      # Los Angeles, USA
-      iex> infer_timezone_from_location(34.0522, -118.2437)
-      "America/Los_Angeles"
-
-      # Coordinates in ocean (no timezone)
-      iex> infer_timezone_from_location(0.0, 0.0)
       "Etc/UTC"
 
-      # Nil coordinates
       iex> infer_timezone_from_location(nil, nil)
       "Etc/UTC"
   """

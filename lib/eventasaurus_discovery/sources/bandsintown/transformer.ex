@@ -46,8 +46,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
             # Required fields
             title: extract_title(raw_event),
             external_id: extract_external_id(raw_event),
-            starts_at: extract_starts_at(raw_event),
-            ends_at: extract_ends_at(raw_event),
+            starts_at: extract_starts_at(raw_event, city),
+            ends_at: extract_ends_at(raw_event, city),
 
             # Venue data - REQUIRED and validated
             venue_data: venue_data,
@@ -177,9 +177,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
     "bandsintown_generated_#{hash}"
   end
 
-  defp extract_starts_at(event) do
+  defp extract_starts_at(event, city) do
     # Get venue timezone for proper UTC conversion
-    venue_timezone = get_venue_timezone(event)
+    venue_timezone = get_venue_timezone(event, city)
 
     case DateParser.parse_start_date(event["date"], venue_timezone) do
       nil ->
@@ -195,20 +195,26 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
     end
   end
 
-  defp extract_ends_at(event) do
+  defp extract_ends_at(event, city) do
     if event["end_date"] do
       # Get venue timezone for proper UTC conversion
-      venue_timezone = get_venue_timezone(event)
+      venue_timezone = get_venue_timezone(event, city)
       DateParser.parse_end_date(event["end_date"], venue_timezone)
     else
       nil
     end
   end
 
-  defp get_venue_timezone(event) do
-    # Try to get timezone from venue coordinates
+  defp get_venue_timezone(event, city) do
+    # Priority order for timezone resolution:
+    # 1. Precomputed city timezone (most accurate, no runtime overhead)
+    # 2. Coordinate lookup (returns UTC since TzWorld is disabled)
     cond do
-      # If venue has coordinates, infer timezone
+      # Prefer precomputed city timezone
+      city && is_binary(city.timezone) && city.timezone != "" ->
+        city.timezone
+
+      # Fallback to coordinate lookup (returns UTC)
       event["venue_latitude"] && event["venue_longitude"] ->
         lat = parse_coordinate(event["venue_latitude"])
         lng = parse_coordinate(event["venue_longitude"])

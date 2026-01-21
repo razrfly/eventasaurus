@@ -121,35 +121,43 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.DateParser do
   end
 
   @doc """
-  Infer timezone from city coordinates.
+  Get timezone from city, preferring precomputed timezone over coordinate lookup.
 
-  Uses timezone lookup to determine timezone from lat/lng.
-  Falls back to UTC if lookup fails.
+  Uses this priority:
+  1. `city.timezone` - precomputed, preferred
+  2. Coordinate lookup (currently returns UTC as fallback)
 
   ## Parameters
-  - `city` - City struct with latitude and longitude
+  - `city` - City struct with optional timezone and lat/lng
 
   ## Returns
   - Timezone string (e.g., "Europe/Warsaw")
   """
   def infer_timezone(city) do
-    if city.latitude && city.longitude do
-      lat =
-        if is_struct(city.latitude, Decimal),
-          do: Decimal.to_float(city.latitude),
-          else: city.latitude
+    # Prefer precomputed city timezone (most accurate, no runtime overhead)
+    cond do
+      is_binary(city.timezone) && city.timezone != "" ->
+        city.timezone
 
-      lng =
-        if is_struct(city.longitude, Decimal),
-          do: Decimal.to_float(city.longitude),
-          else: city.longitude
+      city.latitude && city.longitude ->
+        # Fallback to coordinate lookup (returns UTC since TzWorld is disabled)
+        lat =
+          if is_struct(city.latitude, Decimal),
+            do: Decimal.to_float(city.latitude),
+            else: city.latitude
 
-      EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter.infer_timezone_from_location(
-        lat,
-        lng
-      )
-    else
-      "Etc/UTC"
+        lng =
+          if is_struct(city.longitude, Decimal),
+            do: Decimal.to_float(city.longitude),
+            else: city.longitude
+
+        EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter.infer_timezone_from_location(
+          lat,
+          lng
+        )
+
+      true ->
+        "Etc/UTC"
     end
   end
 

@@ -342,7 +342,9 @@ config :eventasaurus, :clerk,
   authorized_parties: [
     "http://localhost:4000",
     "https://wombie.com",
-    "https://eventasaur.us"
+    "https://www.wombie.com",
+    "https://eventasaur.us",
+    "https://www.eventasaur.us"
   ],
   jwks_cache_ttl: 3_600_000
 

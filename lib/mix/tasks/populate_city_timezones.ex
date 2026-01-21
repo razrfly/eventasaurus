@@ -27,16 +27,17 @@ defmodule Mix.Tasks.PopulateCityTimezones do
 
   ## Production Usage
 
-  Mix tasks aren't available in production releases. Use the release task instead:
+  Mix tasks aren't available in production releases. Use the release task instead,
+  which enqueues Oban jobs to process cities in the background:
 
-      # Dry run (see what would be updated)
-      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.populate_city_timezones()"
+      # Enqueue jobs for cities missing timezone
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.enqueue_timezone_jobs()"
 
-      # Apply changes
-      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.populate_city_timezones(true)"
+      # Force enqueue for ALL cities (even those with timezone set)
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.enqueue_timezone_jobs(true)"
 
-      # Force repopulate ALL cities (even those with timezone set)
-      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.populate_city_timezones(true, true)"
+  Note: The release task enqueues background jobs rather than processing synchronously.
+  Monitor progress in the Oban dashboard or logs.
   """
 
   use Mix.Task
