@@ -35,6 +35,10 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryCheckJob do
     unique: [period: 300, fields: [:args], states: [:available, :scheduled, :executing]]
 
   import Ecto.Query
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
+  # Repo: Used for Repo.replica() read-only queries (uses read replica for performance)
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.{City, Country}
@@ -209,7 +213,7 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryCheckJob do
 
     venue
     |> Ecto.Changeset.change(%{metadata: updated_metadata})
-    |> Repo.update()
+    |> JobRepo.update()
   end
 
   defp get_venue_country_code(%Venue{} = venue) do

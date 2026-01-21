@@ -32,7 +32,9 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
 
   alias EventasaurusDiscovery.Admin.{DataQualityChecker, VenueCountryCheckJob}
   alias EventasaurusDiscovery.Metrics.MetricsTracker
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusApp.Venues.Venue, as: VenueSchema
   require Logger
 
@@ -50,8 +52,8 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
 
     # Load the venue with its metadata
     venue =
-      Repo.get(VenueSchema, venue_id)
-      |> Repo.preload(city_ref: :country)
+      JobRepo.get(VenueSchema, venue_id)
+      |> JobRepo.preload(city_ref: :country)
 
     case venue do
       nil ->
@@ -138,7 +140,7 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
     updated_meta = Map.merge(job.meta || %{}, metadata)
 
     from(j in Oban.Job, where: j.id == ^job.id)
-    |> Repo.update_all(set: [meta: updated_meta])
+    |> JobRepo.update_all(set: [meta: updated_meta])
   end
 
   # Record failure with venue-specific details in job metadata
@@ -164,7 +166,7 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
     updated_meta = Map.merge(job.meta || %{}, metadata)
 
     from(j in Oban.Job, where: j.id == ^job.id)
-    |> Repo.update_all(set: [meta: updated_meta])
+    |> JobRepo.update_all(set: [meta: updated_meta])
   end
 
   defp format_error_message(reason) when is_binary(reason), do: String.slice(reason, 0, 500)

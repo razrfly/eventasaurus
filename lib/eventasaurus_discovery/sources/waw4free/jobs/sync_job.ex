@@ -18,7 +18,9 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Metrics.MetricsTracker
@@ -46,12 +48,12 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
     # Get city (should be Warsaw/Warszawa)
     city =
       if city_id do
-        Repo.get(City, city_id)
+        JobRepo.get(City, city_id)
       else
         # If no city_id provided, look up Warsaw by name
         import Ecto.Query
 
-        Repo.one(from(c in City, where: c.name in ["Warszawa", "Warsaw", "Warschau"], limit: 1))
+        JobRepo.one(from(c in City, where: c.name in ["Warszawa", "Warsaw", "Warschau"], limit: 1))
       end
 
     case city do
@@ -65,7 +67,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
         {:error, :city_not_found}
 
       city ->
-        city = Repo.preload(city, :country)
+        city = JobRepo.preload(city, :country)
 
         # Verify it's Warsaw
         unless String.downcase(city.name) in ["warszawa", "warsaw", "warschau"] do
@@ -274,13 +276,13 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
   end
 
   defp get_or_create_waw4free_source do
-    case Repo.get_by(Source, slug: "waw4free") do
+    case JobRepo.get_by(Source, slug: "waw4free") do
       nil ->
         config = source_config()
 
         %Source{}
         |> Source.changeset(config)
-        |> Repo.insert!()
+        |> JobRepo.insert!()
 
       source ->
         source

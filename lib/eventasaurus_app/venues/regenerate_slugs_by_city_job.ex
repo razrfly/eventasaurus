@@ -33,7 +33,9 @@ defmodule EventasaurusApp.Venues.RegenerateSlugsByCityJob do
     max_attempts: 3,
     priority: 2
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.City
   import Ecto.Query
@@ -51,7 +53,7 @@ defmodule EventasaurusApp.Venues.RegenerateSlugsByCityJob do
     start_time = System.monotonic_time(:second)
 
     # Verify city exists
-    case Repo.get(City, city_id) do
+    case JobRepo.get(City, city_id) do
       nil ->
         {:error, "City not found: #{city_id}"}
 
@@ -130,7 +132,7 @@ defmodule EventasaurusApp.Venues.RegenerateSlugsByCityJob do
       where: v.city_id == ^city_id,
       select: count(v.id)
     )
-    |> Repo.one()
+    |> JobRepo.one()
   end
 
   defp process_venues_in_batches(city_id, total, force_all) do
@@ -150,11 +152,11 @@ defmodule EventasaurusApp.Venues.RegenerateSlugsByCityJob do
           offset: ^offset,
           preload: [city_ref: :country]
         )
-        |> Repo.all()
+        |> JobRepo.all()
 
       # Process each venue in the batch within a transaction
       batch_result =
-        Repo.transaction(fn ->
+        JobRepo.transaction(fn ->
           Enum.reduce(venues, {0, 0, 0, []}, fn venue, {u, s, e, failed} ->
             case regenerate_venue_slug(venue, force_all) do
               {:ok, _} ->
@@ -228,7 +230,7 @@ defmodule EventasaurusApp.Venues.RegenerateSlugsByCityJob do
         {:skipped, "Slug unchanged"}
 
       true ->
-        case Repo.update(changeset_with_slug) do
+        case JobRepo.update(changeset_with_slug) do
           {:ok, updated_venue} ->
             Logger.debug("""
             Updated venue slug:

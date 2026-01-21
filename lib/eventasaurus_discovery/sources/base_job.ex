@@ -33,7 +33,9 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
 
       require Logger
 
-      alias EventasaurusApp.Repo
+      # JobRepo: Direct connection for job business logic (Issue #3353)
+      # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+      alias EventasaurusApp.JobRepo
       alias EventasaurusDiscovery.Locations.City
       alias EventasaurusDiscovery.Sources.{Processor, SourceStore}
 
@@ -83,9 +85,9 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
       end
 
       defp get_city(city_id) do
-        case Repo.get(City, city_id) do
+        case JobRepo.get(City, city_id) do
           nil -> {:error, :city_not_found}
-          city -> {:ok, Repo.preload(city, :country)}
+          city -> {:ok, JobRepo.preload(city, :country)}
         end
       end
 

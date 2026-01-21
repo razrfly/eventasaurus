@@ -12,7 +12,9 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
     max_attempts: 3
 
   require Logger
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Metrics.MetricsTracker
   alias EventasaurusDiscovery.Sources.Pubquiz.{Client, CityExtractor, Jobs.CityJob}
@@ -129,7 +131,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
     alias EventasaurusDiscovery.Sources.Pubquiz.Source, as: PubquizSource
     alias EventasaurusDiscovery.Sources.Pubquiz.Config
 
-    case Repo.get_by(Source, slug: PubquizSource.key()) do
+    case JobRepo.get_by(Source, slug: PubquizSource.key()) do
       nil ->
         Logger.info("Creating PubQuiz source record...")
 
@@ -146,7 +148,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
             "supports_recurring_events" => true
           }
         })
-        |> Repo.insert!()
+        |> JobRepo.insert!()
 
       source ->
         source

@@ -39,7 +39,9 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
 
   import Ecto.Query
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
 
@@ -188,7 +190,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
     case Transformer.transform_event(enriched, city) do
       {:ok, transformed} ->
         # Get source safely
-        case Repo.get(Source, source_id) do
+        case JobRepo.get(Source, source_id) do
           nil ->
             Logger.error(
               "🚫 Discarding showtime: source #{source_id} not found (#{city_config.name})"
@@ -285,7 +287,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
         limit: 1
       )
 
-    case Repo.one(query) do
+    case JobRepo.one(query) do
       nil -> {:error, :not_found}
       movie -> {:ok, movie}
     end
@@ -304,7 +306,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
         limit: 1
       )
 
-    case Repo.one(query) do
+    case JobRepo.one(query) do
       nil ->
         # MovieDetailJob hasn't been created yet
         :not_found_or_pending

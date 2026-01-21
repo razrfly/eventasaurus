@@ -39,7 +39,9 @@ defmodule EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker do
   require Logger
   import Ecto.Query
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Movies.Movie
   alias EventasaurusDiscovery.Performers.Performer
@@ -198,7 +200,7 @@ defmodule EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker do
         update: [set: [posthog_view_count: ^view_count, posthog_synced_at: ^now]]
       )
 
-    case Repo.update_all(query, []) do
+    case JobRepo.update_all(query, []) do
       {count, _} when count >= 0 ->
         {:ok, count}
 
@@ -219,7 +221,7 @@ defmodule EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker do
   @spec get_stats() :: map()
   def get_stats do
     total_with_views =
-      Repo.one(
+      JobRepo.one(
         from(e in PublicEvent,
           where: e.posthog_view_count > 0,
           select: count(e.id)
@@ -227,14 +229,14 @@ defmodule EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker do
       )
 
     total_views =
-      Repo.one(
+      JobRepo.one(
         from(e in PublicEvent,
           select: coalesce(sum(e.posthog_view_count), 0)
         )
       )
 
     last_sync =
-      Repo.one(
+      JobRepo.one(
         from(e in PublicEvent,
           where: not is_nil(e.posthog_synced_at),
           select: max(e.posthog_synced_at)
@@ -243,7 +245,7 @@ defmodule EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker do
 
     # View count tiers
     tiers =
-      Repo.all(
+      JobRepo.all(
         from(e in PublicEvent,
           where: e.posthog_view_count > 0,
           select: %{
@@ -280,7 +282,7 @@ defmodule EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker do
   """
   @spec top_events(integer()) :: [map()]
   def top_events(limit \\ 20) do
-    Repo.all(
+    JobRepo.all(
       from(e in PublicEvent,
         where: e.posthog_view_count > 0,
         order_by: [desc: e.posthog_view_count],

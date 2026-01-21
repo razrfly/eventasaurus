@@ -2,3 +2,4 @@
 # To run them: mix test --include external_api
 ExUnit.start(exclude: [:external_api])
 Ecto.Adapters.SQL.Sandbox.mode(EventasaurusApp.Repo, :manual)
+Ecto.Adapters.SQL.Sandbox.mode(EventasaurusApp.JobRepo, :manual)

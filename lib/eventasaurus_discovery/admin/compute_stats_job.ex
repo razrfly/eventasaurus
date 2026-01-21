@@ -38,6 +38,8 @@ defmodule EventasaurusDiscovery.Admin.ComputeStatsJob do
   alias EventasaurusDiscovery.Sources.SourceRegistry
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
+  # Repo: Used for Repo.replica() read-only queries (uses read replica for performance)
+  # This job only performs reads, so JobRepo is not needed
   alias EventasaurusApp.Repo
 
   import Ecto.Query

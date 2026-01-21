@@ -15,7 +15,9 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     trunc(:math.pow(2, attempt - 1) * 30)
   end
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.SourceRegistry
   require Logger
@@ -47,7 +49,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     # Find the city (only required for city-specific sources)
     city =
       if requires_city && city_id do
-        Repo.get(City, city_id) |> Repo.preload(:country)
+        JobRepo.get(City, city_id) |> JobRepo.preload(:country)
       else
         nil
       end
@@ -231,7 +233,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     # RA requires area_id mapping
     # Look up area_id from city using AreaMapper
     area_id =
-      case Repo.get(City, city_id) |> Repo.preload(:country) do
+      case JobRepo.get(City, city_id) |> JobRepo.preload(:country) do
         nil ->
           Logger.warning("⚠️ City not found for area_id lookup: #{city_id}")
           nil
@@ -253,7 +255,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
 
   defp build_source_options("cinema-city", %{"city_id" => city_id}) do
     # Cinema City requires city_name from the city's discovery_config
-    case Repo.get(City, city_id) do
+    case JobRepo.get(City, city_id) do
       nil ->
         Logger.warning("⚠️ City not found for cinema-city: #{city_id}")
         %{}
@@ -275,7 +277,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
   defp build_source_options("repertuary", %{"city_id" => city_id}) do
     # Repertuary requires city_key from the city's discovery_config
     # This maps to the repertuary.pl subdomain (e.g., "warszawa" -> warszawa.repertuary.pl)
-    case Repo.get(City, city_id) do
+    case JobRepo.get(City, city_id) do
       nil ->
         Logger.warning("⚠️ City not found for repertuary: #{city_id}")
         %{}

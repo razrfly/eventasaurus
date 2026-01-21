@@ -81,7 +81,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
 
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.Source
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   import Ecto.Query
@@ -365,7 +367,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
     Logger.debug("💾 Processing #{length(transformed_events)} event(s)")
 
     # Look up Sortiraparis source by slug
-    source = Repo.one(from(s in Source, where: s.slug == "sortiraparis"))
+    source = JobRepo.one(from(s in Source, where: s.slug == "sortiraparis"))
 
     if is_nil(source) do
       Logger.error("❌ Sortiraparis source not found in database")

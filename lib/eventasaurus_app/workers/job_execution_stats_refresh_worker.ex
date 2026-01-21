@@ -55,7 +55,9 @@ defmodule EventasaurusApp.Workers.JobExecutionStatsRefreshWorker do
 
   use Oban.Worker, queue: :maintenance, max_attempts: 3
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   require Logger
 
   @impl Oban.Worker
@@ -69,7 +71,7 @@ defmodule EventasaurusApp.Workers.JobExecutionStatsRefreshWorker do
     # Use CONCURRENTLY to avoid locking the view during refresh
     # This requires a UNIQUE index on the materialized view (we have job_execution_stats_pk_idx)
     result =
-      Repo.query(
+      JobRepo.query(
         "REFRESH MATERIALIZED VIEW CONCURRENTLY job_execution_stats",
         [],
         timeout: :timer.minutes(5)
@@ -81,7 +83,7 @@ defmodule EventasaurusApp.Workers.JobExecutionStatsRefreshWorker do
       {:ok, _} ->
         # Get row count after refresh (defensive - don't fail job if count query fails)
         row_count =
-          case Repo.query("SELECT COUNT(*) FROM job_execution_stats") do
+          case JobRepo.query("SELECT COUNT(*) FROM job_execution_stats") do
             {:ok, %{rows: [[count]]}} -> count
             _ -> nil
           end

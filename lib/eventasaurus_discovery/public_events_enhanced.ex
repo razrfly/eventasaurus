@@ -55,6 +55,17 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         select_merge: %{occurrences: fragment("NULL")}
       )
 
+    # Query timeout: 90 seconds for expensive city page queries (Issue #3347)
+    # Default Postgrex timeout is 15s which is insufficient for 800+ event aggregation.
+    # PgBouncer kills connections that exceed this, causing "connection closed by pool" errors.
+    query_timeout = opts[:timeout] || 90_000
+
+    # CRITICAL: Allow passing a custom repo for background jobs (Issue #3347)
+    # PgBouncer in transaction mode kills long-running queries. Background jobs like
+    # CityPageCacheRefreshJob can take 30-60+ seconds with 800+ events.
+    # Pass `repo: EventasaurusApp.SessionRepo` to bypass PgBouncer and use direct connection.
+    repo = opts[:repo] || Repo
+
     base_query
     |> filter_past_events(opts[:show_past])
     |> filter_by_categories(opts[:categories])
@@ -66,8 +77,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     |> apply_search(opts[:search])
     |> apply_sorting(opts[:sort_by], opts[:sort_order])
     |> paginate(opts[:page], opts[:page_size])
-    |> Repo.all()
-    |> preload_with_sources(opts[:language], opts[:browsing_city_id])
+    |> repo.all(timeout: query_timeout)
+    |> preload_with_sources(opts[:language], opts[:browsing_city_id], repo)
   end
 
   @doc """
@@ -82,6 +93,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     search_query = String.trim(search_term)
 
     # CRITICAL FIX (Issue #3334 Phase 3): Exclude occurrences from search queries
+    # Query timeout: 60 seconds for search queries (Issue #3347)
+    query_timeout = opts[:timeout] || 60_000
+
     from(pe in PublicEvent,
       where:
         fragment(
@@ -106,7 +120,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       offset: ^offset,
       select_merge: %{occurrences: fragment("NULL")}
     )
-    |> Repo.all()
+    |> Repo.all(timeout: query_timeout)
     |> preload_with_sources(language)
   end
 
@@ -440,11 +454,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   ## Preloading
 
-  defp preload_with_sources(events, language, browsing_city_id \\ nil) do
+  defp preload_with_sources(events, language, browsing_city_id \\ nil, repo \\ Repo) do
     # Load browsing city with unsplash_gallery if provided
     browsing_city =
       if browsing_city_id do
-        Repo.get(City, browsing_city_id)
+        repo.get(City, browsing_city_id)
       else
         nil
       end
@@ -454,7 +468,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # This eliminates unnecessary data loading and improves query performance.
     preloaded_events =
       events
-      |> Repo.preload([
+      |> repo.preload([
         :categories,
         # Load nested source association for aggregate_events and cover images
         sources: :source,
@@ -1148,6 +1162,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         base_query
       end
 
+    # Allow passing a custom repo for background jobs (Issue #3347)
+    repo = opts[:repo] || Repo
+
     query
     |> filter_past_events_for_count(opts[:show_past])
     |> filter_by_categories(opts[:categories])
@@ -1155,7 +1172,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     |> filter_by_price_range(opts[:min_price], opts[:max_price])
     |> filter_by_location(opts[:city_id], opts[:country_id], opts[:venue_ids])
     |> apply_search(opts[:search])
-    |> Repo.one()
+    |> repo.one()
   end
 
   @doc """
@@ -1703,9 +1720,18 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           all_filters when is_map(all_filters) ->
             # Use efficient SQL COUNT instead of fetching all events
             # This gives raw event count (not aggregated), but is much faster
+            # CRITICAL: Propagate :repo from parent opts (Issue #3352)
+            # all_filters doesn't include :repo, so we must add it from parent opts
+            # to ensure count_events uses SessionRepo instead of PgBouncer
             count_opts =
               all_filters
               |> Map.drop([:page, :offset, :limit, :page_size, :all_events_filters])
+              |> then(fn opts_map ->
+                case opts[:repo] do
+                  nil -> opts_map
+                  repo -> Map.put(opts_map, :repo, repo)
+                end
+              end)
               |> then(fn opts_map ->
                 case opts_map[:viewing_city] do
                   %{id: city_id} -> Map.put(opts_map, :browsing_city_id, city_id)
@@ -1750,8 +1776,17 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
       all_events_count =
         case opts[:all_events_filters] do
-          nil -> total_count
-          all_filters -> count_events(Map.new(all_filters))
+          nil ->
+            total_count
+
+          all_filters ->
+            # CRITICAL: Propagate :repo from parent opts (Issue #3352)
+            all_count_opts =
+              all_filters
+              |> Map.new()
+              |> then(fn m -> if opts[:repo], do: Map.put(m, :repo, opts[:repo]), else: m end)
+
+            count_events(all_count_opts)
         end
 
       {events, total_count, all_events_count}

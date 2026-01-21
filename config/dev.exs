@@ -108,7 +108,20 @@ if use_prod_db do
     ],
     prepare: :unnamed
 
-  # ObanRepo: Dedicated connection pool for Oban job processing (Issue #3160)
+  # JobRepo: Direct connection for Oban job business logic (Issue #3353)
+  # Uses direct URL to bypass PgBouncer timeout for long-running queries
+  config :eventasaurus, EventasaurusApp.JobRepo,
+    url: database_direct_url,
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 20,
+    queue_target: 5000,
+    queue_interval: 10000,
+    parameters: [
+      application_name: "eventasaurus_job_dev"
+    ]
+
+  # ObanRepo: DEPRECATED - kept for backwards compatibility (Issue #3353)
   config :eventasaurus, EventasaurusApp.ObanRepo,
     url: database_url,
     stacktrace: true,
@@ -151,7 +164,17 @@ else
     show_sensitive_data_on_connection_error: true,
     pool_size: 5
 
-  # ObanRepo for development - dedicated pool for Oban (Issue #3160)
+  # JobRepo for development - direct connection for job business logic (Issue #3353)
+  config :eventasaurus, EventasaurusApp.JobRepo,
+    username: "postgres",
+    password: "postgres",
+    hostname: "localhost",
+    database: "eventasaurus_dev",
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 20
+
+  # ObanRepo for development - DEPRECATED (Issue #3353)
   config :eventasaurus, EventasaurusApp.ObanRepo,
     username: "postgres",
     password: "postgres",

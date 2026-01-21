@@ -42,7 +42,9 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
   use Oban.Worker, queue: :enrichment, max_attempts: 3
 
   alias EventasaurusApp.Services.UnsplashImageFetcher
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Locations.City
   require Logger
 
@@ -50,7 +52,7 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
   def perform(%Oban.Job{args: %{"city_id" => city_id}}) do
     Logger.info("🖼️  Unsplash City Refresh: Starting refresh for city_id=#{city_id}")
 
-    case Repo.get(City, city_id) do
+    case JobRepo.get(City, city_id) do
       nil ->
         Logger.error("City not found: #{city_id}")
         {:error, :city_not_found}

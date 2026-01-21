@@ -20,7 +20,9 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.EventDetailJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.Waw4Free.{Config, Client, DetailExtractor, Transformer}
@@ -44,7 +46,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.EventDetailJob do
     Logger.info("🎉 Processing Waw4Free event: #{url} (External ID: #{external_id})")
 
     # Get source from database
-    source = Repo.get!(Source, source_id)
+    source = JobRepo.get!(Source, source_id)
 
     # Process the event
     result = process_event(url, source, event_metadata_with_id)

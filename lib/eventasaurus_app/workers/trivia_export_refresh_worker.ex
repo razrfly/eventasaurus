@@ -44,7 +44,9 @@ defmodule EventasaurusApp.Workers.TriviaExportRefreshWorker do
 
   use Oban.Worker, queue: :maintenance, max_attempts: 3
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   require Logger
 
   @impl Oban.Worker
@@ -56,7 +58,7 @@ defmodule EventasaurusApp.Workers.TriviaExportRefreshWorker do
     # Use CONCURRENTLY to avoid locking the view during refresh
     # This requires a UNIQUE index on the materialized view (we have trivia_events_export_id_idx)
     result =
-      Repo.query(
+      JobRepo.query(
         "REFRESH MATERIALIZED VIEW CONCURRENTLY trivia_events_export",
         [],
         timeout: :timer.minutes(5)
@@ -68,7 +70,7 @@ defmodule EventasaurusApp.Workers.TriviaExportRefreshWorker do
       {:ok, _} ->
         # Get row count after refresh (defensive - don't fail job if count query fails)
         row_count =
-          case Repo.query("SELECT COUNT(*) FROM trivia_events_export") do
+          case JobRepo.query("SELECT COUNT(*) FROM trivia_events_export") do
             {:ok, %{rows: [[count]]}} -> count
             _ -> nil
           end

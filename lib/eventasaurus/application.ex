@@ -68,11 +68,14 @@ defmodule Eventasaurus.Application do
       EventasaurusApp.Repo,
       # Start SessionRepo for migrations and advisory locks
       EventasaurusApp.SessionRepo,
+      # Start JobRepo - direct connection for ALL Oban job business logic (Issue #3353)
+      # Bypasses PgBouncer to avoid 30-second timeout on long-running job queries
+      EventasaurusApp.JobRepo,
       # Start ReplicaRepo for read-heavy queries (dedicated pool for analytics/monitoring)
       # Only started in production - dev/test use primary via Repo.replica() helper
       EventasaurusApp.ReplicaRepo,
-      # Start ObanRepo - dedicated connection pool for Oban job processing (Issue #3160)
-      # Isolates Oban from web traffic, preventing job stampedes from blocking requests
+      # Start ObanRepo - DEPRECATED, kept for backwards compatibility (Issue #3353)
+      # Will be removed once all jobs migrate to JobRepo
       EventasaurusApp.ObanRepo,
       {DNSCluster, query: Application.get_env(:eventasaurus, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Eventasaurus.PubSub},

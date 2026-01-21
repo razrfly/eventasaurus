@@ -40,7 +40,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichment
   require Logger
 
   alias EventasaurusDiscovery.Performers.{Performer, PerformerStore}
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   import Ecto.Query
@@ -112,7 +114,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichment
   Find performers that have RA artist IDs but missing enrichment data.
   """
   def find_performers_needing_enrichment(limit \\ 100) do
-    Repo.all(
+    JobRepo.all(
       from(p in Performer,
         where:
           fragment("?->'ra_artist_id' IS NOT NULL", p.metadata) and
@@ -234,7 +236,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichment
   """
   def enrichment_stats do
     total_ra_performers =
-      Repo.one(
+      JobRepo.one(
         from(p in Performer,
           where: fragment("?->'ra_artist_id' IS NOT NULL", p.metadata),
           select: count(p.id)
@@ -242,7 +244,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichment
       )
 
     enriched_performers =
-      Repo.one(
+      JobRepo.one(
         from(p in Performer,
           where:
             fragment("?->'ra_artist_id' IS NOT NULL", p.metadata) and
@@ -252,7 +254,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichment
       )
 
     performers_with_images =
-      Repo.one(
+      JobRepo.one(
         from(p in Performer,
           where:
             fragment("?->'ra_artist_id' IS NOT NULL", p.metadata) and

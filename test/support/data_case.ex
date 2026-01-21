@@ -47,8 +47,14 @@ defmodule EventasaurusApp.DataCase do
         shared: not tags[:async]
       )
 
-    # Also set up sandbox for ObanRepo (Issue #3160)
-    # Oban uses dedicated ObanRepo in all environments, including tests
+    # Also set up sandbox for JobRepo (Issue #3353)
+    # JobRepo is used by ALL Oban job business logic - direct connection to avoid PgBouncer timeouts
+    job_pid =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.JobRepo,
+        shared: not tags[:async]
+      )
+
+    # Also set up sandbox for ObanRepo (Issue #3160) - DEPRECATED, kept for backwards compat
     oban_pid =
       Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.ObanRepo,
         shared: not tags[:async]
@@ -57,6 +63,7 @@ defmodule EventasaurusApp.DataCase do
     on_exit(fn ->
       Ecto.Adapters.SQL.Sandbox.stop_owner(pid)
       Ecto.Adapters.SQL.Sandbox.stop_owner(replica_pid)
+      Ecto.Adapters.SQL.Sandbox.stop_owner(job_pid)
       Ecto.Adapters.SQL.Sandbox.stop_owner(oban_pid)
     end)
   end

@@ -12,8 +12,6 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
 
   require Logger
   alias EventasaurusDiscovery.Sources.Ticketmaster.{Config, Client, Transformer}
-  alias EventasaurusDiscovery.Sources.{SourceStore}
-  alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 

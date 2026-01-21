@@ -301,16 +301,25 @@ defmodule EventasaurusWeb.CityLive.Index do
   # Retry cache load after Oban job has had time to complete (Issue #3347)
   @impl true
   def handle_info(:retry_cache_load, socket) do
-    Logger.debug("[CityPage] Retrying cache load for #{socket.assigns.city.slug}")
+    # Guard: Skip if fetch is already in progress (prevents concurrent fetches)
+    if socket.assigns[:fetch_in_progress] do
+      {:noreply, socket}
+    else
+      Logger.debug("[CityPage] Retrying cache load for #{socket.assigns.city.slug}")
 
-    # Reset loading state and retry fetch
-    socket =
-      socket
-      |> assign(:events_loading, true)
-      |> fetch_events()
-      |> assign(:events_loading, false)
+      # Mark fetch as in progress before starting
+      socket = assign(socket, :fetch_in_progress, true)
 
-    {:noreply, socket}
+      # Reset loading state and retry fetch
+      socket =
+        socket
+        |> assign(:events_loading, true)
+        |> fetch_events()
+        |> assign(:events_loading, false)
+        |> assign(:fetch_in_progress, false)
+
+      {:noreply, socket}
+    end
   end
 
   @impl true

@@ -42,7 +42,9 @@ defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
   use Oban.Worker, queue: :enrichment, max_attempts: 3
 
   alias EventasaurusApp.Services.UnsplashImageFetcher
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Locations.Country
   require Logger
 
@@ -50,7 +52,7 @@ defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
   def perform(%Oban.Job{args: %{"country_id" => country_id}}) do
     Logger.info("🖼️  Unsplash Country Refresh: Starting refresh for country_id=#{country_id}")
 
-    case Repo.get(Country, country_id) do
+    case JobRepo.get(Country, country_id) do
       nil ->
         Logger.error("Country not found: #{country_id}")
         {:error, :country_not_found}

@@ -38,7 +38,9 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
 
   use Oban.Worker, queue: :image_cache, max_attempts: 3
 
-  alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   alias EventasaurusApp.Images.CachedImage
   alias EventasaurusApp.Services.R2Client
   alias EventasaurusDiscovery.Metrics.MetricsTracker
@@ -63,7 +65,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
       "📸 ImageCacheJob: Starting cache for #{entity_type}/#{entity_id} position=#{position} (cached_image_id=#{cached_image_id})"
     )
 
-    case Repo.get(CachedImage, cached_image_id) do
+    case JobRepo.get(CachedImage, cached_image_id) do
       nil ->
         # Record was deleted (likely parent transaction rolled back or entity was cleaned up)
         # Use :cancel to prevent retries - the record will never exist
@@ -92,7 +94,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
     updated_image =
       case cached_image
            |> CachedImage.cache_result_changeset(%{status: "downloading"})
-           |> Repo.update() do
+           |> JobRepo.update() do
         {:ok, updated} ->
           updated
 
@@ -131,7 +133,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
 
     cached_image
     |> CachedImage.cache_result_changeset(attrs)
-    |> Repo.update()
+    |> JobRepo.update()
 
     # Track success in monitoring system
     external_id = build_external_id(cached_image)
@@ -155,7 +157,7 @@ defmodule EventasaurusApp.Workers.ImageCacheJob do
 
     cached_image
     |> CachedImage.cache_result_changeset(attrs)
-    |> Repo.update()
+    |> JobRepo.update()
 
     # Track failure in monitoring system
     external_id = build_external_id(cached_image)
