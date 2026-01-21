@@ -120,7 +120,11 @@ base_queues = [
   geocoding: 1,
   # Analytics queue for PostHog popularity sync
   # Kept at 1 - single daily job that batches updates
-  analytics: 1
+  analytics: 1,
+  # Timezone queue for city timezone population (Issue #3334)
+  # Concurrency 1 - TzWorld ETS backend needs time to warm up
+  # Jobs have 5-minute timeout to allow full initialization
+  timezone: 1
 ]
 
 # Production-only queues (image caching uploads to R2 - must not run in dev)
@@ -519,7 +523,9 @@ if config_env() == :prod do
     url: [host: host, port: 443, scheme: "https"],
     check_origin: [
       "https://wombie.com",
+      "https://www.wombie.com",
       "https://eventasaur.us",
+      "https://www.eventasaur.us",
       "https://eventasaurus.fly.dev"
     ],
     http: [
