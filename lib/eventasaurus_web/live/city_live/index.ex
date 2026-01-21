@@ -843,14 +843,28 @@ defmodule EventasaurusWeb.CityLive.Index do
         do: Keyword.put(opts, :categories, filters[:categories]),
         else: opts
 
+    # Include date filter parameters (Issue #3357)
+    # These determine which events are shown, so must be part of cache key
     opts =
-      if filters[:date_range] && filters[:date_range] != :upcoming,
-        do: Keyword.put(opts, :date_range, filters[:date_range]),
+      if filters[:start_date],
+        do: Keyword.put(opts, :start_date, DateTime.to_iso8601(filters[:start_date])),
         else: opts
 
     opts =
+      if filters[:end_date],
+        do: Keyword.put(opts, :end_date, DateTime.to_iso8601(filters[:end_date])),
+        else: opts
+
+    opts =
+      if filters[:show_past] == true,
+        do: Keyword.put(opts, :show_past, true),
+        else: opts
+
+    # Convert sort_by to string for cache key consistency (Issue #3357)
+    # Job args store sort_by as string due to JSON serialization
+    opts =
       if filters[:sort_by],
-        do: Keyword.put(opts, :sort_by, filters[:sort_by]),
+        do: Keyword.put(opts, :sort_by, to_string(filters[:sort_by])),
         else: opts
 
     opts =
