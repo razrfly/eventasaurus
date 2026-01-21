@@ -101,15 +101,27 @@ defmodule Mix.Tasks.PopulateCityTimezones do
 
     if Enum.empty?(cities) do
       IO.puts("✅ All cities already have timezones populated!")
-      return_stats(%{total: 0, updated: 0, skipped: 0, errors: 0, from_coords: 0, from_country: 0})
+
+      return_stats(%{
+        total: 0,
+        updated: 0,
+        skipped: 0,
+        errors: 0,
+        from_coords: 0,
+        from_country: 0
+      })
     else
       IO.puts("🌍 Populating timezones for #{length(cities)} cities...\n")
 
       stats =
-        Enum.reduce(cities, %{total: 0, updated: 0, skipped: 0, errors: 0, from_coords: 0, from_country: 0}, fn city, acc ->
-          result = populate_city_timezone(city, dry_run)
-          update_stats(acc, result)
-        end)
+        Enum.reduce(
+          cities,
+          %{total: 0, updated: 0, skipped: 0, errors: 0, from_coords: 0, from_country: 0},
+          fn city, acc ->
+            result = populate_city_timezone(city, dry_run)
+            update_stats(acc, result)
+          end
+        )
 
       IO.puts("")
       return_stats(stats)
@@ -131,7 +143,9 @@ defmodule Mix.Tasks.PopulateCityTimezones do
 
         case result do
           {:updated, tz, source} ->
-            IO.puts("✅ #{if dry_run, do: "Would set", else: "Set"} timezone to #{tz} (from #{source})")
+            IO.puts(
+              "✅ #{if dry_run, do: "Would set", else: "Set"} timezone to #{tz} (from #{source})"
+            )
 
           {:error, reason} ->
             IO.puts("❌ Error: #{reason}")
@@ -153,14 +167,22 @@ defmodule Mix.Tasks.PopulateCityTimezones do
 
             {:error, reason} ->
               IO.write("x")
-              Logger.error("Failed to update timezone for city #{city.id} (#{city.name}): #{inspect(reason)}")
+
+              Logger.error(
+                "Failed to update timezone for city #{city.id} (#{city.name}): #{inspect(reason)}"
+              )
+
               {:error, inspect(reason)}
           end
         end
 
       {:error, reason} ->
         IO.write("x")
-        Logger.warning("Could not determine timezone for city #{city.id} (#{city.name}): #{reason}")
+
+        Logger.warning(
+          "Could not determine timezone for city #{city.id} (#{city.name}): #{reason}"
+        )
+
         {:error, reason}
     end
   end
@@ -180,7 +202,10 @@ defmodule Mix.Tasks.PopulateCityTimezones do
         get_timezone_from_country(city)
 
       {:error, reason} ->
-        Logger.warning("TzWorld error for city #{city.name}: #{inspect(reason)}, trying country fallback")
+        Logger.warning(
+          "TzWorld error for city #{city.name}: #{inspect(reason)}, trying country fallback"
+        )
+
         get_timezone_from_country(city)
     end
   end

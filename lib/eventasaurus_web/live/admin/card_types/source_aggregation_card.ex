@@ -92,7 +92,8 @@ defmodule EventasaurusWeb.Admin.CardTypes.SourceAggregationCard do
         content_type: Map.get(params, "content_type", current.content_type),
         total_event_count:
           Helpers.parse_int(Map.get(params, "total_event_count"), current.total_event_count),
-        location_count: Helpers.parse_int(Map.get(params, "location_count"), current.location_count),
+        location_count:
+          Helpers.parse_int(Map.get(params, "location_count"), current.location_count),
         hero_image: Map.get(params, "hero_image", current.hero_image),
         city: %{
           current.city

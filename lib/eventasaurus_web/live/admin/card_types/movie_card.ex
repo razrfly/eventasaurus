@@ -78,7 +78,10 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
     release_date = Helpers.parse_year(Map.get(params, "year"), current.release_date)
 
     rating =
-      Helpers.parse_float(Map.get(params, "rating"), get_in(current.metadata, [:vote_average]) || 0.0)
+      Helpers.parse_float(
+        Map.get(params, "rating"),
+        get_in(current.metadata, [:vote_average]) || 0.0
+      )
 
     %{
       current

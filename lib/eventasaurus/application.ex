@@ -139,6 +139,10 @@ defmodule Eventasaurus.Application do
         # Attach Oban telemetry handler for job-level failure tracking
         attach_oban_telemetry()
 
+        # Schedule city page cache warmup (Issue #3347 Phase 4)
+        # Only in production to avoid noise in dev/test
+        schedule_cache_warmup()
+
         {:ok, pid}
 
       error ->
@@ -166,7 +170,24 @@ defmodule Eventasaurus.Application do
     # Attach city page telemetry for performance monitoring (Phase 0 instrumentation)
     EventasaurusWeb.Telemetry.CityPageTelemetry.attach_handlers()
 
+    # Attach city page cache invalidation handler (Issue #3347 Phase 4)
+    # Triggers cache refresh when scrapers complete successfully
+    EventasaurusWeb.Cache.CityPageCacheInvalidation.attach()
+
     # Note: The legacy scraper-specific telemetry handler was removed in Issue #3048 Phase 3
     # All job execution logging is now handled by ObanTelemetry and MetricsTracker
+  end
+
+  # Schedule city page cache warmup on startup (Issue #3347 Phase 4)
+  # Pre-warms cache for all discovery-enabled cities to prevent cold-start delays
+  defp schedule_cache_warmup do
+    env = Application.get_env(:eventasaurus, :environment, :prod)
+
+    if env == :prod do
+      # In production, schedule warmup after app settles (60s delay)
+      EventasaurusWeb.Jobs.CityPageCacheWarmupJob.enqueue(delay: 60)
+    else
+      Logger.debug("[CacheWarmup] Skipping cache warmup in #{env} environment")
+    end
   end
 end

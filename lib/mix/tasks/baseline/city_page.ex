@@ -182,7 +182,9 @@ defmodule Mix.Tasks.Baseline.CityPage do
 
     {count_time, _count} =
       :timer.tc(fn ->
-        PublicEventsEnhanced.count_events(Map.drop(opts, [:page, :page_size, :all_events_filters]))
+        PublicEventsEnhanced.count_events(
+          Map.drop(opts, [:page, :page_size, :all_events_filters])
+        )
       end)
 
     %{
@@ -228,7 +230,7 @@ defmodule Mix.Tasks.Baseline.CityPage do
 
   defp percentile(sorted_values, p) when p >= 0 and p <= 100 do
     count = length(sorted_values)
-    index = (p / 100) * (count - 1)
+    index = p / 100 * (count - 1)
     lower_index = floor(index)
     upper_index = ceil(index)
 
@@ -321,7 +323,7 @@ defmodule Mix.Tasks.Baseline.CityPage do
   defp print_metric_comparison(label, previous, current)
        when is_number(previous) and previous > 0 and is_number(current) do
     diff = current - previous
-    diff_pct = (diff / previous) * 100
+    diff_pct = diff / previous * 100
 
     direction =
       cond do

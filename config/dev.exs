@@ -61,11 +61,13 @@ if use_prod_db do
 
   # Fly Managed Postgres production database configuration
   # Uses DATABASE_URL (PgBouncer) and DATABASE_DIRECT_URL (direct connection)
-  database_url = System.get_env("DATABASE_URL") ||
-    raise "DATABASE_URL not set. Get it from: fly secrets list -a eventasaurus"
+  database_url =
+    System.get_env("DATABASE_URL") ||
+      raise "DATABASE_URL not set. Get it from: fly secrets list -a eventasaurus"
 
-  database_direct_url = System.get_env("DATABASE_DIRECT_URL") ||
-    raise "DATABASE_DIRECT_URL not set. Get it from: fly secrets list -a eventasaurus"
+  database_direct_url =
+    System.get_env("DATABASE_DIRECT_URL") ||
+      raise "DATABASE_DIRECT_URL not set. Get it from: fly secrets list -a eventasaurus"
 
   # Repo: Pooled connection via PgBouncer for web requests
   # Higher pool size for dev since we're the only user and need headroom for LiveView
@@ -163,7 +165,9 @@ end
 # Development-only features
 config :eventasaurus, :dev_quick_login, true
 # Debug staged loading - adds artificial delays to visualize loading stages
-config :eventasaurus, :debug_staged_loading, true
+# Set to `true` temporarily to test loading skeletons/animations
+# 500ms delay on initial data + 2000ms delay on events loading
+config :eventasaurus, :debug_staged_loading, false
 # Enable week.pl source in full phase (all 13 Polish cities)
 config :eventasaurus, :week_pl_deployment_phase, :full
 

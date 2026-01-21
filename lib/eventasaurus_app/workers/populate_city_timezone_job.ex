@@ -50,16 +50,25 @@ defmodule EventasaurusApp.Workers.PopulateCityTimezoneJob do
           {:ok, timezone, source} ->
             case update_city_timezone(city, timezone) do
               {:ok, _} ->
-                Logger.info("[PopulateCityTimezoneJob] Set #{city.name} timezone to #{timezone} (#{source})")
+                Logger.info(
+                  "[PopulateCityTimezoneJob] Set #{city.name} timezone to #{timezone} (#{source})"
+                )
+
                 {:ok, %{timezone: timezone, source: source}}
 
               {:error, changeset} ->
-                Logger.error("[PopulateCityTimezoneJob] Failed to update #{city.name}: #{inspect(changeset.errors)}")
+                Logger.error(
+                  "[PopulateCityTimezoneJob] Failed to update #{city.name}: #{inspect(changeset.errors)}"
+                )
+
                 {:error, "Failed to update city"}
             end
 
           {:error, reason} ->
-            Logger.warning("[PopulateCityTimezoneJob] Could not determine timezone for #{city.name}: #{reason}")
+            Logger.warning(
+              "[PopulateCityTimezoneJob] Could not determine timezone for #{city.name}: #{reason}"
+            )
+
             {:ok, %{skipped: true, reason: reason}}
         end
     end
@@ -78,7 +87,11 @@ defmodule EventasaurusApp.Workers.PopulateCityTimezoneJob do
     point = %Geo.Point{coordinates: {lng_float, lat_float}}
 
     try do
-      case GenServer.call(TzWorld.Backend.EtsWithIndexCache, {:timezone_at, point}, @tzworld_timeout) do
+      case GenServer.call(
+             TzWorld.Backend.EtsWithIndexCache,
+             {:timezone_at, point},
+             @tzworld_timeout
+           ) do
         {:ok, timezone} ->
           {:ok, timezone, :coordinates}
 
@@ -86,16 +99,25 @@ defmodule EventasaurusApp.Workers.PopulateCityTimezoneJob do
           get_timezone_from_country(city)
 
         {:error, reason} ->
-          Logger.warning("[PopulateCityTimezoneJob] TzWorld error for #{city.name}: #{inspect(reason)}, trying country fallback")
+          Logger.warning(
+            "[PopulateCityTimezoneJob] TzWorld error for #{city.name}: #{inspect(reason)}, trying country fallback"
+          )
+
           get_timezone_from_country(city)
       end
     catch
       :exit, {:timeout, _} ->
-        Logger.warning("[PopulateCityTimezoneJob] TzWorld timeout for #{city.name} after 5min, using country fallback")
+        Logger.warning(
+          "[PopulateCityTimezoneJob] TzWorld timeout for #{city.name} after 5min, using country fallback"
+        )
+
         get_timezone_from_country(city)
 
       :exit, reason ->
-        Logger.warning("[PopulateCityTimezoneJob] TzWorld exit for #{city.name}: #{inspect(reason)}, using country fallback")
+        Logger.warning(
+          "[PopulateCityTimezoneJob] TzWorld exit for #{city.name}: #{inspect(reason)}, using country fallback"
+        )
+
         get_timezone_from_country(city)
     end
   end
