@@ -155,66 +155,51 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverterTest do
   end
 
   describe "infer_timezone_from_location/2" do
-    test "infers Poland timezone from Kraków coordinates" do
+    # NOTE: TzWorld runtime lookups are disabled due to OOM issues (~512MB RAM).
+    # This function now always returns UTC as a safe fallback.
+    # For accurate timezones, use city.timezone (precomputed during city creation).
+
+    test "returns UTC for all coordinates (TzWorld disabled)" do
+      # Since TzWorld is disabled, all coordinates return UTC
+      # Scrapers should use city.timezone instead
+
       # Kraków, Poland
-      assert TimezoneConverter.infer_timezone_from_location(50.0647, 19.9450) == "Europe/Warsaw"
-    end
+      assert TimezoneConverter.infer_timezone_from_location(50.0647, 19.9450) == "Etc/UTC"
 
-    test "infers Poland timezone from Warsaw coordinates" do
       # Warsaw, Poland
-      assert TimezoneConverter.infer_timezone_from_location(52.2297, 21.0122) == "Europe/Warsaw"
-    end
+      assert TimezoneConverter.infer_timezone_from_location(52.2297, 21.0122) == "Etc/UTC"
 
-    test "infers New York timezone from NYC coordinates" do
       # New York City
-      assert TimezoneConverter.infer_timezone_from_location(40.7128, -74.0060) ==
-               "America/New_York"
-    end
+      assert TimezoneConverter.infer_timezone_from_location(40.7128, -74.0060) == "Etc/UTC"
 
-    test "infers Los Angeles timezone from LA coordinates" do
       # Los Angeles
-      assert TimezoneConverter.infer_timezone_from_location(34.0522, -118.2437) ==
-               "America/Los_Angeles"
-    end
+      assert TimezoneConverter.infer_timezone_from_location(34.0522, -118.2437) == "Etc/UTC"
 
-    test "infers Chicago timezone from Chicago coordinates" do
       # Chicago
-      assert TimezoneConverter.infer_timezone_from_location(41.8781, -87.6298) ==
-               "America/Chicago"
-    end
+      assert TimezoneConverter.infer_timezone_from_location(41.8781, -87.6298) == "Etc/UTC"
 
-    test "infers London timezone from London coordinates" do
       # London, UK
-      assert TimezoneConverter.infer_timezone_from_location(51.5074, -0.1278) == "Europe/London"
-    end
+      assert TimezoneConverter.infer_timezone_from_location(51.5074, -0.1278) == "Etc/UTC"
 
-    test "infers Paris timezone from Paris coordinates" do
       # Paris, France
-      assert TimezoneConverter.infer_timezone_from_location(48.8566, 2.3522) == "Europe/Paris"
-    end
+      assert TimezoneConverter.infer_timezone_from_location(48.8566, 2.3522) == "Etc/UTC"
 
-    test "infers Berlin timezone from Berlin coordinates" do
       # Berlin, Germany
-      assert TimezoneConverter.infer_timezone_from_location(52.5200, 13.4050) == "Europe/Berlin"
-    end
+      assert TimezoneConverter.infer_timezone_from_location(52.5200, 13.4050) == "Etc/UTC"
 
-    test "infers Tokyo timezone from Tokyo coordinates" do
       # Tokyo, Japan
-      assert TimezoneConverter.infer_timezone_from_location(35.6762, 139.6503) == "Asia/Tokyo"
-    end
+      assert TimezoneConverter.infer_timezone_from_location(35.6762, 139.6503) == "Etc/UTC"
 
-    test "infers Sydney timezone from Sydney coordinates" do
       # Sydney, Australia
-      assert TimezoneConverter.infer_timezone_from_location(-33.8688, 151.2093) ==
-               "Australia/Sydney"
+      assert TimezoneConverter.infer_timezone_from_location(-33.8688, 151.2093) == "Etc/UTC"
     end
 
-    test "defaults to UTC for unknown coordinates" do
+    test "returns UTC for unknown coordinates" do
       # Middle of the ocean
       assert TimezoneConverter.infer_timezone_from_location(0.0, 0.0) == "Etc/UTC"
     end
 
-    test "defaults to UTC for nil coordinates" do
+    test "returns UTC for nil coordinates" do
       assert TimezoneConverter.infer_timezone_from_location(nil, nil) == "Etc/UTC"
       assert TimezoneConverter.infer_timezone_from_location(40.0, nil) == "Etc/UTC"
       assert TimezoneConverter.infer_timezone_from_location(nil, -74.0) == "Etc/UTC"
@@ -259,10 +244,13 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverterTest do
       assert {tokyo_utc.day, tokyo_utc.hour} == {16, 11}
     end
 
-    test "coordinates → timezone → UTC conversion chain" do
-      # Kraków coordinates
-      timezone = TimezoneConverter.infer_timezone_from_location(50.0647, 19.9450)
-      assert timezone == "Europe/Warsaw"
+    test "coordinates → timezone → UTC conversion chain (with city.timezone)" do
+      # NOTE: TzWorld is disabled, so infer_timezone_from_location returns UTC.
+      # In production, scrapers use city.timezone (precomputed) for accuracy.
+      # This test demonstrates the flow when city.timezone is available.
+
+      # Simulating city.timezone being set (as it would be in production)
+      timezone = "Europe/Warsaw"
 
       # Event at 8:00 PM in Kraków
       naive_dt = ~N[2025-01-16 20:00:00]
@@ -271,6 +259,20 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverterTest do
       # 8:00 PM CET = 7:00 PM UTC (winter)
       assert utc_dt.day == 16
       assert utc_dt.hour == 19
+    end
+
+    test "coordinates fallback returns UTC (TzWorld disabled)" do
+      # When city.timezone is not available, infer_timezone_from_location returns UTC
+      timezone = TimezoneConverter.infer_timezone_from_location(50.0647, 19.9450)
+      assert timezone == "Etc/UTC"
+
+      # This results in times being interpreted as UTC
+      naive_dt = ~N[2025-01-16 20:00:00]
+      utc_dt = TimezoneConverter.convert_local_to_utc(naive_dt, timezone)
+
+      # Time stays at 20:00 since it's already treated as UTC
+      assert utc_dt.day == 16
+      assert utc_dt.hour == 20
     end
 
     test "round-trip conversion: local → UTC → local" do
