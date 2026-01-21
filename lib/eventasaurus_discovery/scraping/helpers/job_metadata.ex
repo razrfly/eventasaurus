@@ -7,7 +7,11 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
   """
 
   require Logger
+  # Repo: Used for Repo.replica() read-only queries (uses read replica for performance)
   alias EventasaurusApp.Repo
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
   import Ecto.Query
 
   @doc """
@@ -101,7 +105,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
         select: j.meta
       )
 
-    case Repo.one(query) do
+    case JobRepo.one(query) do
       nil -> %{}
       meta -> meta
     end
@@ -151,7 +155,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
         where: j.queue == "scraper"
       )
 
-    {deleted_count, _} = Repo.delete_all(query)
+    {deleted_count, _} = JobRepo.delete_all(query)
 
     Logger.info("Cleaned up #{deleted_count} old scraper job records")
     deleted_count
@@ -164,7 +168,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
         where: j.id == ^job_id
       )
 
-    case Repo.one(query) do
+    case JobRepo.one(query) do
       nil ->
         Logger.warning("Job #{job_id} not found for metadata update")
         {:error, :job_not_found}
@@ -175,7 +179,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
 
         # Update the job's metadata
         from(j in Oban.Job, where: j.id == ^job_id)
-        |> Repo.update_all(set: [meta: updated_meta])
+        |> JobRepo.update_all(set: [meta: updated_meta])
 
         Logger.debug("Updated metadata for job #{job_id}: #{inspect(new_metadata)}")
         :ok

@@ -42,6 +42,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
 
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
+  # JobRepo: Direct connection for job business logic (Issue #3353)
+  # Bypasses PgBouncer to avoid 30-second timeout on long-running queries
+  alias EventasaurusApp.JobRepo
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
     movie_slug = args["movie_slug"]
@@ -253,7 +257,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
         where: m.id != ^current_movie_id
       )
 
-    other_movies = EventasaurusApp.Repo.all(query)
+    other_movies = JobRepo.all(query)
 
     Enum.each(other_movies, fn old_movie ->
       # Remove the slug from the old movie's metadata
