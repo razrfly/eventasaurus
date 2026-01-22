@@ -21,6 +21,8 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
       iex> EventFilters.parse_quick_range("invalid")
       :error
   """
+  @quick_date_ranges ~w(today tomorrow this_weekend next_7_days next_30_days this_month next_month)
+
   @spec parse_quick_range(String.t()) :: {:ok, atom()} | :error
   def parse_quick_range("all"), do: {:ok, :all}
   def parse_quick_range("today"), do: {:ok, :today}
@@ -31,6 +33,24 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
   def parse_quick_range("this_month"), do: {:ok, :this_month}
   def parse_quick_range("next_month"), do: {:ok, :next_month}
   def parse_quick_range(_), do: :error
+
+  @doc """
+  Check if a string is a valid quick date range (excluding "all").
+
+  ## Examples
+
+      iex> EventFilters.quick_date_range?("today")
+      true
+
+      iex> EventFilters.quick_date_range?("all")
+      false
+
+      iex> EventFilters.quick_date_range?("invalid")
+      false
+  """
+  @spec quick_date_range?(String.t() | nil) :: boolean()
+  def quick_date_range?(nil), do: false
+  def quick_date_range?(range) when is_binary(range), do: range in @quick_date_ranges
 
   @doc """
   Apply quick date filter to filters map.
@@ -66,6 +86,27 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
     |> Map.put(:end_date, end_date)
     |> Map.put(:page, 1)
     |> Map.put(:show_past, true)
+  end
+
+  @doc """
+  Get date bounds for a quick date range.
+
+  Returns `{start_date, end_date}` tuple for the given range atom.
+  For `:all`, returns `{nil, nil}`.
+
+  ## Examples
+
+      iex> EventFilters.get_quick_date_bounds(:today)
+      {~U[2026-01-22 00:00:00Z], ~U[2026-01-22 23:59:59Z]}
+
+      iex> EventFilters.get_quick_date_bounds(:all)
+      {nil, nil}
+  """
+  @spec get_quick_date_bounds(atom()) :: {DateTime.t() | nil, DateTime.t() | nil}
+  def get_quick_date_bounds(:all), do: {nil, nil}
+
+  def get_quick_date_bounds(range_atom) do
+    EventasaurusDiscovery.PublicEventsEnhanced.calculate_date_range(range_atom)
   end
 
   @doc """

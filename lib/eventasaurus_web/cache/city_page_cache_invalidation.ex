@@ -94,8 +94,25 @@ defmodule EventasaurusWeb.Cache.CityPageCacheInvalidation do
         CityPageCache.invalidate_aggregated_events(city_slug)
         CityPageCache.invalidate_date_counts(city_slug)
         CityPageCache.invalidate_city_stats(city_slug)
+        # Issue #3363: Also invalidate base cache
+        CityPageCache.invalidate_base_events(city_slug)
 
         # Enqueue cache refresh with short delay (let DB settle)
+        # Issue #3363: Base cache first (foundation for in-memory filtering)
+        case CityPageCacheRefreshJob.enqueue_base(city_slug, @default_radius_km) do
+          {:ok, :duplicate} ->
+            Logger.debug("[CacheInvalidation] Base cache refresh already queued for #{city_slug}")
+
+          {:ok, _} ->
+            Logger.debug("[CacheInvalidation] Scheduled BASE cache refresh for #{city_slug}")
+
+          {:error, reason} ->
+            Logger.warning(
+              "[CacheInvalidation] Failed to schedule BASE refresh for #{city_slug}: #{inspect(reason)}"
+            )
+        end
+
+        # Then per-filter cache
         case CityPageCacheRefreshJob.enqueue(city_slug, @default_radius_km, schedule_in: 5) do
           {:ok, :duplicate} ->
             Logger.debug("[CacheInvalidation] Cache refresh already queued for #{city_slug}")

@@ -17,6 +17,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusDiscovery.Categories
   alias EventasaurusWeb.Components.OpenGraphComponent
   alias EventasaurusWeb.Live.Helpers.EventFilters
+  alias EventasaurusWeb.Live.Helpers.CityPageFilters
   alias EventasaurusWeb.Helpers.LanguageDiscovery
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.CitySchema
@@ -735,33 +736,34 @@ defmodule EventasaurusWeb.CityLive.Index do
         count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
         date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
 
-        # Use cached date range counts (15 min TTL) - cache key includes city slug and radius
-        date_counts =
-          CityPageCache.get_date_range_counts(
-            city.slug,
-            radius_km,
-            fn ->
-              PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
-            end
-          )
+        # Issue #3363: Use base cache for date-only filters (instant response)
+        # Fall back to per-filter cache for category/search filters
+        if CityPageFilters.can_use_base_cache?(filters) do
+          # Date-only filters can use base cache with in-memory filtering
+          case CityPageCache.get_base_events(city.slug, radius_km) do
+            {:ok, base_data} ->
+              # Base cache hit - filter in-memory for instant response
+              page_opts = [page: filters[:page] || 1, page_size: filters[:page_size] || 30]
+              result = CityPageFilters.filter_base_events(base_data, filters, page_opts)
 
-        # Build cache options from current filters
-        cache_opts = build_cache_opts(filters, aggregate)
+              # Calculate date counts from base cache (more efficient, same data source)
+              date_counts = CityPageFilters.calculate_date_range_counts(base_data)
 
-        # Try to get events from cache (stale-while-revalidate pattern)
-        # This prevents OOM by running expensive queries in background Oban jobs
-        case CityPageCache.get_aggregated_events(city.slug, radius_km, cache_opts) do
-          {:ok, cached} ->
-            # Cache hit - use cached data (may be stale, refresh happening in background)
-            Logger.info("[CityPage] Cache HIT for #{city.slug} (cached_at: #{cached.cached_at})")
+              Logger.info(
+                "[CityPage] BASE Cache HIT for #{city.slug} " <>
+                  "(filtered #{result.total_count} from #{length(base_data.events)} events)"
+              )
 
-            {cached.events, cached.total_count, cached.all_events_count, date_counts, :hit}
+              {result.events, result.total_count, result.all_events_count, date_counts, :base_hit}
 
-          {:miss, nil} ->
-            # Cache miss - Oban job is computing data
-            # Return empty list and schedule retry
-            Logger.info("[CityPage] Cache MISS for #{city.slug} - job enqueued, will retry")
-            {[], 0, 0, date_counts, :miss}
+            {:miss, nil} ->
+              # No base cache yet - fall back to per-filter cache
+              Logger.info("[CityPage] BASE Cache MISS for #{city.slug} - falling back to per-filter cache")
+              fetch_from_filter_cache(city, radius_km, filters, aggregate, date_range_count_filters)
+          end
+        else
+          # Categories or search active - must use per-filter cache
+          fetch_from_filter_cache(city, radius_km, filters, aggregate, date_range_count_filters)
         end
       else
         # No coordinates, fallback to empty list
@@ -820,6 +822,33 @@ defmodule EventasaurusWeb.CityLive.Index do
       schedule_cache_retry(socket)
     else
       socket
+    end
+  end
+
+  # Fetch events from per-filter cache (used for category/search filters or base cache miss)
+  defp fetch_from_filter_cache(city, radius_km, filters, aggregate, date_range_count_filters) do
+    # Use cached date range counts (15 min TTL)
+    date_counts =
+      CityPageCache.get_date_range_counts(
+        city.slug,
+        radius_km,
+        fn ->
+          PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+        end
+      )
+
+    # Build cache options from current filters
+    cache_opts = build_cache_opts(filters, aggregate)
+
+    # Try to get events from per-filter cache (stale-while-revalidate pattern)
+    case CityPageCache.get_aggregated_events(city.slug, radius_km, cache_opts) do
+      {:ok, cached} ->
+        Logger.info("[CityPage] Filter Cache HIT for #{city.slug} (cached_at: #{cached.cached_at})")
+        {cached.events, cached.total_count, cached.all_events_count, date_counts, :hit}
+
+      {:miss, nil} ->
+        Logger.info("[CityPage] Filter Cache MISS for #{city.slug} - job enqueued, will retry")
+        {[], 0, 0, date_counts, :miss}
     end
   end
 
@@ -1026,21 +1055,28 @@ defmodule EventasaurusWeb.CityLive.Index do
     # Determine if URL has explicit date state
     # Priority:
     # 1. date_filter=all means "All Events" (no date filter)
-    # 2. start_date/end_date params mean specific date filter
-    # 3. No date params = apply default 30-day filter
-    {final_start_date, final_end_date} =
+    # 2. date_filter=today/tomorrow/etc means quick date range
+    # 3. start_date/end_date params mean specific date filter
+    # 4. No date params = show all events (paginated)
+    {final_start_date, final_end_date, show_past} =
       cond do
         params["date_filter"] == "all" ->
           # Explicit "All Events" - no date filter
-          {nil, nil}
+          {nil, nil, false}
+
+        EventFilters.quick_date_range?(params["date_filter"]) ->
+          # Quick date filter from URL (today, tomorrow, this_weekend, etc.)
+          range_atom = String.to_existing_atom(params["date_filter"])
+          {start_dt, end_dt} = EventFilters.get_quick_date_bounds(range_atom)
+          {start_dt, end_dt, true}
 
         Map.has_key?(params, "start_date") or Map.has_key?(params, "end_date") ->
           # URL explicitly sets date range
-          {start_date, end_date}
+          {start_date, end_date, true}
 
         true ->
           # No date params in URL - show all events (paginated)
-          {nil, nil}
+          {nil, nil, false}
       end
 
     # Parse categories
@@ -1060,6 +1096,14 @@ defmodule EventasaurusWeb.CityLive.Index do
       end
 
     # Build filters from URL params
+    # For show_past: use explicit param if present, otherwise use calculated value from date filter
+    final_show_past =
+      if Map.has_key?(params, "show_past") do
+        parse_boolean(params["show_past"])
+      else
+        show_past
+      end
+
     filters = %{
       search: params["search"],
       categories: category_ids,
@@ -1070,7 +1114,7 @@ defmodule EventasaurusWeb.CityLive.Index do
       sort_order: :asc,
       page: page,
       page_size: 30,
-      show_past: parse_boolean(params["show_past"])
+      show_past: final_show_past
     }
 
     # Detect active date range for UI highlighting
@@ -1108,13 +1152,34 @@ defmodule EventasaurusWeb.CityLive.Index do
           []
       end
 
-    # Handle date filter - check for explicit "all" marker first
-    {start_date, end_date} =
-      if params["date_filter"] == "all" do
-        # Explicit "All Events" - no date filter
-        {nil, nil}
+    # Handle date filter - translate date_filter param to actual date bounds
+    # Priority:
+    # 1. date_filter=all → no date filter (show all)
+    # 2. date_filter=today/tomorrow/etc → quick date range
+    # 3. start_date/end_date params → custom date range
+    {start_date, end_date, date_filter_show_past} =
+      cond do
+        params["date_filter"] == "all" ->
+          # Explicit "All Events" - no date filter
+          {nil, nil, false}
+
+        EventFilters.quick_date_range?(params["date_filter"]) ->
+          # Quick date filter (today, tomorrow, this_weekend, etc.)
+          range_atom = String.to_existing_atom(params["date_filter"])
+          {start_dt, end_dt} = EventFilters.get_quick_date_bounds(range_atom)
+          {start_dt, end_dt, true}
+
+        true ->
+          # Custom date range or no date params
+          {parse_date(params["start_date"]), parse_date(params["end_date"]), false}
+      end
+
+    # For show_past: use explicit param if present, otherwise derive from date filter
+    final_show_past =
+      if Map.has_key?(params, "show_past") do
+        parse_boolean(params["show_past"])
       else
-        {parse_date(params["start_date"]), parse_date(params["end_date"])}
+        date_filter_show_past
       end
 
     filters = %{
@@ -1127,7 +1192,7 @@ defmodule EventasaurusWeb.CityLive.Index do
       sort_order: :asc,
       page: parse_integer(params["page"]) || 1,
       page_size: 30,
-      show_past: parse_boolean(params["show_past"])
+      show_past: final_show_past
     }
 
     # Update active_date_range for UI highlighting

@@ -81,12 +81,43 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheWarmupJob do
     else
       Logger.info("[CacheWarmup] Found #{city_count} discovery-enabled cities")
 
-      # Enqueue cache refresh for each city with staggered delays
+      # Enqueue BASE cache refresh for each city first (Issue #3363)
+      # Base cache is the foundation - warm it before per-filter caches
+      base_scheduled =
+        cities
+        |> Enum.with_index()
+        |> Enum.map(fn {city, index} ->
+          # Base cache jobs run first (small delay)
+          delay = index * @stagger_seconds
+
+          case CityPageCacheRefreshJob.enqueue_base(city.slug, @default_radius_km) do
+            {:ok, :duplicate} ->
+              Logger.debug("[CacheWarmup] Base cache already queued for #{city.slug}")
+              :duplicate
+
+            {:ok, _} ->
+              Logger.debug("[CacheWarmup] Scheduled BASE cache for #{city.slug} (delay: #{delay}s)")
+              :ok
+
+            {:error, reason} ->
+              Logger.warning("[CacheWarmup] Failed to schedule base for #{city.slug}: #{inspect(reason)}")
+              :error
+          end
+        end)
+
+      base_successful = Enum.count(base_scheduled, &(&1 == :ok))
+      base_duplicates = Enum.count(base_scheduled, &(&1 == :duplicate))
+
+      Logger.info("[CacheWarmup] Base cache jobs: #{base_successful} scheduled, #{base_duplicates} already queued")
+
+      # Also enqueue per-filter cache refresh for default view (no filters)
+      # This runs after base cache with additional delay
       scheduled =
         cities
         |> Enum.with_index()
         |> Enum.map(fn {city, index} ->
-          delay = index * @stagger_seconds
+          # Per-filter jobs run after base cache (larger delay)
+          delay = (city_count + index) * @stagger_seconds
 
           case CityPageCacheRefreshJob.enqueue(city.slug, @default_radius_km, schedule_in: delay) do
             {:ok, :duplicate} ->
@@ -109,11 +140,17 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheWarmupJob do
       Logger.info("""
       [CacheWarmup] Pre-warming complete
       Cities processed: #{city_count}
-      Jobs scheduled: #{successful}
-      Already queued: #{duplicates}
+      Base cache jobs: #{base_successful} scheduled, #{base_duplicates} already queued
+      Filter cache jobs: #{successful} scheduled, #{duplicates} already queued
       """)
 
-      {:ok, %{cities_warmed: city_count, jobs_scheduled: successful, duplicates: duplicates}}
+      {:ok, %{
+        cities_warmed: city_count,
+        base_jobs_scheduled: base_successful,
+        base_duplicates: base_duplicates,
+        jobs_scheduled: successful,
+        duplicates: duplicates
+      }}
     end
   end
 end
