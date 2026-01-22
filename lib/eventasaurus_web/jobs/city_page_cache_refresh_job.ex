@@ -104,20 +104,27 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
 
     - `city_slug` - The city slug (e.g., "krakow")
     - `radius_km` - Search radius in kilometers
+    - `opts` - Optional parameters:
+      - `:schedule_in` - Delay in seconds before job runs
 
   ## Returns
 
     - `{:ok, %Oban.Job{}}` on success
     - `{:ok, :duplicate}` if job already queued
   """
-  def enqueue_base(city_slug, radius_km) do
+  def enqueue_base(city_slug, radius_km, opts \\ []) do
+    {schedule_in, _rest} = Keyword.pop(opts, :schedule_in)
+
     args = %{
       "type" => "base_refresh",
       "city_slug" => city_slug,
       "radius_km" => radius_km
     }
 
-    case Oban.insert(new(args)) do
+    # Build job options with optional scheduling
+    job_opts = if schedule_in, do: [schedule_in: schedule_in], else: []
+
+    case Oban.insert(new(args, job_opts)) do
       {:ok, %Oban.Job{conflict?: true}} ->
         Logger.debug("Base cache refresh job already queued for #{city_slug}")
         {:ok, :duplicate}
