@@ -39,13 +39,8 @@ defmodule EventasaurusApp.DataCase do
   def setup_sandbox(tags) do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.Repo, shared: not tags[:async])
 
-    # Also set up sandbox for ReplicaRepo
-    # In tests, Repo.replica() returns the primary Repo, but we still need
-    # ReplicaRepo configured for the sandbox in case it's used directly
-    replica_pid =
-      Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.ReplicaRepo,
-        shared: not tags[:async]
-      )
+    # NOTE: ReplicaRepo removed (Issue #3360) - Fly MPG basic plan has no read replicas
+    # Repo.replica() returns Repo anyway, so ReplicaRepo was unused
 
     # Also set up sandbox for JobRepo (Issue #3353)
     # JobRepo is used by ALL Oban job business logic - direct connection to avoid PgBouncer timeouts
@@ -54,7 +49,7 @@ defmodule EventasaurusApp.DataCase do
         shared: not tags[:async]
       )
 
-    # Also set up sandbox for ObanRepo (Issue #3160) - DEPRECATED, kept for backwards compat
+    # Also set up sandbox for ObanRepo (Issue #3360) - dedicated pool for Oban framework
     oban_pid =
       Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.ObanRepo,
         shared: not tags[:async]
@@ -62,7 +57,6 @@ defmodule EventasaurusApp.DataCase do
 
     on_exit(fn ->
       Ecto.Adapters.SQL.Sandbox.stop_owner(pid)
-      Ecto.Adapters.SQL.Sandbox.stop_owner(replica_pid)
       Ecto.Adapters.SQL.Sandbox.stop_owner(job_pid)
       Ecto.Adapters.SQL.Sandbox.stop_owner(oban_pid)
     end)

@@ -19,8 +19,9 @@ config :eventasaurus, EventasaurusWeb.Endpoint,
 # to provide built-in test partitioning in CI environment.
 #
 # IMPORTANT: Fixed pool sizes for tests to avoid connection exhaustion (Issue #3353)
-# With 5 repos (Repo, SessionRepo, ReplicaRepo, JobRepo, ObanRepo), we need to stay
-# well under PostgreSQL's default 100 connection limit. Total: 10+5+3+5+3 = 26 connections
+# With 4 repos (Repo, SessionRepo, JobRepo, ObanRepo), we need to stay
+# well under PostgreSQL's default 100 connection limit. Total: 10+5+5+3 = 23 connections
+# NOTE: ReplicaRepo removed (Issue #3360) - Fly MPG basic plan has no read replicas
 
 config :eventasaurus, EventasaurusApp.Repo,
   username: "postgres",
@@ -48,21 +49,6 @@ config :eventasaurus, EventasaurusApp.SessionRepo,
   pool_timeout: 5_000,
   ownership_timeout: 60_000
 
-# Configure ReplicaRepo for testing
-# In test, replica points to same test database for sandbox compatibility
-# Note: Repo.replica() returns the primary Repo in test environment,
-# so this config is mainly for completeness and edge case testing
-config :eventasaurus, EventasaurusApp.ReplicaRepo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "eventasaurus_test#{System.get_env("MIX_TEST_PARTITION")}",
-  pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: 3,
-  timeout: 15_000,
-  pool_timeout: 5_000,
-  ownership_timeout: 60_000
-
 # Configure JobRepo for testing - direct connection for job business logic (Issue #3353)
 # In test, uses same sandbox as other repos for transactional isolation
 config :eventasaurus, EventasaurusApp.JobRepo,
@@ -76,7 +62,7 @@ config :eventasaurus, EventasaurusApp.JobRepo,
   pool_timeout: 5_000,
   ownership_timeout: 60_000
 
-# Configure ObanRepo for testing - DEPRECATED (Issue #3353)
+# Configure ObanRepo for testing - dedicated pool for Oban framework (Issue #3360)
 # In test, uses same sandbox as other repos for transactional isolation
 config :eventasaurus, EventasaurusApp.ObanRepo,
   username: "postgres",

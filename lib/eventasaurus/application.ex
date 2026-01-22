@@ -68,15 +68,15 @@ defmodule Eventasaurus.Application do
       EventasaurusApp.Repo,
       # Start SessionRepo for migrations and advisory locks
       EventasaurusApp.SessionRepo,
-      # Start JobRepo - direct connection for ALL Oban job business logic (Issue #3353)
+      # Start JobRepo - direct connection for Oban job business logic (Issue #3353)
       # Bypasses PgBouncer to avoid 30-second timeout on long-running job queries
       EventasaurusApp.JobRepo,
-      # Start ReplicaRepo for read-heavy queries (dedicated pool for analytics/monitoring)
-      # Only started in production - dev/test use primary via Repo.replica() helper
-      EventasaurusApp.ReplicaRepo,
-      # Start ObanRepo - DEPRECATED, kept for backwards compatibility (Issue #3353)
-      # Will be removed once all jobs migrate to JobRepo
+      # Start ObanRepo - dedicated pool for Oban framework operations (Issue #3360)
+      # Oban uses this for fast queries (polling, state updates) via PgBouncer
+      # Job business logic uses JobRepo (direct) for long-running queries
       EventasaurusApp.ObanRepo,
+      # NOTE: ReplicaRepo removed (Issue #3360) - Fly MPG basic plan has no read replicas
+      # Repo.replica() returns Repo anyway, so ReplicaRepo was unused and wasting 3 connections
       {DNSCluster, query: Application.get_env(:eventasaurus, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Eventasaurus.PubSub},
       # Start the Finch HTTP client for sending emails
