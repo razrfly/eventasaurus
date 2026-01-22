@@ -90,7 +90,7 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheWarmupJob do
           # Base cache jobs run first (small delay)
           delay = index * @stagger_seconds
 
-          case CityPageCacheRefreshJob.enqueue_base(city.slug, @default_radius_km) do
+          case CityPageCacheRefreshJob.enqueue_base(city.slug, @default_radius_km, schedule_in: delay) do
             {:ok, :duplicate} ->
               Logger.debug("[CacheWarmup] Base cache already queued for #{city.slug}")
               :duplicate
