@@ -106,6 +106,13 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
   def perform(%Oban.Job{args: args}) do
     city_slug = args["city_slug"]
     radius_km = args["radius_km"]
+
+    # IMPORTANT: Build cache key using ORIGINAL string args (Issue #3357)
+    # The LiveView looks up cache using string representations of dates,
+    # so we must store using the same format to avoid key mismatch.
+    cache_opts = build_cache_opts_from_args(args)
+
+    # Parse opts for query execution (DateTime structs needed for SQL)
     opts = decode_opts(args)
 
     Logger.info("Starting cache refresh for city=#{city_slug} radius=#{radius_km}km")
@@ -129,8 +136,8 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
       duration = System.monotonic_time(:millisecond) - start_time
       event_count = length(events)
 
-      # Store in cache with TTL
-      key = cache_key(city_slug, radius_km, opts)
+      # Store in cache with TTL using ORIGINAL string-based opts for key
+      key = cache_key(city_slug, radius_km, cache_opts)
 
       cache_value = %{
         events: events,
@@ -197,6 +204,10 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
       |> maybe_put(:categories, opts[:categories])
       |> maybe_put(:date_range, opts[:date_range])
       |> maybe_put(:sort_by, opts[:sort_by])
+      # Date filter params (Issue #3357)
+      |> maybe_put(:start_date, opts[:start_date])
+      |> maybe_put(:end_date, opts[:end_date])
+      |> maybe_put(:show_past, opts[:show_past])
 
     # Build filters for "all events" count (without date restrictions)
     count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
@@ -237,6 +248,10 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
       {:date_range, v}, acc -> Map.put(acc, "date_range", to_string(v))
       {:sort_by, v}, acc -> Map.put(acc, "sort_by", to_string(v))
       {:sort_order, v}, acc -> Map.put(acc, "sort_order", to_string(v))
+      # Date filter params (Issue #3357)
+      {:start_date, v}, acc -> Map.put(acc, "start_date", v)
+      {:end_date, v}, acc -> Map.put(acc, "end_date", v)
+      {:show_past, v}, acc -> Map.put(acc, "show_past", v)
       _, acc -> acc
     end)
   end
@@ -250,12 +265,52 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
     |> maybe_add_opt(args, "date_range", :date_range, &String.to_existing_atom/1)
     |> maybe_add_opt(args, "sort_by", :sort_by, &String.to_existing_atom/1)
     |> maybe_add_opt(args, "sort_order", :sort_order, &String.to_existing_atom/1)
+    # Date filter params (Issue #3357)
+    |> maybe_add_opt(args, "start_date", :start_date, &parse_datetime/1)
+    |> maybe_add_opt(args, "end_date", :end_date, &parse_datetime/1)
+    |> maybe_add_opt(args, "show_past", :show_past, & &1)
   end
+
+  # Parse ISO8601 datetime string
+  defp parse_datetime(nil), do: nil
+  defp parse_datetime(str) when is_binary(str) do
+    case DateTime.from_iso8601(str) do
+      {:ok, dt, _offset} -> dt
+      _ -> nil
+    end
+  end
+  defp parse_datetime(other), do: other
 
   defp maybe_add_opt(opts, args, key, atom_key, transform) do
     case Map.get(args, key) do
       nil -> opts
       value -> Keyword.put(opts, atom_key, transform.(value))
+    end
+  end
+
+  # Build cache opts from job args using ORIGINAL string values (Issue #3357)
+  # This ensures the cache key matches what the LiveView uses for lookup.
+  # The LiveView stores dates as ISO8601 strings in cache opts, so we must
+  # use the same format here to avoid cache key mismatch.
+  defp build_cache_opts_from_args(args) do
+    []
+    |> maybe_add_opt_raw(args, "page", :page)
+    |> maybe_add_opt_raw(args, "page_size", :page_size)
+    |> maybe_add_opt_raw(args, "categories", :categories)
+    |> maybe_add_opt_raw(args, "date_range", :date_range)
+    |> maybe_add_opt_raw(args, "sort_by", :sort_by)
+    |> maybe_add_opt_raw(args, "sort_order", :sort_order)
+    # Date filter params - keep as strings to match LiveView format
+    |> maybe_add_opt_raw(args, "start_date", :start_date)
+    |> maybe_add_opt_raw(args, "end_date", :end_date)
+    |> maybe_add_opt_raw(args, "show_past", :show_past)
+  end
+
+  # Add opt without transformation (keeps original value from args)
+  defp maybe_add_opt_raw(opts, args, key, atom_key) do
+    case Map.get(args, key) do
+      nil -> opts
+      value -> Keyword.put(opts, atom_key, value)
     end
   end
 end
