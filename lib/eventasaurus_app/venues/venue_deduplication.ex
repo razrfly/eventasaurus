@@ -71,6 +71,7 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   defp find_candidates(venue, distance_meters, limit) do
     if venue.latitude && venue.longitude do
       # Use PostGIS for proximity search
+      # Exclude venues with identical coordinates (geocoding fallback to city center)
       from(v in Venue,
         where: v.id != ^venue.id,
         where: v.city_id == ^venue.city_id,
@@ -80,6 +81,12 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
             ^venue.longitude,
             ^venue.latitude,
             ^distance_meters
+          ),
+        where:
+          fragment(
+            "NOT (latitude = ? AND longitude = ?)",
+            ^venue.latitude,
+            ^venue.longitude
           ),
         limit: ^limit
       )

@@ -713,6 +713,17 @@ defmodule EventasaurusWeb.VenueLive.Show do
                 entity_type={:venue}
                 current_user={@user}
               />
+              <!-- Admin: Find duplicates link (authenticated users only) -->
+              <%= if @user do %>
+                <.link
+                  navigate={~p"/admin/venues/duplicates?venue_id=#{@venue.id}"}
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  title="Find potential duplicate venues"
+                >
+                  <Heroicons.document_duplicate class="w-4 h-4" />
+                  <span class="hidden sm:inline">Find Duplicates</span>
+                </.link>
+              <% end %>
             </:actions>
           </VenueHeroCard.venue_hero_card>
         </div>

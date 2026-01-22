@@ -663,6 +663,8 @@ defmodule EventasaurusApp.Venues do
         AND v1.longitude IS NOT NULL
         AND v2.latitude IS NOT NULL
         AND v2.longitude IS NOT NULL
+        -- Exclude pairs with identical coordinates (geocoding fallback to city center)
+        AND NOT (v1.latitude = v2.latitude AND v1.longitude = v2.longitude)
         AND ST_DWithin(
           ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
           ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,

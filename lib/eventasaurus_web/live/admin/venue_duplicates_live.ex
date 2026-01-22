@@ -53,6 +53,53 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
   end
 
   @impl true
+  def handle_params(params, _uri, socket) do
+    # Handle venue_id URL parameter to pre-select a venue
+    socket =
+      case params do
+        %{"venue_id" => venue_id_str} ->
+          if connected?(socket) do
+            case Integer.parse(venue_id_str) do
+              {venue_id, ""} ->
+                # Find duplicates for this venue (similar to select_venue handler)
+                case VenueDeduplication.find_duplicates_for_venue(venue_id,
+                       distance_meters: 2000,
+                       min_similarity: 0.3,
+                       limit: 20
+                     ) do
+                  {:ok, duplicates} ->
+                    case Repo.get(Venues.Venue, venue_id) do
+                      nil ->
+                        put_flash(socket, :error, "Venue not found")
+
+                      venue ->
+                        venue = Repo.preload(venue, :city)
+                        venue = Map.put(venue, :event_count, count_events_for_venue(venue.id))
+
+                        socket
+                        |> assign(:selected_venue, venue)
+                        |> assign(:venue_duplicates, duplicates)
+                    end
+
+                  {:error, _reason} ->
+                    put_flash(socket, :error, "Venue not found")
+                end
+
+              _ ->
+                put_flash(socket, :error, "Invalid venue ID")
+            end
+          else
+            socket
+          end
+
+        _ ->
+          socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info(:load_duplicates, socket) do
     # Load duplicate groups with distance and similarity data
     duplicate_groups =
@@ -100,7 +147,18 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
 
   # Search handlers
   @impl true
+  def handle_event("search_venues", %{"value" => query}, socket) do
+    # Handle raw input phx-change (sends "value" key)
+    do_search_venues(query, socket)
+  end
+
+  @impl true
   def handle_event("search_venues", %{"query" => query}, socket) do
+    # Handle form-wrapped input (sends "query" key based on name attribute)
+    do_search_venues(query, socket)
+  end
+
+  defp do_search_venues(query, socket) do
     results =
       if String.length(query) >= 2 do
         opts =
@@ -123,10 +181,21 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
 
   @impl true
   def handle_event("filter_by_city", %{"city_id" => city_id}, socket) do
+    do_filter_by_city(city_id, socket)
+  end
+
+  @impl true
+  def handle_event("filter_by_city", %{"value" => city_id}, socket) do
+    # Handle raw select phx-change (sends "value" key)
+    do_filter_by_city(city_id, socket)
+  end
+
+  defp do_filter_by_city(city_id, socket) do
     city_id =
       case city_id do
         "" -> nil
-        id -> String.to_integer(id)
+        id when is_binary(id) -> String.to_integer(id)
+        id when is_integer(id) -> id
       end
 
     # Re-run search with city filter if there's a query
