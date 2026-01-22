@@ -271,14 +271,28 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
     |> maybe_add_opt(args, "show_past", :show_past, & &1)
   end
 
-  # Parse ISO8601 datetime string
+  # Parse ISO8601 datetime or date-only string
+  # Handles both "2026-01-22T00:00:00Z" (DateTime) and "2026-01-22" (Date) formats
   defp parse_datetime(nil), do: nil
+
   defp parse_datetime(str) when is_binary(str) do
     case DateTime.from_iso8601(str) do
-      {:ok, dt, _offset} -> dt
-      _ -> nil
+      {:ok, dt, _offset} ->
+        dt
+
+      _ ->
+        # Fallback to date-only format (YYYY-MM-DD)
+        case Date.from_iso8601(str) do
+          {:ok, date} ->
+            # Convert date to DateTime at start of day in UTC
+            DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+
+          _ ->
+            nil
+        end
     end
   end
+
   defp parse_datetime(other), do: other
 
   defp maybe_add_opt(opts, args, key, atom_key, transform) do
