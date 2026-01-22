@@ -51,6 +51,9 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
   @cache_name :city_page_cache
   # Cache TTL: 2 hours (data updates daily, so this is conservative)
   @cache_ttl_ms :timer.hours(2)
+  # Base cache page size: fetch 500 events to cover ~30 days
+  # Note: Base cache TTL (4 hours) is defined in CityPageCache module
+  @base_page_size 500
 
   @doc """
   Enqueues a cache refresh job for a city.
@@ -92,6 +95,39 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
   end
 
   @doc """
+  Enqueues a BASE cache refresh job for a city.
+
+  The base cache stores ~500 events with no filters applied, covering ~30 days.
+  This data is then filtered in-memory for instant date filter responses.
+
+  ## Parameters
+
+    - `city_slug` - The city slug (e.g., "krakow")
+    - `radius_km` - Search radius in kilometers
+
+  ## Returns
+
+    - `{:ok, %Oban.Job{}}` on success
+    - `{:ok, :duplicate}` if job already queued
+  """
+  def enqueue_base(city_slug, radius_km) do
+    args = %{
+      "type" => "base_refresh",
+      "city_slug" => city_slug,
+      "radius_km" => radius_km
+    }
+
+    case Oban.insert(new(args)) do
+      {:ok, %Oban.Job{conflict?: true}} ->
+        Logger.debug("Base cache refresh job already queued for #{city_slug}")
+        {:ok, :duplicate}
+
+      result ->
+        result
+    end
+  end
+
+  @doc """
   Builds the cache key for a city's aggregated events.
 
   The key includes city_slug, radius_km, and a hash of the query options
@@ -103,7 +139,66 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
   end
 
   @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"type" => "base_refresh"} = args}) do
+    # Handle base cache refresh (Issue #3363)
+    perform_base_refresh(args)
+  end
+
   def perform(%Oban.Job{args: args}) do
+    # Handle regular per-filter cache refresh
+    perform_filter_refresh(args)
+  end
+
+  # Base cache refresh - fetches ~500 events with no filters for in-memory filtering
+  defp perform_base_refresh(args) do
+    city_slug = args["city_slug"]
+    radius_km = args["radius_km"]
+
+    Logger.info("Starting BASE cache refresh for city=#{city_slug} radius=#{radius_km}km")
+    start_time = System.monotonic_time(:millisecond)
+
+    # Build query opts for base cache (large page, no date filters)
+    query_opts = build_base_query_opts(city_slug, radius_km)
+    query_opts_with_repo = Map.put(query_opts, :repo, EventasaurusApp.JobRepo)
+
+    try do
+      {events, total_count, all_events_count} =
+        PublicEventsEnhanced.list_events_with_aggregation_and_counts(query_opts_with_repo)
+
+      duration = System.monotonic_time(:millisecond) - start_time
+      event_count = length(events)
+
+      # Store in base cache
+      alias EventasaurusWeb.Cache.CityPageCache
+
+      cache_data = %{
+        events: events,
+        total_count: total_count,
+        all_events_count: all_events_count,
+        duration_ms: duration
+      }
+
+      case CityPageCache.put_base_events(city_slug, radius_km, cache_data) do
+        :ok ->
+          Logger.info(
+            "BASE cache refreshed for city=#{city_slug}: #{event_count} events in #{duration}ms"
+          )
+
+          :ok
+
+        {:error, reason} ->
+          Logger.error("Failed to store BASE cache for city=#{city_slug}: #{inspect(reason)}")
+          {:error, reason}
+      end
+    rescue
+      e ->
+        Logger.error("BASE cache refresh failed for city=#{city_slug}: #{inspect(e)}")
+        {:error, Exception.message(e)}
+    end
+  end
+
+  # Regular per-filter cache refresh
+  defp perform_filter_refresh(args) do
     city_slug = args["city_slug"]
     radius_km = args["radius_km"]
 
@@ -169,7 +264,6 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
   # Build query opts, looking up city by slug
   defp build_query_opts(city_slug, radius_km, opts) do
     alias EventasaurusDiscovery.Locations
-    alias EventasaurusWeb.Live.Helpers.EventFilters
 
     # Look up the city by slug
     case Locations.get_city_by_slug(city_slug) do
@@ -178,6 +272,34 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
 
       viewing_city ->
         build_query_opts_for_city(viewing_city, radius_km, opts)
+    end
+  end
+
+  # Build query opts for BASE cache (large page, no filters)
+  # This fetches ~500 events covering ~30 days for in-memory filtering
+  defp build_base_query_opts(city_slug, radius_km) do
+    alias EventasaurusDiscovery.Locations
+
+    case Locations.get_city_by_slug(city_slug) do
+      nil ->
+        raise "City not found: #{city_slug}"
+
+      viewing_city ->
+        lat = if viewing_city.latitude, do: Decimal.to_float(viewing_city.latitude), else: nil
+        lng = if viewing_city.longitude, do: Decimal.to_float(viewing_city.longitude), else: nil
+
+        %{
+          center_lat: lat,
+          center_lng: lng,
+          radius_km: radius_km,
+          sort_order: :asc,
+          page_size: @base_page_size,
+          page: 1,
+          # No date filters - get all upcoming events
+          aggregate: true,
+          ignore_city_in_aggregation: true,
+          viewing_city: viewing_city
+        }
     end
   end
 

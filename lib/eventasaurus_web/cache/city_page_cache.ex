@@ -29,6 +29,9 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   # Data older than this triggers a background refresh, but is still returned
   @stale_threshold_ms :timer.minutes(30)
 
+  # Base cache TTL: 4 hours (contains ~500 events for 30-day range)
+  @base_cache_ttl_ms :timer.hours(4)
+
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
@@ -268,6 +271,141 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
       {:ok, _} -> true
       {:error, _} -> false
     end
+  end
+
+  # =============================================================================
+  # BASE CACHE FUNCTIONS (Issue #3363 - Phase 1)
+  #
+  # The base cache stores a single large dataset per city (500 events, 30-day range)
+  # that can be filtered in-memory for instant date filter responses.
+  #
+  # This avoids the "cache key explosion" problem where each filter combination
+  # creates a unique cache key, causing cache misses on first click.
+  # =============================================================================
+
+  @doc """
+  Builds the cache key for base events (no filters applied).
+
+  Format: "events_base:{city_slug}:{radius_km}"
+  """
+  def base_cache_key(city_slug, radius_km) do
+    "events_base:#{city_slug}:#{radius_km}"
+  end
+
+  @doc """
+  Gets base events from cache.
+
+  Returns:
+    - `{:ok, %{events: [...], cached_at: ..., ...}}` - Cache hit
+    - `{:miss, nil}` - Cache miss (no data, background refresh may be needed)
+  """
+  def get_base_events(city_slug, radius_km) do
+    cache_key = base_cache_key(city_slug, radius_km)
+
+    case Cachex.get(@cache_name, cache_key) do
+      {:ok, nil} ->
+        CityPageTelemetry.cache_event(:miss, %{
+          cache_key: cache_key,
+          city_slug: city_slug,
+          cache_type: "base_events"
+        })
+
+        {:miss, nil}
+
+      {:ok, cached_value} ->
+        # Check staleness and trigger background refresh if needed
+        if stale?(cached_value) do
+          CityPageTelemetry.cache_event(:stale, %{
+            cache_key: cache_key,
+            city_slug: city_slug,
+            cache_type: "base_events",
+            cached_at: cached_value.cached_at
+          })
+
+          # Enqueue base refresh in background
+          CityPageCacheRefreshJob.enqueue_base(city_slug, radius_km)
+        else
+          CityPageTelemetry.cache_event(:hit, %{
+            cache_key: cache_key,
+            city_slug: city_slug,
+            cache_type: "base_events"
+          })
+        end
+
+        {:ok, cached_value}
+
+      {:error, reason} ->
+        Logger.warning("Base cache error for #{cache_key}: #{inspect(reason)}")
+
+        CityPageTelemetry.cache_event(:miss, %{
+          cache_key: cache_key,
+          city_slug: city_slug,
+          cache_type: "base_events",
+          error: true
+        })
+
+        {:miss, nil}
+    end
+  end
+
+  @doc """
+  Stores base events in cache with 4-hour TTL.
+
+  The cached value includes metadata for staleness checking.
+  """
+  def put_base_events(city_slug, radius_km, data) do
+    cache_key = base_cache_key(city_slug, radius_km)
+
+    cache_value =
+      data
+      |> Map.put(:cached_at, DateTime.utc_now())
+      |> Map.put(:cache_type, :base)
+
+    case Cachex.put(@cache_name, cache_key, cache_value, ttl: @base_cache_ttl_ms) do
+      {:ok, true} ->
+        event_count = length(Map.get(data, :events, []))
+        Logger.info("Base cache stored for city=#{city_slug}: #{event_count} events")
+        :ok
+
+      {:error, reason} ->
+        Logger.error("Failed to store base cache for #{city_slug}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Checks if base cache exists for a city (even if stale).
+  """
+  def has_base_cache?(city_slug, radius_km) do
+    cache_key = base_cache_key(city_slug, radius_km)
+
+    case Cachex.get(@cache_name, cache_key) do
+      {:ok, nil} -> false
+      {:ok, _} -> true
+      {:error, _} -> false
+    end
+  end
+
+  @doc """
+  Invalidates the base events cache for a city.
+
+  Call this when events are added/modified for a city to ensure
+  fresh data is loaded on next request.
+  """
+  def invalidate_base_events(city_slug) do
+    # Delete all base events entries for this city (all radii)
+    prefix = "events_base:#{city_slug}:"
+
+    @cache_name
+    |> Cachex.stream!()
+    |> Stream.filter(fn {key, _entry} ->
+      is_binary(key) && String.starts_with?(key, prefix)
+    end)
+    |> Enum.each(fn {key, _entry} ->
+      Cachex.del(@cache_name, key)
+    end)
+
+    Logger.debug("Invalidated base cache for city=#{city_slug}")
   end
 
   @doc """
