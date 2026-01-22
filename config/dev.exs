@@ -95,18 +95,8 @@ if use_prod_db do
       application_name: "eventasaurus_session_dev"
     ]
 
-  # ReplicaRepo: Pooled connection for read-heavy operations
-  config :eventasaurus, EventasaurusApp.ReplicaRepo,
-    url: database_url,
-    stacktrace: true,
-    show_sensitive_data_on_connection_error: true,
-    pool_size: 10,
-    queue_target: 5000,
-    queue_interval: 10000,
-    parameters: [
-      application_name: "eventasaurus_replica_dev"
-    ],
-    prepare: :unnamed
+  # NOTE: ReplicaRepo removed (Issue #3360) - Fly MPG basic plan has no read replicas
+  # Repo.replica() returns Repo anyway, so ReplicaRepo was unused
 
   # JobRepo: Direct connection for Oban job business logic (Issue #3353)
   # Uses direct URL to bypass PgBouncer timeout for long-running queries
@@ -121,7 +111,8 @@ if use_prod_db do
       application_name: "eventasaurus_job_dev"
     ]
 
-  # ObanRepo: DEPRECATED - kept for backwards compatibility (Issue #3353)
+  # ObanRepo: Dedicated pool for Oban framework operations (Issue #3360)
+  # Uses PgBouncer for fast queries (polling, state updates)
   config :eventasaurus, EventasaurusApp.ObanRepo,
     url: database_url,
     stacktrace: true,
@@ -154,15 +145,7 @@ else
     show_sensitive_data_on_connection_error: true,
     pool_size: 2
 
-  # ReplicaRepo for development (points to same DB)
-  config :eventasaurus, EventasaurusApp.ReplicaRepo,
-    username: "postgres",
-    password: "postgres",
-    hostname: "localhost",
-    database: "eventasaurus_dev",
-    stacktrace: true,
-    show_sensitive_data_on_connection_error: true,
-    pool_size: 5
+  # NOTE: ReplicaRepo removed (Issue #3360) - Fly MPG basic plan has no read replicas
 
   # JobRepo for development - direct connection for job business logic (Issue #3353)
   config :eventasaurus, EventasaurusApp.JobRepo,
@@ -174,7 +157,7 @@ else
     show_sensitive_data_on_connection_error: true,
     pool_size: 20
 
-  # ObanRepo for development - DEPRECATED (Issue #3353)
+  # ObanRepo for development - dedicated pool for Oban framework operations (Issue #3360)
   config :eventasaurus, EventasaurusApp.ObanRepo,
     username: "postgres",
     password: "postgres",

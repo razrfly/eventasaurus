@@ -70,9 +70,11 @@ config :eventasaurus, :environment, config_env()
 #
 # Previous (Issue #3119): Oban shared Repo with web requests → connection pool exhaustion
 # Now: ObanRepo has dedicated pool, preventing job stampedes from blocking web traffic
-# JobRepo: Direct connection for ALL Oban job business logic (Issue #3353)
-# This bypasses PgBouncer to avoid 30-second query timeouts on long-running jobs
-oban_repo = EventasaurusApp.JobRepo
+#
+# IMPORTANT (Issue #3360): Oban framework MUST use ObanRepo (PgBouncer), not JobRepo (Direct).
+# Oban's internal operations (polling, state updates) are fast queries that work with PgBouncer.
+# Only job BUSINESS LOGIC uses JobRepo for long-running queries that need direct connections.
+oban_repo = EventasaurusApp.ObanRepo
 
 # Base queues that run in all environments
 base_queues = [
@@ -662,19 +664,10 @@ if config_env() == :prod do
     # Force IPv6 for Fly.io internal network
     socket_options: [:inet6]
 
-  # ReplicaRepo: Points to primary since Fly MPG basic plan has no read replicas
-  # The HA replica is for failover only, not read scaling
-  # Repo.replica() returns Repo anyway, but this config is needed for module startup
-  # NOTE: If you upgrade to a Fly MPG plan with read replicas, configure a separate URL here
-  config :eventasaurus, EventasaurusApp.ReplicaRepo,
-    url: database_url,
-    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "3"),
-    queue_target: 5000,
-    queue_interval: 30000,
-    # Disable prepared statements for PgBouncer Transaction mode
-    prepare: :unnamed,
-    # Force IPv6 for Fly.io internal network
-    socket_options: [:inet6]
+  # NOTE: ReplicaRepo removed (Issue #3360)
+  # Fly MPG basic plan has no read replicas (HA replica is failover only).
+  # Repo.replica() returns Repo anyway, so ReplicaRepo was unused.
+  # If you upgrade to a plan with read replicas, add ReplicaRepo config here.
 
   # Configure Cloudflare R2 storage settings
   config :eventasaurus, :r2,
