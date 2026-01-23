@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.Workers.RefreshCityEventsViewJob do
 
   ## Schedule
 
-  Runs hourly at minute 0 (configured in config/runtime.exs).
+  Runs hourly at minute 15 (configured in config/runtime.exs).
 
   ## Performance
 

@@ -826,10 +826,12 @@ defmodule EventasaurusWeb.CityLive.Index do
       |> assign(:date_range_counts, date_range_counts)
       |> assign(:loading, false)
 
-    # If cache miss, schedule a retry to check if data is ready
-    # The Oban job typically completes in 5-20 seconds
-    if cache_status == :miss do
-      schedule_cache_retry(socket)
+    # If cache miss with empty events, show loading skeleton while we wait
+    # Issue #3373: This prevents showing "No Events Found" briefly before retry
+    if cache_status == :miss and geographic_events == [] do
+      socket
+      |> assign(:events_loading, true)
+      |> schedule_cache_retry()
     else
       socket
     end
