@@ -79,25 +79,28 @@ oban_repo = EventasaurusApp.ObanRepo
 # Base queues that run in all environments
 base_queues = [
   # ====================================================================
-  # QUEUE CONCURRENCY - CRITICAL: Must stay within connection pool limits!
+  # QUEUE CONCURRENCY - Fly Managed Postgres capacity (Issue #3371)
   # ====================================================================
-  # SessionRepo pool: 5 connections (for Oban - advisory locks, job fetching)
-  # Repo pool: 3 connections (for web requests)
+  # Fly MPG: 100 max connections, typically using ~65
+  # - Repo pool: 10 connections (web requests via PgBouncer)
+  # - ObanRepo pool: 5 connections (Oban framework via PgBouncer)
+  # - JobRepo pool: 20 connections (job business logic, direct)
+  # - SessionRepo pool: 1 connection (migrations, direct)
   #
-  # Total concurrent workers: 15 (down from 42)
-  # Rule: Total workers should be ~3x pool size to allow some queuing
-  # without causing 15+ second connection timeouts
+  # Total concurrent workers: ~22
+  # Headroom: ~35 unused connections available
   # ====================================================================
 
   # Email queue with limited concurrency for Resend API rate limiting
   # Max 2 concurrent jobs to respect Resend's 2/second limit
   emails: 2,
   # Scraper queue for event data ingestion
-  # Reduced from 5 to 1 - scraper jobs spawn many detail jobs
-  scraper: 1,
+  # Increased from 1 to 3 for Fly MPG capacity (Issue #3371)
+  # Note: scraper jobs spawn detail jobs, but we have connection headroom
+  scraper: 3,
   # Scraper detail queue for individual event processing
-  # Reduced from 10 to 3 - these are the main DB-heavy jobs
-  scraper_detail: 3,
+  # Increased from 3 to 5 for Fly MPG capacity (Issue #3371)
+  scraper_detail: 5,
   # Scraper index queue for processing index pages
   # Reduced from 2 to 1 - index pages spawn many detail jobs
   scraper_index: 1,
