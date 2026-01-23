@@ -194,8 +194,13 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
     city_id =
       case city_id do
         "" -> nil
-        id when is_binary(id) -> String.to_integer(id)
+        nil -> nil
         id when is_integer(id) -> id
+        id when is_binary(id) ->
+          case Integer.parse(id) do
+            {int, ""} -> int
+            _ -> nil
+          end
       end
 
     # Re-run search with city filter if there's a query
