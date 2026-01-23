@@ -209,6 +209,10 @@ config :eventasaurus, Oban,
        # This populates the discovery_stats_snapshots table for the admin dashboard
        # Reduced from every 15 min to hourly due to memory constraints on 1GB VM
        {"0 * * * *", EventasaurusDiscovery.Admin.ComputeStatsJob},
+       # City events materialized view refresh hourly (at minute 15)
+       # Refreshes city_events_mv used by CityEventsFallback for guaranteed cache fallback
+       # See: https://github.com/anthropics/eventasaurus/issues/3373
+       {"15 * * * *", EventasaurusWeb.Workers.RefreshCityEventsViewJob},
        # Trivia export materialized view refresh daily at 5 AM UTC
        # Refreshes pre-computed trivia events data for QuizAdvisor API
        # See: lib/eventasaurus_app/workers/trivia_export_refresh_worker.ex

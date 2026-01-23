@@ -23,6 +23,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.JsonLd.CitySchema
   alias Eventasaurus.SocialCards.UrlBuilder
   alias EventasaurusWeb.Cache.CityPageCache
+  alias EventasaurusWeb.Cache.CityEventsFallback
   alias EventasaurusWeb.Telemetry.CityPageTelemetry
 
   import EventasaurusWeb.EventComponents
@@ -758,8 +759,17 @@ defmodule EventasaurusWeb.CityLive.Index do
 
             {:miss, nil} ->
               # No base cache yet - fall back to per-filter cache
-              Logger.info("[CityPage] BASE Cache MISS for #{city.slug} - falling back to per-filter cache")
-              fetch_from_filter_cache(city, radius_km, filters, aggregate, date_range_count_filters)
+              Logger.info(
+                "[CityPage] BASE Cache MISS for #{city.slug} - falling back to per-filter cache"
+              )
+
+              fetch_from_filter_cache(
+                city,
+                radius_km,
+                filters,
+                aggregate,
+                date_range_count_filters
+              )
           end
         else
           # Categories or search active - must use per-filter cache
@@ -827,28 +837,104 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   # Fetch events from per-filter cache (used for category/search filters or base cache miss)
   defp fetch_from_filter_cache(city, radius_km, filters, aggregate, date_range_count_filters) do
-    # Use cached date range counts (15 min TTL)
-    date_counts =
-      CityPageCache.get_date_range_counts(
-        city.slug,
-        radius_km,
-        fn ->
-          PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
-        end
-      )
-
     # Build cache options from current filters
     cache_opts = build_cache_opts(filters, aggregate)
 
     # Try to get events from per-filter cache (stale-while-revalidate pattern)
     case CityPageCache.get_aggregated_events(city.slug, radius_km, cache_opts) do
       {:ok, cached} ->
-        Logger.info("[CityPage] Filter Cache HIT for #{city.slug} (cached_at: #{cached.cached_at})")
+        # Issue #3373: Use base cache for date counts to ensure consistency
+        # If base cache is not available, fall back to separate date counts cache
+        date_counts = get_date_counts_consistently(city.slug, radius_km, date_range_count_filters)
+
+        Logger.info(
+          "[CityPage] Filter Cache HIT for #{city.slug} (cached_at: #{cached.cached_at})"
+        )
+
         {cached.events, cached.total_count, cached.all_events_count, date_counts, :hit}
 
       {:miss, nil} ->
-        Logger.info("[CityPage] Filter Cache MISS for #{city.slug} - job enqueued, will retry")
-        {[], 0, 0, date_counts, :miss}
+        # Issue #3373: Use materialized view fallback instead of showing empty results
+        # The fallback only supports date-only filters (no category/search)
+        # For category/search filters, we must wait for cache to populate
+        if CityPageFilters.can_use_base_cache?(filters) do
+          # Date-only filters - use materialized view fallback
+          Logger.info(
+            "[CityPage] Filter Cache MISS for #{city.slug} - using materialized view fallback"
+          )
+
+          fetch_from_fallback(city, filters)
+        else
+          # Category/search filters - can't use fallback, wait for cache
+          Logger.info(
+            "[CityPage] Filter Cache MISS for #{city.slug} - job enqueued, will retry (has category/search filters)"
+          )
+
+          # Issue #3373: Use base cache for date counts to ensure consistency
+          date_counts =
+            get_date_counts_consistently(city.slug, radius_km, date_range_count_filters)
+
+          {[], 0, 0, date_counts, :miss}
+        end
+    end
+  end
+
+  # Issue #3373: Get date counts from a consistent data source
+  # Priority: 1. Base cache (same data source as events)
+  #           2. Materialized view fallback (guaranteed availability)
+  #           3. Separate date counts cache (last resort)
+  defp get_date_counts_consistently(city_slug, radius_km, date_range_count_filters) do
+    # Try base cache first (same data source as base cache path)
+    case CityPageCache.get_base_events(city_slug, radius_km) do
+      {:ok, base_data} ->
+        CityPageFilters.calculate_date_range_counts(base_data)
+
+      {:miss, nil} ->
+        # Base cache not available - try materialized view fallback
+        case CityEventsFallback.get_date_counts(city_slug) do
+          {:ok, counts} ->
+            counts
+
+          {:error, _reason} ->
+            # Last resort: use separate cache (may be slightly stale)
+            CityPageCache.get_date_range_counts(
+              city_slug,
+              radius_km,
+              fn ->
+                PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+              end
+            )
+        end
+    end
+  end
+
+  # Fetch events from materialized view fallback (Issue #3373)
+  # Used when cache misses occur for date-only filters
+  defp fetch_from_fallback(city, filters) do
+    # Get all events from fallback, then filter in-memory for date range
+    # This matches how base cache works
+    case CityEventsFallback.get_all_events(city.slug) do
+      {:ok, fallback_data} ->
+        # Apply date filter in-memory (same as base cache path)
+        page_opts = [page: filters[:page] || 1, page_size: filters[:page_size] || 30]
+        result = CityPageFilters.filter_base_events(fallback_data, filters, page_opts)
+
+        # Calculate date counts from the full list (same data source)
+        date_counts = CityPageFilters.calculate_date_range_counts(fallback_data)
+
+        Logger.info(
+          "[CityPage] Fallback SUCCESS for #{city.slug} " <>
+            "(filtered #{result.total_count} from #{fallback_data.all_events_count} events in #{fallback_data.duration_ms}ms)"
+        )
+
+        {result.events, result.total_count, fallback_data.all_events_count, date_counts,
+         :fallback}
+
+      {:error, reason} ->
+        # Fallback failed - log error and return empty
+        # This should be rare since materialized view is always available
+        Logger.error("[CityPage] Fallback FAILED for #{city.slug}: #{reason}")
+        {[], 0, 0, %{}, :miss}
     end
   end
 
