@@ -199,7 +199,7 @@
       </div>
     </.section>
 
-    <%!-- Newsletter Section --%>
+    <%!-- Newsletter Section - Uses Clerk Waitlist with customized text --%>
     <.section background="gray" class="py-24">
       <div class="text-center">
         <.heading as="h2" class="mb-6">
@@ -208,14 +208,109 @@
         <p class="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
           Get notified when we ship new features and improvements. No spam, just product updates.
         </p>
-        <div class="max-w-md mx-auto flex space-x-4">
-          <input 
-            type="email" 
-            placeholder="Enter your email" 
-            class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-          />
-          <.radiant_button>Subscribe</.radiant_button>
+
+        <%!-- Clerk Waitlist as Newsletter Signup - phx-update="ignore" prevents LiveView interference --%>
+        <div id="clerk-newsletter" class="flex justify-center" phx-update="ignore">
+          <div class="text-center text-gray-500 py-8">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            Loading...
+          </div>
         </div>
+
+        <script>
+          (function initNewsletterSignup() {
+            const containerId = 'clerk-newsletter';
+            let mounted = false;
+            let retryCount = 0;
+            const maxRetries = 100;
+
+            async function mountNewsletter() {
+              if (mounted) return;
+
+              const container = document.getElementById(containerId);
+              if (!container) return;
+
+              if (!window.Clerk) {
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                  console.error('Clerk failed to load');
+                  container.innerHTML = `
+                    <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm max-w-md mx-auto">
+                      <p class="text-gray-600">Unable to load. Please refresh the page.</p>
+                    </div>
+                  `;
+                  return;
+                }
+                setTimeout(mountNewsletter, 100);
+                return;
+              }
+
+              try {
+                // Load Clerk with newsletter-specific localization
+                await window.Clerk.load({
+                  localization: {
+                    waitlist: {
+                      start: {
+                        title: 'Get product updates',
+                        subtitle: "We'll send you a monthly digest of new features.",
+                        formButton: 'Subscribe',
+                        actionText: 'Already have an account?',
+                        actionLink: 'Sign in'
+                      },
+                      success: {
+                        title: "You're subscribed!",
+                        subtitle: "We'll notify you when we ship new features.",
+                        message: ''
+                      }
+                    }
+                  }
+                });
+
+                // If already signed in, show appropriate message
+                if (window.Clerk.user) {
+                  container.innerHTML = `
+                    <div class="bg-green-50 border border-green-200 rounded-2xl p-6 max-w-md mx-auto">
+                      <p class="text-green-800 font-medium">You're already in the loop!</p>
+                      <p class="text-green-700 text-sm mt-1">We'll notify you when we ship new features.</p>
+                    </div>
+                  `;
+                  return;
+                }
+
+                if (!mounted) {
+                  mounted = true;
+                  container.innerHTML = '';
+                  window.Clerk.mountWaitlist(container, {
+                    appearance: {
+                      elements: {
+                        rootBox: 'w-full max-w-md mx-auto',
+                        card: 'shadow-none border border-gray-200 rounded-2xl bg-white',
+                        headerTitle: 'text-xl font-semibold text-gray-900',
+                        headerSubtitle: 'text-gray-600',
+                        formButtonPrimary: 'bg-gray-900 hover:bg-gray-800',
+                        footerAction: 'text-gray-600'
+                      }
+                    }
+                  });
+                }
+              } catch (error) {
+                console.error('Error mounting newsletter signup:', error);
+                container.innerHTML = `
+                  <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm max-w-md mx-auto">
+                    <p class="text-gray-600">Unable to load newsletter signup. Please try again later.</p>
+                  </div>
+                `;
+              }
+            }
+
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', mountNewsletter);
+            } else {
+              mountNewsletter();
+            }
+          })();
+        </script>
+
         <p class="mt-4 text-sm text-gray-500">
           We'll send you a monthly digest of new features and improvements.
         </p>
