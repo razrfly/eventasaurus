@@ -280,7 +280,11 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
         venue_is_public: e.venue_is_public,
         category_id: e.category_id,
         category_name: e.category_name,
-        category_slug: e.category_slug
+        category_slug: e.category_slug,
+        # Image columns added in migration 20260124154631
+        movie_poster_url: e.movie_poster_url,
+        movie_backdrop_url: e.movie_backdrop_url,
+        source_image_url: e.source_image_url
       }
     )
   end
@@ -335,9 +339,29 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
           }
         else
           nil
-        end
+        end,
+      # Cover image using same priority as PublicEventsEnhanced.get_cover_image_url:
+      # 1. Movie backdrop (highest quality)
+      # 2. Movie poster
+      # 3. Source image
+      # 4. nil (Unsplash fallback handled by event card component)
+      cover_image_url: derive_cover_image_url(row)
     }
   end
+
+  # Derive cover image URL using same priority as PublicEventsEnhanced.get_cover_image_url
+  defp derive_cover_image_url(row) do
+    cond do
+      is_non_empty_string?(row[:movie_backdrop_url]) -> row.movie_backdrop_url
+      is_non_empty_string?(row[:movie_poster_url]) -> row.movie_poster_url
+      is_non_empty_string?(row[:source_image_url]) -> row.source_image_url
+      true -> nil
+    end
+  end
+
+  defp is_non_empty_string?(nil), do: false
+  defp is_non_empty_string?(str) when is_binary(str), do: String.trim(str) != ""
+  defp is_non_empty_string?(_), do: false
 
   # Convert NaiveDateTime to DateTime with UTC timezone
   # Raw SQL queries return NaiveDateTime, but our comparison functions expect DateTime

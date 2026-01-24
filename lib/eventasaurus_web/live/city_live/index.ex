@@ -33,6 +33,10 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   @default_radius_km 50
 
+  # Debug mode: bypass cache and show data source comparison
+  # Enable with ?debug=true query param (dev environment only)
+  @debug_enabled Mix.env() == :dev
+
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
     case Locations.get_city_by_slug(city_slug) do
@@ -98,6 +102,9 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:show_filters, false)
            |> assign(:loading, true)
            |> assign(:events_loading, true)
+           # Debug mode for comparing data sources (dev only)
+           |> assign(:debug_mode, false)
+           |> assign(:debug_data, nil)
            # Cache retry state for stale-while-revalidate pattern (Issue #3347)
            |> assign(:cache_loading, false)
            |> assign(:cache_retry_count, 0)
@@ -217,23 +224,34 @@ defmodule EventasaurusWeb.CityLive.Index do
       # STAGE 2: Load events (expensive geographic query)
       socket =
         try do
-          socket
-          |> fetch_events()
-          |> fetch_nearby_cities()
-          |> assign(:events_loading, false)
-          # Clear deferred_loading flag - initial loading is complete
-          |> assign(:deferred_loading, false)
-          |> assign(:fetch_in_progress, false)
-          |> then(fn socket ->
-            # TELEMETRY: Complete page load timing
-            if timing_ctx = socket.assigns[:timing_ctx] do
-              timing_ctx
-              |> CityPageTelemetry.mark(:events_loaded)
-              |> CityPageTelemetry.finish_timing()
+          socket =
+            socket
+            |> fetch_events()
+            |> fetch_nearby_cities()
+            |> assign(:events_loading, false)
+            # Clear deferred_loading flag - initial loading is complete
+            |> assign(:deferred_loading, false)
+            |> assign(:fetch_in_progress, false)
+
+          # DEBUG MODE: Fetch comparison data if enabled
+          socket =
+            if socket.assigns[:debug_mode] do
+              Logger.info("[DEBUG_MODE] Fetching comparison data for #{socket.assigns.city.slug}")
+              debug_data = fetch_debug_comparison(socket)
+              Logger.info("[DEBUG_MODE] Comparison data: #{inspect(Map.keys(debug_data))}")
+              assign(socket, :debug_data, debug_data)
+            else
+              socket
             end
 
-            socket
-          end)
+          # TELEMETRY: Complete page load timing
+          if timing_ctx = socket.assigns[:timing_ctx] do
+            timing_ctx
+            |> CityPageTelemetry.mark(:events_loaded)
+            |> CityPageTelemetry.finish_timing()
+          end
+
+          socket
         rescue
           e ->
             Logger.error(
@@ -559,6 +577,11 @@ defmodule EventasaurusWeb.CityLive.Index do
   def render(assigns) do
     ~H"""
     <div class="min-h-screen">
+      <!-- DEBUG PANEL: Data source comparison (dev only, ?debug=true) -->
+      <%= if @debug_mode and @debug_data do %>
+        <.debug_panel debug_data={@debug_data} />
+      <% end %>
+
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Header with Title and Controls -->
         <div class="flex items-center justify-between mb-6">
@@ -654,6 +677,131 @@ defmodule EventasaurusWeb.CityLive.Index do
     </div>
 
     <div id="language-cookie-hook" phx-hook="LanguageCookie"></div>
+    """
+  end
+
+  # Component: Debug Panel showing data source comparison
+  # Only shown in dev when ?debug=true
+  defp debug_panel(assigns) do
+    ~H"""
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+      <div class="flex items-center mb-2">
+        <Heroicons.bug_ant class="w-6 h-6 text-yellow-600 mr-2" />
+        <h2 class="text-lg font-bold text-yellow-800">Debug Mode: Data Source Comparison</h2>
+      </div>
+      <p class="text-sm text-yellow-700 mb-4">
+        Comparing event counts from different data sources for city: <strong><%= @debug_data.city_slug %></strong>
+        (radius: <%= @debug_data.radius_km %>km) at <%= Calendar.strftime(@debug_data.fetched_at, "%H:%M:%S") %>
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Direct Query -->
+        <div class="bg-white p-4 rounded-lg shadow">
+          <h3 class="font-semibold text-gray-800 mb-2">1. Direct Query</h3>
+          <p class="text-xs text-gray-500 mb-2">PublicEventsEnhanced (bypasses cache)</p>
+          <%= case @debug_data.direct_query.status do %>
+            <% :ok -> %>
+              <p class="text-2xl font-bold text-blue-600"><%= @debug_data.direct_query.event_count %> events</p>
+              <p class="text-sm text-gray-600">Total: <%= @debug_data.direct_query.total_count %></p>
+              <p class="text-xs text-gray-500"><%= @debug_data.direct_query.duration_ms %>ms</p>
+            <% :error -> %>
+              <p class="text-red-600">Error: <%= @debug_data.direct_query.error %></p>
+          <% end %>
+        </div>
+
+        <!-- Cachex Base Cache -->
+        <div class="bg-white p-4 rounded-lg shadow">
+          <h3 class="font-semibold text-gray-800 mb-2">2. Cachex Base Cache</h3>
+          <p class="text-xs text-gray-500 mb-2">CityPageCache.get_base_events</p>
+          <%= case @debug_data.cachex_base.status do %>
+            <% :hit -> %>
+              <p class="text-2xl font-bold text-green-600"><%= @debug_data.cachex_base.event_count %> events</p>
+              <p class="text-sm text-gray-600">All events: <%= @debug_data.cachex_base.all_events_count %></p>
+              <p class="text-xs text-gray-500">
+                Cached: <%= if @debug_data.cachex_base.cached_at, do: Calendar.strftime(@debug_data.cachex_base.cached_at, "%H:%M:%S"), else: "?" %>
+              </p>
+            <% :miss -> %>
+              <p class="text-2xl font-bold text-orange-600">MISS</p>
+              <p class="text-sm text-gray-600">Cache not populated</p>
+            <% :error -> %>
+              <p class="text-red-600">Error: <%= @debug_data.cachex_base.error %></p>
+          <% end %>
+        </div>
+
+        <!-- MV Fallback -->
+        <div class="bg-white p-4 rounded-lg shadow">
+          <h3 class="font-semibold text-gray-800 mb-2">3. MV Fallback</h3>
+          <p class="text-xs text-gray-500 mb-2">city_events_mv (materialized view)</p>
+          <%= case @debug_data.mv_fallback.status do %>
+            <% :ok -> %>
+              <p class="text-2xl font-bold text-purple-600"><%= @debug_data.mv_fallback.event_count %> events</p>
+              <p class="text-sm text-gray-600">All events: <%= @debug_data.mv_fallback.all_events_count %></p>
+              <p class="text-xs text-gray-500"><%= @debug_data.mv_fallback.duration_ms %>ms</p>
+            <% :error -> %>
+              <p class="text-red-600">Error: <%= @debug_data.mv_fallback.error %></p>
+          <% end %>
+        </div>
+
+        <!-- Current Path -->
+        <div class="bg-white p-4 rounded-lg shadow">
+          <h3 class="font-semibold text-gray-800 mb-2">4. Current Path</h3>
+          <p class="text-xs text-gray-500 mb-2"><%= @debug_data.current_path.path %></p>
+          <%= if @debug_data.current_path[:event_count] do %>
+            <p class="text-2xl font-bold text-indigo-600"><%= @debug_data.current_path.event_count %> events</p>
+            <p class="text-sm text-gray-600">Total: <%= @debug_data.current_path.total_count %></p>
+            <p class="text-xs text-gray-500">All: <%= @debug_data.current_path.all_events_count %></p>
+          <% else %>
+            <p class="text-sm text-gray-600"><%= @debug_data.current_path[:note] || @debug_data.current_path[:error] %></p>
+          <% end %>
+        </div>
+      </div>
+
+      <!-- Sample Events Comparison -->
+      <details class="mt-4">
+        <summary class="cursor-pointer text-sm font-medium text-yellow-800">Show Sample Events</summary>
+        <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div>
+            <h4 class="font-semibold">Direct Query:</h4>
+            <%= if @debug_data.direct_query[:sample_events] do %>
+              <ul class="list-disc pl-4">
+                <%= for event <- @debug_data.direct_query.sample_events do %>
+                  <li>
+                    <%= event.title %>
+                    <%= if event.has_image, do: "📷", else: "❌" %>
+                  </li>
+                <% end %>
+              </ul>
+            <% end %>
+          </div>
+          <div>
+            <h4 class="font-semibold">Cachex:</h4>
+            <%= if @debug_data.cachex_base[:sample_events] do %>
+              <ul class="list-disc pl-4">
+                <%= for event <- @debug_data.cachex_base.sample_events do %>
+                  <li>
+                    <%= event.title %>
+                    <%= if event.has_image, do: "📷", else: "❌" %>
+                  </li>
+                <% end %>
+              </ul>
+            <% end %>
+          </div>
+          <div>
+            <h4 class="font-semibold">MV Fallback:</h4>
+            <%= if @debug_data.mv_fallback[:sample_events] do %>
+              <ul class="list-disc pl-4">
+                <%= for event <- @debug_data.mv_fallback.sample_events do %>
+                  <li>
+                    <%= event.title %>
+                    <%= if event.has_image, do: "📷", else: "❌" %>
+                  </li>
+                <% end %>
+              </ul>
+            <% end %>
+          </div>
+        </div>
+      </details>
+    </div>
     """
   end
 
@@ -912,6 +1060,11 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   # Fetch events from materialized view fallback (Issue #3373)
   # Used when cache misses occur for date-only filters
+  #
+  # This provides IMMEDIATE event display from the materialized view while
+  # the background cache refresh job runs. The MV data may be slightly
+  # imperfect (missing cover images, no aggregation) but showing real events
+  # is FAR better than showing "No events found" (Issue #3378).
   defp fetch_from_fallback(city, filters) do
     # Get all events from fallback, then filter in-memory for date range
     # This matches how base cache works
@@ -1136,6 +1289,13 @@ defmodule EventasaurusWeb.CityLive.Index do
     page = parse_integer(params["page"]) || 1
     radius_km = parse_integer(params["radius"]) || socket.assigns.radius_km
 
+    # Debug mode: ?debug=true enables data source comparison (dev only)
+    debug_mode = @debug_enabled and parse_boolean(params["debug"])
+
+    if debug_mode do
+      Logger.info("[DEBUG_MODE] Enabled for city page - will fetch comparison data")
+    end
+
     # Parse date params from URL
     start_date = parse_date(params["start_date"])
     end_date = parse_date(params["end_date"])
@@ -1212,6 +1372,7 @@ defmodule EventasaurusWeb.CityLive.Index do
     |> assign(:filters, filters)
     |> assign(:radius_km, radius_km)
     |> assign(:active_date_range, active_date_range)
+    |> assign(:debug_mode, debug_mode)
     |> assign(:pagination, %Pagination{
       entries: [],
       page_number: page,
@@ -1460,4 +1621,181 @@ defmodule EventasaurusWeb.CityLive.Index do
     )
     |> IO.iodata_to_binary()
   end
+
+  # ============================================================================
+  # DEBUG MODE: Compare data sources for Issue #3376 investigation
+  # Enable with ?debug=true query param (dev environment only)
+  # ============================================================================
+
+  # Fetch data from all three sources for comparison
+  defp fetch_debug_comparison(socket) do
+    city = socket.assigns.city
+    radius_km = socket.assigns.filters[:radius_km] || @default_radius_km
+    language = socket.assigns.language
+    filters = socket.assigns.filters
+
+    lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
+    lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
+
+    debug_data = %{
+      fetched_at: DateTime.utc_now(),
+      city_slug: city.slug,
+      radius_km: radius_km
+    }
+
+    # 1. Direct database query (bypasses all caching)
+    direct_result =
+      try do
+        start_time = System.monotonic_time(:millisecond)
+
+        query_filters = %{
+          language: language,
+          sort_by: :starts_at,
+          sort_order: :asc,
+          page_size: 1000,
+          page: 1,
+          center_lat: lat,
+          center_lng: lng,
+          radius_km: radius_km,
+          show_past: false
+        }
+
+        # Use PublicEventsEnhanced directly to bypass cache
+        # Returns tuple: {events, total_count, all_events_count}
+        {events, total_count, all_events_count} =
+          PublicEventsEnhanced.list_events_with_aggregation_and_counts(query_filters)
+
+        duration = System.monotonic_time(:millisecond) - start_time
+
+        %{
+          status: :ok,
+          event_count: length(events),
+          total_count: total_count,
+          all_events_count: all_events_count,
+          duration_ms: duration,
+          sample_events: Enum.take(events, 3) |> Enum.map(&event_summary/1)
+        }
+      rescue
+        e ->
+          %{status: :error, error: Exception.message(e)}
+      end
+
+    # 2. Cachex base cache
+    cache_result =
+      try do
+        start_time = System.monotonic_time(:millisecond)
+
+        case CityPageCache.get_base_events(city.slug, radius_km) do
+          {:ok, cached} ->
+            duration = System.monotonic_time(:millisecond) - start_time
+
+            %{
+              status: :hit,
+              event_count: length(cached.events),
+              all_events_count: cached.all_events_count,
+              cached_at: cached.cached_at,
+              duration_ms: duration,
+              sample_events: Enum.take(cached.events, 3) |> Enum.map(&event_summary/1)
+            }
+
+          {:miss, nil} ->
+            %{status: :miss, event_count: 0}
+        end
+      rescue
+        e ->
+          %{status: :error, error: Exception.message(e)}
+      end
+
+    # 3. Materialized view fallback
+    fallback_result =
+      try do
+        start_time = System.monotonic_time(:millisecond)
+
+        case CityEventsFallback.get_all_events(city.slug) do
+          {:ok, fallback_data} ->
+            duration = System.monotonic_time(:millisecond) - start_time
+
+            %{
+              status: :ok,
+              event_count: length(fallback_data.events),
+              all_events_count: fallback_data.all_events_count,
+              from_fallback: fallback_data.from_fallback,
+              duration_ms: duration,
+              sample_events: Enum.take(fallback_data.events, 3) |> Enum.map(&event_summary/1)
+            }
+
+          {:error, reason} ->
+            %{status: :error, error: inspect(reason)}
+        end
+      rescue
+        e ->
+          %{status: :error, error: Exception.message(e)}
+      end
+
+    # 4. Current filter path (what the user is actually seeing)
+    current_result =
+      try do
+        page_opts = [page: filters[:page] || 1, page_size: filters[:page_size] || 30]
+
+        # Determine which path we're using
+        if CityPageFilters.can_use_base_cache?(filters) do
+          case CityPageCache.get_base_events(city.slug, radius_km) do
+            {:ok, base_data} ->
+              result = CityPageFilters.filter_base_events(base_data, filters, page_opts)
+
+              %{
+                path: "base_cache + in_memory_filter",
+                event_count: length(result.events),
+                total_count: result.total_count,
+                all_events_count: result.all_events_count
+              }
+
+            {:miss, nil} ->
+              case CityEventsFallback.get_all_events(city.slug) do
+                {:ok, fallback_data} ->
+                  result = CityPageFilters.filter_base_events(fallback_data, filters, page_opts)
+
+                  %{
+                    path: "fallback_mv + in_memory_filter",
+                    event_count: length(result.events),
+                    total_count: result.total_count,
+                    all_events_count: result.all_events_count
+                  }
+
+                {:error, reason} ->
+                  %{path: "error", error: inspect(reason)}
+              end
+          end
+        else
+          %{path: "per_filter_cache (category/search active)", note: "skipped in debug"}
+        end
+      rescue
+        e ->
+          %{path: "error", error: Exception.message(e)}
+      end
+
+    debug_data
+    |> Map.put(:direct_query, direct_result)
+    |> Map.put(:cachex_base, cache_result)
+    |> Map.put(:mv_fallback, fallback_result)
+    |> Map.put(:current_path, current_result)
+  end
+
+  # Create a summary of an event for debug display
+  defp event_summary(event) do
+    %{
+      id: Map.get(event, :id) || Map.get(event, :event_id),
+      title: truncate(Map.get(event, :title) || Map.get(event, :display_title), 40),
+      has_image: has_cover_image?(event)
+    }
+  end
+
+  defp has_cover_image?(event) do
+    url = Map.get(event, :cover_image_url)
+    is_binary(url) and String.trim(url) != ""
+  end
+
+  defp truncate(nil, _), do: nil
+  defp truncate(str, max) when byte_size(str) <= max, do: str
+  defp truncate(str, max), do: String.slice(str, 0, max - 3) <> "..."
 end

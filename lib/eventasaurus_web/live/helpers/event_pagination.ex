@@ -30,6 +30,15 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.PublicEventsEnhanced
 
+  # Helper to get start time from any event type
+  # PublicEvent uses :starts_at, AggregatedContainerGroup uses :start_date
+  defp get_starts_at(event) do
+    case Map.get(event, :starts_at) do
+      nil -> Map.get(event, :start_date)
+      starts_at -> starts_at
+    end
+  end
+
   @doc """
   Filter events by date range.
 
@@ -60,13 +69,18 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
     now = DateTime.utc_now()
 
     Enum.filter(events, fn event ->
-      starts_at = event.starts_at
+      starts_at = get_starts_at(event)
 
-      cond do
-        DateTime.compare(starts_at, now) == :lt -> false
-        start_date && DateTime.compare(starts_at, start_date) == :lt -> false
-        end_date && DateTime.compare(starts_at, end_date) == :gt -> false
-        true -> true
+      # Skip events without a valid start time
+      if is_nil(starts_at) do
+        false
+      else
+        cond do
+          DateTime.compare(starts_at, now) == :lt -> false
+          start_date && DateTime.compare(starts_at, start_date) == :lt -> false
+          end_date && DateTime.compare(starts_at, end_date) == :gt -> false
+          true -> true
+        end
       end
     end)
   end
@@ -114,13 +128,18 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
 
       count =
         Enum.count(events, fn event ->
-          starts_at = event.starts_at
+          starts_at = get_starts_at(event)
 
-          cond do
-            DateTime.compare(starts_at, now) == :lt -> false
-            start_date && DateTime.compare(starts_at, start_date) == :lt -> false
-            end_date && DateTime.compare(starts_at, end_date) == :gt -> false
-            true -> true
+          # Skip events without a valid start time
+          if is_nil(starts_at) do
+            false
+          else
+            cond do
+              DateTime.compare(starts_at, now) == :lt -> false
+              start_date && DateTime.compare(starts_at, start_date) == :lt -> false
+              end_date && DateTime.compare(starts_at, end_date) == :gt -> false
+              true -> true
+            end
           end
         end)
 
@@ -200,7 +219,9 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
     now = DateTime.utc_now()
 
     Enum.filter(events, fn event ->
-      DateTime.compare(event.starts_at, now) != :lt
+      starts_at = get_starts_at(event)
+      # Include events with valid start time that are not in the past
+      starts_at && DateTime.compare(starts_at, now) != :lt
     end)
   end
 
@@ -208,7 +229,9 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
     now = DateTime.utc_now()
 
     Enum.filter(events, fn event ->
-      DateTime.compare(event.starts_at, now) == :lt
+      starts_at = get_starts_at(event)
+      # Include events with valid start time that are in the past
+      starts_at && DateTime.compare(starts_at, now) == :lt
     end)
   end
 
@@ -237,10 +260,12 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
 
     {upcoming, past} =
       Enum.reduce(events, {0, 0}, fn event, {up, past} ->
-        if DateTime.compare(event.starts_at, now) == :lt do
-          {up, past + 1}
-        else
-          {up + 1, past}
+        starts_at = get_starts_at(event)
+
+        cond do
+          is_nil(starts_at) -> {up, past}
+          DateTime.compare(starts_at, now) == :lt -> {up, past + 1}
+          true -> {up + 1, past}
         end
       end)
 
@@ -313,7 +338,7 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
     {aggregated, non_aggregated} = Enum.split_with(events, &is_aggregated?/1)
 
     # Sort non-aggregated by date, leave aggregated in original order at the end
-    sorted_non_aggregated = Enum.sort_by(non_aggregated, & &1.starts_at, DateTime)
+    sorted_non_aggregated = Enum.sort_by(non_aggregated, &get_starts_at/1, DateTime)
 
     sorted_non_aggregated ++ aggregated
   end
