@@ -297,45 +297,66 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
 
   Returns:
     - `{:ok, %{events: [...], cached_at: ..., ...}}` - Cache hit
-    - `{:miss, nil}` - Cache miss (no data, background refresh may be needed)
+    - `{:miss, nil}` - Cache miss, background refresh enqueued (Issue #3376)
   """
   def get_base_events(city_slug, radius_km) do
     cache_key = base_cache_key(city_slug, radius_km)
 
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
+        # Issue #3376: Enqueue refresh job on miss (was missing, causing "No events found")
+        # This is critical - without this, cache never gets populated after deploy!
+        Logger.info(
+          "[BaseCache] MISS for #{city_slug} - enqueueing refresh job (Issue #3376 fix)"
+        )
+
         CityPageTelemetry.cache_event(:miss, %{
           cache_key: cache_key,
           city_slug: city_slug,
           cache_type: "base_events"
         })
 
+        enqueue_base_refresh(city_slug, radius_km)
         {:miss, nil}
 
       {:ok, cached_value} ->
         # Check staleness and trigger background refresh if needed
         if stale?(cached_value) do
+          age_minutes = cache_age_minutes(cached_value)
+
+          Logger.info(
+            "[BaseCache] STALE for #{city_slug} (#{age_minutes}m old) - enqueueing background refresh"
+          )
+
           CityPageTelemetry.cache_event(:stale, %{
             cache_key: cache_key,
             city_slug: city_slug,
             cache_type: "base_events",
-            cached_at: cached_value.cached_at
+            cached_at: cached_value.cached_at,
+            age_minutes: age_minutes
           })
 
           # Enqueue base refresh in background
-          CityPageCacheRefreshJob.enqueue_base(city_slug, radius_km)
+          enqueue_base_refresh(city_slug, radius_km)
         else
+          event_count = length(cached_value.events || [])
+
+          Logger.debug(
+            "[BaseCache] HIT for #{city_slug} (#{event_count} events, cached_at: #{cached_value.cached_at})"
+          )
+
           CityPageTelemetry.cache_event(:hit, %{
             cache_key: cache_key,
             city_slug: city_slug,
-            cache_type: "base_events"
+            cache_type: "base_events",
+            event_count: event_count
           })
         end
 
         {:ok, cached_value}
 
       {:error, reason} ->
-        Logger.warning("Base cache error for #{cache_key}: #{inspect(reason)}")
+        Logger.error("[BaseCache] ERROR for #{city_slug}: #{inspect(reason)} - enqueueing refresh")
 
         CityPageTelemetry.cache_event(:miss, %{
           cache_key: cache_key,
@@ -344,9 +365,34 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
           error: true
         })
 
+        enqueue_base_refresh(city_slug, radius_km)
         {:miss, nil}
     end
   end
+
+  # Enqueue base cache refresh with logging for observability
+  defp enqueue_base_refresh(city_slug, radius_km) do
+    case CityPageCacheRefreshJob.enqueue_base(city_slug, radius_km) do
+      {:ok, %Oban.Job{id: job_id}} ->
+        Logger.info("[BaseCache] Enqueued refresh job ##{job_id} for #{city_slug}")
+        :ok
+
+      {:ok, :duplicate} ->
+        Logger.info("[BaseCache] Refresh job already queued for #{city_slug}")
+        :ok
+
+      {:error, reason} ->
+        Logger.error("[BaseCache] FAILED to enqueue refresh for #{city_slug}: #{inspect(reason)}")
+        :error
+    end
+  end
+
+  # Calculate cache age in minutes for logging
+  defp cache_age_minutes(%{cached_at: cached_at}) when not is_nil(cached_at) do
+    DateTime.diff(DateTime.utc_now(), cached_at, :minute)
+  end
+
+  defp cache_age_minutes(_), do: nil
 
   @doc """
   Stores base events in cache with 4-hour TTL.

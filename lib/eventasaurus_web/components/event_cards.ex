@@ -38,21 +38,24 @@ defmodule EventasaurusWeb.Components.EventCards do
   Renders an event card for grid view.
 
   ## Assigns
-  - `:event` - The PublicEvent to display
+  - `:event` - The PublicEvent struct or map to display (supports fallback data)
   - `:language` - Current language (optional)
   - `:show_city` - Whether to display city name (default: true)
+
+  Note: This component accepts both PublicEvent structs and plain maps
+  to support the materialized view fallback (Issue #3373).
   """
-  attr :event, PublicEvent, required: true
+  attr :event, :map, required: true
   attr :language, :string, default: "en"
   attr :show_city, :boolean, default: true
 
   def event_card(assigns) do
     ~H"""
     <.link navigate={~p"/activities/#{@event.slug}"} class="block">
-      <div class={"bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow #{if PublicEvent.recurring?(@event), do: "ring-2 ring-green-500 ring-offset-2", else: ""}"}>
+      <div class={"bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow #{if event_recurring?(@event), do: "ring-2 ring-green-500 ring-offset-2", else: ""}"}>
         <!-- Event Image -->
         <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
-          <%= if @event.cover_image_url do %>
+          <%= if Map.get(@event, :cover_image_url) do %>
             <.cdn_img src={@event.cover_image_url} alt={@event.title} width={400} height={300} fit="cover" quality={85} class="w-full h-full object-cover" />
           <% else %>
             <div class="w-full h-full flex items-center justify-center">
@@ -62,9 +65,9 @@ defmodule EventasaurusWeb.Components.EventCards do
             </div>
           <% end %>
 
-          <%= if @event.categories && @event.categories != [] do %>
-            <% category = CategoryHelpers.get_preferred_category(@event.categories) %>
-            <%= if category && category.color do %>
+          <%= if event_categories(@event) != [] do %>
+            <% category = CategoryHelpers.get_preferred_category(event_categories(@event)) %>
+            <%= if category && Map.get(category, :color) do %>
               <div
                 class="absolute top-3 left-3 px-2 py-1 rounded-md text-xs font-medium text-white"
                 style={"background-color: #{category.color}"}
@@ -75,7 +78,7 @@ defmodule EventasaurusWeb.Components.EventCards do
           <% end %>
 
           <!-- Time-Sensitive Badge -->
-          <%= if badge = PublicEventsEnhanced.get_time_sensitive_badge(@event) do %>
+          <%= if badge = get_time_sensitive_badge(@event) do %>
             <div class={[
               "absolute top-3 right-3 text-white px-2 py-1 rounded-md text-xs font-medium",
               case badge.type do
@@ -90,12 +93,12 @@ defmodule EventasaurusWeb.Components.EventCards do
           <% end %>
 
           <!-- Recurring Event Badge -->
-          <%= if PublicEvent.recurring?(@event) do %>
+          <%= if event_recurring?(@event) do %>
             <div class="absolute bottom-3 right-3 bg-green-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
               <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
               </svg>
-              <%= PublicEvent.occurrence_count(@event) %> dates
+              <%= event_occurrence_count(@event) %> dates
             </div>
           <% end %>
         </div>
@@ -103,19 +106,19 @@ defmodule EventasaurusWeb.Components.EventCards do
         <!-- Event Details -->
         <div class="p-4">
           <h3 class="font-semibold text-lg text-gray-900 line-clamp-2">
-            <%= @event.display_title || @event.title %>
+            <%= Map.get(@event, :display_title) || @event.title %>
           </h3>
 
           <div class="mt-2 flex items-center text-sm text-gray-600">
             <Heroicons.calendar class="w-4 h-4 mr-1" />
             <%= cond do %>
-              <% PublicEvent.recurring?(@event) -> %>
-                <%= if next = PublicEvent.next_occurrence_date(@event) do %>
+              <% event_recurring?(@event) -> %>
+                <%= if next = event_next_occurrence_date(@event) do %>
                   <span class="text-green-600 font-medium">
-                    <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_local_datetime(next, @event.venue, :short) %>
+                    <%= event_frequency_label(@event) %> • Next: <%= format_local_datetime(next, @event.venue, :short) %>
                   </span>
                 <% else %>
-                  <span class="text-green-600 font-medium"><%= PublicEvent.frequency_label(@event) %></span>
+                  <span class="text-green-600 font-medium"><%= event_frequency_label(@event) %></span>
                 <% end %>
               <% is_exhibition?(@event) -> %>
                 <%= if exhibition_datetime = format_exhibition_datetime(@event) do %>
@@ -355,6 +358,77 @@ defmodule EventasaurusWeb.Components.EventCards do
       </div>
     </.link>
     """
+  end
+
+  # =============================================================================
+  # Helper functions for event_card that work with both PublicEvent structs
+  # and plain maps (from CityEventsFallback materialized view - Issue #3373)
+  # =============================================================================
+
+  # Check if event is recurring (works with both structs and maps)
+  defp event_recurring?(%PublicEvent{} = event), do: PublicEvent.recurring?(event)
+  defp event_recurring?(event) when is_map(event) do
+    event_occurrence_count(event) > 1
+  end
+
+  # Get occurrence count (works with both structs and maps)
+  defp event_occurrence_count(%PublicEvent{} = event), do: PublicEvent.occurrence_count(event)
+  defp event_occurrence_count(event) when is_map(event) do
+    case Map.get(event, :occurrences) do
+      %{"dates" => dates} when is_list(dates) -> length(dates)
+      _ -> 1
+    end
+  end
+
+  # Get next occurrence date (works with both structs and maps)
+  defp event_next_occurrence_date(%PublicEvent{} = event), do: PublicEvent.next_occurrence_date(event)
+  defp event_next_occurrence_date(event) when is_map(event) do
+    # For fallback maps, just use starts_at as the next date
+    Map.get(event, :starts_at)
+  end
+
+  # Get frequency label (works with both structs and maps)
+  defp event_frequency_label(%PublicEvent{} = event), do: PublicEvent.frequency_label(event)
+  defp event_frequency_label(event) when is_map(event) do
+    count = event_occurrence_count(event)
+    cond do
+      count == 0 -> nil
+      count == 1 -> nil
+      count <= 7 -> "#{count} dates available"
+      count <= 30 -> "Multiple dates"
+      true -> "Many dates"
+    end
+  end
+
+  # Get categories (works with both structs and maps)
+  # Handles: struct with categories association, map with categories list,
+  # map with single category (from fallback)
+  defp event_categories(%PublicEvent{categories: categories}) when is_list(categories), do: categories
+  defp event_categories(%{categories: categories}) when is_list(categories), do: categories
+  defp event_categories(%{category: category}) when not is_nil(category), do: [category]
+  defp event_categories(_), do: []
+
+  # Get time-sensitive badge (works with both structs and maps)
+  # For maps without full struct, we compute a simpler badge based on starts_at
+  defp get_time_sensitive_badge(%PublicEvent{} = event) do
+    PublicEventsEnhanced.get_time_sensitive_badge(event)
+  end
+  defp get_time_sensitive_badge(event) when is_map(event) do
+    # Simplified badge logic for fallback maps
+    case Map.get(event, :starts_at) do
+      nil -> nil
+      starts_at ->
+        now = DateTime.utc_now()
+        diff_days = DateTime.diff(starts_at, now, :day)
+        cond do
+          diff_days < 0 -> nil  # Past event
+          diff_days == 0 -> %{type: :last_chance, label: "Today"}
+          diff_days == 1 -> %{type: :this_week, label: "Tomorrow"}
+          diff_days <= 7 -> %{type: :this_week, label: "This week"}
+          diff_days <= 14 -> %{type: :upcoming, label: "Coming soon"}
+          true -> nil
+        end
+    end
   end
 
   # Helper functions for container styling
