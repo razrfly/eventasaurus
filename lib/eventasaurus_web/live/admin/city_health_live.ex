@@ -78,9 +78,12 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
     {:noreply, assign(socket, :status_filter, status)}
   end
 
+  # Valid sort columns for whitelist validation
+  @valid_sort_columns ~w(name health_score event_count weekly_change venue_count source_count)a
+
   @impl true
   def handle_event("sort", %{"column" => column}, socket) do
-    column_atom = String.to_existing_atom(column)
+    column_atom = validate_sort_column(column)
 
     {new_column, new_direction} =
       if socket.assigns.sort_column == column_atom do
@@ -98,6 +101,17 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
      |> assign(:sort_column, new_column)
      |> assign(:sort_direction, new_direction)}
   end
+
+  defp validate_sort_column(column) when is_binary(column) do
+    case String.to_existing_atom(column) do
+      atom when atom in @valid_sort_columns -> atom
+      _ -> :event_count  # Default fallback
+    end
+  rescue
+    ArgumentError -> :event_count  # Atom doesn't exist
+  end
+
+  defp validate_sort_column(_), do: :event_count
 
   defp load_city_health_data(socket) do
     # Use the new CityHealthCalculator for proper 4-component health scores

@@ -63,21 +63,23 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLiveTest do
     test "displays component weights", %{conn: conn, city: city} do
       {:ok, _live, html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
 
-      # Should show weights for each component
-      assert html =~ "Weight: 40%"
-      assert html =~ "Weight: 30%"
-      assert html =~ "Weight: 20%"
-      assert html =~ "Weight: 10%"
+      # Should show weights for each component (displayed as badges in health_metric_card)
+      # Event Coverage: 40%, Source Activity: 30%, Data Quality: 20%, Venue Health: 10%
+      # Match with whitespace tolerance since EEx templates add newlines
+      assert html =~ ~r/>\s*40%\s*</
+      assert html =~ ~r/>\s*30%\s*</
+      assert html =~ ~r/>\s*20%\s*</
+      assert html =~ ~r/>\s*10%\s*</
     end
 
     test "displays component descriptions", %{conn: conn, city: city} do
       {:ok, _live, html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
 
       # Should show descriptions for each component
-      assert html =~ "7-day event availability"
-      assert html =~ "Jobs completed successfully"
-      assert html =~ "Events with category/venue"
-      assert html =~ "Venues with valid slugs"
+      assert html =~ "7-day availability"
+      assert html =~ "Job success rate"
+      assert html =~ "Events with metadata"
+      assert html =~ "Venues with slugs"
     end
 
     test "displays event trend section with date range selector", %{conn: conn, city: city} do

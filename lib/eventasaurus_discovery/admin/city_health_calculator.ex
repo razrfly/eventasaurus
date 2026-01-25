@@ -145,8 +145,12 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   end
 
   @doc """
-  Get only active cities (those with events in the last 30 days).
+  Get only active cities (those with at least one event).
   Ordered by event count descending.
+
+  Note: event_count includes all events associated with the city,
+  not just recent ones. The health score components (event_coverage,
+  source_activity, etc.) use time-windowed queries for accuracy.
   """
   def get_active_cities_health(opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
@@ -169,12 +173,14 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   end
 
   @doc """
-  Event Coverage (40%): Days with events in the last 14 days.
+  Event Coverage (40%): Days with events in the last 14 days (including today).
   Score = (days_with_events / 14) * 100
   """
   def calculate_event_coverage(city_id) do
     today = Date.utc_today()
-    start_date = Date.add(today, -@coverage_days)
+    # Use -(@coverage_days - 1) to get exactly @coverage_days days including today
+    # E.g., for 14 days: today (0), -1, -2, ..., -13 = 14 days
+    start_date = Date.add(today, -(@coverage_days - 1))
 
     # Count distinct dates with events
     query =
@@ -315,7 +321,8 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
 
   defp batch_event_coverage(city_ids) when is_list(city_ids) do
     today = Date.utc_today()
-    start_date = Date.add(today, -@coverage_days)
+    # Use -(@coverage_days - 1) to get exactly @coverage_days days including today
+    start_date = Date.add(today, -(@coverage_days - 1))
 
     query =
       from(pe in PublicEvent,
