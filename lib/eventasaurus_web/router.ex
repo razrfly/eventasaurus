@@ -98,6 +98,8 @@ defmodule EventasaurusWeb.Router do
       live "/cities/:id/edit", Admin.CityFormLive, :edit
       live "/cities/duplicates", Admin.CityDuplicatesLive, :index
       live "/cities/cleanup", Admin.CityCleanupLive
+      live "/cities/health", Admin.CityHealthLive, :index
+      live "/cities/:city_slug/health", Admin.CityHealthDetailLive, :show
 
       # Venue Country Mismatches (dev - no auth)
       live "/venues/country-mismatches", Admin.VenueCountryMismatchesLive, :index
@@ -239,6 +241,8 @@ defmodule EventasaurusWeb.Router do
         live "/cities/:id/edit", EventasaurusWeb.Admin.CityFormLive, :edit
         live "/cities/duplicates", EventasaurusWeb.Admin.CityDuplicatesLive, :index
         live "/cities/cleanup", EventasaurusWeb.Admin.CityCleanupLive
+        live "/cities/health", EventasaurusWeb.Admin.CityHealthLive, :index
+        live "/cities/:city_slug/health", EventasaurusWeb.Admin.CityHealthDetailLive, :show
 
         # Venue Country Mismatches (with admin authentication)
         live "/venues/country-mismatches",

@@ -876,4 +876,53 @@ defmodule EventasaurusApp.Factory do
       }
     })
   end
+
+  @doc """
+  Factory for JobExecutionSummary schema (job execution tracking)
+  """
+  def job_execution_summary_factory do
+    alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
+
+    %JobExecutionSummary{
+      job_id: sequence(:job_id, & &1),
+      worker: "EventasaurusDiscovery.Sources.TestSource.Jobs.SyncJob",
+      queue: "scraper_index",
+      state: "completed",
+      args: %{},
+      results: %{},
+      error: nil,
+      attempted_at: DateTime.utc_now(),
+      completed_at: DateTime.utc_now() |> DateTime.add(1, :minute),
+      duration_ms: Enum.random(100..5000)
+    }
+  end
+
+  @doc """
+  Factory for Category schema (event categories)
+  """
+  def category_factory do
+    alias EventasaurusDiscovery.Categories.Category
+
+    %Category{
+      name: sequence(:category_name, &"Category #{&1}"),
+      slug: sequence(:category_slug, &"category-#{&1}"),
+      description: "A test category",
+      is_active: true,
+      display_order: 0,
+      schema_type: "Event"
+    }
+  end
+
+  @doc """
+  Factory for PublicEventCategory schema (event-category associations)
+  """
+  def public_event_category_factory do
+    alias EventasaurusDiscovery.Categories.PublicEventCategory
+
+    %PublicEventCategory{
+      is_primary: false,
+      source: nil,
+      confidence: 1.0
+    }
+  end
 end

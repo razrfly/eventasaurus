@@ -1,0 +1,999 @@
+defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
+  @moduledoc """
+  Detailed health view for a single city.
+
+  Shows comprehensive health metrics using the 4-component formula:
+  - Event Coverage (40%): Days with events in last 14 days
+  - Source Activity (30%): Recent sync job success rate
+  - Data Quality (20%): Events with complete metadata
+  - Venue Health (10%): Venues with complete information
+
+  Uses CityHierarchy to aggregate metrics across metro area clusters.
+  """
+  use EventasaurusWeb, :live_view
+
+  import Ecto.Query
+  import EventasaurusWeb.Admin.Components.HealthComponents
+
+  alias EventasaurusApp.Repo
+  alias EventasaurusApp.Venues.Venue
+  alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Locations.CityHierarchy
+  alias EventasaurusDiscovery.PublicEvents.PublicEvent
+  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+  alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Categories.Category
+  alias EventasaurusDiscovery.Admin.CityHealthCalculator
+  alias EventasaurusDiscovery.Admin.TrendAnalyzer
+  alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
+
+  # Auto-refresh every 5 minutes
+  @refresh_interval :timer.minutes(5)
+
+  @impl true
+  def mount(%{"city_slug" => city_slug}, _session, socket) do
+    city = get_city_by_slug(city_slug)
+
+    if city do
+      if connected?(socket) do
+        Process.send_after(self(), :refresh, @refresh_interval)
+      end
+
+      socket =
+        socket
+        |> assign(:page_title, "#{city.name} Health")
+        |> assign(:city, city)
+        |> assign(:city_slug, city_slug)
+        |> assign(:loading, true)
+        |> load_city_health_data()
+
+      {:ok, socket}
+    else
+      {:ok,
+       socket
+       |> put_flash(:error, "City not found")
+       |> push_navigate(to: ~p"/admin/cities/health")}
+    end
+  end
+
+  @impl true
+  def handle_info(:refresh, socket) do
+    Process.send_after(self(), :refresh, @refresh_interval)
+    {:noreply, load_city_health_data(socket)}
+  end
+
+  @impl true
+  def handle_event("refresh", _params, socket) do
+    {:noreply, load_city_health_data(socket)}
+  end
+
+  @impl true
+  def handle_event("toggle_source", %{"source" => source_slug}, socket) do
+    expanded = socket.assigns.expanded_sources
+
+    expanded =
+      if MapSet.member?(expanded, source_slug) do
+        MapSet.delete(expanded, source_slug)
+      else
+        MapSet.put(expanded, source_slug)
+      end
+
+    {:noreply, assign(socket, :expanded_sources, expanded)}
+  end
+
+  @impl true
+  def handle_event("expand_all_sources", _params, socket) do
+    all_sources = MapSet.new(socket.assigns.source_data, & &1.slug)
+    {:noreply, assign(socket, :expanded_sources, all_sources)}
+  end
+
+  @impl true
+  def handle_event("collapse_all_sources", _params, socket) do
+    {:noreply, assign(socket, :expanded_sources, MapSet.new())}
+  end
+
+  @impl true
+  def handle_event("change_date_range", %{"date_range" => date_range}, socket) do
+    date_range = String.to_integer(date_range)
+    city = socket.assigns.city
+
+    # Get new chart data for the selected date range
+    chart_data = get_chart_data(city.id, date_range)
+
+    socket =
+      socket
+      |> assign(:date_range, date_range)
+      |> assign(:chart_data, chart_data)
+      |> push_event("update-chart", %{
+        chart_id: "city-event-trend-chart",
+        chart_data: chart_data
+      })
+
+    {:noreply, socket}
+  end
+
+  defp load_city_health_data(socket) do
+    city = socket.assigns.city
+
+    # Get metro area city IDs for aggregation
+    cluster_city_ids = CityHierarchy.get_cluster_city_ids(city.id)
+
+    # Calculate health for the primary city
+    {:ok, health_data} = CityHealthCalculator.calculate_city_health(city.id)
+
+    # Get additional metrics
+    event_count = count_events(cluster_city_ids)
+    venue_count = count_venues(cluster_city_ids)
+    category_count = count_categories(cluster_city_ids)
+    source_data = get_source_data(cluster_city_ids)
+    weekly_change = calculate_weekly_change(cluster_city_ids)
+    sparkline_data = get_daily_sparkline_data(city.id)
+
+    # Get top venues and category distribution (Phase 5)
+    top_venues = get_top_venues(cluster_city_ids, 10)
+    category_distribution = get_category_distribution(cluster_city_ids)
+
+    # Get metro area info
+    metro_cities = get_metro_cities(cluster_city_ids, city.id)
+
+    # Get source errors for error lookup (pass source_data for worker pattern matching)
+    source_errors = get_source_errors(source_data)
+
+    # Preserve expanded state if already set, otherwise initialize empty
+    expanded_sources = Map.get(socket.assigns, :expanded_sources, MapSet.new())
+
+    # Preserve date range if already set, otherwise default to 30 days
+    date_range = Map.get(socket.assigns, :date_range, 30)
+
+    # Get chart data for the trend chart
+    chart_data = get_chart_data(city.id, date_range)
+
+    socket
+    |> assign(:loading, false)
+    |> assign(:health_data, health_data)
+    |> assign(:cluster_city_ids, cluster_city_ids)
+    |> assign(:metro_cities, metro_cities)
+    |> assign(:event_count, event_count)
+    |> assign(:venue_count, venue_count)
+    |> assign(:category_count, category_count)
+    |> assign(:source_data, source_data)
+    |> assign(:source_errors, source_errors)
+    |> assign(:expanded_sources, expanded_sources)
+    |> assign(:weekly_change, weekly_change)
+    |> assign(:sparkline, sparkline_data)
+    |> assign(:date_range, date_range)
+    |> assign(:chart_data, chart_data)
+    |> assign(:top_venues, top_venues)
+    |> assign(:category_distribution, category_distribution)
+    |> assign(:last_updated, DateTime.utc_now())
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="min-h-screen">
+      <!-- Back Navigation -->
+      <div class="bg-white border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <.link
+            navigate={~p"/admin/cities/health"}
+            class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
+          >
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to City Health Dashboard
+          </.link>
+        </div>
+      </div>
+
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <%= if @loading do %>
+          <div class="flex items-center justify-center h-64">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        <% else %>
+          <!-- Header Section -->
+          <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              <!-- City Info -->
+              <div class="flex-1">
+                <div class="flex items-center gap-3">
+                  <h1 class="text-3xl font-bold text-gray-900"><%= @city.name %></h1>
+                  <.health_score_pill score={@health_data.health_score} status={@health_data.health_status} />
+                </div>
+                <div class="mt-2 text-gray-500 flex items-center gap-2">
+                  <span><%= @city.country.name %></span>
+                  <%= if length(@metro_cities) > 0 do %>
+                    <span class="text-gray-300">•</span>
+                    <span>Metro area: <%= length(@metro_cities) + 1 %> cities</span>
+                  <% end %>
+                </div>
+              </div>
+
+              <!-- Large Health Score -->
+              <div class="flex-shrink-0">
+                <.health_score_large
+                  score={@health_data.health_score}
+                  status={@health_data.health_status}
+                  label="Health Score"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Stats Bar -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <.stat_card
+              title="Total Events"
+              value={format_number(@event_count)}
+              icon="📊"
+              color={:blue}
+              subtitle={"#{format_change(@weekly_change)} this week"}
+            />
+            <.stat_card
+              title="Active Sources"
+              value={length(@source_data)}
+              icon="🔌"
+              color={:purple}
+              subtitle={"#{count_healthy_sources(@source_data)} healthy"}
+            />
+            <.stat_card
+              title="Venues"
+              value={format_number(@venue_count)}
+              icon="📍"
+              color={:green}
+            />
+            <.stat_card
+              title="Categories"
+              value={@category_count}
+              icon="🏷️"
+              color={:yellow}
+            />
+          </div>
+
+          <!-- Health Score Breakdown -->
+          <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-6">Health Score Breakdown</h2>
+
+            <div class="space-y-6">
+              <!-- Event Coverage (40%) -->
+              <.health_component_bar
+                label="Event Coverage"
+                value={@health_data.components.event_coverage}
+                weight="40%"
+                color={component_color(@health_data.components.event_coverage)}
+                target={80}
+                description="7-day event availability"
+                show_status={true}
+              />
+
+              <!-- Source Activity (30%) -->
+              <.health_component_bar
+                label="Source Activity"
+                value={@health_data.components.source_activity}
+                weight="30%"
+                color={component_color(@health_data.components.source_activity)}
+                target={90}
+                description="Jobs completed successfully"
+                show_status={true}
+              />
+
+              <!-- Data Quality (20%) -->
+              <.health_component_bar
+                label="Data Quality"
+                value={@health_data.components.data_quality}
+                weight="20%"
+                color={component_color(@health_data.components.data_quality)}
+                target={85}
+                description="Events with category/venue"
+                show_status={true}
+              />
+
+              <!-- Venue Health (10%) -->
+              <.health_component_bar
+                label="Venue Health"
+                value={@health_data.components.venue_health}
+                weight="10%"
+                color={component_color(@health_data.components.venue_health)}
+                target={90}
+                description="Venues with valid slugs"
+                show_status={true}
+              />
+            </div>
+          </div>
+
+          <!-- Event Trend Chart -->
+          <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+              <div class="flex items-center gap-3">
+                <h2 class="text-lg font-semibold text-gray-900">Event Trend</h2>
+                <.trend_indicator change={@weekly_change} size={:sm} />
+              </div>
+
+              <!-- Date Range Selector -->
+              <form phx-change="change_date_range" class="flex items-center gap-2">
+                <label for="date-range" class="text-sm text-gray-500">Period:</label>
+                <select
+                  id="date-range"
+                  name="date_range"
+                  class="text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="7" selected={@date_range == 7}>Last 7 days</option>
+                  <option value="14" selected={@date_range == 14}>Last 14 days</option>
+                  <option value="30" selected={@date_range == 30}>Last 30 days</option>
+                  <option value="90" selected={@date_range == 90}>Last 90 days</option>
+                </select>
+              </form>
+            </div>
+
+            <!-- Chart Container -->
+            <div class="h-64">
+              <canvas
+                id="city-event-trend-chart"
+                phx-hook="ChartHook"
+                phx-update="ignore"
+                data-chart-data={Jason.encode!(@chart_data)}
+                data-chart-type="line"
+                class="w-full h-full"
+              >
+              </canvas>
+            </div>
+
+            <!-- Quick Stats Below Chart -->
+            <div class="mt-4 pt-4 border-t grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div class="text-2xl font-bold text-gray-900">
+                  <%= total_events_in_period(@chart_data) %>
+                </div>
+                <div class="text-xs text-gray-500">Total Events</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-gray-900">
+                  <%= avg_events_per_day(@chart_data) %>
+                </div>
+                <div class="text-xs text-gray-500">Avg/Day</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-gray-900">
+                  <%= peak_events_day(@chart_data) %>
+                </div>
+                <div class="text-xs text-gray-500">Peak Day</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Sources Table -->
+          <.source_table
+            sources={@source_data}
+            expanded={@expanded_sources}
+            source_errors={@source_errors}
+          />
+
+          <!-- Top Venues Table (Phase 5) -->
+          <div class="bg-white rounded-lg shadow-sm border mb-6">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+              <h2 class="text-lg font-semibold text-gray-900">Top Venues</h2>
+              <.link
+                navigate={~p"/venues/duplicates"}
+                class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              >
+                View All
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </.link>
+            </div>
+
+            <%= if Enum.empty?(@top_venues) do %>
+              <div class="px-6 py-12 text-center text-gray-500">
+                <p>No venues found for this city.</p>
+              </div>
+            <% else %>
+              <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                  <thead class="bg-gray-50">
+                    <tr>
+                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Venue
+                      </th>
+                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Events
+                      </th>
+                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Sources
+                      </th>
+                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Last Seen
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="bg-white divide-y divide-gray-200">
+                    <%= for venue <- @top_venues do %>
+                      <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <div class="flex items-center">
+                            <div class="flex-shrink-0 h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
+                              <span class="text-gray-500 text-sm">📍</span>
+                            </div>
+                            <div class="ml-3">
+                              <.link
+                                navigate={~p"/venues/duplicates?venue_id=#{venue.venue_id}"}
+                                class="text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                              >
+                                <%= venue.venue_name %>
+                              </.link>
+                            </div>
+                          </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <%= venue.event_count %>
+                          </span>
+                        </td>
+                        <td class="px-6 py-4">
+                          <div class="flex flex-wrap gap-1">
+                            <%= for source <- Enum.take(venue.sources, 3) do %>
+                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                <%= source %>
+                              </span>
+                            <% end %>
+                            <%= if length(venue.sources) > 3 do %>
+                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-50 text-gray-500">
+                                +<%= length(venue.sources) - 3 %> more
+                              </span>
+                            <% end %>
+                          </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <%= format_last_seen(venue.last_seen) %>
+                        </td>
+                      </tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              </div>
+            <% end %>
+          </div>
+
+          <!-- Category Distribution (Phase 5) -->
+          <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Category Distribution</h2>
+
+            <%= if Enum.empty?(@category_distribution) do %>
+              <div class="text-center text-gray-500 py-8">
+                <p>No category data available.</p>
+              </div>
+            <% else %>
+              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <%= for category <- @category_distribution do %>
+                  <div class={"p-4 rounded-lg border #{if category.category_slug == "unknown", do: "bg-gray-50 border-gray-200", else: "bg-white border-gray-200 hover:border-blue-200 hover:shadow-sm transition-all"}"}>
+                    <div class="flex items-center gap-3">
+                      <span class="text-2xl"><%= category_icon(category.category_slug) %></span>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-gray-900 truncate">
+                          <%= category.category_name %>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <span class="text-lg font-bold text-gray-800">
+                            <%= category.count %>
+                          </span>
+                          <span class="text-xs text-gray-500">
+                            (<%= category.percentage %>%)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Mini progress bar -->
+                    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        class={"h-full rounded-full #{if category.category_slug == "unknown", do: "bg-gray-400", else: "bg-blue-500"}"}
+                        style={"width: #{category.percentage}%"}
+                      >
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+
+          <!-- Metro Area Cities (if applicable) -->
+          <%= if length(@metro_cities) > 0 do %>
+            <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+              <h2 class="text-lg font-semibold text-gray-900 mb-4">Metro Area Cities</h2>
+              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                <%= for metro_city <- @metro_cities do %>
+                  <div class="px-3 py-2 bg-gray-50 rounded-lg text-sm">
+                    <span class="font-medium text-gray-900"><%= metro_city.name %></span>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+
+          <!-- Last Updated -->
+          <div class="text-center text-sm text-gray-500">
+            Last updated: <%= time_ago_in_words(@last_updated) %>
+            <button
+              phx-click="refresh"
+              class="ml-2 text-blue-600 hover:text-blue-800"
+            >
+              Refresh
+            </button>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  # Private Functions
+
+  defp get_city_by_slug(slug) do
+    from(c in City,
+      where: c.slug == ^slug,
+      preload: [:country]
+    )
+    |> Repo.one()
+  end
+
+  defp count_events(city_ids) do
+    now = DateTime.utc_now()
+    thirty_days_ago = DateTime.add(now, -30, :day)
+
+    from(e in PublicEvent,
+      join: v in Venue,
+      on: v.id == e.venue_id,
+      where: v.city_id in ^city_ids,
+      where: e.inserted_at >= ^thirty_days_ago
+    )
+    |> Repo.replica().aggregate(:count, :id, timeout: 30_000)
+  end
+
+  defp count_venues(city_ids) do
+    from(v in Venue,
+      where: v.city_id in ^city_ids
+    )
+    |> Repo.replica().aggregate(:count, :id, timeout: 30_000)
+  end
+
+  defp count_categories(city_ids) do
+    from(e in PublicEvent,
+      join: v in Venue,
+      on: v.id == e.venue_id,
+      where: v.city_id in ^city_ids,
+      where: not is_nil(e.category_id),
+      select: count(e.category_id, :distinct)
+    )
+    |> Repo.replica().one(timeout: 30_000) || 0
+  end
+
+  defp get_source_data(city_ids) do
+    # Get sources that have events in these cities
+    now = DateTime.utc_now()
+    seven_days_ago = DateTime.add(now, -7, :day)
+
+    sources =
+      from(pes in PublicEventSource,
+        join: pe in PublicEvent,
+        on: pe.id == pes.event_id,
+        join: v in Venue,
+        on: v.id == pe.venue_id,
+        join: s in Source,
+        on: s.id == pes.source_id,
+        where: v.city_id in ^city_ids,
+        where: pe.inserted_at >= ^seven_days_ago,
+        group_by: [s.id, s.name, s.slug],
+        select: %{
+          id: s.id,
+          name: s.name,
+          slug: s.slug,
+          event_count: count(pe.id, :distinct)
+        },
+        order_by: [desc: count(pe.id, :distinct)]
+      )
+      |> Repo.replica().all(timeout: 30_000)
+
+    # Enrich with job success rates (pass full sources for worker pattern matching)
+    job_stats = get_source_job_stats(sources)
+
+    Enum.map(sources, fn source ->
+      stats = Map.get(job_stats, source.id, %{success_rate: 0, total_jobs: 0})
+      health_status = calculate_source_health(stats.success_rate)
+
+      source
+      |> Map.put(:success_rate, stats.success_rate)
+      |> Map.put(:total_jobs, stats.total_jobs)
+      |> Map.put(:health_status, health_status)
+    end)
+  end
+
+  defp get_source_job_stats(sources) when sources == [], do: %{}
+
+  defp get_source_job_stats(sources) do
+    now = DateTime.utc_now()
+    seven_days_ago = DateTime.add(now, -7, :day)
+
+    # Extract source from worker name using regex, then group by it
+    # Worker format: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob"
+    from(j in JobExecutionSummary,
+      where: j.attempted_at >= ^seven_days_ago,
+      where: like(j.worker, "EventasaurusDiscovery.Sources.%"),
+      group_by: fragment("substring(? from 'Sources\\.([^.]+)\\.Jobs')", j.worker),
+      select: %{
+        source_match: fragment("substring(? from 'Sources\\.([^.]+)\\.Jobs')", j.worker),
+        total: count(j.id),
+        successes: sum(fragment("CASE WHEN ? = 'completed' THEN 1 ELSE 0 END", j.state))
+      }
+    )
+    |> Repo.replica().all(timeout: 30_000)
+    |> Enum.reduce(%{}, fn row, acc ->
+      # Convert PascalCase source match to snake_case slug
+      # CinemaCity -> cinema_city
+      slug = Macro.underscore(row.source_match || "")
+
+      # Find the source by slug to get the ID
+      source = Enum.find(sources, fn s -> s.slug == slug end)
+
+      if source do
+        success_rate =
+          if row.total > 0 do
+            round((row.successes || 0) / row.total * 100)
+          else
+            0
+          end
+
+        Map.put(acc, source.id, %{success_rate: success_rate, total_jobs: row.total})
+      else
+        acc
+      end
+    end)
+  end
+
+  defp calculate_source_health(success_rate) when success_rate >= 90, do: :healthy
+  defp calculate_source_health(success_rate) when success_rate >= 70, do: :warning
+  defp calculate_source_health(_), do: :critical
+
+  defp get_source_errors(sources) when sources == [], do: %{}
+
+  defp get_source_errors(sources) do
+    now = DateTime.utc_now()
+    twenty_four_hours_ago = DateTime.add(now, -24, :hour)
+
+    # Query errors using worker pattern matching (same approach as get_source_job_stats)
+    from(j in JobExecutionSummary,
+      where: j.attempted_at >= ^twenty_four_hours_ago,
+      where: like(j.worker, "EventasaurusDiscovery.Sources.%"),
+      where: j.state in ["failure", "cancelled", "discarded"],
+      order_by: [desc: j.attempted_at],
+      select: %{
+        id: j.id,
+        source_match: fragment("substring(? from 'Sources\\.([^.]+)\\.Jobs')", j.worker),
+        worker: j.worker,
+        state: j.state,
+        attempted_at: j.attempted_at,
+        error_category: fragment("?->>'error_category'", j.results),
+        error_message: fragment("?->>'error'", j.results)
+      }
+    )
+    |> Repo.replica().all(timeout: 30_000)
+    |> Enum.reduce(%{}, fn row, acc ->
+      # Convert PascalCase source match to snake_case slug (CinemaCity -> cinema_city)
+      slug = Macro.underscore(row.source_match || "")
+
+      # Find the source by slug to get the ID
+      source = Enum.find(sources, fn s -> s.slug == slug end)
+
+      if source do
+        errors = Map.get(acc, source.id, [])
+
+        error_entry = %{
+          id: row.id,
+          worker: row.worker,
+          state: row.state,
+          attempted_at: row.attempted_at,
+          error_category: row.error_category,
+          error_message: row.error_message
+        }
+
+        Map.put(acc, source.id, [error_entry | errors])
+      else
+        acc
+      end
+    end)
+    # Reverse each list to maintain order (newest first)
+    |> Enum.map(fn {source_id, errors} -> {source_id, Enum.reverse(errors)} end)
+    |> Map.new()
+  end
+
+  defp calculate_weekly_change(city_ids) do
+    now = DateTime.utc_now()
+    one_week_ago = DateTime.add(now, -7, :day)
+    two_weeks_ago = DateTime.add(now, -14, :day)
+
+    this_week =
+      from(e in PublicEvent,
+        join: v in Venue,
+        on: v.id == e.venue_id,
+        where: v.city_id in ^city_ids,
+        where: e.inserted_at >= ^one_week_ago
+      )
+      |> Repo.replica().aggregate(:count, :id, timeout: 30_000)
+
+    last_week =
+      from(e in PublicEvent,
+        join: v in Venue,
+        on: v.id == e.venue_id,
+        where: v.city_id in ^city_ids,
+        where: e.inserted_at >= ^two_weeks_ago,
+        where: e.inserted_at < ^one_week_ago
+      )
+      |> Repo.replica().aggregate(:count, :id, timeout: 30_000)
+
+    if last_week > 0 do
+      round((this_week - last_week) / last_week * 100)
+    else
+      if this_week > 0, do: 100, else: 0
+    end
+  end
+
+  defp get_daily_sparkline_data(city_id) do
+    # Get event counts for last 7 days
+    now = DateTime.utc_now()
+    seven_days_ago = DateTime.add(now, -7, :day)
+
+    # Get cluster for this city
+    cluster_city_ids = CityHierarchy.get_cluster_city_ids(city_id)
+
+    daily_counts =
+      from(e in PublicEvent,
+        join: v in Venue,
+        on: v.id == e.venue_id,
+        where: v.city_id in ^cluster_city_ids,
+        where: e.inserted_at >= ^seven_days_ago,
+        group_by: fragment("DATE(?)::date", e.inserted_at),
+        select: %{
+          date: fragment("DATE(?)::date", e.inserted_at),
+          count: count(e.id)
+        },
+        order_by: [asc: fragment("DATE(?)::date", e.inserted_at)]
+      )
+      |> Repo.replica().all(timeout: 30_000)
+
+    # Fill in missing days with 0
+    today = Date.utc_today()
+    dates = Enum.map(6..0//-1, fn days_ago -> Date.add(today, -days_ago) end)
+    counts_by_date = Map.new(daily_counts, fn %{date: d, count: c} -> {d, c} end)
+
+    Enum.map(dates, fn date -> Map.get(counts_by_date, date, 0) end)
+  end
+
+  defp get_metro_cities(cluster_city_ids, primary_city_id) do
+    other_ids = Enum.reject(cluster_city_ids, &(&1 == primary_city_id))
+
+    if Enum.empty?(other_ids) do
+      []
+    else
+      from(c in City,
+        where: c.id in ^other_ids,
+        order_by: [asc: c.name],
+        select: %{id: c.id, name: c.name, slug: c.slug}
+      )
+      |> Repo.all()
+    end
+  end
+
+  defp get_chart_data(city_id, date_range) do
+    # Get event trend data for the chart
+    city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, date_range)
+    TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
+  end
+
+  defp count_healthy_sources(source_data) do
+    Enum.count(source_data, fn s -> s.health_status == :healthy end)
+  end
+
+  defp format_number(num) when num >= 1_000_000, do: "#{Float.round(num / 1_000_000, 1)}M"
+  defp format_number(num) when num >= 1_000, do: "#{Float.round(num / 1_000, 1)}K"
+  defp format_number(num), do: to_string(num)
+
+  # Chart stat helpers
+  defp total_events_in_period(%{datasets: [%{data: data} | _]}) do
+    Enum.sum(data) |> format_number()
+  end
+
+  defp total_events_in_period(_), do: "0"
+
+  defp avg_events_per_day(%{datasets: [%{data: data} | _]}) when length(data) > 0 do
+    avg = Enum.sum(data) / length(data)
+    Float.round(avg, 1) |> format_decimal()
+  end
+
+  defp avg_events_per_day(_), do: "0"
+
+  defp peak_events_day(%{datasets: [%{data: data} | _], labels: labels})
+       when length(data) > 0 and length(labels) > 0 do
+    max_value = Enum.max(data)
+    max_index = Enum.find_index(data, fn x -> x == max_value end)
+    Enum.at(labels, max_index) || "N/A"
+  end
+
+  defp peak_events_day(_), do: "N/A"
+
+  defp format_decimal(num) when is_float(num) do
+    if Float.floor(num) == num do
+      trunc(num) |> to_string()
+    else
+      :erlang.float_to_binary(num, decimals: 1)
+    end
+  end
+
+  defp format_decimal(num), do: to_string(num)
+
+  # Phase 5: Top Venues
+  defp get_top_venues(city_ids, limit) do
+    now = DateTime.utc_now()
+    thirty_days_ago = DateTime.add(now, -30, :day)
+
+    from(e in PublicEvent,
+      join: v in Venue,
+      on: v.id == e.venue_id,
+      left_join: pes in PublicEventSource,
+      on: pes.event_id == e.id,
+      left_join: s in Source,
+      on: s.id == pes.source_id,
+      where: v.city_id in ^city_ids,
+      where: e.inserted_at >= ^thirty_days_ago,
+      group_by: [v.id, v.name, v.slug],
+      order_by: [desc: count(e.id, :distinct)],
+      limit: ^limit,
+      select: %{
+        venue_id: v.id,
+        venue_name: v.name,
+        venue_slug: v.slug,
+        event_count: count(e.id, :distinct),
+        sources: fragment("array_agg(DISTINCT ?)", s.name),
+        last_seen: max(e.inserted_at)
+      }
+    )
+    |> Repo.replica().all(timeout: 30_000)
+    |> Enum.map(fn venue ->
+      # Clean up sources array (remove nils)
+      sources = venue.sources |> Enum.reject(&is_nil/1) |> Enum.uniq()
+      %{venue | sources: sources}
+    end)
+  end
+
+  # Phase 5: Category Distribution
+  defp get_category_distribution(city_ids) do
+    now = DateTime.utc_now()
+    thirty_days_ago = DateTime.add(now, -30, :day)
+
+    # Get categorized events
+    categorized =
+      from(e in PublicEvent,
+        join: v in Venue,
+        on: v.id == e.venue_id,
+        join: pec in "public_event_categories",
+        on: pec.event_id == e.id,
+        join: c in Category,
+        on: c.id == pec.category_id,
+        where: v.city_id in ^city_ids,
+        where: e.inserted_at >= ^thirty_days_ago,
+        group_by: [c.id, c.name, c.slug],
+        order_by: [desc: count(e.id)],
+        select: %{
+          category_id: c.id,
+          category_name: c.name,
+          category_slug: c.slug,
+          count: count(e.id)
+        }
+      )
+      |> Repo.replica().all(timeout: 30_000)
+
+    # Get total count of events with categories
+    total_categorized = Enum.sum(Enum.map(categorized, & &1.count))
+
+    # Count uncategorized events
+    uncategorized_count =
+      from(e in PublicEvent,
+        join: v in Venue,
+        on: v.id == e.venue_id,
+        left_join: pec in "public_event_categories",
+        on: pec.event_id == e.id,
+        where: v.city_id in ^city_ids,
+        where: e.inserted_at >= ^thirty_days_ago,
+        where: is_nil(pec.category_id),
+        select: count(e.id, :distinct)
+      )
+      |> Repo.replica().one(timeout: 30_000) || 0
+
+    # Calculate total for percentages
+    total = total_categorized + uncategorized_count
+
+    # Calculate percentages and add to result
+    categories_with_percentage =
+      Enum.map(categorized, fn cat ->
+        percentage = if total > 0, do: round(cat.count / total * 100), else: 0
+        Map.put(cat, :percentage, percentage)
+      end)
+
+    # Add "Unknown" category if there are uncategorized events
+    if uncategorized_count > 0 do
+      percentage = if total > 0, do: round(uncategorized_count / total * 100), else: 0
+
+      categories_with_percentage ++
+        [
+          %{
+            category_id: nil,
+            category_name: "Unknown",
+            category_slug: "unknown",
+            count: uncategorized_count,
+            percentage: percentage
+          }
+        ]
+    else
+      categories_with_percentage
+    end
+  end
+
+  defp category_icon(category_slug) do
+    # Map category slugs to icons
+    icons = %{
+      "music" => "🎵",
+      "live-music" => "🎸",
+      "concerts" => "🎤",
+      "comedy" => "😂",
+      "standup" => "🎭",
+      "theater" => "🎭",
+      "theatre" => "🎭",
+      "film" => "🎬",
+      "movies" => "🎬",
+      "cinema" => "🎬",
+      "art" => "🎨",
+      "exhibition" => "🖼️",
+      "museum" => "🏛️",
+      "sports" => "⚽",
+      "fitness" => "💪",
+      "dance" => "💃",
+      "food" => "🍕",
+      "dining" => "🍽️",
+      "drinks" => "🍻",
+      "nightlife" => "🌙",
+      "party" => "🎉",
+      "club" => "🪩",
+      "festival" => "🎪",
+      "outdoor" => "🌲",
+      "nature" => "🏕️",
+      "workshop" => "🛠️",
+      "class" => "📚",
+      "education" => "🎓",
+      "lecture" => "📖",
+      "conference" => "💼",
+      "business" => "📊",
+      "networking" => "🤝",
+      "family" => "👨‍👩‍👧‍👦",
+      "kids" => "👶",
+      "children" => "🧒",
+      "games" => "🎮",
+      "trivia" => "❓",
+      "quiz" => "🧠",
+      "unknown" => "❔"
+    }
+
+    Map.get(icons, category_slug, "📌")
+  end
+
+  defp format_last_seen(nil), do: "Never"
+
+  defp format_last_seen(%NaiveDateTime{} = naive_dt) do
+    # Convert NaiveDateTime to DateTime (assuming UTC)
+    datetime = DateTime.from_naive!(naive_dt, "Etc/UTC")
+    time_ago_in_words(datetime)
+  end
+
+  defp format_last_seen(%DateTime{} = datetime) do
+    time_ago_in_words(datetime)
+  end
+end

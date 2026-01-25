@@ -158,27 +158,6 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
     do_search_venues(query, socket)
   end
 
-  defp do_search_venues(query, socket) do
-    results =
-      if String.length(query) >= 2 do
-        opts =
-          if socket.assigns.selected_city_id do
-            [city_id: socket.assigns.selected_city_id, limit: 20]
-          else
-            [limit: 20]
-          end
-
-        VenueDeduplication.search_venues(query, opts)
-      else
-        []
-      end
-
-    {:noreply,
-     socket
-     |> assign(:search_query, query)
-     |> assign(:search_results, results)}
-  end
-
   @impl true
   def handle_event("filter_by_city", %{"city_id" => city_id}, socket) do
     do_filter_by_city(city_id, socket)
@@ -188,40 +167,6 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
   def handle_event("filter_by_city", %{"value" => city_id}, socket) do
     # Handle raw select phx-change (sends "value" key)
     do_filter_by_city(city_id, socket)
-  end
-
-  defp do_filter_by_city(city_id, socket) do
-    city_id =
-      case city_id do
-        "" -> nil
-        nil -> nil
-        id when is_integer(id) -> id
-        id when is_binary(id) ->
-          case Integer.parse(id) do
-            {int, ""} -> int
-            _ -> nil
-          end
-      end
-
-    # Re-run search with city filter if there's a query
-    results =
-      if String.length(socket.assigns.search_query) >= 2 do
-        opts =
-          if city_id do
-            [city_id: city_id, limit: 20]
-          else
-            [limit: 20]
-          end
-
-        VenueDeduplication.search_venues(socket.assigns.search_query, opts)
-      else
-        []
-      end
-
-    {:noreply,
-     socket
-     |> assign(:selected_city_id, city_id)
-     |> assign(:search_results, results)}
   end
 
   @impl true
@@ -454,6 +399,61 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
   # ============================================================================
   # Private Functions
   # ============================================================================
+
+  defp do_search_venues(query, socket) do
+    results =
+      if String.length(query) >= 2 do
+        opts =
+          if socket.assigns.selected_city_id do
+            [city_id: socket.assigns.selected_city_id, limit: 20]
+          else
+            [limit: 20]
+          end
+
+        VenueDeduplication.search_venues(query, opts)
+      else
+        []
+      end
+
+    {:noreply,
+     socket
+     |> assign(:search_query, query)
+     |> assign(:search_results, results)}
+  end
+
+  defp do_filter_by_city(city_id, socket) do
+    city_id =
+      case city_id do
+        "" -> nil
+        nil -> nil
+        id when is_integer(id) -> id
+        id when is_binary(id) ->
+          case Integer.parse(id) do
+            {int, ""} -> int
+            _ -> nil
+          end
+      end
+
+    # Re-run search with city filter if there's a query
+    results =
+      if String.length(socket.assigns.search_query) >= 2 do
+        opts =
+          if city_id do
+            [city_id: city_id, limit: 20]
+          else
+            [limit: 20]
+          end
+
+        VenueDeduplication.search_venues(socket.assigns.search_query, opts)
+      else
+        []
+      end
+
+    {:noreply,
+     socket
+     |> assign(:selected_city_id, city_id)
+     |> assign(:search_results, results)}
+  end
 
   defp count_events_for_venue(venue_id) do
     Repo.replica().aggregate(
