@@ -183,6 +183,7 @@ defmodule EventasaurusWeb.Live.Helpers.CityPageFilters do
   defp filter_by_date_bounds(events, start_date, end_date) do
     Enum.filter(events, fn event ->
       starts_at = get_event_start(event)
+
       starts_at && DateTime.compare(starts_at, start_date) != :lt &&
         DateTime.compare(starts_at, end_date) != :gt
     end)

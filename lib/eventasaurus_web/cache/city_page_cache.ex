@@ -356,7 +356,9 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
         {:ok, cached_value}
 
       {:error, reason} ->
-        Logger.error("[BaseCache] ERROR for #{city_slug}: #{inspect(reason)} - enqueueing refresh")
+        Logger.error(
+          "[BaseCache] ERROR for #{city_slug}: #{inspect(reason)} - enqueueing refresh"
+        )
 
         CityPageTelemetry.cache_event(:miss, %{
           cache_key: cache_key,
