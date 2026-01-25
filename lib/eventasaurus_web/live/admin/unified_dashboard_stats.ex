@@ -31,16 +31,28 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
       {:freshness, fn -> fetch_data_freshness() end}
     ]
 
-    tasks
-    |> Task.async_stream(fn {key, func} -> {key, func.()} end,
-      max_concurrency: 4,
-      timeout: 10_000,
-      on_timeout: :kill_task
-    )
-    |> Enum.reduce(%{}, fn
-      {:ok, {key, value}}, acc -> Map.put(acc, key, value)
-      {:exit, _reason}, acc -> acc
-    end)
+    # Fallback values when tasks time out or fail
+    fallbacks = %{
+      health: %{sources: %{}, avg_score: 0, sources_meeting_slo: 0, total_sources: 0, status: :error},
+      queue: %{available: 0, scheduled: 0, executing: 0, retryable: 0, discarded: 0, total_pending: 0},
+      alerts: %{recent_errors: [], error_rate: 0, critical_count: 0},
+      freshness: %{status: :unknown, sources: [], total_sources: 0, synced_today: 0, most_recent_hours_ago: nil}
+    }
+
+    results =
+      tasks
+      |> Task.async_stream(fn {key, func} -> {key, func.()} end,
+        max_concurrency: 4,
+        timeout: 10_000,
+        on_timeout: :kill_task
+      )
+      |> Enum.reduce(%{}, fn
+        {:ok, {key, value}}, acc -> Map.put(acc, key, value)
+        {:exit, _reason}, acc -> acc
+      end)
+
+    # Merge with fallbacks to ensure all keys are present
+    Map.merge(fallbacks, results)
   end
 
   @doc """
@@ -55,16 +67,29 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
       {:data_quality, fn -> fetch_data_quality_stats() end}
     ]
 
-    tasks
-    |> Task.async_stream(fn {key, func} -> {key, func.()} end,
-      max_concurrency: 3,
-      timeout: 15_000,
-      on_timeout: :kill_task
-    )
-    |> Enum.reduce(%{}, fn
-      {:ok, {key, value}}, acc -> Map.put(acc, key, value)
-      {:exit, _reason}, acc -> acc
-    end)
+    # Fallback values when tasks time out or fail
+    fallbacks = %{
+      events: %{total: 0, upcoming: 0, past: 0},
+      movies: %{total: 0, matched: 0, unmatched: 0, match_rate: 0.0},
+      images: %{cached: 0, failed: 0, total_size: 0},
+      geocoding: %{success_rate: 0.0, cached: 0, pending: 0, failed: 0},
+      data_quality: %{duplicate_count: 0, venues_without_coords: 0}
+    }
+
+    results =
+      tasks
+      |> Task.async_stream(fn {key, func} -> {key, func.()} end,
+        max_concurrency: 3,
+        timeout: 15_000,
+        on_timeout: :kill_task
+      )
+      |> Enum.reduce(%{}, fn
+        {:ok, {key, value}}, acc -> Map.put(acc, key, value)
+        {:exit, _reason}, acc -> acc
+      end)
+
+    # Merge with fallbacks to ensure all keys are present
+    Map.merge(fallbacks, results)
   end
 
   @doc """
@@ -77,16 +102,26 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
       {:sources, fn -> fetch_source_stats() end}
     ]
 
-    tasks
-    |> Task.async_stream(fn {key, func} -> {key, func.()} end,
-      max_concurrency: 2,
-      timeout: 15_000,
-      on_timeout: :kill_task
-    )
-    |> Enum.reduce(%{}, fn
-      {:ok, {key, value}}, acc -> Map.put(acc, key, value)
-      {:exit, _reason}, acc -> acc
-    end)
+    # Fallback values when tasks time out or fail
+    fallbacks = %{
+      collisions: %{total: 0, cross_source: 0, same_source: 0},
+      sources: %{active: 0, inactive: 0, total: 0}
+    }
+
+    results =
+      tasks
+      |> Task.async_stream(fn {key, func} -> {key, func.()} end,
+        max_concurrency: 2,
+        timeout: 15_000,
+        on_timeout: :kill_task
+      )
+      |> Enum.reduce(%{}, fn
+        {:ok, {key, value}}, acc -> Map.put(acc, key, value)
+        {:exit, _reason}, acc -> acc
+      end)
+
+    # Merge with fallbacks to ensure all keys are present
+    Map.merge(fallbacks, results)
   end
 
   @doc """

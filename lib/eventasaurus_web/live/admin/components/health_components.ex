@@ -1601,7 +1601,55 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
         <% end %>
       </div>
 
-      <%= if @sources && is_list(@sources) && length(@sources) > 0 do %>
+      <%= cond do %>
+        <% @sources == nil -> %>
+          <!-- Loading skeleton -->
+          <div class="bg-white shadow rounded-lg overflow-hidden">
+            <div class="animate-pulse">
+              <!-- Header skeleton -->
+              <div class="bg-gray-50 px-4 py-3 border-b">
+                <div class="flex space-x-4">
+                  <div class="h-4 bg-gray-200 rounded w-20"></div>
+                  <div class="h-4 bg-gray-200 rounded w-16"></div>
+                  <div class="h-4 bg-gray-200 rounded w-16"></div>
+                  <div class="h-4 bg-gray-200 rounded w-20"></div>
+                  <div class="h-4 bg-gray-200 rounded w-16"></div>
+                  <div class="h-4 bg-gray-200 rounded w-16"></div>
+                </div>
+              </div>
+              <!-- Row skeletons -->
+              <%= for _ <- 1..5 do %>
+                <div class="px-4 py-4 border-b">
+                  <div class="flex items-center space-x-4">
+                    <div class="h-2 w-2 bg-gray-200 rounded-full"></div>
+                    <div class="h-4 bg-gray-200 rounded w-28"></div>
+                    <div class="h-6 bg-gray-200 rounded-full w-14"></div>
+                    <div class="h-4 bg-gray-200 rounded w-16"></div>
+                    <div class="h-4 bg-gray-200 rounded w-12"></div>
+                    <div class="h-4 bg-gray-200 rounded w-14"></div>
+                    <div class="h-4 bg-gray-200 rounded w-16"></div>
+                    <div class="flex space-x-0.5">
+                      <%= for _ <- 1..7 do %>
+                        <div class="w-1.5 h-4 bg-gray-200 rounded-sm"></div>
+                      <% end %>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% @sources == :error -> %>
+          <!-- Error state -->
+          <div class="bg-white shadow rounded-lg overflow-hidden px-6 py-12 text-center">
+            <div class="text-red-500 mb-2">
+              <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <p class="text-red-600 font-medium">Failed to load source data</p>
+            <p class="text-gray-500 text-sm mt-1">Please try refreshing the page</p>
+          </div>
+        <% is_list(@sources) && length(@sources) > 0 -> %>
         <div class="bg-white shadow rounded-lg overflow-hidden">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
@@ -1755,8 +1803,8 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
             </tbody>
           </table>
         </div>
-      <% else %>
-        <!-- No sources message -->
+      <% true -> %>
+        <!-- No sources (empty list) -->
         <div class="bg-white shadow rounded-lg overflow-hidden px-6 py-12 text-center text-gray-500">
           <p><%= @empty_state_text %></p>
         </div>
