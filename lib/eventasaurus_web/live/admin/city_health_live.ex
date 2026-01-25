@@ -28,6 +28,9 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
   # Auto-refresh every 5 minutes
   @refresh_interval :timer.minutes(5)
 
+  @type socket :: Phoenix.LiveView.Socket.t()
+
+  @spec mount(map(), map(), socket()) :: {:ok, socket()}
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
@@ -47,12 +50,14 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
     {:ok, socket}
   end
 
+  @spec handle_info(:refresh, socket()) :: {:noreply, socket()}
   @impl true
   def handle_info(:refresh, socket) do
     Process.send_after(self(), :refresh, @refresh_interval)
     {:noreply, load_city_health_data(socket)}
   end
 
+  @spec handle_event(String.t(), map(), socket()) :: {:noreply, socket()}
   @impl true
   def handle_event("refresh", _params, socket) do
     {:noreply, load_city_health_data(socket)}
@@ -451,12 +456,26 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
     |> String.replace("Job", "")
   end
 
+  # Valid status filter values (whitelist for security)
+  @valid_status_filters %{
+    "all" => :all,
+    "healthy" => :healthy,
+    "warning" => :warning,
+    "critical" => :critical,
+    "disabled" => :disabled
+  }
+
   defp filter_cities(cities, "all"), do: cities
 
-  defp filter_cities(cities, status) do
-    status_atom = String.to_existing_atom(status)
-    Enum.filter(cities, fn city -> city.health_status == status_atom end)
+  defp filter_cities(cities, status) when is_binary(status) do
+    case Map.get(@valid_status_filters, status) do
+      nil -> cities  # Invalid status, return all cities
+      :all -> cities
+      status_atom -> Enum.filter(cities, fn city -> city.health_status == status_atom end)
+    end
   end
+
+  defp filter_cities(cities, _), do: cities
 
   defp sort_cities(cities, column, direction) do
     sorter = case column do
@@ -479,6 +498,7 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
 
   defp sort_indicator(_, _, _), do: ""
 
+  @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   @impl true
   def render(assigns) do
     ~H"""

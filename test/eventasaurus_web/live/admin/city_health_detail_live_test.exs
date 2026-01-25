@@ -404,13 +404,16 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLiveTest do
       assert html =~ "%"
     end
 
-    test "displays category icons", %{conn: conn, city: city} do
+    test "displays category table with sortable headers", %{conn: conn, city: city} do
       {:ok, _live, html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
 
-      # Default icon appears for test categories (unique slugs don't match predefined icons)
-      assert html =~ "📌"
-      # Unknown category icon also appears (white question mark ornament)
-      assert html =~ "❔"
+      # Table headers should be present (matching Source Status styling)
+      assert html =~ "Category"
+      assert html =~ "Events"
+      assert html =~ "Distribution"
+
+      # Should have inline progress bars for distribution (blue for regular categories)
+      assert html =~ "bg-blue-500"
     end
 
     test "displays no category data message when city has no events", %{conn: conn} do

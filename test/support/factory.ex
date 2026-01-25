@@ -915,11 +915,20 @@ defmodule EventasaurusApp.Factory do
 
   @doc """
   Factory for PublicEventCategory schema (event-category associations)
+
+  Creates associations for event and category. Can override with:
+    insert(:public_event_category, event_id: existing_event.id, category_id: existing_category.id)
   """
   def public_event_category_factory do
     alias EventasaurusDiscovery.Categories.PublicEventCategory
 
+    # Create associated event and category
+    event = insert(:public_event)
+    category = insert(:category)
+
     %PublicEventCategory{
+      event_id: event.id,
+      category_id: category.id,
       is_primary: false,
       source: nil,
       confidence: 1.0
