@@ -511,20 +511,34 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
             Last updated: <%= time_ago_in_words(@last_updated) %>
           </p>
         </div>
-        <button
-          phx-click="refresh"
-          class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-        >
-          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          Refresh
-        </button>
+        <div class="flex items-center gap-3">
+          <.link
+            navigate={~p"/venues/duplicates"}
+            class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900"
+          >
+            🔀 Venue Duplicates
+          </.link>
+          <.link
+            navigate={~p"/admin/discovery/stats"}
+            class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900"
+          >
+            📊 Discovery Stats
+          </.link>
+          <button
+            phx-click="refresh"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            Refresh
+          </button>
+        </div>
       </div>
 
       <!-- Summary Cards -->
@@ -565,7 +579,7 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
                 <%= for city <- @cities_needing_attention do %>
                   <% {emoji, _label, _color} = health_indicator(city.health_status) %>
                   <.link
-                    navigate={~p"/admin/discovery/stats/city/#{city.slug}"}
+                    navigate={~p"/admin/cities/#{city.slug}/health"}
                     class="inline-flex items-center gap-1 px-3 py-1 bg-gray-50 border border-gray-300 rounded-full text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                   >
                     <%= emoji %> <%= city.name %>
@@ -738,7 +752,7 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
                 </td>
                 <td class="px-4 py-4 whitespace-nowrap text-right text-sm">
                   <.link
-                    navigate={~p"/admin/discovery/stats/city/#{city.slug}"}
+                    navigate={~p"/admin/cities/#{city.slug}/health"}
                     class="text-blue-600 hover:text-blue-900"
                   >
                     View Details →

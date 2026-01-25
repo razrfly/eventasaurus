@@ -202,6 +202,9 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   @doc """
   Source Activity (30%): Job success rate for city-related jobs in last 7 days.
   Score = (successful_jobs / total_jobs) * 100
+
+  Note: JobExecutionSummary uses Oban states: 'completed' (success), 'retryable' (failed),
+  'cancelled', 'discarded'. We count 'completed' as successful.
   """
   def calculate_source_activity(city_id) do
     city = get_city(city_id)
@@ -212,13 +215,14 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
       hours_ago = DateTime.utc_now() |> DateTime.add(-@job_activity_hours, :hour)
 
       # Query jobs that have this city's slug in their args
+      # Note: Oban uses 'completed' for successful jobs, not 'success'
       query =
         from(j in JobExecutionSummary,
           where: j.attempted_at >= ^hours_ago,
           where: fragment("?->>'city_slug' = ?", j.args, ^city.slug),
           select: %{
             total: count(j.id),
-            successful: sum(fragment("CASE WHEN ? = 'success' THEN 1 ELSE 0 END", j.state))
+            successful: sum(fragment("CASE WHEN ? = 'completed' THEN 1 ELSE 0 END", j.state))
           }
         )
 
@@ -238,7 +242,10 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
 
   @doc """
   Data Quality (20%): Percentage of events with complete metadata.
-  Checks: title, description, venue_id, category
+  Checks: title, venue_id, and has at least one category in join table.
+
+  Note: Categories use the public_event_categories join table, NOT the legacy
+  category_id column on public_events (which is deprecated).
   """
   def calculate_data_quality(city_id) do
     query =
@@ -255,13 +262,13 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
                 CASE WHEN
                   ? IS NOT NULL AND ? != '' AND
                   ? IS NOT NULL AND
-                  ? IS NOT NULL
+                  EXISTS (SELECT 1 FROM public_event_categories pec WHERE pec.event_id = ?)
                 THEN 1 ELSE 0 END
                 """,
                 pe.title,
                 pe.title,
                 pe.venue_id,
-                pe.category_id
+                pe.id
               )
             )
         }
@@ -362,7 +369,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
           select: {
             fragment("?->>'city_slug'", j.args),
             count(j.id),
-            sum(fragment("CASE WHEN ? = 'success' THEN 1 ELSE 0 END", j.state))
+            sum(fragment("CASE WHEN ? = 'completed' THEN 1 ELSE 0 END", j.state))
           }
         )
 

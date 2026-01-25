@@ -382,6 +382,25 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   def render(assigns) do
     ~H"""
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Deprecation Notice -->
+      <div class="mb-6 bg-amber-50 border border-amber-300 rounded-lg p-4">
+        <div class="flex items-start gap-3">
+          <span class="text-amber-600 text-xl">⚠️</span>
+          <div class="flex-1">
+            <h3 class="font-semibold text-amber-800">This page is deprecated</h3>
+            <p class="text-sm text-amber-700 mt-1">
+              This page will be removed soon. Please use the new City Health Dashboard for improved metrics and features.
+            </p>
+            <.link
+              navigate={~p"/admin/cities/#{@city.slug}/health"}
+              class="inline-flex items-center gap-1 mt-2 text-sm font-medium text-amber-800 hover:text-amber-900 underline"
+            >
+              Go to New City Health Dashboard →
+            </.link>
+          </div>
+        </div>
+      </div>
+
       <!-- Header with Back Button -->
       <div class="mb-8">
         <div class="flex items-center mb-4">
