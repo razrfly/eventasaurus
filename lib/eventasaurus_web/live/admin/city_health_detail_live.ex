@@ -31,6 +31,18 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   # Auto-refresh every 5 minutes
   @refresh_interval :timer.minutes(5)
 
+  # Valid sort columns for the source status table (whitelist for security)
+  @valid_source_sort_columns ~w(display_name health_score success_rate p95_duration last_execution coverage_days)a
+
+  # Valid sort columns for venues table
+  @valid_venue_sort_columns ~w(venue_name event_count last_seen)a
+
+  # Valid sort columns for category distribution table
+  @valid_category_sort_columns ~w(category_name count percentage)a
+
+  @type socket :: Phoenix.LiveView.Socket.t()
+
+  @spec mount(map(), map(), socket()) :: {:ok, socket()}
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
     city = get_city_by_slug(city_slug)
@@ -57,12 +69,14 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     end
   end
 
+  @spec handle_info(:refresh, socket()) :: {:noreply, socket()}
   @impl true
   def handle_info(:refresh, socket) do
     Process.send_after(self(), :refresh, @refresh_interval)
     {:noreply, load_city_health_data(socket)}
   end
 
+  @spec handle_event(String.t(), map(), socket()) :: {:noreply, socket()}
   @impl true
   def handle_event("refresh", _params, socket) do
     {:noreply, load_city_health_data(socket)}
@@ -95,15 +109,16 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
 
   @impl true
   def handle_event("sort_sources", %{"column" => column}, socket) do
-    column = String.to_existing_atom(column)
+    column_atom = validate_source_sort_column(column)
+
     {new_sort_by, new_sort_dir} =
-      if socket.assigns.sort_by == column do
+      if socket.assigns.sort_by == column_atom do
         # Toggle direction
         new_dir = if socket.assigns.sort_dir == :desc, do: :asc, else: :desc
-        {column, new_dir}
+        {column_atom, new_dir}
       else
         # New column, default to descending
-        {column, :desc}
+        {column_atom, :desc}
       end
 
     sorted = sort_sources(socket.assigns.source_table_stats, new_sort_by, new_sort_dir)
@@ -113,6 +128,48 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
      |> assign(:sort_by, new_sort_by)
      |> assign(:sort_dir, new_sort_dir)
      |> assign(:source_table_stats, sorted)}
+  end
+
+  @impl true
+  def handle_event("sort_venues", %{"column" => column}, socket) do
+    column_atom = validate_venue_sort_column(column)
+
+    {new_sort_by, new_sort_dir} =
+      if socket.assigns.venue_sort_by == column_atom do
+        new_dir = if socket.assigns.venue_sort_dir == :desc, do: :asc, else: :desc
+        {column_atom, new_dir}
+      else
+        {column_atom, :desc}
+      end
+
+    sorted = sort_venues(socket.assigns.top_venues, new_sort_by, new_sort_dir)
+
+    {:noreply,
+     socket
+     |> assign(:venue_sort_by, new_sort_by)
+     |> assign(:venue_sort_dir, new_sort_dir)
+     |> assign(:top_venues, sorted)}
+  end
+
+  @impl true
+  def handle_event("sort_categories", %{"column" => column}, socket) do
+    column_atom = validate_category_sort_column(column)
+
+    {new_sort_by, new_sort_dir} =
+      if socket.assigns.category_sort_by == column_atom do
+        new_dir = if socket.assigns.category_sort_dir == :desc, do: :asc, else: :desc
+        {column_atom, new_dir}
+      else
+        {column_atom, :desc}
+      end
+
+    sorted = sort_categories(socket.assigns.category_distribution, new_sort_by, new_sort_dir)
+
+    {:noreply,
+     socket
+     |> assign(:category_sort_by, new_sort_by)
+     |> assign(:category_sort_dir, new_sort_dir)
+     |> assign(:category_distribution, sorted)}
   end
 
   @impl true
@@ -134,6 +191,30 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
 
     {:noreply, socket}
   end
+
+  # Private helper to safely validate sort column from user input
+  defp validate_source_sort_column(column) when is_binary(column) do
+    column_map = Map.new(@valid_source_sort_columns, fn atom -> {Atom.to_string(atom), atom} end)
+    Map.get(column_map, column, :health_score)
+  end
+
+  defp validate_source_sort_column(_), do: :health_score
+
+  # Private helper to safely validate venue sort column from user input
+  defp validate_venue_sort_column(column) when is_binary(column) do
+    column_map = Map.new(@valid_venue_sort_columns, fn atom -> {Atom.to_string(atom), atom} end)
+    Map.get(column_map, column, :event_count)
+  end
+
+  defp validate_venue_sort_column(_), do: :event_count
+
+  # Private helper to safely validate category sort column from user input
+  defp validate_category_sort_column(column) when is_binary(column) do
+    column_map = Map.new(@valid_category_sort_columns, fn atom -> {Atom.to_string(atom), atom} end)
+    Map.get(column_map, column, :count)
+  end
+
+  defp validate_category_sort_column(_), do: :count
 
   defp load_city_health_data(socket) do
     city = socket.assigns.city
@@ -189,6 +270,19 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     source_table_stats = UnifiedDashboardStats.fetch_source_table_stats_for_city(cluster_city_ids)
     sorted_source_table_stats = sort_sources(source_table_stats, sort_by, sort_dir)
 
+    # Preserve venue sort state or initialize to event_count descending
+    venue_sort_by = Map.get(socket.assigns, :venue_sort_by, :event_count)
+    venue_sort_dir = Map.get(socket.assigns, :venue_sort_dir, :desc)
+    sorted_venues = sort_venues(top_venues, venue_sort_by, venue_sort_dir)
+
+    # Preserve category sort state or initialize to count descending
+    category_sort_by = Map.get(socket.assigns, :category_sort_by, :count)
+    category_sort_dir = Map.get(socket.assigns, :category_sort_dir, :desc)
+    sorted_categories = sort_categories(category_distribution, category_sort_by, category_sort_dir)
+
+    # Calculate total events for category distribution
+    total_category_events = Enum.sum(Enum.map(category_distribution, & &1.count))
+
     socket
     |> assign(:loading, false)
     |> assign(:health_data, health_data)
@@ -205,13 +299,19 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     |> assign(:sparkline, sparkline_data)
     |> assign(:date_range, date_range)
     |> assign(:chart_data, chart_data)
-    |> assign(:top_venues, top_venues)
-    |> assign(:category_distribution, category_distribution)
+    |> assign(:top_venues, sorted_venues)
+    |> assign(:category_distribution, sorted_categories)
+    |> assign(:total_category_events, total_category_events)
     |> assign(:sort_by, sort_by)
     |> assign(:sort_dir, sort_dir)
+    |> assign(:venue_sort_by, venue_sort_by)
+    |> assign(:venue_sort_dir, venue_sort_dir)
+    |> assign(:category_sort_by, category_sort_by)
+    |> assign(:category_sort_dir, category_sort_dir)
     |> assign(:last_updated, DateTime.utc_now())
   end
 
+  @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   @impl true
   def render(assigns) do
     ~H"""
@@ -394,132 +494,203 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
             sort_by={@sort_by}
             sort_dir={@sort_dir}
             on_sort="sort_sources"
+            empty_state_text="No sources found for this city."
           />
 
           <!-- Top Venues Table (Phase 5) -->
-          <div class="bg-white rounded-lg shadow-sm border mb-6">
-            <div class="px-6 py-4 border-b flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-gray-900">Top Venues</h2>
+          <div class="mb-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xl font-semibold text-gray-900">Top Venues</h2>
               <.link
                 navigate={~p"/venues/duplicates"}
-                class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                class="text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
-                View All
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
+                View All &rarr;
               </.link>
             </div>
 
             <%= if Enum.empty?(@top_venues) do %>
-              <div class="px-6 py-12 text-center text-gray-500">
+              <div class="bg-white shadow rounded-lg overflow-hidden px-6 py-12 text-center text-gray-500">
                 <p>No venues found for this city.</p>
               </div>
             <% else %>
-              <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                  <thead class="bg-gray-50">
-                    <tr>
-                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Venue
-                      </th>
-                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Events
-                      </th>
-                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Sources
-                      </th>
-                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Last Seen
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody class="bg-white divide-y divide-gray-200">
-                    <%= for venue <- @top_venues do %>
-                      <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 whitespace-nowrap">
-                          <div class="flex items-center">
-                            <div class="flex-shrink-0 h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
-                              <span class="text-gray-500 text-sm">📍</span>
-                            </div>
-                            <div class="ml-3">
-                              <.link
-                                navigate={~p"/venues/duplicates?venue_id=#{venue.venue_id}"}
-                                class="text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline"
-                              >
-                                <%= venue.venue_name %>
-                              </.link>
-                            </div>
-                          </div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            <%= venue.event_count %>
-                          </span>
-                        </td>
-                        <td class="px-6 py-4">
-                          <div class="flex flex-wrap gap-1">
-                            <%= for source <- Enum.take(venue.sources, 3) do %>
-                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                                <%= source %>
-                              </span>
-                            <% end %>
-                            <%= if length(venue.sources) > 3 do %>
-                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-50 text-gray-500">
-                                +<%= length(venue.sources) - 3 %> more
-                              </span>
+              <div class="bg-white shadow rounded-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                  <table class="min-w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th
+                          scope="col"
+                          class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                          phx-click="sort_venues"
+                          phx-value-column="venue_name"
+                        >
+                          <div class="flex items-center gap-1">
+                            Venue
+                            <%= if @venue_sort_by == :venue_name do %>
+                              <span class="text-blue-600"><%= if @venue_sort_dir == :asc, do: "▲", else: "▼" %></span>
                             <% end %>
                           </div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <%= format_last_seen(venue.last_seen) %>
-                        </td>
+                        </th>
+                        <th
+                          scope="col"
+                          class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                          phx-click="sort_venues"
+                          phx-value-column="event_count"
+                        >
+                          <div class="flex items-center justify-end gap-1">
+                            Events
+                            <%= if @venue_sort_by == :event_count do %>
+                              <span class="text-blue-600"><%= if @venue_sort_dir == :asc, do: "▲", else: "▼" %></span>
+                            <% end %>
+                          </div>
+                        </th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Sources
+                        </th>
+                        <th
+                          scope="col"
+                          class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                          phx-click="sort_venues"
+                          phx-value-column="last_seen"
+                        >
+                          <div class="flex items-center justify-end gap-1">
+                            Last Seen
+                            <%= if @venue_sort_by == :last_seen do %>
+                              <span class="text-blue-600"><%= if @venue_sort_dir == :asc, do: "▲", else: "▼" %></span>
+                            <% end %>
+                          </div>
+                        </th>
                       </tr>
-                    <% end %>
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      <%= for venue <- @top_venues do %>
+                        <tr class="hover:bg-gray-50 transition-colors">
+                          <td class="px-4 py-3 whitespace-nowrap">
+                            <.link
+                              navigate={~p"/venues/duplicates?venue_id=#{venue.venue_id}"}
+                              class="text-sm font-medium text-gray-900 hover:text-blue-600"
+                            >
+                              <%= venue.venue_name %>
+                            </.link>
+                          </td>
+                          <td class="px-4 py-3 whitespace-nowrap text-right">
+                            <span class="text-sm font-medium text-gray-900">
+                              <%= venue.event_count %>
+                            </span>
+                          </td>
+                          <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="text-sm text-gray-600">
+                              <%= format_sources_list(venue.sources) %>
+                            </span>
+                          </td>
+                          <td class="px-4 py-3 whitespace-nowrap text-right">
+                            <span class="text-sm text-gray-500">
+                              <%= format_compact_time(venue.last_seen) %>
+                            </span>
+                          </td>
+                        </tr>
+                      <% end %>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             <% end %>
           </div>
 
           <!-- Category Distribution (Phase 5) -->
-          <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Category Distribution</h2>
+          <div class="mb-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xl font-semibold text-gray-900">Category Distribution</h2>
+              <span class="text-sm text-gray-500">Total: <%= @total_category_events %> events</span>
+            </div>
 
             <%= if Enum.empty?(@category_distribution) do %>
-              <div class="text-center text-gray-500 py-8">
+              <div class="bg-white shadow rounded-lg overflow-hidden px-6 py-12 text-center text-gray-500">
                 <p>No category data available.</p>
               </div>
             <% else %>
-              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                <%= for category <- @category_distribution do %>
-                  <div class={"p-4 rounded-lg border #{if category.category_slug == "unknown", do: "bg-gray-50 border-gray-200", else: "bg-white border-gray-200 hover:border-blue-200 hover:shadow-sm transition-all"}"}>
-                    <div class="flex items-center gap-3">
-                      <span class="text-2xl"><%= category_icon(category.category_slug) %></span>
-                      <div class="flex-1 min-w-0">
-                        <div class="text-sm font-medium text-gray-900 truncate">
-                          <%= category.category_name %>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <span class="text-lg font-bold text-gray-800">
-                            <%= category.count %>
-                          </span>
-                          <span class="text-xs text-gray-500">
-                            (<%= category.percentage %>%)
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <!-- Mini progress bar -->
-                    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        class={"h-full rounded-full #{if category.category_slug == "unknown", do: "bg-gray-400", else: "bg-blue-500"}"}
-                        style={"width: #{category.percentage}%"}
-                      >
-                      </div>
-                    </div>
-                  </div>
-                <% end %>
+              <div class="bg-white shadow rounded-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                  <table class="min-w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th
+                          scope="col"
+                          class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                          phx-click="sort_categories"
+                          phx-value-column="category_name"
+                        >
+                          <div class="flex items-center gap-1">
+                            Category
+                            <%= if @category_sort_by == :category_name do %>
+                              <span class="text-blue-600"><%= if @category_sort_dir == :asc, do: "▲", else: "▼" %></span>
+                            <% end %>
+                          </div>
+                        </th>
+                        <th
+                          scope="col"
+                          class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-24"
+                          phx-click="sort_categories"
+                          phx-value-column="count"
+                        >
+                          <div class="flex items-center justify-end gap-1">
+                            Events
+                            <%= if @category_sort_by == :count do %>
+                              <span class="text-blue-600"><%= if @category_sort_dir == :asc, do: "▲", else: "▼" %></span>
+                            <% end %>
+                          </div>
+                        </th>
+                        <th
+                          scope="col"
+                          class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-20"
+                          phx-click="sort_categories"
+                          phx-value-column="percentage"
+                        >
+                          <div class="flex items-center justify-end gap-1">
+                            %
+                            <%= if @category_sort_by == :percentage do %>
+                              <span class="text-blue-600"><%= if @category_sort_dir == :asc, do: "▲", else: "▼" %></span>
+                            <% end %>
+                          </div>
+                        </th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Distribution
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      <%= for category <- @category_distribution do %>
+                        <tr class="hover:bg-gray-50 transition-colors">
+                          <td class="px-4 py-3 whitespace-nowrap">
+                            <span class={"text-sm font-medium #{if category.category_slug == "unknown", do: "text-gray-500 italic", else: "text-gray-900"}"}>
+                              <%= category.category_name %>
+                            </span>
+                          </td>
+                          <td class="px-4 py-3 whitespace-nowrap text-right">
+                            <span class="text-sm font-medium text-gray-900">
+                              <%= category.count %>
+                            </span>
+                          </td>
+                          <td class="px-4 py-3 whitespace-nowrap text-right">
+                            <span class="text-sm text-gray-600">
+                              <%= category.percentage %>%
+                            </span>
+                          </td>
+                          <td class="px-4 py-3">
+                            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                              <div
+                                class={"h-full rounded-full transition-all #{if category.category_slug == "unknown", do: "bg-gray-400", else: "bg-blue-500"}"}
+                                style={"width: #{category.percentage}%"}
+                              >
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      <% end %>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             <% end %>
           </div>
@@ -1052,65 +1223,6 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     end
   end
 
-  defp category_icon(category_slug) do
-    # Map category slugs to icons
-    icons = %{
-      "music" => "🎵",
-      "live-music" => "🎸",
-      "concerts" => "🎤",
-      "comedy" => "😂",
-      "standup" => "🎭",
-      "theater" => "🎭",
-      "theatre" => "🎭",
-      "film" => "🎬",
-      "movies" => "🎬",
-      "cinema" => "🎬",
-      "art" => "🎨",
-      "exhibition" => "🖼️",
-      "museum" => "🏛️",
-      "sports" => "⚽",
-      "fitness" => "💪",
-      "dance" => "💃",
-      "food" => "🍕",
-      "dining" => "🍽️",
-      "drinks" => "🍻",
-      "nightlife" => "🌙",
-      "party" => "🎉",
-      "club" => "🪩",
-      "festival" => "🎪",
-      "outdoor" => "🌲",
-      "nature" => "🏕️",
-      "workshop" => "🛠️",
-      "class" => "📚",
-      "education" => "🎓",
-      "lecture" => "📖",
-      "conference" => "💼",
-      "business" => "📊",
-      "networking" => "🤝",
-      "family" => "👨‍👩‍👧‍👦",
-      "kids" => "👶",
-      "children" => "🧒",
-      "games" => "🎮",
-      "trivia" => "❓",
-      "quiz" => "🧠",
-      "unknown" => "❔"
-    }
-
-    Map.get(icons, category_slug, "📌")
-  end
-
-  defp format_last_seen(nil), do: "Never"
-
-  defp format_last_seen(%NaiveDateTime{} = naive_dt) do
-    # Convert NaiveDateTime to DateTime (assuming UTC)
-    datetime = DateTime.from_naive!(naive_dt, "Etc/UTC")
-    time_ago_in_words(datetime)
-  end
-
-  defp format_last_seen(%DateTime{} = datetime) do
-    time_ago_in_words(datetime)
-  end
-
   # Sort sources for the source_status_table component
   defp sort_sources(sources, sort_by, sort_dir) when is_list(sources) do
     Enum.sort_by(sources, &source_sort_key(&1, sort_by), sort_dir)
@@ -1125,4 +1237,63 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   defp source_sort_key(source, :last_execution), do: source.last_execution || ~U[1970-01-01 00:00:00Z]
   defp source_sort_key(source, :coverage_days), do: source.coverage_days || 0
   defp source_sort_key(_source, _), do: 0
+
+  # Sort venues for the top venues table
+  defp sort_venues(venues, sort_by, sort_dir) when is_list(venues) do
+    Enum.sort_by(venues, &venue_sort_key(&1, sort_by), sort_dir)
+  end
+
+  defp sort_venues(venues, _sort_by, _sort_dir), do: venues
+
+  defp venue_sort_key(venue, :venue_name), do: String.downcase(venue.venue_name || "")
+  defp venue_sort_key(venue, :event_count), do: venue.event_count || 0
+  defp venue_sort_key(venue, :last_seen), do: venue.last_seen || ~N[1970-01-01 00:00:00]
+  defp venue_sort_key(_venue, _), do: 0
+
+  # Sort categories for the category distribution table
+  defp sort_categories(categories, sort_by, sort_dir) when is_list(categories) do
+    Enum.sort_by(categories, &category_sort_key(&1, sort_by), sort_dir)
+  end
+
+  defp sort_categories(categories, _sort_by, _sort_dir), do: categories
+
+  defp category_sort_key(cat, :category_name), do: String.downcase(cat.category_name || "")
+  defp category_sort_key(cat, :count), do: cat.count || 0
+  defp category_sort_key(cat, :percentage), do: cat.percentage || 0
+  defp category_sort_key(_cat, _), do: 0
+
+  # Format sources list with truncation (comma-separated, max 2 shown)
+  defp format_sources_list(nil), do: "—"
+  defp format_sources_list([]), do: "—"
+
+  defp format_sources_list(sources) when is_list(sources) do
+    case length(sources) do
+      0 -> "—"
+      1 -> Enum.at(sources, 0)
+      2 -> Enum.join(sources, ", ")
+      n -> "#{Enum.join(Enum.take(sources, 2), ", ")} +#{n - 2}"
+    end
+  end
+
+  # Format time in compact form (2h, 1d, etc.)
+  defp format_compact_time(nil), do: "—"
+
+  defp format_compact_time(%NaiveDateTime{} = naive_dt) do
+    datetime = DateTime.from_naive!(naive_dt, "Etc/UTC")
+    format_compact_time(datetime)
+  end
+
+  defp format_compact_time(%DateTime{} = datetime) do
+    now = DateTime.utc_now()
+    diff_seconds = DateTime.diff(now, datetime)
+
+    cond do
+      diff_seconds < 60 -> "now"
+      diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m"
+      diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h"
+      diff_seconds < 604_800 -> "#{div(diff_seconds, 86400)}d"
+      diff_seconds < 2_592_000 -> "#{div(diff_seconds, 604_800)}w"
+      true -> "#{div(diff_seconds, 2_592_000)}mo"
+    end
+  end
 end

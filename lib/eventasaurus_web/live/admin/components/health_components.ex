@@ -1320,6 +1320,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   - ≥80%: Yellow (warning)
   - <80%: Red (critical)
   """
+  @spec success_rate_badge_color(number()) :: String.t()
   def success_rate_badge_color(rate) when rate >= 95, do: "bg-green-100 text-green-800"
   def success_rate_badge_color(rate) when rate >= 80, do: "bg-yellow-100 text-yellow-800"
   def success_rate_badge_color(_rate), do: "bg-red-100 text-red-800"
@@ -1327,6 +1328,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Formats job timestamp for display in timeline tooltips.
   """
+  @spec format_job_time(map()) :: String.t()
   def format_job_time(%{completed_at: completed_at}) when not is_nil(completed_at) do
     Calendar.strftime(completed_at, "%Y-%m-%d %H:%M")
   end
@@ -1338,6 +1340,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Returns status indicator tuple: {emoji, label, color_class}
   """
+  @spec status_indicator(atom()) :: {String.t(), String.t(), String.t()}
   def status_indicator(:healthy), do: {"🟢", "Healthy", "text-green-600"}
   def status_indicator(:warning), do: {"🟡", "Warning", "text-yellow-600"}
   def status_indicator(:critical), do: {"🔴", "Critical", "text-red-600"}
@@ -1348,6 +1351,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Returns CSS classes for status backgrounds and text.
   """
+  @spec status_classes(atom()) :: String.t()
   def status_classes(:healthy), do: "bg-green-100 text-green-800"
   def status_classes(:warning), do: "bg-yellow-100 text-yellow-800"
   def status_classes(:critical), do: "bg-red-100 text-red-800"
@@ -1358,6 +1362,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Calculates sparkline bar heights from data (0-100 scale).
   """
+  @spec sparkline_heights(list()) :: list(number())
   def sparkline_heights(data) when is_list(data) and length(data) > 0 do
     max_val = Enum.max(data, fn -> 1 end)
     max_val = if max_val == 0, do: 1, else: max_val
@@ -1374,12 +1379,14 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Formats a change value with + prefix for positive numbers.
   """
+  @spec format_change(number()) :: String.t()
   def format_change(change) when change > 0, do: "+#{change}%"
   def format_change(change), do: "#{change}%"
 
   @doc """
   Formats time ago in human-readable words.
   """
+  @spec time_ago_in_words(DateTime.t() | nil) :: String.t()
   def time_ago_in_words(nil), do: "Never"
 
   def time_ago_in_words(datetime) do
@@ -1397,6 +1404,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   Returns the appropriate color atom based on a percentage value.
   Used for health component bars and source statistics.
   """
+  @spec component_color(number()) :: atom()
   def component_color(value) when value >= 80, do: :green
   def component_color(value) when value >= 50, do: :yellow
   def component_color(_), do: :red
@@ -1413,6 +1421,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
       iex> format_worker_name("EventasaurusDiscovery.Sources.WeekPl.Jobs.EventDetailJob")
       "EventDetail"
   """
+  @spec format_worker_name(binary() | any()) :: String.t()
   def format_worker_name(worker) when is_binary(worker) do
     worker
     |> String.split(".")
@@ -1573,6 +1582,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   attr :sort_by, :atom, default: nil
   attr :sort_dir, :atom, default: :desc
   attr :on_sort, :string, default: nil
+  attr :empty_state_text, :string, default: "No sources found."
 
   def source_status_table(assigns) do
     ~H"""
@@ -1748,7 +1758,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
       <% else %>
         <!-- No sources message -->
         <div class="bg-white shadow rounded-lg overflow-hidden px-6 py-12 text-center text-gray-500">
-          <p>No sources found for this city.</p>
+          <p><%= @empty_state_text %></p>
         </div>
       <% end %>
     </div>
@@ -1795,6 +1805,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Returns CSS class for health status dot color.
   """
+  @spec source_health_dot_class(atom()) :: String.t()
   def source_health_dot_class(:healthy), do: "bg-green-500"
   def source_health_dot_class(:degraded), do: "bg-yellow-500"
   def source_health_dot_class(:warning), do: "bg-orange-500"
@@ -1804,6 +1815,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Returns CSS class for health score badge.
   """
+  @spec source_health_badge_class(number()) :: String.t()
   def source_health_badge_class(score) when is_number(score) and score >= 95, do: "bg-green-100 text-green-800"
   def source_health_badge_class(score) when is_number(score) and score >= 85, do: "bg-yellow-100 text-yellow-800"
   def source_health_badge_class(score) when is_number(score) and score >= 70, do: "bg-orange-100 text-orange-800"
@@ -1812,6 +1824,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Returns CSS class for success rate text color.
   """
+  @spec source_success_rate_color(number()) :: String.t()
   def source_success_rate_color(rate) when is_number(rate) and rate >= 95.0, do: "text-green-600"
   def source_success_rate_color(rate) when is_number(rate) and rate >= 85.0, do: "text-yellow-600"
   def source_success_rate_color(_rate), do: "text-red-600"
@@ -1819,6 +1832,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Returns hex color for sparkline based on trend direction.
   """
+  @spec sparkline_color(atom()) :: String.t()
   def sparkline_color(:improving), do: "#22c55e"
   def sparkline_color(:declining), do: "#ef4444"
   def sparkline_color(:stable), do: "#6b7280"
@@ -1827,6 +1841,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Converts daily rates to SVG polyline points for sparkline.
   """
+  @spec sparkline_points(list()) :: String.t()
   def sparkline_points(daily_rates) when is_list(daily_rates) and length(daily_rates) > 0 do
     rates =
       Enum.map(daily_rates, fn
@@ -1854,6 +1869,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Returns CSS class for trend text color.
   """
+  @spec trend_text_class(atom()) :: String.t()
   def trend_text_class(:improving), do: "text-green-600"
   def trend_text_class(:declining), do: "text-red-600"
   def trend_text_class(:stable), do: "text-gray-500"
@@ -1862,6 +1878,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Returns trend arrow symbol.
   """
+  @spec trend_arrow(atom()) :: String.t()
   def trend_arrow(:improving), do: "↑"
   def trend_arrow(:declining), do: "↓"
   def trend_arrow(:stable), do: "→"
@@ -1870,6 +1887,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Formats duration in milliseconds to human-readable string.
   """
+  @spec format_duration_ms(number() | nil) :: String.t()
   def format_duration_ms(nil), do: "-"
   def format_duration_ms(ms) when ms == 0, do: "0ms"
 
@@ -1886,6 +1904,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Formats last run timestamp to relative time string.
   """
+  @spec format_last_run(DateTime.t() | NaiveDateTime.t() | nil) :: String.t()
   def format_last_run(nil), do: "Never"
 
   def format_last_run(%DateTime{} = dt) do
@@ -1912,6 +1931,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   Gets z-score status for a source from zscore_data.
   Returns {:ok, status, zscore_info} | :not_available
   """
+  @spec get_zscore_status(String.t(), map() | nil) :: {:ok, atom(), map()} | :not_available
   def get_zscore_status(_source, nil), do: :not_available
 
   def get_zscore_status(source, zscore_data) do
@@ -1924,6 +1944,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @doc """
   Renders z-score indicator as HTML string.
   """
+  @spec render_zscore_indicator(:not_available | {:ok, atom(), map()}) :: String.t()
   def render_zscore_indicator(:not_available), do: ""
 
   def render_zscore_indicator({:ok, :normal, _data}) do
