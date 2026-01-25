@@ -214,7 +214,9 @@ defmodule Mix.Tasks.Cache.Diagnose do
         do: String.pad_leading("#{status.age_minutes}m", 6),
         else: String.pad_leading("-", 6)
 
-    IO.puts("│ #{city_col} │ #{status_icon} #{status_text}│ #{events_col} │ #{cached_at_col} │ #{age_col} │")
+    IO.puts(
+      "│ #{city_col} │ #{status_icon} #{status_text}│ #{events_col} │ #{cached_at_col} │ #{age_col} │"
+    )
   end
 
   defp display_pending_jobs(cities) do
@@ -406,7 +408,8 @@ defmodule Mix.Tasks.Cache.Diagnose do
     case EventasaurusWeb.Jobs.CityPageCacheRefreshJob.enqueue_base(city_slug, @default_radius_km) do
       {:ok, %Oban.Job{id: job_id}} ->
         IO.puts(
-          IO.ANSI.green() <> "✅ Enqueued refresh job ##{job_id} for #{city_slug}" <> IO.ANSI.reset()
+          IO.ANSI.green() <>
+            "✅ Enqueued refresh job ##{job_id} for #{city_slug}" <> IO.ANSI.reset()
         )
 
       {:ok, :duplicate} ->
@@ -453,12 +456,13 @@ defmodule Mix.Tasks.Cache.Diagnose do
     IO.puts("Available cities with events:")
 
     from(c in City,
-      join: subquery in subquery(
-        from(e in "city_events_mv",
-          select: %{city_slug: e.city_slug},
-          distinct: true
-        )
-      ),
+      join:
+        subquery in subquery(
+          from(e in "city_events_mv",
+            select: %{city_slug: e.city_slug},
+            distinct: true
+          )
+        ),
       on: c.slug == subquery.city_slug,
       select: c.slug,
       order_by: [asc: c.slug]

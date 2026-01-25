@@ -177,13 +177,6 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
   # Format source name for display
   def format_source_name(name), do: UnifiedDashboardStats.format_source_name(name)
 
-  # Health status color helper
-  def health_color(:healthy), do: "green"
-  def health_color(:degraded), do: "yellow"
-  def health_color(:warning), do: "orange"
-  def health_color(:critical), do: "red"
-  def health_color(_), do: "gray"
-
   # Health status text
   def health_text(:healthy), do: "Healthy"
   def health_text(:degraded), do: "Degraded"
@@ -286,112 +279,10 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
     "μ: #{Float.round(zscore_data.success_mean, 1)}% success, #{Float.round(zscore_data.duration_mean, 1)}s avg"
   end
 
-  # Source table helper functions
-  # NOTE: These functions are duplicated in HealthComponents. When we use the shared
-  # source_status_table component, these are no longer needed for the Source Status table,
-  # but may still be used elsewhere in the template.
-
-  # Health status dot color (green/yellow/red dot next to source name)
-  def source_health_dot_class(:healthy), do: "bg-green-500"
-  def source_health_dot_class(:degraded), do: "bg-yellow-500"
-  def source_health_dot_class(:warning), do: "bg-orange-500"
-  def source_health_dot_class(:critical), do: "bg-red-500"
-  def source_health_dot_class(_), do: "bg-gray-400"
-
-  # Health score badge class (for the health percentage badge)
-  def source_health_badge_class(score) when score >= 95, do: "bg-green-100 text-green-800"
-  def source_health_badge_class(score) when score >= 85, do: "bg-yellow-100 text-yellow-800"
-  def source_health_badge_class(score) when score >= 70, do: "bg-orange-100 text-orange-800"
-  def source_health_badge_class(_score), do: "bg-red-100 text-red-800"
-
-  # Success rate color (for success % column)
-  def success_rate_color(rate) when rate >= 95.0, do: "text-green-600"
-  def success_rate_color(rate) when rate >= 85.0, do: "text-yellow-600"
-  def success_rate_color(_rate), do: "text-red-600"
-
-  # Sparkline color based on trend direction
-  def sparkline_color(:improving), do: "#22c55e"
-  def sparkline_color(:declining), do: "#ef4444"
-  def sparkline_color(:stable), do: "#6b7280"
-  def sparkline_color(_), do: "#6b7280"
-
-  # Convert daily rates to SVG polyline points
-  # daily_rates is a list of maps: [%{day: "2026-01-01", success_rate: 75.5, total: 100}, ...]
-  def sparkline_points(daily_rates) when is_list(daily_rates) and length(daily_rates) > 0 do
-    # Extract success_rate values from the maps
-    rates =
-      Enum.map(daily_rates, fn
-        %{success_rate: rate} when is_number(rate) -> rate
-        rate when is_number(rate) -> rate
-        _ -> 0.0
-      end)
-
-    # Normalize rates to fit in 64x24 viewbox
-    min_val = Enum.min(rates) || 0
-    max_val = Enum.max(rates) || 100
-    range = max(max_val - min_val, 1)
-
-    rates
-    |> Enum.with_index()
-    |> Enum.map(fn {rate, i} ->
-      x = i * (64 / max(length(rates) - 1, 1))
-      # Invert Y because SVG y=0 is top
-      y = 22 - (rate - min_val) / range * 20
-      "#{Float.round(x, 1)},#{Float.round(y, 1)}"
-    end)
-    |> Enum.join(" ")
-  end
-
-  def sparkline_points(_), do: "0,12 64,12"
-
-  # Trend text color class
-  def trend_text_class(:improving), do: "text-green-600"
-  def trend_text_class(:declining), do: "text-red-600"
-  def trend_text_class(:stable), do: "text-gray-500"
-  def trend_text_class(_), do: "text-gray-500"
-
-  # Trend arrow symbol
-  def trend_arrow(:improving), do: "↑"
-  def trend_arrow(:declining), do: "↓"
-  def trend_arrow(:stable), do: "→"
-  def trend_arrow(_), do: "→"
-
-  # Format duration in milliseconds to human-readable
-  def format_duration(nil), do: "-"
-  def format_duration(ms) when ms == 0, do: "0ms"
-
-  def format_duration(ms) when is_number(ms) do
-    cond do
-      ms < 1000 -> "#{round(ms)}ms"
-      ms < 60_000 -> "#{Float.round(ms / 1000, 1)}s"
-      true -> "#{Float.round(ms / 60_000, 1)}m"
-    end
-  end
-
-  # Format last run timestamp
-  def format_last_run(nil), do: "Never"
-
-  def format_last_run(%DateTime{} = dt) do
-    now = DateTime.utc_now()
-    diff_seconds = DateTime.diff(now, dt)
-
-    cond do
-      diff_seconds < 60 -> "Just now"
-      diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m ago"
-      diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h ago"
-      true -> "#{div(diff_seconds, 86400)}d ago"
-    end
-  end
-
-  def format_last_run(%NaiveDateTime{} = dt) do
-    dt
-    |> DateTime.from_naive!("Etc/UTC")
-    |> format_last_run()
-  end
-
-  def format_last_run(_), do: "Unknown"
-
   # Z-score helper functions
+  # NOTE: Source table helper functions (source_health_dot_class, sparkline_points, etc.)
+  # have been removed as they are now provided by the shared source_status_table component
+  # in HealthComponents.
 
   @doc """
   Get z-score status for a source from zscore_data.

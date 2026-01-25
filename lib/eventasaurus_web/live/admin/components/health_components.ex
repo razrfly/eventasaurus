@@ -1,29 +1,114 @@
 defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   @moduledoc """
-  Shared UI components for health dashboards.
+  Shared UI components for admin health dashboards.
 
-  Provides reusable components for displaying health scores, status indicators,
-  progress bars, sparklines, and stat cards. Used by both the City Health Dashboard
-  index and detail pages.
+  This module provides a unified component library for displaying health metrics,
+  status indicators, and data visualizations across all admin pages. Created as
+  part of Issue #3396 (Admin Dashboard Unification) to ensure consistent UI/UX.
 
-  ## Components
+  ## Design Philosophy
 
-  - `health_score_pill/1` - Compact status pill with score and color
-  - `health_score_large/1` - Large score display with progress ring
-  - `progress_bar/1` - Configurable progress bar
-  - `sparkline/1` - 7-day trend mini bar chart
-  - `stat_card/1` - Stat card with icon and border
-  - `health_component_bar/1` - Individual health component with label and weight
-  - `trend_indicator/1` - Trend arrow with percentage
+  1. **Consistency**: All admin pages use the same visual language for health status
+  2. **Accessibility**: Color-coded status always includes text/emoji alternatives
+  3. **Responsiveness**: Components adapt to container width
+  4. **Composability**: Small components combine to build complex dashboards
+
+  ## Component Categories
+
+  ### Health Score Display
+  - `health_score_pill/1` - Compact inline status pill (tables, lists)
+  - `health_score_large/1` - Large circular score display (hero sections)
+  - `health_metric_card/1` - Card with score, progress bar, and target
+
+  ### Progress & Trends
+  - `progress_bar/1` - Horizontal progress bar with label option
+  - `sparkline/1` - 7-day mini bar chart for trends
+  - `trend_indicator/1` - Arrow with percentage change
+
+  ### Status Indicators
+  - `status_badge/1` - Job/task status badge (success, failure, etc.)
+  - `health_component_bar/1` - Named component with weight percentage
+
+  ### Stat Cards
+  - `stat_card/1` - Basic stat card with colored border
+  - `admin_stat_card/1` - Admin stat card with icon
+  - `admin_icon/1` - Icon set for admin cards
+
+  ### Tables
+  - `sortable_header/1` - Table header with sort indicator
+  - `source_status_table/1` - Complete source health table
+
+  ## Status Colors
+
+  | Status     | Background      | Text          | Use Case                    |
+  |------------|-----------------|---------------|-----------------------------|
+  | :healthy   | green-100       | green-800     | Score ≥ 80%, success        |
+  | :warning   | yellow-100      | yellow-800    | Score 60-79%, degraded      |
+  | :critical  | red-100         | red-800       | Score < 60%, errors         |
+  | :disabled  | gray-100        | gray-600      | Inactive, no data           |
+
+  ## Health Score Formula
+
+  The 4-component health score used across dashboards:
+
+  | Component        | Weight | Description                              |
+  |------------------|--------|------------------------------------------|
+  | Event Coverage   | 40%    | Days with events / total days            |
+  | Source Activity  | 30%    | Sources active in last 24h / total       |
+  | Data Quality     | 20%    | Events with complete data / total        |
+  | Venue Health     | 10%    | Venues with valid coords / total         |
 
   ## Usage
 
-      use EventasaurusWeb, :html
+      # In a LiveView module
       import EventasaurusWeb.Admin.Components.HealthComponents
 
-      # In template:
+      # Basic health pill
       <.health_score_pill score={85} status={:healthy} />
+
+      # Large health score with label
+      <.health_score_large score={92} status={:healthy} label="City Health" />
+
+      # Progress bar with percentage
+      <.progress_bar value={75} color={:blue} show_label={true} />
+
+      # Sparkline for 7-day trend
       <.sparkline data={[10, 15, 12, 18, 22, 20, 25]} />
+
+      # Sortable table header
+      <.sortable_header
+        label="City"
+        column={:name}
+        sort_by={@sort_column}
+        sort_dir={@sort_direction}
+        on_sort="sort"
+      />
+
+      # Complete source status table
+      <.source_status_table
+        sources={@source_stats}
+        title="Source Health"
+        sort_by={@sort_by}
+        sort_dir={@sort_dir}
+        on_sort="sort_sources"
+      />
+
+  ## Migration Guide
+
+  If migrating from custom implementations to these shared components:
+
+  1. Replace inline progress bars with `<.progress_bar />`
+  2. Replace status badges with `<.health_score_pill />` or `<.status_badge />`
+  3. Replace custom table headers with `<.sortable_header />`
+  4. Use `status_indicator/1` helper for consistent emoji/text mapping
+  5. Use `status_classes/1` helper for consistent CSS classes
+
+  ## Related Modules
+
+  - `EventasaurusWeb.Admin.CityHealthLive` - City health index page
+  - `EventasaurusWeb.Admin.CityHealthDetailLive` - City health detail page
+  - `EventasaurusWeb.Admin.AdminDashboardLive` - Main admin dashboard
+  - `EventasaurusWeb.Admin.MonitoringDashboardLive` - Source monitoring
   """
   use Phoenix.Component
   use Phoenix.VerifiedRoutes, endpoint: EventasaurusWeb.Endpoint, router: EventasaurusWeb.Router
@@ -111,7 +196,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
     # Calculate ring circumference and offset for SVG circle
     # Circle has radius 45, circumference = 2 * pi * 45 ≈ 283
     circumference = 283
-    offset = circumference - (assigns.score / 100 * circumference)
+    offset = circumference - assigns.score / 100 * circumference
 
     assigns =
       assigns
@@ -305,24 +390,29 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   end
 
   # ============================================================================
-  # Stat Card (Legacy - emoji-based)
+  # Stat Card (Unified design with emoji support)
   # ============================================================================
 
   @doc """
-  Renders a stat card with icon and value (legacy version with emoji).
+  Renders a stat card with title, prominent value, and emoji icon.
+
+  Matches the Admin Dashboard design pattern:
+  - Title label at top (small, gray)
+  - Value large and prominent below
+  - Icon on right side in colored circle
 
   ## Attributes
 
-  - `title` - Card title
-  - `value` - The main value to display
-  - `icon` - Emoji or icon string
-  - `color` - Border color: :blue, :green, :yellow, :red, :purple, :indigo, :gray (default: :blue)
-  - `subtitle` - Optional subtitle below the value
+  - `title` - Card title (displayed as label at top)
+  - `value` - The main value to display (large, prominent)
+  - `icon` - Emoji or icon string (displayed in colored circle on right)
+  - `color` - Accent color: :blue, :green, :yellow, :red, :purple, :indigo, :gray (default: :blue)
+  - `subtitle` - Optional subtitle below the main content
 
   ## Examples
 
       <.stat_card title="Total Events" value={1234} icon="📊" color={:blue} />
-      <.stat_card title="Active Sources" value={8} icon="🔌" color={:purple} subtitle="3 healthy" />
+      <.stat_card title="Healthy" value={4} icon="🟢" color={:green} />
   """
   attr :title, :string, required: true
   attr :value, :any, required: true
@@ -332,18 +422,28 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
 
   def stat_card(assigns) do
     border_color = border_color_class(assigns.color)
+    bg_color = bg_color_class(assigns.color)
+    text_color = admin_text_color_class(assigns.color)
 
-    assigns = assign(assigns, :border_color, border_color)
+    assigns =
+      assigns
+      |> assign(:border_color, border_color)
+      |> assign(:bg_color, bg_color)
+      |> assign(:text_color, text_color)
 
     ~H"""
     <div class={"bg-white shadow rounded-lg p-5 border-l-4 #{@border_color}"}>
       <div class="flex items-center justify-between">
-        <span class="text-2xl"><%= @icon %></span>
-        <span class="text-2xl font-bold text-gray-900"><%= format_value(@value) %></span>
+        <div>
+          <div class="text-sm font-medium text-gray-500"><%= @title %></div>
+          <div class={"text-3xl font-bold mt-1 #{@text_color}"}><%= format_value(@value) %></div>
+        </div>
+        <div class={"flex items-center justify-center w-12 h-12 rounded-full #{@bg_color}"}>
+          <span class="text-xl"><%= @icon %></span>
+        </div>
       </div>
-      <p class="mt-1 text-sm text-gray-600"><%= @title %></p>
       <%= if @subtitle do %>
-        <p class="text-xs text-gray-400 mt-0.5"><%= @subtitle %></p>
+        <div class="text-sm mt-2 text-gray-500"><%= @subtitle %></div>
       <% end %>
     </div>
     """
@@ -462,7 +562,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
         label="Event Coverage"
         value={85}
         weight="40%"
-        description="7-day availability"
+        description="14-day availability"
         target={80}
       />
   """
@@ -957,10 +1057,13 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   def source_health_summary(assigns) do
     total = length(assigns.sources)
     healthy = Enum.count(assigns.sources, fn s -> Map.get(s, :success_rate, 0) >= 95 end)
-    warning = Enum.count(assigns.sources, fn s ->
-      rate = Map.get(s, :success_rate, 0)
-      rate >= 80 and rate < 95
-    end)
+
+    warning =
+      Enum.count(assigns.sources, fn s ->
+        rate = Map.get(s, :success_rate, 0)
+        rate >= 80 and rate < 95
+      end)
+
     critical = Enum.count(assigns.sources, fn s -> Map.get(s, :success_rate, 0) < 80 end)
 
     assigns =
@@ -1332,9 +1435,11 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   def format_job_time(%{completed_at: completed_at}) when not is_nil(completed_at) do
     Calendar.strftime(completed_at, "%Y-%m-%d %H:%M")
   end
+
   def format_job_time(%{attempted_at: attempted_at}) when not is_nil(attempted_at) do
     Calendar.strftime(attempted_at, "%Y-%m-%d %H:%M")
   end
+
   def format_job_time(_), do: "Unknown time"
 
   @doc """
@@ -1508,11 +1613,25 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
 
   defp format_value(val), do: to_string(val)
 
-  defp badge_classes("success"), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
-  defp badge_classes("failure"), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
-  defp badge_classes("cancelled"), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800"
-  defp badge_classes("discarded"), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-  defp badge_classes(_), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
+  defp badge_classes("success"),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+
+  defp badge_classes("failure"),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+
+  defp badge_classes("cancelled"),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800"
+
+  defp badge_classes("discarded"),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+
+  defp badge_classes(_),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
 
   defp badge_icon("success"), do: "✓"
   defp badge_icon("failure"), do: "✗"
@@ -1765,33 +1884,76 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
     """
   end
 
-  # Sortable header helper component
+  # ============================================================================
+  # Sortable Header (Public - for reuse in custom tables)
+  # ============================================================================
+
+  @doc """
+  Renders a sortable table header cell.
+
+  ## Attributes
+
+  - `label` - The header text
+  - `column` - The column key (atom) for sorting
+  - `sort_by` - Currently sorted column (atom)
+  - `sort_dir` - Current sort direction (:asc or :desc)
+  - `on_sort` - The event name to send when clicked (e.g., "sort_venues")
+  - `align` - Text alignment: :left, :center, :right (default: :left)
+
+  ## Examples
+
+      <.sortable_header
+        label="Name"
+        column={:name}
+        sort_by={@sort_by}
+        sort_dir={@sort_dir}
+        on_sort="sort_items"
+      />
+  """
   attr :label, :string, required: true
   attr :column, :atom, required: true
   attr :sort_by, :atom, default: nil
   attr :sort_dir, :atom, default: :desc
   attr :on_sort, :string, default: nil
+  attr :align, :atom, default: :left
 
-  defp sortable_header(assigns) do
+  def sortable_header(assigns) do
+    align_class =
+      case assigns.align do
+        :left -> "text-left"
+        :center -> "text-center"
+        :right -> "text-right"
+      end
+
+    justify_class =
+      case assigns.align do
+        :left -> "justify-start"
+        :center -> "justify-center"
+        :right -> "justify-end"
+      end
+
+    assigns =
+      assigns
+      |> assign(:align_class, align_class)
+      |> assign(:justify_class, justify_class)
+
     ~H"""
     <%= if @on_sort do %>
       <th
         scope="col"
-        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+        class={"px-4 py-3 #{@align_class} text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"}
         phx-click={@on_sort}
         phx-value-column={@column}
       >
-        <div class="flex items-center space-x-1">
+        <div class={"flex items-center #{@justify_class} gap-1"}>
           <span><%= @label %></span>
           <%= if @sort_by == @column do %>
-            <svg class={"w-4 h-4 #{if @sort_dir == :asc, do: "transform rotate-180"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
+            <span class="text-blue-600"><%= if @sort_dir == :asc, do: "▲", else: "▼" %></span>
           <% end %>
         </div>
       </th>
     <% else %>
-      <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+      <th scope="col" class={"px-4 py-3 #{@align_class} text-xs font-medium text-gray-500 uppercase tracking-wider"}>
         <%= @label %>
       </th>
     <% end %>
@@ -1816,9 +1978,15 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   Returns CSS class for health score badge.
   """
   @spec source_health_badge_class(number()) :: String.t()
-  def source_health_badge_class(score) when is_number(score) and score >= 95, do: "bg-green-100 text-green-800"
-  def source_health_badge_class(score) when is_number(score) and score >= 85, do: "bg-yellow-100 text-yellow-800"
-  def source_health_badge_class(score) when is_number(score) and score >= 70, do: "bg-orange-100 text-orange-800"
+  def source_health_badge_class(score) when is_number(score) and score >= 95,
+    do: "bg-green-100 text-green-800"
+
+  def source_health_badge_class(score) when is_number(score) and score >= 85,
+    do: "bg-yellow-100 text-yellow-800"
+
+  def source_health_badge_class(score) when is_number(score) and score >= 70,
+    do: "bg-orange-100 text-orange-800"
+
   def source_health_badge_class(_score), do: "bg-red-100 text-red-800"
 
   @doc """
@@ -1982,4 +2150,309 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
 
     Enum.join(parts, ", ")
   end
+
+  # ============================================================================
+  # Venues Table Component
+  # ============================================================================
+
+  @doc """
+  Renders a sortable table of top venues.
+
+  ## Attributes
+
+  - `venues` - List of venue maps with keys: venue_id, venue_name, venue_slug, event_count, sources, last_seen
+  - `title` - Section title (default: "Top Venues")
+  - `sort_by` - Currently sorted column (:venue_name, :event_count, :last_seen)
+  - `sort_dir` - Current sort direction (:asc or :desc)
+  - `on_sort` - Event name for sorting (e.g., "sort_venues")
+  - `link_path` - Optional path for "View All" link
+  - `link_text` - Text for the link (default: "View All")
+  - `empty_state_text` - Text when no venues (default: "No venues found.")
+  - `on_regenerate_slugs` - Optional event name for regenerate slugs button
+
+  ## Examples
+
+      <.venues_table
+        venues={@top_venues}
+        sort_by={@venue_sort_by}
+        sort_dir={@venue_sort_dir}
+        on_sort="sort_venues"
+        link_path={~p"/venues/duplicates"}
+      />
+  """
+  attr :venues, :list, default: []
+  attr :title, :string, default: "Top Venues"
+  attr :sort_by, :atom, default: :event_count
+  attr :sort_dir, :atom, default: :desc
+  attr :on_sort, :string, required: true
+  attr :link_path, :string, default: nil
+  attr :link_text, :string, default: "View All"
+  attr :empty_state_text, :string, default: "No venues found."
+  attr :on_regenerate_slugs, :string, default: nil
+
+  def venues_table(assigns) do
+    ~H"""
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold text-gray-900"><%= @title %></h2>
+        <div class="flex items-center gap-4">
+          <%= if @on_regenerate_slugs do %>
+            <button
+              phx-click={@on_regenerate_slugs}
+              class="text-sm text-amber-600 hover:text-amber-800 font-medium"
+            >
+              🔄 Regenerate Slugs
+            </button>
+          <% end %>
+          <%= if @link_path do %>
+            <.link
+              navigate={@link_path}
+              class="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            >
+              <%= @link_text %> &rarr;
+            </.link>
+          <% end %>
+        </div>
+      </div>
+
+      <%= if Enum.empty?(@venues) do %>
+        <div class="bg-white shadow rounded-lg overflow-hidden px-6 py-12 text-center text-gray-500">
+          <p><%= @empty_state_text %></p>
+        </div>
+      <% else %>
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="min-w-full">
+              <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <.sortable_header
+                    label="Venue"
+                    column={:venue_name}
+                    sort_by={@sort_by}
+                    sort_dir={@sort_dir}
+                    on_sort={@on_sort}
+                  />
+                  <.sortable_header
+                    label="Events"
+                    column={:event_count}
+                    sort_by={@sort_by}
+                    sort_dir={@sort_dir}
+                    on_sort={@on_sort}
+                    align={:right}
+                  />
+                  <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Sources
+                  </th>
+                  <.sortable_header
+                    label="Last Seen"
+                    column={:last_seen}
+                    sort_by={@sort_by}
+                    sort_dir={@sort_dir}
+                    on_sort={@on_sort}
+                    align={:right}
+                  />
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <%= for venue <- @venues do %>
+                  <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <.link
+                        navigate={~p"/venues/duplicates?venue_id=#{venue.venue_id}"}
+                        class="text-sm font-medium text-gray-900 hover:text-blue-600"
+                      >
+                        <%= venue.venue_name %>
+                      </.link>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-right">
+                      <span class="text-sm font-medium text-gray-900">
+                        <%= venue.event_count %>
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <span class="text-sm text-gray-600">
+                        <%= format_sources_list(venue.sources) %>
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-right">
+                      <span class="text-sm text-gray-500">
+                        <%= format_compact_time(venue.last_seen) %>
+                      </span>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  # ============================================================================
+  # Category Distribution Table Component
+  # ============================================================================
+
+  @doc """
+  Renders a sortable table showing category distribution.
+
+  ## Attributes
+
+  - `categories` - List of category maps with keys: category_id, category_name, category_slug, count, percentage
+  - `title` - Section title (default: "Category Distribution")
+  - `total_events` - Total number of events for display
+  - `sort_by` - Currently sorted column (:category_name, :count, :percentage)
+  - `sort_dir` - Current sort direction (:asc or :desc)
+  - `on_sort` - Event name for sorting (e.g., "sort_categories")
+  - `empty_state_text` - Text when no data (default: "No category data available.")
+
+  ## Examples
+
+      <.category_distribution_table
+        categories={@category_distribution}
+        total_events={@total_category_events}
+        sort_by={@category_sort_by}
+        sort_dir={@category_sort_dir}
+        on_sort="sort_categories"
+      />
+  """
+  attr :categories, :list, default: []
+  attr :title, :string, default: "Category Distribution"
+  attr :total_events, :integer, default: 0
+  attr :sort_by, :atom, default: :count
+  attr :sort_dir, :atom, default: :desc
+  attr :on_sort, :string, required: true
+  attr :empty_state_text, :string, default: "No category data available."
+
+  def category_distribution_table(assigns) do
+    ~H"""
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold text-gray-900"><%= @title %></h2>
+        <span class="text-sm text-gray-500">Total: <%= @total_events %> events</span>
+      </div>
+
+      <%= if Enum.empty?(@categories) do %>
+        <div class="bg-white shadow rounded-lg overflow-hidden px-6 py-12 text-center text-gray-500">
+          <p><%= @empty_state_text %></p>
+        </div>
+      <% else %>
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="min-w-full">
+              <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <.sortable_header
+                    label="Category"
+                    column={:category_name}
+                    sort_by={@sort_by}
+                    sort_dir={@sort_dir}
+                    on_sort={@on_sort}
+                  />
+                  <.sortable_header
+                    label="Events"
+                    column={:count}
+                    sort_by={@sort_by}
+                    sort_dir={@sort_dir}
+                    on_sort={@on_sort}
+                    align={:right}
+                  />
+                  <.sortable_header
+                    label="%"
+                    column={:percentage}
+                    sort_by={@sort_by}
+                    sort_dir={@sort_dir}
+                    on_sort={@on_sort}
+                    align={:right}
+                  />
+                  <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Distribution
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <%= for category <- @categories do %>
+                  <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <span class={"text-sm font-medium #{if category.category_slug == "unknown", do: "text-gray-500 italic", else: "text-gray-900"}"}>
+                        <%= category.category_name %>
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-right">
+                      <span class="text-sm font-medium text-gray-900">
+                        <%= category.count %>
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-right">
+                      <span class="text-sm text-gray-600">
+                        <%= category.percentage %>%
+                      </span>
+                    </td>
+                    <td class="px-4 py-3">
+                      <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                        <div
+                          class={"h-full rounded-full transition-all #{if category.category_slug == "unknown", do: "bg-gray-400", else: "bg-blue-500"}"}
+                          style={"width: #{category.percentage}%"}
+                        >
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  # ============================================================================
+  # Venues Table Helper Functions
+  # ============================================================================
+
+  @doc """
+  Formats sources list with truncation (comma-separated, max 2 shown).
+  """
+  @spec format_sources_list(list() | nil) :: String.t()
+  def format_sources_list(nil), do: "—"
+  def format_sources_list([]), do: "—"
+
+  def format_sources_list(sources) when is_list(sources) do
+    case length(sources) do
+      0 -> "—"
+      1 -> Enum.at(sources, 0)
+      2 -> Enum.join(sources, ", ")
+      n -> "#{Enum.join(Enum.take(sources, 2), ", ")} +#{n - 2}"
+    end
+  end
+
+  @doc """
+  Formats time in compact form (2h, 1d, etc.).
+  """
+  @spec format_compact_time(DateTime.t() | NaiveDateTime.t() | nil) :: String.t()
+  def format_compact_time(nil), do: "—"
+
+  def format_compact_time(%NaiveDateTime{} = naive_dt) do
+    datetime = DateTime.from_naive!(naive_dt, "Etc/UTC")
+    format_compact_time(datetime)
+  end
+
+  def format_compact_time(%DateTime{} = datetime) do
+    now = DateTime.utc_now()
+    diff_seconds = DateTime.diff(now, datetime)
+
+    cond do
+      diff_seconds < 60 -> "now"
+      diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m"
+      diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h"
+      diff_seconds < 604_800 -> "#{div(diff_seconds, 86400)}d"
+      diff_seconds < 2_592_000 -> "#{div(diff_seconds, 604_800)}w"
+      true -> "#{div(diff_seconds, 2_592_000)}mo"
+    end
+  end
+
+  def format_compact_time(_), do: "—"
 end

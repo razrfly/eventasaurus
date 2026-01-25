@@ -424,9 +424,15 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
   defp do_filter_by_city(city_id, socket) do
     city_id =
       case city_id do
-        "" -> nil
-        nil -> nil
-        id when is_integer(id) -> id
+        "" ->
+          nil
+
+        nil ->
+          nil
+
+        id when is_integer(id) ->
+          id
+
         id when is_binary(id) ->
           case Integer.parse(id) do
             {int, ""} -> int

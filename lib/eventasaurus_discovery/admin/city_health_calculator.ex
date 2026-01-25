@@ -34,7 +34,8 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
 
   # Analysis window
   @coverage_days 14
-  @job_activity_hours 168  # 7 days
+  # 7 days
+  @job_activity_hours 168
 
   @doc """
   Calculate the health score for a single city.
@@ -51,28 +52,30 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
       {:error, :city_not_found}
     else
       if not city.discovery_enabled do
-        {:ok, %{
-          city_id: city_id,
-          health_score: 0,
-          health_status: :disabled,
-          components: %{
-            event_coverage: 0,
-            source_activity: 0,
-            data_quality: 0,
-            venue_health: 0
-          }
-        }}
+        {:ok,
+         %{
+           city_id: city_id,
+           health_score: 0,
+           health_status: :disabled,
+           components: %{
+             event_coverage: 0,
+             source_activity: 0,
+             data_quality: 0,
+             venue_health: 0
+           }
+         }}
       else
         components = calculate_components(city_id, opts)
         health_score = calculate_weighted_score(components)
         health_status = score_to_status(health_score)
 
-        {:ok, %{
-          city_id: city_id,
-          health_score: health_score,
-          health_status: health_status,
-          components: components
-        }}
+        {:ok,
+         %{
+           city_id: city_id,
+           health_score: health_score,
+           health_status: health_status,
+           components: components
+         }}
       end
     end
   end
@@ -145,12 +148,11 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   end
 
   @doc """
-  Get only active cities (those with at least one event).
+  Get only active cities (those with at least one event in the last 30 days).
   Ordered by event count descending.
 
-  Note: event_count includes all events associated with the city,
-  not just recent ones. The health score components (event_coverage,
-  source_activity, etc.) use time-windowed queries for accuracy.
+  Note: event_count uses a 30-day rolling window to match the detail page
+  behavior and provide consistent metrics across index and detail views.
   """
   def get_active_cities_health(opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
@@ -277,7 +279,9 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     result = Repo.replica().one(query, timeout: 30_000)
 
     cond do
-      result == nil or result.total == 0 -> 0
+      result == nil or result.total == 0 ->
+        0
+
       true ->
         complete = result.complete || 0
         round(complete / result.total * 100)
@@ -315,7 +319,9 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     result = Repo.replica().one(query, timeout: 30_000)
 
     cond do
-      result == nil or result.total == 0 -> 0
+      result == nil or result.total == 0 ->
+        0
+
       true ->
         complete = result.complete || 0
         round(complete / result.total * 100)
@@ -388,7 +394,8 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
       city_ids
       |> Enum.map(fn city_id ->
         slug = Map.get(city_slugs, city_id)
-        score = Map.get(slug_scores, slug, 100)  # Default 100 if no jobs
+        # Default 100 if no jobs
+        score = Map.get(slug_scores, slug, 100)
         {city_id, score}
       end)
       |> Map.new()
@@ -396,6 +403,8 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   end
 
   defp batch_data_quality(city_ids) when is_list(city_ids) do
+    # Note: Uses public_event_categories join table (not deprecated category_id column)
+    # to match the single-city calculate_data_quality function behavior
     query =
       from(pe in PublicEvent,
         join: v in Venue,
@@ -411,13 +420,13 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
               CASE WHEN
                 ? IS NOT NULL AND ? != '' AND
                 ? IS NOT NULL AND
-                ? IS NOT NULL
+                EXISTS (SELECT 1 FROM public_event_categories pec WHERE pec.event_id = ?)
               THEN 1 ELSE 0 END
               """,
               pe.title,
               pe.title,
               pe.venue_id,
-              pe.category_id
+              pe.id
             )
           )
         }
@@ -475,9 +484,9 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   defp calculate_weighted_score(components) do
     score =
       components.event_coverage * @event_coverage_weight / 100 +
-      components.source_activity * @source_activity_weight / 100 +
-      components.data_quality * @data_quality_weight / 100 +
-      components.venue_health * @venue_health_weight / 100
+        components.source_activity * @source_activity_weight / 100 +
+        components.data_quality * @data_quality_weight / 100 +
+        components.venue_health * @venue_health_weight / 100
 
     round(score)
   end
@@ -494,13 +503,23 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     Repo.replica().get(City, city_id)
   end
 
+  # 30-day window for event counts (matches detail page behavior)
+  @event_count_days 30
+
   defp get_cities_with_event_counts(include_disabled, limit) do
+    # Use 30-day window for event counts to match detail page behavior
+    # This ensures consistency between index and detail views
+    today = Date.utc_today()
+    start_date = Date.add(today, -(@event_count_days - 1))
+
     base_query =
       from(c in City,
         left_join: v in Venue,
         on: v.city_id == c.id,
         left_join: e in PublicEvent,
-        on: e.venue_id == v.id,
+        on:
+          e.venue_id == v.id and fragment("?::date", e.starts_at) >= ^start_date and
+            fragment("?::date", e.starts_at) <= ^today,
         group_by: [c.id, c.name, c.slug, c.discovery_enabled],
         select: %{
           id: c.id,

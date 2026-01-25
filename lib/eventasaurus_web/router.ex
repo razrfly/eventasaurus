@@ -38,11 +38,6 @@ defmodule EventasaurusWeb.Router do
       # Discovery Dashboard (dev - no auth)
       live "/imports", Admin.DiscoveryDashboardLive
 
-      # Discovery Stats Dashboard (dev - no auth)
-      live "/discovery/stats", Admin.DiscoveryStatsLive, :index
-      live "/discovery/stats/source/:source_slug", Admin.DiscoveryStatsLive.SourceDetail, :show
-      live "/discovery/stats/city/:city_slug", Admin.DiscoveryStatsLive.CityDetail, :show
-
       # Job Execution Monitor (dev - no auth)
       live "/job-executions", Admin.JobExecutionMonitorLive
       live "/job-executions/sources/:source_slug", Admin.SourcePipelineMonitorLive
@@ -189,17 +184,6 @@ defmodule EventasaurusWeb.Router do
 
         # Discovery Dashboard with admin authentication
         live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
-
-        # Discovery Stats Dashboard with admin authentication
-        live "/discovery/stats", EventasaurusWeb.Admin.DiscoveryStatsLive, :index
-
-        live "/discovery/stats/source/:source_slug",
-             EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail,
-             :show
-
-        live "/discovery/stats/city/:city_slug",
-             EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail,
-             :show
 
         # Category Analysis with admin authentication
         live "/discovery/category-analysis/:source_slug",

@@ -110,10 +110,12 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
   defp validate_sort_column(column) when is_binary(column) do
     case String.to_existing_atom(column) do
       atom when atom in @valid_sort_columns -> atom
-      _ -> :event_count  # Default fallback
+      # Default fallback
+      _ -> :event_count
     end
   rescue
-    ArgumentError -> :event_count  # Atom doesn't exist
+    # Atom doesn't exist
+    ArgumentError -> :event_count
   end
 
   defp validate_sort_column(_), do: :event_count
@@ -281,13 +283,36 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
     disabled =
       Enum.count(cities, fn c -> c.health_status == :disabled end)
 
+    # Calculate average health score across all cities
+    avg_health_score =
+      if total > 0 do
+        cities
+        |> Enum.map(& &1.health_score)
+        |> Enum.sum()
+        |> Kernel./(total)
+        |> round()
+      else
+        0
+      end
+
+    # Count cities with improving/declining trends (based on weekly_change)
+    improving_count = Enum.count(cities, fn c -> Map.get(c, :weekly_change, 0) > 5 end)
+    declining_count = Enum.count(cities, fn c -> Map.get(c, :weekly_change, 0) < -5 end)
+
+    # Calculate healthy percentage
+    healthy_pct = if total > 0, do: round(healthy / total * 100), else: 0
+
     %{
       total: total,
       healthy: healthy,
       warning: warning,
       critical: critical,
       disabled: disabled,
-      health_percentage: if(total > 0, do: round(healthy / total * 100), else: 0)
+      health_percentage: healthy_pct,
+      healthy_pct: healthy_pct,
+      avg_health_score: avg_health_score,
+      improving_count: improving_count,
+      declining_count: declining_count
     }
   end
 
@@ -433,7 +458,8 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
     error
   end
 
-  defp extract_error_message(%{results: %{"error_category" => category}}) when is_binary(category) do
+  defp extract_error_message(%{results: %{"error_category" => category}})
+       when is_binary(category) do
     category |> String.replace("_", " ") |> String.capitalize()
   end
 
@@ -469,7 +495,8 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
 
   defp filter_cities(cities, status) when is_binary(status) do
     case Map.get(@valid_status_filters, status) do
-      nil -> cities  # Invalid status, return all cities
+      # Invalid status, return all cities
+      nil -> cities
       :all -> cities
       status_atom -> Enum.filter(cities, fn city -> city.health_status == status_atom end)
     end
@@ -478,25 +505,20 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
   defp filter_cities(cities, _), do: cities
 
   defp sort_cities(cities, column, direction) do
-    sorter = case column do
-      :name -> &(&1.name)
-      :health_score -> &(&1.health_score)
-      :event_count -> &(&1.event_count)
-      :weekly_change -> &(&1.weekly_change)
-      :venue_count -> &(&1.venue_count)
-      :source_count -> &(&1.source_count)
-      _ -> &(&1.event_count)
-    end
+    sorter =
+      case column do
+        :name -> & &1.name
+        :health_score -> & &1.health_score
+        :event_count -> & &1.event_count
+        :weekly_change -> & &1.weekly_change
+        :venue_count -> & &1.venue_count
+        :source_count -> & &1.source_count
+        _ -> & &1.event_count
+      end
 
     sorted = Enum.sort_by(cities, sorter)
     if direction == :desc, do: Enum.reverse(sorted), else: sorted
   end
-
-  defp sort_indicator(column, current_column, direction) when column == current_column do
-    if direction == :asc, do: " ↑", else: " ↓"
-  end
-
-  defp sort_indicator(_, _, _), do: ""
 
   @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   @impl true
@@ -519,10 +541,10 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
             🔀 Venue Duplicates
           </.link>
           <.link
-            navigate={~p"/admin/discovery/stats"}
+            navigate={~p"/admin/monitoring"}
             class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900"
           >
-            📊 Discovery Stats
+            📊 Source Monitoring
           </.link>
           <button
             phx-click="refresh"
@@ -543,26 +565,41 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
 
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-        <.stat_card title="Total Cities" value={@summary.total} icon="🏙️" color={:blue} />
-        <.stat_card title="Healthy" value={@summary.healthy} icon="🟢" color={:green} />
-        <.stat_card title="Warning" value={@summary.warning} icon="🟡" color={:yellow} />
-        <.stat_card title="Critical" value={@summary.critical} icon="🔴" color={:red} />
-        <.stat_card title="Disabled" value={@summary.disabled} icon="⚪" color={:gray} />
-      </div>
-
-      <!-- Health Overview Bar -->
-      <div class="bg-white shadow rounded-lg p-5 mb-8">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-medium text-gray-700">Overall Health</span>
-          <span class="text-sm font-bold text-gray-900"><%= @summary.health_percentage %>%</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-3">
-          <div
-            class="bg-green-500 h-3 rounded-full transition-all duration-500"
-            style={"width: #{@summary.health_percentage}%"}
-          >
-          </div>
-        </div>
+        <.stat_card
+          title="Total Cities"
+          value={@summary.total}
+          icon="🏙️"
+          color={:blue}
+          subtitle={"avg health #{@summary.avg_health_score}%"}
+        />
+        <.stat_card
+          title="Healthy"
+          value={@summary.healthy}
+          icon="🟢"
+          color={:green}
+          subtitle={"#{@summary.healthy_pct}% of total"}
+        />
+        <.stat_card
+          title="Warning"
+          value={@summary.warning}
+          icon="🟡"
+          color={:yellow}
+          subtitle={if @summary.declining_count > 0, do: "#{@summary.declining_count} declining", else: "stable"}
+        />
+        <.stat_card
+          title="Critical"
+          value={@summary.critical}
+          icon="🔴"
+          color={:red}
+          subtitle={if @summary.critical > 0, do: "needs attention", else: "none"}
+        />
+        <.stat_card
+          title="Disabled"
+          value={@summary.disabled}
+          icon="⚪"
+          color={:gray}
+          subtitle="no recent events"
+        />
       </div>
 
       <!-- Cities Needing Attention -->
@@ -598,32 +635,28 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
       <div class="bg-white shadow rounded-lg p-5 mb-8">
         <h2 class="text-xl font-semibold text-gray-900 mb-4">Source Coverage Analysis</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <!-- Active Sources -->
-          <div class="bg-white shadow rounded-lg p-5 border-l-4 border-purple-500">
-            <div class="flex items-center justify-between">
-              <span class="text-2xl">🔌</span>
-              <span class="text-2xl font-bold text-gray-900"><%= @source_summary.total_sources %></span>
-            </div>
-            <p class="mt-1 text-sm text-gray-600">Active Sources</p>
-          </div>
-
-          <!-- Cities with Coverage -->
-          <div class="bg-white shadow rounded-lg p-5 border-l-4 border-indigo-500">
-            <div class="flex items-center justify-between">
-              <span class="text-2xl">🌍</span>
-              <span class="text-2xl font-bold text-gray-900"><%= @source_summary.cities_with_coverage %></span>
-            </div>
-            <p class="mt-1 text-sm text-gray-600">Cities with Source Data</p>
-          </div>
-
-          <!-- Top Sources -->
+          <.stat_card
+            title="Active Sources"
+            value={@source_summary.total_sources}
+            icon="🔌"
+            color={:purple}
+            subtitle="providing events"
+          />
+          <.stat_card
+            title="Cities with Data"
+            value={@source_summary.cities_with_coverage}
+            icon="🌍"
+            color={:indigo}
+            subtitle="have source coverage"
+          />
+          <!-- Top Sources - custom card for list display -->
           <div class="bg-white shadow rounded-lg p-5 border-l-4 border-teal-500">
-            <div class="text-sm font-medium text-gray-700 mb-2">Top Sources by City Coverage</div>
-            <div class="space-y-1">
+            <div class="text-sm font-medium text-gray-500 mb-3">Top Sources by Coverage</div>
+            <div class="space-y-2">
               <%= for source <- @source_summary.top_sources do %>
                 <div class="flex justify-between text-sm">
-                  <span class="text-gray-600 truncate"><%= source.name %></span>
-                  <span class="font-medium text-gray-900"><%= source.city_count %> cities</span>
+                  <span class="text-gray-700 truncate"><%= source.name %></span>
+                  <span class="font-semibold text-teal-600"><%= source.city_count %> cities</span>
                 </div>
               <% end %>
             </div>
@@ -657,56 +690,60 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th
-                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                phx-click="sort"
-                phx-value-column="name"
-              >
-                City<%= sort_indicator(:name, @sort_column, @sort_direction) %>
-              </th>
-              <th
-                class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                phx-click="sort"
-                phx-value-column="health_score"
-              >
-                Health<%= sort_indicator(:health_score, @sort_column, @sort_direction) %>
-              </th>
-              <th
-                class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                phx-click="sort"
-                phx-value-column="event_count"
-              >
-                Events<%= sort_indicator(:event_count, @sort_column, @sort_direction) %>
-              </th>
-              <th
-                class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                phx-click="sort"
-                phx-value-column="weekly_change"
-              >
-                7-Day Trend<%= sort_indicator(:weekly_change, @sort_column, @sort_direction) %>
-              </th>
-              <th
-                class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                phx-click="sort"
-                phx-value-column="venue_count"
-              >
-                Venues<%= sort_indicator(:venue_count, @sort_column, @sort_direction) %>
-              </th>
-              <th
-                class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                phx-click="sort"
-                phx-value-column="source_count"
-              >
-                Sources<%= sort_indicator(:source_count, @sort_column, @sort_direction) %>
-              </th>
-              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
+              <.sortable_header
+                label="City"
+                column={:name}
+                sort_by={@sort_column}
+                sort_dir={@sort_direction}
+                on_sort="sort"
+                align={:left}
+              />
+              <.sortable_header
+                label="Health"
+                column={:health_score}
+                sort_by={@sort_column}
+                sort_dir={@sort_direction}
+                on_sort="sort"
+                align={:center}
+              />
+              <.sortable_header
+                label="Events"
+                column={:event_count}
+                sort_by={@sort_column}
+                sort_dir={@sort_direction}
+                on_sort="sort"
+                align={:right}
+              />
+              <.sortable_header
+                label="7-Day Trend"
+                column={:weekly_change}
+                sort_by={@sort_column}
+                sort_dir={@sort_direction}
+                on_sort="sort"
+                align={:center}
+              />
+              <.sortable_header
+                label="Venues"
+                column={:venue_count}
+                sort_by={@sort_column}
+                sort_dir={@sort_direction}
+                on_sort="sort"
+                align={:right}
+              />
+              <.sortable_header
+                label="Sources"
+                column={:source_count}
+                sort_by={@sort_column}
+                sort_dir={@sort_direction}
+                on_sort="sort"
+                align={:right}
+              />
+              <.sortable_header label="Actions" column={:actions} align={:right} />
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
             <%= for city <- @cities |> filter_cities(@status_filter) |> sort_cities(@sort_column, @sort_direction) do %>
-              <% {emoji, label, color_class} = health_indicator(city.health_status) %>
+              <% {_emoji, label, color_class} = health_indicator(city.health_status) %>
               <% is_expanded = MapSet.member?(@expanded_cities, city.id) %>
               <tr class={"hover:bg-gray-50 #{if is_expanded, do: "bg-gray-50", else: ""}"}>
                 <td class="px-4 py-4 whitespace-nowrap">
@@ -727,9 +764,7 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
                 </td>
                 <td class="px-4 py-4 whitespace-nowrap text-center">
                   <div class="flex flex-col items-center gap-1">
-                    <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{CityHealthCalculator.status_classes(city.health_status)}"}>
-                      <%= emoji %> <%= city.health_score %>%
-                    </span>
+                    <.health_score_pill score={city.health_score} status={city.health_status} />
                     <span class={"text-xs #{color_class}"}><%= label %></span>
                   </div>
                 </td>

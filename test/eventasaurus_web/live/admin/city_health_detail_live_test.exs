@@ -76,10 +76,10 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLiveTest do
       {:ok, _live, html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
 
       # Should show descriptions for each component
-      assert html =~ "7-day availability"
+      assert html =~ "14-day availability"
       assert html =~ "Job success rate"
       assert html =~ "Events with metadata"
-      assert html =~ "Venues with slugs"
+      assert html =~ "Venues with name &amp; address"
     end
 
     test "displays event trend section with date range selector", %{conn: conn, city: city} do
