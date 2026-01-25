@@ -26,6 +26,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   alias EventasaurusDiscovery.Admin.CityHealthCalculator
   alias EventasaurusDiscovery.Admin.TrendAnalyzer
   alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
+  alias EventasaurusWeb.Admin.UnifiedDashboardStats
 
   # Auto-refresh every 5 minutes
   @refresh_interval :timer.minutes(5)
@@ -90,6 +91,28 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   @impl true
   def handle_event("collapse_all_sources", _params, socket) do
     {:noreply, assign(socket, :expanded_sources, MapSet.new())}
+  end
+
+  @impl true
+  def handle_event("sort_sources", %{"column" => column}, socket) do
+    column = String.to_existing_atom(column)
+    {new_sort_by, new_sort_dir} =
+      if socket.assigns.sort_by == column do
+        # Toggle direction
+        new_dir = if socket.assigns.sort_dir == :desc, do: :asc, else: :desc
+        {column, new_dir}
+      else
+        # New column, default to descending
+        {column, :desc}
+      end
+
+    sorted = sort_sources(socket.assigns.source_table_stats, new_sort_by, new_sort_dir)
+
+    {:noreply,
+     socket
+     |> assign(:sort_by, new_sort_by)
+     |> assign(:sort_dir, new_sort_dir)
+     |> assign(:source_table_stats, sorted)}
   end
 
   @impl true
@@ -159,6 +182,13 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     # Get chart data for the trend chart
     chart_data = get_chart_data(city.id, date_range)
 
+    # Get source table stats using UnifiedDashboardStats (same format as admin dashboard)
+    # Preserve sort state or initialize to health_score descending
+    sort_by = Map.get(socket.assigns, :sort_by, :health_score)
+    sort_dir = Map.get(socket.assigns, :sort_dir, :desc)
+    source_table_stats = UnifiedDashboardStats.fetch_source_table_stats_for_city(cluster_city_ids)
+    sorted_source_table_stats = sort_sources(source_table_stats, sort_by, sort_dir)
+
     socket
     |> assign(:loading, false)
     |> assign(:health_data, health_data)
@@ -168,6 +198,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     |> assign(:venue_count, venue_count)
     |> assign(:category_count, category_count)
     |> assign(:source_data, source_data)
+    |> assign(:source_table_stats, sorted_source_table_stats)
     |> assign(:source_errors, source_errors)
     |> assign(:expanded_sources, expanded_sources)
     |> assign(:weekly_change, weekly_change)
@@ -176,6 +207,8 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     |> assign(:chart_data, chart_data)
     |> assign(:top_venues, top_venues)
     |> assign(:category_distribution, category_distribution)
+    |> assign(:sort_by, sort_by)
+    |> assign(:sort_dir, sort_dir)
     |> assign(:last_updated, DateTime.utc_now())
   end
 
@@ -232,10 +265,10 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
             />
             <.admin_stat_card
               title="Active Sources"
-              value={length(@source_data)}
+              value={length(@source_table_stats || [])}
               icon_type={:plug}
               color={:purple}
-              subtitle={"#{count_healthy_sources(@source_data)} healthy"}
+              subtitle={"#{count_healthy_sources(@source_table_stats || [])} healthy"}
             />
             <.admin_stat_card
               title="Venues"
@@ -354,12 +387,13 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
             </div>
           </div>
 
-          <!-- Active Sources Table (Enhanced with Summary Grid + Job Timeline) -->
-          <.source_table_enhanced
-            sources={@source_data}
-            expanded={@expanded_sources}
-            source_errors={@source_errors}
-            show_summary={true}
+          <!-- Source Status Table (same design as admin dashboard) -->
+          <.source_status_table
+            sources={@source_table_stats}
+            title="Source Status"
+            sort_by={@sort_by}
+            sort_dir={@sort_dir}
+            on_sort="sort_sources"
           />
 
           <!-- Top Venues Table (Phase 5) -->
@@ -1076,4 +1110,19 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   defp format_last_seen(%DateTime{} = datetime) do
     time_ago_in_words(datetime)
   end
+
+  # Sort sources for the source_status_table component
+  defp sort_sources(sources, sort_by, sort_dir) when is_list(sources) do
+    Enum.sort_by(sources, &source_sort_key(&1, sort_by), sort_dir)
+  end
+
+  defp sort_sources(sources, _sort_by, _sort_dir), do: sources
+
+  defp source_sort_key(source, :display_name), do: String.downcase(source.display_name || source.name || "")
+  defp source_sort_key(source, :health_score), do: source.health_score || 0
+  defp source_sort_key(source, :success_rate), do: source.success_rate || 0
+  defp source_sort_key(source, :p95_duration), do: source.p95_duration || 0
+  defp source_sort_key(source, :last_execution), do: source.last_execution || ~U[1970-01-01 00:00:00Z]
+  defp source_sort_key(source, :coverage_days), do: source.coverage_days || 0
+  defp source_sort_key(_source, _), do: 0
 end

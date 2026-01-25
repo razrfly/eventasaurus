@@ -1516,4 +1516,449 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   defp badge_label("cancelled"), do: "Cancelled"
   defp badge_label("discarded"), do: "Discarded"
   defp badge_label(state), do: String.capitalize(state)
+
+  # ============================================================================
+  # Source Status Table (Shared Component)
+  # ============================================================================
+
+  @doc """
+  Renders the Source Status table matching the Admin Dashboard design.
+
+  This is the canonical source health table used across admin pages.
+  Shows: Source name, Health %, Z-score, 7D Trend sparkline, Success %,
+  P95 duration, Last Run, Coverage bars, and Details link.
+
+  ## Attributes
+
+  - `sources` - List of source data maps (required)
+  - `zscore_data` - Z-score statistics (optional, hides Z column if nil)
+  - `title` - Section title (default: "Source Status")
+  - `subtitle` - Subtitle text like "μ: 92.4% success, 11.5s avg" (optional)
+  - `link_path` - Path for "View All Sources" link (optional)
+  - `link_text` - Text for the link (default: "View All Sources")
+  - `sort_by` - Current sort column (optional)
+  - `sort_dir` - Current sort direction :asc/:desc (optional)
+  - `on_sort` - Event name for sorting (optional, headers non-sortable if nil)
+
+  ## Source Data Structure
+
+  Each source map should have:
+  - `name` - Source identifier (e.g., "cinema_city")
+  - `display_name` - Human-readable name (e.g., "Cinema City")
+  - `health_score` - Health percentage (0-100)
+  - `health_status` - :healthy, :degraded, :warning, :critical
+  - `success_rate` - Success percentage (0-100)
+  - `p95_duration` - P95 duration in milliseconds
+  - `last_execution` - DateTime of last run
+  - `coverage_days` - Days with activity (0-7)
+  - `daily_rates` - List of daily rate maps for sparkline
+  - `trend_direction` - :improving, :stable, :declining
+
+  ## Examples
+
+      <.source_status_table
+        sources={@source_table}
+        zscore_data={@zscore_data}
+        sort_by={@sort_by}
+        sort_dir={@sort_dir}
+        on_sort="sort_sources"
+      />
+  """
+  attr :sources, :list, required: true
+  attr :zscore_data, :any, default: nil
+  attr :title, :string, default: "Source Status"
+  attr :subtitle, :string, default: nil
+  attr :link_path, :string, default: nil
+  attr :link_text, :string, default: "View All Sources"
+  attr :sort_by, :atom, default: nil
+  attr :sort_dir, :atom, default: :desc
+  attr :on_sort, :string, default: nil
+
+  def source_status_table(assigns) do
+    ~H"""
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-xl font-semibold text-gray-900"><%= @title %></h2>
+          <%= if @subtitle do %>
+            <p class="text-xs text-gray-500 mt-1"><%= @subtitle %></p>
+          <% end %>
+        </div>
+        <%= if @link_path do %>
+          <.link navigate={@link_path} class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+            <%= @link_text %> &rarr;
+          </.link>
+        <% end %>
+      </div>
+
+      <%= if @sources && is_list(@sources) && length(@sources) > 0 do %>
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <.sortable_header
+                  label="Source"
+                  column={:display_name}
+                  sort_by={@sort_by}
+                  sort_dir={@sort_dir}
+                  on_sort={@on_sort}
+                />
+                <.sortable_header
+                  label="Health"
+                  column={:health_score}
+                  sort_by={@sort_by}
+                  sort_dir={@sort_dir}
+                  on_sort={@on_sort}
+                />
+                <%= if @zscore_data do %>
+                  <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Z-score outlier detection">
+                    Z
+                  </th>
+                <% end %>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  7d Trend
+                </th>
+                <.sortable_header
+                  label="Success %"
+                  column={:success_rate}
+                  sort_by={@sort_by}
+                  sort_dir={@sort_dir}
+                  on_sort={@on_sort}
+                />
+                <.sortable_header
+                  label="P95"
+                  column={:p95_duration}
+                  sort_by={@sort_by}
+                  sort_dir={@sort_dir}
+                  on_sort={@on_sort}
+                />
+                <.sortable_header
+                  label="Last Run"
+                  column={:last_execution}
+                  sort_by={@sort_by}
+                  sort_dir={@sort_dir}
+                  on_sort={@on_sort}
+                />
+                <.sortable_header
+                  label="Coverage"
+                  column={:coverage_days}
+                  sort_by={@sort_by}
+                  sort_dir={@sort_dir}
+                  on_sort={@on_sort}
+                />
+                <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <%= for source <- @sources do %>
+                <tr class="hover:bg-gray-50">
+                  <!-- Source Name -->
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <div class="flex items-center">
+                      <div class={"w-2 h-2 rounded-full mr-2 #{source_health_dot_class(source.health_status)}"} />
+                      <span class="text-sm font-medium text-gray-900"><%= source.display_name %></span>
+                    </div>
+                  </td>
+
+                  <!-- Health Score -->
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{source_health_badge_class(source.health_score)}"}>
+                      <%= source.health_score %>%
+                    </span>
+                  </td>
+
+                  <!-- Z-Score Indicator -->
+                  <%= if @zscore_data do %>
+                    <td class="px-4 py-3 whitespace-nowrap text-center">
+                      <% zscore_status = get_zscore_status(source.name, @zscore_data) %>
+                      <%= Phoenix.HTML.raw(render_zscore_indicator(zscore_status)) %>
+                    </td>
+                  <% end %>
+
+                  <!-- 7d Trend Sparkline -->
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <%= if source.daily_rates && length(source.daily_rates) > 0 do %>
+                      <div class="flex items-center space-x-1">
+                        <svg class="w-16 h-6" viewBox="0 0 64 24" preserveAspectRatio="none">
+                          <polyline
+                            fill="none"
+                            stroke={sparkline_color(source.trend_direction)}
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            points={sparkline_points(source.daily_rates)}
+                          />
+                        </svg>
+                        <span class={"text-xs #{trend_text_class(source.trend_direction)}"}>
+                          <%= trend_arrow(source.trend_direction) %>
+                        </span>
+                      </div>
+                    <% else %>
+                      <span class="text-xs text-gray-400">No data</span>
+                    <% end %>
+                  </td>
+
+                  <!-- Success Rate -->
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <span class={"text-sm font-medium #{source_success_rate_color(source.success_rate)}"}>
+                      <%= Float.round(source.success_rate * 1.0, 1) %>%
+                    </span>
+                  </td>
+
+                  <!-- P95 Duration -->
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <span class={"text-sm #{if source.p95_duration <= 3000, do: "text-gray-600", else: "text-orange-600"}"}>
+                      <%= format_duration_ms(source.p95_duration) %>
+                    </span>
+                  </td>
+
+                  <!-- Last Run -->
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <%= format_last_run(source.last_execution) %>
+                  </td>
+
+                  <!-- Coverage -->
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <div class="flex items-center">
+                      <div class="flex space-x-0.5">
+                        <%= for i <- 1..7 do %>
+                          <div class={"w-1.5 h-4 rounded-sm #{if i <= (source.coverage_days || 0), do: "bg-green-400", else: "bg-gray-200"}"} />
+                        <% end %>
+                      </div>
+                      <span class="ml-2 text-xs text-gray-500"><%= source.coverage_days || 0 %>/7</span>
+                    </div>
+                  </td>
+
+                  <!-- Actions -->
+                  <td class="px-4 py-3 whitespace-nowrap text-right text-sm">
+                    <.link
+                      navigate={~p"/admin/monitoring?source=#{source.name}"}
+                      class="text-blue-600 hover:text-blue-900"
+                    >
+                      Details
+                    </.link>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <!-- No sources message -->
+        <div class="bg-white shadow rounded-lg overflow-hidden px-6 py-12 text-center text-gray-500">
+          <p>No sources found for this city.</p>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  # Sortable header helper component
+  attr :label, :string, required: true
+  attr :column, :atom, required: true
+  attr :sort_by, :atom, default: nil
+  attr :sort_dir, :atom, default: :desc
+  attr :on_sort, :string, default: nil
+
+  defp sortable_header(assigns) do
+    ~H"""
+    <%= if @on_sort do %>
+      <th
+        scope="col"
+        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+        phx-click={@on_sort}
+        phx-value-column={@column}
+      >
+        <div class="flex items-center space-x-1">
+          <span><%= @label %></span>
+          <%= if @sort_by == @column do %>
+            <svg class={"w-4 h-4 #{if @sort_dir == :asc, do: "transform rotate-180"}"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          <% end %>
+        </div>
+      </th>
+    <% else %>
+      <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <%= @label %>
+      </th>
+    <% end %>
+    """
+  end
+
+  # ============================================================================
+  # Source Status Table Helper Functions
+  # ============================================================================
+
+  @doc """
+  Returns CSS class for health status dot color.
+  """
+  def source_health_dot_class(:healthy), do: "bg-green-500"
+  def source_health_dot_class(:degraded), do: "bg-yellow-500"
+  def source_health_dot_class(:warning), do: "bg-orange-500"
+  def source_health_dot_class(:critical), do: "bg-red-500"
+  def source_health_dot_class(_), do: "bg-gray-400"
+
+  @doc """
+  Returns CSS class for health score badge.
+  """
+  def source_health_badge_class(score) when is_number(score) and score >= 95, do: "bg-green-100 text-green-800"
+  def source_health_badge_class(score) when is_number(score) and score >= 85, do: "bg-yellow-100 text-yellow-800"
+  def source_health_badge_class(score) when is_number(score) and score >= 70, do: "bg-orange-100 text-orange-800"
+  def source_health_badge_class(_score), do: "bg-red-100 text-red-800"
+
+  @doc """
+  Returns CSS class for success rate text color.
+  """
+  def source_success_rate_color(rate) when is_number(rate) and rate >= 95.0, do: "text-green-600"
+  def source_success_rate_color(rate) when is_number(rate) and rate >= 85.0, do: "text-yellow-600"
+  def source_success_rate_color(_rate), do: "text-red-600"
+
+  @doc """
+  Returns hex color for sparkline based on trend direction.
+  """
+  def sparkline_color(:improving), do: "#22c55e"
+  def sparkline_color(:declining), do: "#ef4444"
+  def sparkline_color(:stable), do: "#6b7280"
+  def sparkline_color(_), do: "#6b7280"
+
+  @doc """
+  Converts daily rates to SVG polyline points for sparkline.
+  """
+  def sparkline_points(daily_rates) when is_list(daily_rates) and length(daily_rates) > 0 do
+    rates =
+      Enum.map(daily_rates, fn
+        %{success_rate: rate} when is_number(rate) -> rate
+        rate when is_number(rate) -> rate
+        _ -> 0.0
+      end)
+
+    min_val = Enum.min(rates) || 0
+    max_val = Enum.max(rates) || 100
+    range = max(max_val - min_val, 1)
+
+    rates
+    |> Enum.with_index()
+    |> Enum.map(fn {rate, i} ->
+      x = i * (64 / max(length(rates) - 1, 1))
+      y = 22 - (rate - min_val) / range * 20
+      "#{Float.round(x * 1.0, 1)},#{Float.round(y * 1.0, 1)}"
+    end)
+    |> Enum.join(" ")
+  end
+
+  def sparkline_points(_), do: "0,12 64,12"
+
+  @doc """
+  Returns CSS class for trend text color.
+  """
+  def trend_text_class(:improving), do: "text-green-600"
+  def trend_text_class(:declining), do: "text-red-600"
+  def trend_text_class(:stable), do: "text-gray-500"
+  def trend_text_class(_), do: "text-gray-500"
+
+  @doc """
+  Returns trend arrow symbol.
+  """
+  def trend_arrow(:improving), do: "↑"
+  def trend_arrow(:declining), do: "↓"
+  def trend_arrow(:stable), do: "→"
+  def trend_arrow(_), do: "→"
+
+  @doc """
+  Formats duration in milliseconds to human-readable string.
+  """
+  def format_duration_ms(nil), do: "-"
+  def format_duration_ms(ms) when ms == 0, do: "0ms"
+
+  def format_duration_ms(ms) when is_number(ms) do
+    cond do
+      ms < 1000 -> "#{round(ms)}ms"
+      ms < 60_000 -> "#{Float.round(ms / 1000, 1)}s"
+      true -> "#{Float.round(ms / 60_000, 1)}m"
+    end
+  end
+
+  def format_duration_ms(_), do: "-"
+
+  @doc """
+  Formats last run timestamp to relative time string.
+  """
+  def format_last_run(nil), do: "Never"
+
+  def format_last_run(%DateTime{} = dt) do
+    now = DateTime.utc_now()
+    diff_seconds = DateTime.diff(now, dt)
+
+    cond do
+      diff_seconds < 60 -> "Just now"
+      diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m ago"
+      diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h ago"
+      true -> "#{div(diff_seconds, 86400)}d ago"
+    end
+  end
+
+  def format_last_run(%NaiveDateTime{} = dt) do
+    dt
+    |> DateTime.from_naive!("Etc/UTC")
+    |> format_last_run()
+  end
+
+  def format_last_run(_), do: "Unknown"
+
+  @doc """
+  Gets z-score status for a source from zscore_data.
+  Returns {:ok, status, zscore_info} | :not_available
+  """
+  def get_zscore_status(_source, nil), do: :not_available
+
+  def get_zscore_status(source, zscore_data) do
+    case Enum.find(zscore_data.sources, &(&1.source == source)) do
+      nil -> :not_available
+      data -> {:ok, data.overall_status, data}
+    end
+  end
+
+  @doc """
+  Renders z-score indicator as HTML string.
+  """
+  def render_zscore_indicator(:not_available), do: ""
+
+  def render_zscore_indicator({:ok, :normal, _data}) do
+    ~s(<span class="text-green-500" title="Normal - within expected range">✓</span>)
+  end
+
+  def render_zscore_indicator({:ok, :warning, data}) do
+    tooltip = zscore_tooltip(data)
+    ~s(<span class="text-yellow-500 cursor-help" title="#{tooltip}">⚠</span>)
+  end
+
+  def render_zscore_indicator({:ok, :critical, data}) do
+    tooltip = zscore_tooltip(data)
+    ~s(<span class="text-red-500 cursor-help" title="#{tooltip}">!</span>)
+  end
+
+  defp zscore_tooltip(data) do
+    parts = []
+
+    parts =
+      if Map.has_key?(data, :success_zscore) && data.success_zscore != nil do
+        z_val = Float.round(data.success_zscore, 2)
+        parts ++ ["Success z=#{z_val}"]
+      else
+        parts
+      end
+
+    parts =
+      if Map.has_key?(data, :duration_zscore) && data.duration_zscore != nil do
+        z_val = Float.round(data.duration_zscore, 2)
+        parts ++ ["Duration z=#{z_val}"]
+      else
+        parts
+      end
+
+    Enum.join(parts, ", ")
+  end
 end
