@@ -17,6 +17,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
+  alias EventasaurusApp.Venues.RegenerateSlugsByCityJob
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Locations.CityHierarchy
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
@@ -190,6 +191,30 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
       })
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("regenerate_venue_slugs", _params, socket) do
+    city = socket.assigns.city
+
+    case RegenerateSlugsByCityJob.enqueue(city.id, city.slug) do
+      {:ok, _job} ->
+        socket =
+          socket
+          |> put_flash(
+            :info,
+            "✅ Venue slug regeneration queued for #{city.name}. This will take a few minutes."
+          )
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket =
+          socket
+          |> put_flash(:error, "Failed to queue slug regeneration: #{inspect(reason)}")
+
+        {:noreply, socket}
+    end
   end
 
   # Private helper to safely validate sort column from user input
@@ -501,12 +526,20 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
           <div class="mb-6">
             <div class="flex items-center justify-between mb-4">
               <h2 class="text-xl font-semibold text-gray-900">Top Venues</h2>
-              <.link
-                navigate={~p"/venues/duplicates"}
-                class="text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                View All &rarr;
-              </.link>
+              <div class="flex items-center gap-4">
+                <button
+                  phx-click="regenerate_venue_slugs"
+                  class="text-sm text-amber-600 hover:text-amber-800 font-medium"
+                >
+                  🔄 Regenerate Slugs
+                </button>
+                <.link
+                  navigate={~p"/venues/duplicates"}
+                  class="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  View All &rarr;
+                </.link>
+              </div>
             </div>
 
             <%= if Enum.empty?(@top_venues) do %>

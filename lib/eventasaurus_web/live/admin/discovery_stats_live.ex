@@ -394,7 +394,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                 <%= for city <- @city_stats do %>
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <.link navigate={~p"/admin/discovery/stats/city/#{city.city_slug}"} class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
+                      <.link navigate={~p"/admin/cities/#{city.city_slug}/health"} class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
                         <%= city.city_name %>
                       </.link>
                     </td>
