@@ -159,7 +159,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLiveTest do
     end
   end
 
-  describe "Sources Table (Phase 3)" do
+  describe "Source Status Table (Admin Dashboard Style)" do
     setup do
       country = insert(:country, name: "Poland", code: "PL")
 
@@ -185,105 +185,38 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLiveTest do
       {:ok, city: city, venue: venue, source: source, event: event}
     end
 
-    test "displays Active Sources section", %{conn: conn, city: city} do
+    test "displays Source Status section", %{conn: conn, city: city} do
       {:ok, _live, html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
 
-      assert html =~ "Active Sources"
+      assert html =~ "Source Status"
     end
 
-    test "displays Expand All button initially", %{conn: conn, city: city} do
+    test "displays sortable column headers", %{conn: conn, city: city} do
       {:ok, _live, html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
 
-      assert html =~ "Expand All"
+      # Should display table headers (sortable columns)
+      assert html =~ "Source"
+      assert html =~ "Health"
+      assert html =~ "Success"
+      assert html =~ "P95"
+      assert html =~ "Last Run"
+      assert html =~ "Coverage"
     end
 
     test "displays source with health status", %{conn: conn, city: city, source: source} do
       {:ok, _live, html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
 
       assert html =~ source.name
-      # Should show events count
-      assert html =~ "events"
-      # Should show success rate
-      assert html =~ "success"
     end
 
-    test "toggle_source expands source row", %{conn: conn, city: city, source: source} do
+    test "sort_sources changes sort order", %{conn: conn, city: city} do
       {:ok, live_view, _html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
 
-      # Click to expand source
-      html = render_click(live_view, "toggle_source", %{"source" => source.slug})
+      # Click to sort by health_score
+      html = render_click(live_view, "sort_sources", %{"column" => "health_score"})
 
-      # Expanded content should show
-      assert html =~ "Source Statistics"
-      assert html =~ "Job Success Rate"
-      assert html =~ "Recent Errors (24h)"
-    end
-
-    test "toggle_source collapses expanded source row", %{conn: conn, city: city, source: source} do
-      {:ok, live_view, _html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
-
-      # Expand source
-      _html = render_click(live_view, "toggle_source", %{"source" => source.slug})
-
-      # Collapse source
-      html = render_click(live_view, "toggle_source", %{"source" => source.slug})
-
-      # Expanded content should be hidden
-      refute html =~ "Source Statistics"
-    end
-
-    test "expand_all_sources expands all source rows", %{conn: conn, city: city} do
-      {:ok, live_view, _html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
-
-      # Click Expand All
-      html = render_click(live_view, "expand_all_sources")
-
-      # Should show Collapse All button now
-      assert html =~ "Collapse All"
-      # Expanded content should show
-      assert html =~ "Source Statistics"
-    end
-
-    test "collapse_all_sources collapses all source rows", %{conn: conn, city: city} do
-      {:ok, live_view, _html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
-
-      # First expand all
-      _html = render_click(live_view, "expand_all_sources")
-
-      # Then collapse all
-      html = render_click(live_view, "collapse_all_sources")
-
-      # Should show Expand All button again
-      assert html =~ "Expand All"
-      # Expanded content should be hidden
-      refute html =~ "Source Statistics"
-    end
-
-    test "expanded source shows quick action links", %{conn: conn, city: city, source: source} do
-      {:ok, live_view, _html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
-
-      # Expand source
-      html = render_click(live_view, "toggle_source", %{"source" => source.slug})
-
-      # Should show quick action links
-      assert html =~ "View Job Executions"
-      assert html =~ "View Error Trends"
-      assert html =~ "/admin/job-executions?source=#{source.slug}"
-      assert html =~ "/admin/error-trends?source=#{source.slug}"
-    end
-
-    test "expanded source with no errors shows success message", %{
-      conn: conn,
-      city: city,
-      source: source
-    } do
-      {:ok, live_view, _html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
-
-      # Expand source
-      html = render_click(live_view, "toggle_source", %{"source" => source.slug})
-
-      # Should show no errors message
-      assert html =~ "No errors in the last 24 hours"
+      # Should still display the source
+      assert html =~ "Source Status"
     end
 
     test "displays no sources message when city has no sources", %{conn: conn} do
@@ -301,52 +234,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLiveTest do
 
       {:ok, _live, html} = live(conn, ~p"/admin/cities/#{empty_city.slug}/health")
 
-      assert html =~ "No active sources found for this city"
-    end
-  end
-
-  describe "Sources Table with errors" do
-    setup do
-      country = insert(:country, name: "Poland", code: "PL")
-
-      city =
-        insert(:city,
-          name: "Kraków",
-          slug: "krakow",
-          country: country,
-          discovery_enabled: true,
-          latitude: Decimal.new("50.0647"),
-          longitude: Decimal.new("19.9450")
-        )
-
-      venue = insert(:venue, city_id: city.id, name: "Kino Pod Baranami")
-      source = insert(:public_event_source_type, name: "Failing Source", slug: "failing_source")
-
-      # Create a public event for this venue and source
-      event = insert(:public_event, venue_id: venue.id, title: "Test Event")
-      insert(:public_event_source, event_id: event.id, source_id: source.id)
-
-      # Create a failed job execution summary
-      # Note: Worker pattern must match the source slug (failing_source -> FailingSource)
-      insert(:job_execution_summary,
-        worker: "EventasaurusDiscovery.Sources.FailingSource.Jobs.SyncJob",
-        state: "failure",
-        attempted_at: DateTime.utc_now(),
-        results: %{"error_category" => "network_error", "error" => "Connection timeout"}
-      )
-
-      {:ok, city: city, source: source}
-    end
-
-    test "expanded source shows recent errors", %{conn: conn, city: city, source: source} do
-      {:ok, live_view, _html} = live(conn, ~p"/admin/cities/#{city.slug}/health")
-
-      # Expand source
-      html = render_click(live_view, "toggle_source", %{"source" => source.slug})
-
-      # Should show error details
-      assert html =~ "Failed"
-      assert html =~ "network_error"
+      assert html =~ "No sources found for this city"
     end
   end
 

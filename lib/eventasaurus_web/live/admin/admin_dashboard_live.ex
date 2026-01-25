@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusWeb.Admin.UnifiedDashboardStats
+  import EventasaurusWeb.Admin.Components.HealthComponents, only: [source_status_table: 1]
 
   require Logger
 
@@ -278,7 +279,17 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
     if days == 1, do: "1 day ago", else: "#{days} days ago"
   end
 
+  # Helper to build zscore subtitle for source_status_table component
+  def zscore_subtitle(nil), do: nil
+
+  def zscore_subtitle(zscore_data) do
+    "μ: #{Float.round(zscore_data.success_mean, 1)}% success, #{Float.round(zscore_data.duration_mean, 1)}s avg"
+  end
+
   # Source table helper functions
+  # NOTE: These functions are duplicated in HealthComponents. When we use the shared
+  # source_status_table component, these are no longer needed for the Source Status table,
+  # but may still be used elsewhere in the template.
 
   # Health status dot color (green/yellow/red dot next to source name)
   def source_health_dot_class(:healthy), do: "bg-green-500"

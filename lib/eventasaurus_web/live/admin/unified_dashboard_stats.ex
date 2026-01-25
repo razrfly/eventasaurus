@@ -714,6 +714,85 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
       []
   end
 
+  @doc """
+  Fetches source table stats filtered to sources that have events in the specified cities.
+
+  The stats themselves remain GLOBAL (health is system-wide, not city-specific).
+  Only the list of sources is filtered to those with events in the given cities.
+
+  ## Parameters
+
+    - `city_ids` - List of city IDs to filter sources by
+
+  ## Returns
+
+  List of source stat maps (same structure as `fetch_source_table_stats/0`)
+  """
+  def fetch_source_table_stats_for_city(city_ids) when is_list(city_ids) do
+    # First, find which sources have events in these cities
+    sources_with_events = discover_sources_for_cities(city_ids)
+
+    if Enum.empty?(sources_with_events) do
+      []
+    else
+      # Fetch health and trends in parallel for each source
+      source_data =
+        sources_with_events
+        |> Task.async_stream(
+          fn source ->
+            {source, fetch_single_source_stats(source)}
+          end,
+          max_concurrency: 3,
+          timeout: 15_000,
+          on_timeout: :kill_task
+        )
+        |> Enum.reduce([], fn
+          {:ok, {_source, data}}, acc -> [data | acc]
+          {:exit, _}, acc -> acc
+        end)
+        |> Enum.sort_by(& &1.health_score, :desc)
+
+      source_data
+    end
+  rescue
+    e ->
+      Logger.error("Failed to fetch source table stats for city: #{Exception.message(e)}")
+      []
+  end
+
+  @doc """
+  Discovers sources that have events in the specified cities.
+  Returns a list of source slugs.
+  """
+  def discover_sources_for_cities(city_ids) when is_list(city_ids) do
+    import Ecto.Query
+
+    now = DateTime.utc_now()
+    seven_days_ago = DateTime.add(now, -7, :day)
+
+    # Query to find sources with events in these cities
+    query =
+      from(pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
+        join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+        on: pe.id == pes.event_id,
+        join: v in EventasaurusApp.Venues.Venue,
+        on: v.id == pe.venue_id,
+        join: s in EventasaurusDiscovery.Sources.Source,
+        on: s.id == pes.source_id,
+        where: v.city_id in ^city_ids,
+        where: pe.inserted_at >= ^seven_days_ago,
+        select: s.slug,
+        distinct: true
+      )
+
+    EventasaurusApp.Repo.replica().all(query, timeout: 30_000)
+    |> Enum.sort()
+  rescue
+    e ->
+      Logger.error("Failed to discover sources for cities: #{Exception.message(e)}")
+      []
+  end
+
   defp fetch_single_source_stats(source) do
     # Get 24-hour health check
     health_data =
