@@ -94,7 +94,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
 
   @impl true
   def handle_event("change_date_range", %{"date_range" => date_range}, socket) do
-    date_range = String.to_integer(date_range)
+    date_range = parse_date_range(date_range)
     city = socket.assigns.city
 
     # Get new chart data for the selected date range
@@ -118,9 +118,20 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     # Get metro area city IDs for aggregation
     cluster_city_ids = CityHierarchy.get_cluster_city_ids(city.id)
 
-    # Calculate health for the primary city
-    {:ok, health_data} = CityHealthCalculator.calculate_city_health(city.id)
+    # Calculate health for the primary city (handle deleted city case)
+    case CityHealthCalculator.calculate_city_health(city.id) do
+      {:ok, health_data} ->
+        load_city_health_data_with_health(socket, city, cluster_city_ids, health_data)
 
+      {:error, :city_not_found} ->
+        # City was deleted between mount and refresh - redirect to list
+        socket
+        |> put_flash(:error, "City no longer exists")
+        |> push_navigate(to: ~p"/admin/cities/health")
+    end
+  end
+
+  defp load_city_health_data_with_health(socket, city, cluster_city_ids, health_data) do
     # Get additional metrics
     event_count = count_events(cluster_city_ids)
     venue_count = count_venues(cluster_city_ids)
@@ -193,112 +204,92 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         <% else %>
-          <!-- Header Section -->
-          <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-              <!-- City Info -->
-              <div class="flex-1">
-                <div class="flex items-center gap-3">
-                  <h1 class="text-3xl font-bold text-gray-900"><%= @city.name %></h1>
-                  <.health_score_pill score={@health_data.health_score} status={@health_data.health_status} />
-                </div>
-                <div class="mt-2 text-gray-500 flex items-center gap-2">
-                  <span><%= @city.country.name %></span>
-                  <%= if length(@metro_cities) > 0 do %>
-                    <span class="text-gray-300">•</span>
-                    <span>Metro area: <%= length(@metro_cities) + 1 %> cities</span>
-                  <% end %>
-                </div>
-              </div>
-
-              <!-- Large Health Score -->
-              <div class="flex-shrink-0">
-                <.health_score_large
-                  score={@health_data.health_score}
-                  status={@health_data.health_status}
-                  label="Health Score"
-                />
+          <!-- Header Section (Compact) -->
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h1 class="text-xl font-semibold text-gray-900 flex items-center gap-3">
+                <%= @city.name %>
+                <.health_score_pill score={@health_data.health_score} status={@health_data.health_status} />
+              </h1>
+              <div class="mt-1 text-sm text-gray-500 flex items-center gap-2">
+                <span><%= @city.country.name %></span>
+                <%= if length(@metro_cities) > 0 do %>
+                  <span class="text-gray-300">•</span>
+                  <span>Metro area: <%= length(@metro_cities) + 1 %> cities</span>
+                <% end %>
               </div>
             </div>
           </div>
 
-          <!-- Quick Stats Bar -->
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <.stat_card
+          <!-- Health Overview (Admin Dashboard Style) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <.admin_stat_card
               title="Total Events"
               value={format_number(@event_count)}
-              icon="📊"
+              icon_type={:chart}
               color={:blue}
               subtitle={"#{format_change(@weekly_change)} this week"}
             />
-            <.stat_card
+            <.admin_stat_card
               title="Active Sources"
               value={length(@source_data)}
-              icon="🔌"
+              icon_type={:plug}
               color={:purple}
               subtitle={"#{count_healthy_sources(@source_data)} healthy"}
             />
-            <.stat_card
+            <.admin_stat_card
               title="Venues"
               value={format_number(@venue_count)}
-              icon="📍"
+              icon_type={:location}
               color={:green}
             />
-            <.stat_card
+            <.admin_stat_card
               title="Categories"
               value={@category_count}
-              icon="🏷️"
+              icon_type={:tag}
               color={:yellow}
             />
           </div>
 
-          <!-- Health Score Breakdown -->
-          <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-6">Health Score Breakdown</h2>
+          <!-- Health Score Breakdown (4-Column Grid) -->
+          <div class="mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Health Score Breakdown</h2>
 
-            <div class="space-y-6">
-              <!-- Event Coverage (40%) -->
-              <.health_component_bar
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <.health_metric_card
                 label="Event Coverage"
                 value={@health_data.components.event_coverage}
                 weight="40%"
                 color={component_color(@health_data.components.event_coverage)}
                 target={80}
-                description="7-day event availability"
-                show_status={true}
+                description="7-day availability"
               />
 
-              <!-- Source Activity (30%) -->
-              <.health_component_bar
+              <.health_metric_card
                 label="Source Activity"
                 value={@health_data.components.source_activity}
                 weight="30%"
                 color={component_color(@health_data.components.source_activity)}
                 target={90}
-                description="Jobs completed successfully"
-                show_status={true}
+                description="Job success rate"
               />
 
-              <!-- Data Quality (20%) -->
-              <.health_component_bar
+              <.health_metric_card
                 label="Data Quality"
                 value={@health_data.components.data_quality}
                 weight="20%"
                 color={component_color(@health_data.components.data_quality)}
                 target={85}
-                description="Events with category/venue"
-                show_status={true}
+                description="Events with metadata"
               />
 
-              <!-- Venue Health (10%) -->
-              <.health_component_bar
+              <.health_metric_card
                 label="Venue Health"
                 value={@health_data.components.venue_health}
                 weight="10%"
                 color={component_color(@health_data.components.venue_health)}
                 target={90}
-                description="Venues with valid slugs"
-                show_status={true}
+                description="Venues with slugs"
               />
             </div>
           </div>
@@ -363,11 +354,12 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
             </div>
           </div>
 
-          <!-- Active Sources Table -->
-          <.source_table
+          <!-- Active Sources Table (Enhanced with Summary Grid + Job Timeline) -->
+          <.source_table_enhanced
             sources={@source_data}
             expanded={@expanded_sources}
             source_errors={@source_errors}
+            show_summary={true}
           />
 
           <!-- Top Venues Table (Phase 5) -->
@@ -530,6 +522,19 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
 
   # Private Functions
 
+  # Valid date ranges for the chart selector
+  @valid_date_ranges [7, 14, 30, 90]
+
+  defp parse_date_range(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} when int in @valid_date_ranges -> int
+      _ -> 30  # Default to 30 days for invalid input
+    end
+  end
+
+  defp parse_date_range(value) when is_integer(value) and value in @valid_date_ranges, do: value
+  defp parse_date_range(_), do: 30
+
   defp get_city_by_slug(slug) do
     from(c in City,
       where: c.slug == ^slug,
@@ -559,12 +564,14 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   end
 
   defp count_categories(city_ids) do
+    # Use join table instead of deprecated category_id field
     from(e in PublicEvent,
       join: v in Venue,
       on: v.id == e.venue_id,
+      join: pec in "public_event_categories",
+      on: pec.event_id == e.id,
       where: v.city_id in ^city_ids,
-      where: not is_nil(e.category_id),
-      select: count(e.category_id, :distinct)
+      select: count(pec.category_id, :distinct)
     )
     |> Repo.replica().one(timeout: 30_000) || 0
   end
@@ -598,14 +605,19 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     # Enrich with job success rates (pass full sources for worker pattern matching)
     job_stats = get_source_job_stats(sources)
 
+    # Get recent job history for the timeline visualization
+    recent_jobs_by_source = get_source_recent_jobs(sources)
+
     Enum.map(sources, fn source ->
       stats = Map.get(job_stats, source.id, %{success_rate: 0, total_jobs: 0})
       health_status = calculate_source_health(stats.success_rate)
+      recent_jobs = Map.get(recent_jobs_by_source, source.slug, [])
 
       source
       |> Map.put(:success_rate, stats.success_rate)
       |> Map.put(:total_jobs, stats.total_jobs)
       |> Map.put(:health_status, health_status)
+      |> Map.put(:recent_jobs, recent_jobs)
     end)
   end
 
@@ -650,6 +662,74 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
       end
     end)
   end
+
+  defp get_source_recent_jobs(sources) when sources == [], do: %{}
+
+  defp get_source_recent_jobs(sources) do
+    now = DateTime.utc_now()
+    seven_days_ago = DateTime.add(now, -7, :day)
+
+    # Only fetch SyncJob runs for the timeline (main orchestrator jobs)
+    # Limit to 10 most recent per source
+    from(j in JobExecutionSummary,
+      where: j.attempted_at >= ^seven_days_ago,
+      where: like(j.worker, "EventasaurusDiscovery.Sources.%"),
+      where: like(j.worker, "%SyncJob"),
+      order_by: [desc: j.attempted_at],
+      select: %{
+        id: j.id,
+        worker: j.worker,
+        state: j.state,
+        attempted_at: j.attempted_at,
+        completed_at: j.completed_at,
+        duration_seconds: fragment("EXTRACT(EPOCH FROM (? - ?))", j.completed_at, j.attempted_at),
+        errors: fragment("?->>'error_message'", j.results)
+      }
+    )
+    |> Repo.replica().all(timeout: 30_000)
+    |> Enum.reduce(%{}, fn job, acc ->
+      # Extract source slug from worker name
+      # Worker format: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob"
+      source_match = Regex.run(~r/Sources\.([^.]+)\.Jobs/, job.worker)
+
+      if source_match do
+        slug = source_match |> List.last() |> Macro.underscore()
+
+        # Only add if we have this source and haven't exceeded 10 jobs
+        if Enum.any?(sources, fn s -> s.slug == slug end) do
+          current_jobs = Map.get(acc, slug, [])
+
+          if length(current_jobs) < 10 do
+            # Convert state from "completed" to "success" for display consistency
+            state = if job.state == "completed", do: "success", else: job.state
+
+            job_with_state = %{
+              id: job.id,
+              state: state,
+              completed_at: job.completed_at || job.attempted_at,
+              duration_seconds: parse_duration(job.duration_seconds),
+              errors: job.errors
+            }
+
+            Map.put(acc, slug, current_jobs ++ [job_with_state])
+          else
+            acc
+          end
+        else
+          acc
+        end
+      else
+        acc
+      end
+    end)
+  end
+
+  # Parse duration from SQL result, handling Decimal type
+  defp parse_duration(nil), do: 0
+  defp parse_duration(%Decimal{} = d), do: d |> Decimal.round() |> Decimal.to_integer()
+  defp parse_duration(d) when is_float(d), do: round(d)
+  defp parse_duration(d) when is_integer(d), do: d
+  defp parse_duration(_), do: 0
 
   defp calculate_source_health(success_rate) when success_rate >= 90, do: :healthy
   defp calculate_source_health(success_rate) when success_rate >= 70, do: :warning

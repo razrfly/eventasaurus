@@ -193,6 +193,174 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponentsTest do
     end
   end
 
+  describe "admin_stat_card/1" do
+    test "renders card with title, value, and SVG icon" do
+      assigns = %{title: "Total Events", value: 1234, icon_type: :chart, color: :blue}
+      html = render_component(&HealthComponents.admin_stat_card/1, assigns)
+
+      assert html =~ "Total Events"
+      assert html =~ "1234"
+      assert html =~ "<svg"
+      assert html =~ "border-blue-500"
+      assert html =~ "bg-blue-100"
+    end
+
+    test "renders title as label above value" do
+      assigns = %{title: "Active Sources", value: 8, icon_type: :plug, color: :purple}
+      html = render_component(&HealthComponents.admin_stat_card/1, assigns)
+
+      # Title should have text-sm styling (label pattern)
+      assert html =~ "text-sm font-medium text-gray-500"
+      # Value should have text-3xl styling (large number pattern)
+      assert html =~ "text-3xl font-bold"
+    end
+
+    test "renders with different colors" do
+      for color <- [:blue, :green, :yellow, :red, :purple, :indigo] do
+        assigns = %{title: "Test", value: 100, icon_type: :chart, color: color}
+        html = render_component(&HealthComponents.admin_stat_card/1, assigns)
+
+        assert html =~ "border-#{color}-500"
+        assert html =~ "bg-#{color}-100"
+      end
+    end
+
+    test "renders with different icon types" do
+      for icon_type <- [:chart, :plug, :location, :tag, :calendar, :users] do
+        assigns = %{title: "Test", value: 42, icon_type: icon_type, color: :blue}
+        html = render_component(&HealthComponents.admin_stat_card/1, assigns)
+
+        assert html =~ "<svg"
+        assert html =~ "w-12 h-12 rounded-full"
+      end
+    end
+
+    test "renders subtitle when provided" do
+      assigns = %{title: "Sources", value: 8, icon_type: :plug, color: :purple, subtitle: "3 healthy"}
+      html = render_component(&HealthComponents.admin_stat_card/1, assigns)
+
+      assert html =~ "3 healthy"
+    end
+
+    test "icon appears in circular background on right side" do
+      assigns = %{title: "Events", value: 100, icon_type: :chart, color: :blue}
+      html = render_component(&HealthComponents.admin_stat_card/1, assigns)
+
+      # Icon should be in a circular div
+      assert html =~ "w-12 h-12 rounded-full"
+      # Layout should use flex justify-between
+      assert html =~ "flex items-center justify-between"
+    end
+  end
+
+  describe "admin_icon/1" do
+    test "renders chart icon" do
+      assigns = %{type: :chart, class: "w-6 h-6"}
+      html = render_component(&HealthComponents.admin_icon/1, assigns)
+
+      assert html =~ "<svg"
+      assert html =~ "w-6 h-6"
+    end
+
+    test "renders plug icon" do
+      assigns = %{type: :plug, class: "w-6 h-6 text-purple-600"}
+      html = render_component(&HealthComponents.admin_icon/1, assigns)
+
+      assert html =~ "<svg"
+      assert html =~ "text-purple-600"
+    end
+
+    test "renders location icon" do
+      assigns = %{type: :location, class: "w-6 h-6"}
+      html = render_component(&HealthComponents.admin_icon/1, assigns)
+
+      assert html =~ "<svg"
+      # Location icon has two paths
+      assert html =~ "path"
+    end
+
+    test "renders fallback icon for unknown types" do
+      assigns = %{type: :unknown, class: "w-6 h-6"}
+      html = render_component(&HealthComponents.admin_icon/1, assigns)
+
+      assert html =~ "<svg"
+    end
+  end
+
+  describe "health_metric_card/1" do
+    test "renders card with label, value, and weight" do
+      assigns = %{label: "Event Coverage", value: 85, weight: "40%", color: :blue}
+      html = render_component(&HealthComponents.health_metric_card/1, assigns)
+
+      assert html =~ "Event Coverage"
+      assert html =~ "85%"
+      assert html =~ "40%"
+    end
+
+    test "renders with progress bar" do
+      assigns = %{label: "Test", value: 75, weight: "30%", color: :green}
+      html = render_component(&HealthComponents.health_metric_card/1, assigns)
+
+      assert html =~ "bg-green-500"
+      assert html =~ "width: 75%"
+    end
+
+    test "renders description when provided" do
+      assigns = %{label: "Event Coverage", value: 85, weight: "40%", color: :blue, description: "7-day availability"}
+      html = render_component(&HealthComponents.health_metric_card/1, assigns)
+
+      assert html =~ "7-day availability"
+    end
+
+    test "shows on target indicator when value meets target" do
+      assigns = %{label: "Test", value: 90, weight: "30%", color: :green, target: 80}
+      html = render_component(&HealthComponents.health_metric_card/1, assigns)
+
+      assert html =~ "On target"
+      assert html =~ "text-green-600"
+    end
+
+    test "shows below indicator when value is below target" do
+      assigns = %{label: "Test", value: 60, weight: "30%", color: :red, target: 80}
+      html = render_component(&HealthComponents.health_metric_card/1, assigns)
+
+      assert html =~ "Below"
+      assert html =~ "text-red-600"
+    end
+
+    test "shows target value" do
+      assigns = %{label: "Test", value: 70, weight: "30%", color: :yellow, target: 80}
+      html = render_component(&HealthComponents.health_metric_card/1, assigns)
+
+      assert html =~ "Target: 80%"
+    end
+
+    test "does not show target indicator when no target provided" do
+      assigns = %{label: "Test", value: 70, weight: "30%", color: :blue}
+      html = render_component(&HealthComponents.health_metric_card/1, assigns)
+
+      refute html =~ "Target:"
+      refute html =~ "On target"
+      refute html =~ "Below"
+    end
+
+    test "renders with different colors" do
+      for color <- [:blue, :green, :yellow, :red, :purple] do
+        assigns = %{label: "Test", value: 50, weight: "20%", color: color}
+        html = render_component(&HealthComponents.health_metric_card/1, assigns)
+
+        assert html =~ "bg-#{color}-500"
+      end
+    end
+
+    test "caps progress bar at 100%" do
+      assigns = %{label: "Test", value: 150, weight: "30%", color: :blue}
+      html = render_component(&HealthComponents.health_metric_card/1, assigns)
+
+      assert html =~ "width: 100%"
+    end
+  end
+
   describe "health_component_bar/1" do
     test "renders component bar with label, value, and weight" do
       assigns = %{label: "Event Coverage", value: 85, weight: "40%", color: :blue}
