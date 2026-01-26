@@ -85,6 +85,14 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
         )
 
         {:error, :timeout}
+
+      {:exit, reason} ->
+        Logger.error(
+          "[RA.EventDetailJob] 💥 Task crashed for #{external_id} " <>
+            "(timeout: #{div(@job_timeout_ms, 1000)}s): #{inspect(reason)}"
+        )
+
+        {:error, {:exit, reason}}
     end
   end
 
