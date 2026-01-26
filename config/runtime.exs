@@ -99,8 +99,10 @@ base_queues = [
   # Note: scraper jobs spawn detail jobs, but we have connection headroom
   scraper: 3,
   # Scraper detail queue for individual event processing
-  # Increased from 3 to 5 for Fly MPG capacity (Issue #3371)
-  scraper_detail: 5,
+  # REDUCED from 5 to 1 to prevent connection pool exhaustion (Issue #3383)
+  # RestaurantDetailJob processes 15 dates × 9 slots = 135 DB transactions per job
+  # Multiple concurrent jobs were exhausting the connection pool
+  scraper_detail: 1,
   # Scraper index queue for processing index pages
   # Reduced from 2 to 1 - index pages spawn many detail jobs
   scraper_index: 1,

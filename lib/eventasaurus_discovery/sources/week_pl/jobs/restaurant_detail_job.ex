@@ -32,6 +32,11 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
   - festival_price: Menu price
   """
 
+  # Job timeout of 120 seconds (2 minutes) to prevent connection pool exhaustion
+  # Each job processes 15 dates × 9 slots = 135 DB transactions
+  # At ~1s per transaction + 2s rate limit delay, should complete in ~60s
+  @job_timeout_ms 120_000
+
   use Oban.Worker,
     queue: :scraper_detail,
     max_attempts: 3,
@@ -58,7 +63,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
 
     # Note: EventFreshnessChecker optimization happens at event level in EventProcessor
     # through consolidation logic and last_seen_at tracking
-    result = fetch_and_process(args, source_id, meta)
+    # Wrap in timeout to prevent connection pool exhaustion from long-running jobs
+    result = execute_with_timeout(args, source_id, meta)
 
     # Track success/failure based on processing outcome
     # Error messages use standard categories for ErrorCategories.categorize_error/1
@@ -102,6 +108,24 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         Logger.warning("[WeekPl.DetailJob] Unknown result status: #{inspect(unknown)}")
         MetricsTracker.record_failure(job, :uncategorized_error, external_id)
         {:ok, unknown}
+    end
+  end
+
+  # Execute with timeout to prevent connection pool exhaustion
+  # Jobs that exceed the timeout will be retried by Oban
+  defp execute_with_timeout(args, source_id, meta) do
+    task = Task.async(fn -> fetch_and_process(args, source_id, meta) end)
+
+    case Task.yield(task, @job_timeout_ms) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} ->
+        result
+
+      nil ->
+        Logger.warning(
+          "[WeekPl.DetailJob] ⏰ Timeout after #{div(@job_timeout_ms, 1000)}s for #{args["restaurant_name"]}"
+        )
+
+        {:error, :timeout}
     end
   end
 

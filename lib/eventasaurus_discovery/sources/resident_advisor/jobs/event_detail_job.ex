@@ -11,6 +11,10 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
   - `source_id` - Database ID of the RA source
   """
 
+  # Job timeout of 60 seconds to prevent connection pool exhaustion
+  # RA events are simpler than restaurant slots, should complete in ~30s
+  @job_timeout_ms 60_000
+
   use Oban.Worker,
     queue: :scraper_detail,
     max_attempts: 3
@@ -48,8 +52,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
         # This ensures last_seen_at is updated even if processing fails
         EventProcessor.mark_event_as_seen(external_id, source_id)
 
-        # Process event and track metrics
-        result = process_event(event_data, source_id, external_id)
+        # Process event with timeout to prevent connection pool exhaustion
+        result = execute_with_timeout(event_data, source_id, external_id)
 
         case result do
           {:ok, _} ->
@@ -64,6 +68,23 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
             MetricsTracker.record_failure(job, reason, external_id)
             result
         end
+    end
+  end
+
+  # Execute with timeout to prevent connection pool exhaustion
+  defp execute_with_timeout(event_data, source_id, external_id) do
+    task = Task.async(fn -> process_event(event_data, source_id, external_id) end)
+
+    case Task.yield(task, @job_timeout_ms) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} ->
+        result
+
+      nil ->
+        Logger.warning(
+          "[RA.EventDetailJob] ⏰ Timeout after #{div(@job_timeout_ms, 1000)}s for #{external_id}"
+        )
+
+        {:error, :timeout}
     end
   end
 
