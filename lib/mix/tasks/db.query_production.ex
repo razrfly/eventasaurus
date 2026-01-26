@@ -51,8 +51,9 @@ defmodule Mix.Tasks.Db.QueryProduction do
   @fly_app "eventasaurus"
 
   # Dangerous SQL keywords that indicate write operations
-  @write_keywords ~w(INSERT UPDATE DELETE DROP ALTER TRUNCATE CREATE GRANT REVOKE VACUUM REINDEX)
+  @write_keywords ~w(INSERT INTO UPDATE DELETE DROP ALTER TRUNCATE CREATE GRANT REVOKE VACUUM REINDEX)
 
+  @spec run([binary()]) :: :ok
   @impl Mix.Task
   def run(args) do
     {opts, positional, _} =
@@ -168,28 +169,31 @@ defmodule Mix.Tasks.Db.QueryProduction do
   # ============================================================================
 
   defp execute_query(query, timeout_seconds) do
-    # Escape the query for shell - double quotes need escaping for the nested shell command
+    # Escape the query for Elixir string embedding (double quotes need escaping)
     escaped_query =
       query
-      |> String.replace("\\", "\\\\\\\\")
-      |> String.replace("\"", "\\\\\\\"")
+      |> String.replace("\\", "\\\\")
+      |> String.replace("\"", "\\\"")
 
     # Build the RPC command as a single line with semicolons
     # We encode the result as JSON for easy parsing
     timeout_ms = timeout_seconds * 1000
 
     rpc_code =
-      "result = Ecto.Adapters.SQL.query(EventasaurusApp.Repo, \\\"#{escaped_query}\\\", [], timeout: #{timeout_ms}); " <>
+      "result = Ecto.Adapters.SQL.query(EventasaurusApp.Repo, \"#{escaped_query}\", [], timeout: #{timeout_ms}); " <>
         "case result do " <>
-        "{:ok, %{columns: cols, rows: rows}} -> IO.puts(\\\"__RESULT_START__\\\"); IO.puts(Jason.encode!(%{columns: cols, rows: rows})); IO.puts(\\\"__RESULT_END__\\\"); " <>
-        "{:error, %Postgrex.Error{postgres: %{message: msg}}} -> IO.puts(\\\"__ERROR__:\\\" <> msg); " <>
-        "{:error, reason} -> IO.puts(\\\"__ERROR__:\\\" <> inspect(reason)) " <>
+        "{:ok, %{columns: cols, rows: rows}} -> IO.puts(\"__RESULT_START__\"); IO.puts(Jason.encode!(%{columns: cols, rows: rows})); IO.puts(\"__RESULT_END__\"); " <>
+        "{:error, %Postgrex.Error{postgres: %{message: msg}}} -> IO.puts(\"__ERROR__:\" <> msg); " <>
+        "{:error, reason} -> IO.puts(\"__ERROR__:\" <> inspect(reason)) " <>
         "end"
 
-    # Execute via fly ssh console
-    cmd = "fly ssh console -a #{@fly_app} -C '/app/bin/eventasaurus rpc \"#{rpc_code}\"'"
+    # Build the full command to run on the remote machine
+    remote_cmd = "/app/bin/eventasaurus rpc \"#{rpc_code}\""
 
-    case System.cmd("sh", ["-c", cmd], stderr_to_stdout: true) do
+    # Execute via fly ssh console - pass arguments directly without shell
+    args = ["ssh", "console", "-a", @fly_app, "-C", remote_cmd]
+
+    case System.cmd("fly", args, stderr_to_stdout: true) do
       {output, 0} ->
         parse_rpc_output(output)
 
@@ -240,12 +244,12 @@ defmodule Mix.Tasks.Db.QueryProduction do
     end
   end
 
-  defp format_table(columns, rows, no_headers) do
-    if Enum.empty?(rows) do
-      info("(0 rows)")
-      return_ok()
-    end
+  defp format_table(_columns, rows, _no_headers) when rows == [] do
+    info("(0 rows)")
+    :ok
+  end
 
+  defp format_table(columns, rows, no_headers) do
     # Calculate column widths
     all_data = if no_headers, do: rows, else: [columns | rows]
 
@@ -356,8 +360,6 @@ defmodule Mix.Tasks.Db.QueryProduction do
 
   defp info(msg), do: Mix.shell().info(msg)
   defp error(msg), do: Mix.shell().error("❌ #{msg}")
-
-  defp return_ok, do: :ok
 
   defp print_help do
     IO.puts("""
