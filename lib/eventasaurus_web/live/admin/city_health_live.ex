@@ -28,6 +28,13 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
   # Auto-refresh every 5 minutes
   @refresh_interval :timer.minutes(5)
 
+  # Pagination settings - reduced from 100 to prevent OOM
+  @default_page_size 10
+  @max_page_size 25
+
+  # Query timeout reduced from 60s to 10s to prevent memory buildup
+  @query_timeout 10_000
+
   @type socket :: Phoenix.LiveView.Socket.t()
 
   @spec mount(map(), map(), socket()) :: {:ok, socket()}
@@ -42,9 +49,13 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
       |> assign(:page_title, "City Health Dashboard")
       |> assign(:loading, true)
       |> assign(:expanded_cities, MapSet.new())
+      |> assign(:city_details, %{})  # Lazy-loaded sparklines/weekly changes
       |> assign(:status_filter, "all")
       |> assign(:sort_column, :event_count)
       |> assign(:sort_direction, :desc)
+      |> assign(:page, 1)
+      |> assign(:page_size, @default_page_size)
+      |> assign(:total_cities, 0)
       |> load_city_health_data()
 
     {:ok, socket}
@@ -68,14 +79,67 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
     city_id = String.to_integer(city_id)
     expanded = socket.assigns.expanded_cities
 
-    new_expanded =
+    {new_expanded, socket} =
       if MapSet.member?(expanded, city_id) do
-        MapSet.delete(expanded, city_id)
+        # Collapsing - just remove from expanded set
+        {MapSet.delete(expanded, city_id), socket}
       else
-        MapSet.put(expanded, city_id)
+        # Expanding - lazy load sparkline/weekly data if not already loaded
+        socket = maybe_load_city_details(socket, city_id)
+        {MapSet.put(expanded, city_id), socket}
       end
 
     {:noreply, assign(socket, :expanded_cities, new_expanded)}
+  end
+
+  # Pagination handlers
+  @impl true
+  def handle_event("next_page", _params, socket) do
+    page = socket.assigns.page
+    total_cities = socket.assigns.total_cities
+    page_size = socket.assigns.page_size
+    max_page = max(1, ceil(total_cities / page_size))
+
+    if page < max_page do
+      {:noreply,
+       socket
+       |> assign(:page, page + 1)
+       |> load_city_health_data()}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("prev_page", _params, socket) do
+    page = socket.assigns.page
+
+    if page > 1 do
+      {:noreply,
+       socket
+       |> assign(:page, page - 1)
+       |> load_city_health_data()}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("go_to_page", %{"page" => page_str}, socket) do
+    total_cities = socket.assigns.total_cities
+    page_size = socket.assigns.page_size
+    max_page = max(1, ceil(total_cities / page_size))
+
+    case Integer.parse(page_str) do
+      {page, _} when page >= 1 and page <= max_page ->
+        {:noreply,
+         socket
+         |> assign(:page, page)
+         |> load_city_health_data()}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -118,66 +182,73 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
 
   defp validate_sort_column(_), do: :event_count
 
-  defp load_city_health_data(socket) do
-    # Use the new CityHealthCalculator for proper 4-component health scores
-    # Only get active cities (with events), ordered by event count
-    cities_health = CityHealthCalculator.get_active_cities_health(limit: 100)
+  # PHASE 1: Lazy load sparkline and weekly change data for a specific city
+  defp maybe_load_city_details(socket, city_id) do
+    city_details = socket.assigns.city_details
 
-    # Get additional data for enrichment
-    source_coverage = get_source_coverage_by_city()
-    all_sources = get_all_active_sources()
-    weekly_changes = get_weekly_changes()
-    daily_sparklines = get_daily_sparkline_data()
+    # Only load if not already cached
+    if Map.has_key?(city_details, city_id) do
+      socket
+    else
+      # Load sparkline and weekly change for this city only
+      details =
+        try do
+          sparkline = get_city_sparkline(city_id)
+          weekly_change = get_city_weekly_change(city_id)
+          %{sparkline: sparkline, weekly_change: weekly_change}
+        rescue
+          _ -> %{sparkline: List.duplicate(0, 7), weekly_change: 0}
+        catch
+          :exit, _ -> %{sparkline: List.duplicate(0, 7), weekly_change: 0}
+        end
 
-    # Enrich cities with source coverage, weekly change, and sparkline data
-    cities_with_sources =
-      Enum.map(cities_health, fn city ->
-        city_sources = Map.get(source_coverage, city.city_id, [])
-        source_count = length(city_sources)
-        weekly_change = Map.get(weekly_changes, city.city_id, 0)
-        sparkline = Map.get(daily_sparklines, city.city_id, List.duplicate(0, 7))
-        components = city.components || %{}
+      # Update cities list with the loaded details
+      cities =
+        Enum.map(socket.assigns.cities, fn city ->
+          if city.id == city_id do
+            city
+            |> Map.put(:sparkline, details.sparkline)
+            |> Map.put(:weekly_change, details.weekly_change)
+          else
+            city
+          end
+        end)
 
-        city
-        |> Map.put(:id, city.city_id)
-        |> Map.put(:name, city.city_name)
-        |> Map.put(:slug, city.city_slug)
-        |> Map.put(:sources, city_sources)
-        |> Map.put(:source_count, source_count)
-        |> Map.put(:weekly_change, weekly_change)
-        |> Map.put(:sparkline, sparkline)
-        # Individual component percentages for progress bars
-        |> Map.put(:event_coverage_pct, components[:event_coverage] || 0)
-        |> Map.put(:source_activity_pct, components[:source_activity] || 0)
-        |> Map.put(:data_quality_pct, components[:data_quality] || 0)
-        |> Map.put(:venue_health_pct, components[:venue_health] || 0)
-      end)
-
-    summary = calculate_summary(cities_with_sources)
-    source_summary = calculate_source_summary(source_coverage, all_sources)
-    recent_issues = get_recent_issues()
-
-    # Identify cities needing attention (critical or warning with declining trend)
-    cities_needing_attention =
-      cities_with_sources
-      |> Enum.filter(fn city ->
-        city.health_status in [:critical, :warning] or city.weekly_change < -20
-      end)
-      |> Enum.take(5)
-
-    socket
-    |> assign(:loading, false)
-    |> assign(:cities, cities_with_sources)
-    |> assign(:summary, summary)
-    |> assign(:source_summary, source_summary)
-    |> assign(:all_sources, all_sources)
-    |> assign(:recent_issues, recent_issues)
-    |> assign(:cities_needing_attention, cities_needing_attention)
-    |> assign(:last_updated, DateTime.utc_now())
+      socket
+      |> assign(:city_details, Map.put(city_details, city_id, details))
+      |> assign(:cities, cities)
+    end
   end
 
-  defp get_weekly_changes do
-    # Calculate weekly change for each city
+  # Get sparkline data for a single city
+  defp get_city_sparkline(city_id) do
+    today = Date.utc_today()
+    seven_days_ago = Date.add(today, -6)
+
+    query =
+      from(pe in PublicEvent,
+        join: v in Venue,
+        on: v.id == pe.venue_id,
+        where: v.city_id == ^city_id,
+        where: fragment("?::date", pe.starts_at) >= ^seven_days_ago,
+        where: fragment("?::date", pe.starts_at) <= ^today,
+        group_by: fragment("?::date", pe.starts_at),
+        select: %{
+          event_date: fragment("?::date", pe.starts_at),
+          count: count(pe.id, :distinct)
+        },
+        order_by: [asc: fragment("?::date", pe.starts_at)]
+      )
+
+    raw_data = Repo.replica().all(query, timeout: @query_timeout)
+    dates = Enum.map(0..6, fn offset -> Date.add(seven_days_ago, offset) end)
+    date_counts = Map.new(raw_data, fn e -> {e.event_date, e.count} end)
+
+    Enum.map(dates, fn date -> Map.get(date_counts, date, 0) end)
+  end
+
+  # Get weekly change for a single city
+  defp get_city_weekly_change(city_id) do
     now = DateTime.utc_now()
     one_week_ago = DateTime.add(now, -7, :day)
     two_weeks_ago = DateTime.add(now, -14, :day)
@@ -186,9 +257,8 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
       from(e in PublicEvent,
         join: v in Venue,
         on: v.id == e.venue_id,
-        group_by: v.city_id,
+        where: v.city_id == ^city_id,
         select: %{
-          city_id: v.city_id,
           events_this_week:
             fragment(
               "COUNT(DISTINCT CASE WHEN ? >= ? THEN ? END)",
@@ -208,14 +278,112 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
         }
       )
 
-    query
-    |> Repo.replica().all(timeout: 60_000)
-    |> Enum.map(fn %{city_id: city_id, events_this_week: this_week, events_last_week: last_week} ->
-      change = calculate_weekly_change(this_week, last_week)
-      {city_id, change}
-    end)
-    |> Map.new()
+    case Repo.replica().one(query, timeout: @query_timeout) do
+      %{events_this_week: this_week, events_last_week: last_week} ->
+        calculate_weekly_change(this_week, last_week)
+
+      _ ->
+        0
+    end
   end
+
+  defp load_city_health_data(socket) do
+    page = socket.assigns.page
+    page_size = socket.assigns.page_size
+
+    # Use the new CityHealthCalculator for proper 4-component health scores
+    # PHASE 1 FIX: Reduced limit from 100 to @default_page_size with pagination
+    # This prevents OOM by loading only what's needed for the current page
+    cities_health =
+      try do
+        CityHealthCalculator.get_active_cities_health(
+          limit: page_size,
+          offset: (page - 1) * page_size,
+          timeout: @query_timeout
+        )
+      rescue
+        _ -> []
+      catch
+        :exit, _ -> []
+      end
+
+    # Get total count for pagination (lightweight query)
+    total_cities = get_total_city_count()
+
+    # PHASE 1 FIX: Load source coverage only (lightweight)
+    # Sparklines and weekly changes are now loaded lazily on city expand
+    source_coverage = get_source_coverage_by_city()
+    all_sources = get_all_active_sources()
+
+    # Enrich cities with source coverage ONLY (no expensive sparkline/weekly queries)
+    cities_with_sources =
+      Enum.map(cities_health, fn city ->
+        city_sources = Map.get(source_coverage, city.city_id, [])
+        source_count = length(city_sources)
+        components = city.components || %{}
+
+        city
+        |> Map.put(:id, city.city_id)
+        |> Map.put(:name, city.city_name)
+        |> Map.put(:slug, city.city_slug)
+        |> Map.put(:sources, city_sources)
+        |> Map.put(:source_count, source_count)
+        # PHASE 1: Placeholder values - loaded lazily on expand
+        |> Map.put(:weekly_change, nil)
+        |> Map.put(:sparkline, nil)
+        # Individual component percentages for progress bars
+        |> Map.put(:event_coverage_pct, components[:event_coverage] || 0)
+        |> Map.put(:source_activity_pct, components[:source_activity] || 0)
+        |> Map.put(:data_quality_pct, components[:data_quality] || 0)
+        |> Map.put(:venue_health_pct, components[:venue_health] || 0)
+      end)
+
+    summary = calculate_summary(cities_with_sources)
+    source_summary = calculate_source_summary(source_coverage, all_sources)
+
+    # PHASE 1 FIX: Limit recent issues query with timeout
+    recent_issues =
+      try do
+        get_recent_issues()
+      rescue
+        _ -> []
+      catch
+        :exit, _ -> []
+      end
+
+    # Identify cities needing attention (critical or warning status)
+    # PHASE 1: Removed weekly_change check since it's now lazy-loaded
+    cities_needing_attention =
+      cities_with_sources
+      |> Enum.filter(fn city ->
+        city.health_status in [:critical, :warning]
+      end)
+      |> Enum.take(5)
+
+    socket
+    |> assign(:loading, false)
+    |> assign(:cities, cities_with_sources)
+    |> assign(:total_cities, total_cities)
+    |> assign(:summary, summary)
+    |> assign(:source_summary, source_summary)
+    |> assign(:all_sources, all_sources)
+    |> assign(:recent_issues, recent_issues)
+    |> assign(:cities_needing_attention, cities_needing_attention)
+    |> assign(:last_updated, DateTime.utc_now())
+  end
+
+  # Get total city count for pagination (lightweight query)
+  defp get_total_city_count do
+    try do
+      CityHealthCalculator.count_active_cities(timeout: @query_timeout)
+    rescue
+      _ -> 0
+    catch
+      :exit, _ -> 0
+    end
+  end
+
+  # Batch versions removed - now using lazy single-city loading (get_city_weekly_change/1)
 
   defp calculate_weekly_change(this_week, last_week) do
     cond do
@@ -225,46 +393,7 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
     end
   end
 
-  defp get_daily_sparkline_data do
-    # Get event counts per day for the last 7 days per city
-    # Returns a map of city_id -> [day1_count, day2_count, ..., day7_count]
-    today = Date.utc_today()
-    seven_days_ago = Date.add(today, -6)
-
-    query =
-      from(pe in PublicEvent,
-        join: v in Venue,
-        on: v.id == pe.venue_id,
-        where: fragment("?::date", pe.starts_at) >= ^seven_days_ago,
-        where: fragment("?::date", pe.starts_at) <= ^today,
-        group_by: [v.city_id, fragment("?::date", pe.starts_at)],
-        select: %{
-          city_id: v.city_id,
-          event_date: fragment("?::date", pe.starts_at),
-          count: count(pe.id, :distinct)
-        },
-        order_by: [asc: v.city_id, asc: fragment("?::date", pe.starts_at)]
-      )
-
-    raw_data = Repo.replica().all(query, timeout: 60_000)
-
-    # Build the 7-day array for each city
-    dates = Enum.map(0..6, fn offset -> Date.add(seven_days_ago, offset) end)
-
-    raw_data
-    |> Enum.group_by(& &1.city_id)
-    |> Enum.map(fn {city_id, entries} ->
-      date_counts = Map.new(entries, fn e -> {e.event_date, e.count} end)
-
-      sparkline =
-        Enum.map(dates, fn date ->
-          Map.get(date_counts, date, 0)
-        end)
-
-      {city_id, sparkline}
-    end)
-    |> Map.new()
-  end
+  # Batch sparkline function removed - now using lazy single-city loading (get_city_sparkline/1)
 
   defp calculate_summary(cities) do
     total = length(cities)
@@ -316,7 +445,7 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
       )
 
     query
-    |> Repo.replica().all(timeout: 60_000)
+    |> Repo.replica().all(timeout: @query_timeout)
     |> Enum.group_by(& &1.city_id)
   end
 
@@ -543,26 +672,11 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
 
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-        <.stat_card title="Total Cities" value={@summary.total} icon="🏙️" color={:blue} />
-        <.stat_card title="Healthy" value={@summary.healthy} icon="🟢" color={:green} />
-        <.stat_card title="Warning" value={@summary.warning} icon="🟡" color={:yellow} />
-        <.stat_card title="Critical" value={@summary.critical} icon="🔴" color={:red} />
-        <.stat_card title="Disabled" value={@summary.disabled} icon="⚪" color={:gray} />
-      </div>
-
-      <!-- Health Overview Bar -->
-      <div class="bg-white shadow rounded-lg p-5 mb-8">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-medium text-gray-700">Overall Health</span>
-          <span class="text-sm font-bold text-gray-900"><%= @summary.health_percentage %>%</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-3">
-          <div
-            class="bg-green-500 h-3 rounded-full transition-all duration-500"
-            style={"width: #{@summary.health_percentage}%"}
-          >
-          </div>
-        </div>
+        <.admin_stat_card title="Total Cities" value={@summary.total} icon_type={:location} color={:blue} />
+        <.admin_stat_card title="Healthy" value={@summary.healthy} icon_type={:chart} color={:green} />
+        <.admin_stat_card title="Warning" value={@summary.warning} icon_type={:chart} color={:yellow} />
+        <.admin_stat_card title="Critical" value={@summary.critical} icon_type={:chart} color={:red} />
+        <.admin_stat_card title="Disabled" value={@summary.disabled} icon_type={:chart} color={:gray} />
       </div>
 
       <!-- Cities Needing Attention -->
@@ -738,8 +852,14 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
                 </td>
                 <td class="px-4 py-4 whitespace-nowrap">
                   <div class="flex items-center justify-center gap-2">
-                    <.sparkline data={city.sparkline} />
-                    <.trend_indicator change={city.weekly_change} size={:sm} />
+                    <%= if city.sparkline do %>
+                      <.sparkline data={city.sparkline} />
+                    <% else %>
+                      <span class="text-gray-400 text-xs">Expand to load</span>
+                    <% end %>
+                    <%= if city.weekly_change do %>
+                      <.trend_indicator change={city.weekly_change} size={:sm} />
+                    <% end %>
                   </div>
                 </td>
                 <td class="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-900">
@@ -841,6 +961,33 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
             <% end %>
           </tbody>
         </table>
+
+        <!-- Pagination Controls -->
+        <% max_page = max(1, ceil(@total_cities / @page_size)) %>
+        <div class="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+          <div class="text-sm text-gray-600">
+            Showing <%= (@page - 1) * @page_size + 1 %>-<%= min(@page * @page_size, @total_cities) %> of <%= @total_cities %> cities
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              phx-click="prev_page"
+              disabled={@page <= 1}
+              class={"px-3 py-1 text-sm rounded border #{if @page <= 1, do: "bg-gray-100 text-gray-400 cursor-not-allowed", else: "bg-white text-gray-700 hover:bg-gray-50"}"}
+            >
+              ← Previous
+            </button>
+            <span class="text-sm text-gray-600">
+              Page <%= @page %> of <%= max_page %>
+            </span>
+            <button
+              phx-click="next_page"
+              disabled={@page >= max_page}
+              class={"px-3 py-1 text-sm rounded border #{if @page >= max_page, do: "bg-gray-100 text-gray-400 cursor-not-allowed", else: "bg-white text-gray-700 hover:bg-gray-50"}"}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Recent Issues (Phase 3 Option C) -->

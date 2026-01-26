@@ -36,6 +36,9 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   @coverage_days 14
   @job_activity_hours 168  # 7 days
 
+  # PHASE 1 FIX: Reduced default timeout from 60s to 10s to prevent OOM
+  @default_timeout 10_000
+
   @doc """
   Calculate the health score for a single city.
 
@@ -80,24 +83,32 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   @doc """
   Calculate health scores for all active cities.
 
+  Options:
+  - include_disabled: Include cities with discovery disabled (default: false)
+  - limit: Maximum number of cities to return (default: nil - all cities)
+  - offset: Number of cities to skip for pagination (default: 0)
+  - timeout: Query timeout in milliseconds (default: 10_000)
+
   Returns a list of city health maps sorted by event count (descending).
   Filters to only cities with discovery_enabled by default.
   """
   def calculate_all_cities_health(opts \\ []) do
     include_disabled = Keyword.get(opts, :include_disabled, false)
     limit = Keyword.get(opts, :limit, nil)
+    offset = Keyword.get(opts, :offset, 0)
+    timeout = Keyword.get(opts, :timeout, @default_timeout)
 
     # Get cities ordered by event count
-    cities = get_cities_with_event_counts(include_disabled, limit)
+    cities = get_cities_with_event_counts(include_disabled, limit, offset, timeout)
 
     # Batch calculate all component data
     city_ids = Enum.map(cities, & &1.id)
 
-    # Batch queries for efficiency
-    event_coverage_data = batch_event_coverage(city_ids)
-    source_activity_data = batch_source_activity(city_ids)
-    data_quality_data = batch_data_quality(city_ids)
-    venue_health_data = batch_venue_health(city_ids)
+    # Batch queries for efficiency with configurable timeout
+    event_coverage_data = batch_event_coverage(city_ids, timeout)
+    source_activity_data = batch_source_activity(city_ids, timeout)
+    data_quality_data = batch_data_quality(city_ids, timeout)
+    venue_health_data = batch_venue_health(city_ids, timeout)
 
     # Build results
     Enum.map(cities, fn city ->
@@ -148,15 +159,79 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   Get only active cities (those with at least one event).
   Ordered by event count descending.
 
+  Options:
+  - limit: Maximum number of cities to return (default: 50)
+  - offset: Number of cities to skip for pagination (default: 0)
+  - timeout: Query timeout in milliseconds (default: 10_000)
+
   Note: event_count includes all events associated with the city,
   not just recent ones. The health score components (event_coverage,
   source_activity, etc.) use time-windowed queries for accuracy.
   """
   def get_active_cities_health(opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
+    offset = Keyword.get(opts, :offset, 0)
+    timeout = Keyword.get(opts, :timeout, @default_timeout)
 
-    calculate_all_cities_health(include_disabled: false, limit: limit)
+    calculate_all_cities_health(
+      include_disabled: false,
+      limit: limit,
+      offset: offset,
+      timeout: timeout
+    )
     |> Enum.filter(fn city -> city.event_count > 0 end)
+  end
+
+  @doc """
+  Count the total number of active cities (those with events and discovery enabled).
+  Used for pagination.
+  """
+  def count_active_cities(opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, @default_timeout)
+
+    query =
+      from(c in City,
+        join: v in Venue,
+        on: v.city_id == c.id,
+        join: e in PublicEvent,
+        on: e.venue_id == v.id,
+        where: c.discovery_enabled == true,
+        select: count(c.id, :distinct)
+      )
+
+    Repo.replica().one(query, timeout: timeout) || 0
+  end
+
+  @doc """
+  Compute batch health scores for a list of city IDs.
+  Returns a map of city_id -> health_score.
+  Used by CityHealthMonitorJob for efficient monitoring.
+  """
+  def batch_health_scores(city_ids, opts \\ []) when is_list(city_ids) do
+    timeout = Keyword.get(opts, :timeout, @default_timeout)
+
+    if Enum.empty?(city_ids) do
+      %{}
+    else
+      # Batch queries for efficiency
+      event_coverage_data = batch_event_coverage(city_ids, timeout)
+      source_activity_data = batch_source_activity(city_ids, timeout)
+      data_quality_data = batch_data_quality(city_ids, timeout)
+      venue_health_data = batch_venue_health(city_ids, timeout)
+
+      city_ids
+      |> Enum.map(fn city_id ->
+        components = %{
+          event_coverage: Map.get(event_coverage_data, city_id, 0),
+          source_activity: Map.get(source_activity_data, city_id, 0),
+          data_quality: Map.get(data_quality_data, city_id, 0),
+          venue_health: Map.get(venue_health_data, city_id, 0)
+        }
+
+        {city_id, calculate_weighted_score(components)}
+      end)
+      |> Map.new()
+    end
   end
 
   # ============================================================================
@@ -326,7 +401,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   # Batch Calculations (for calculating all cities efficiently)
   # ============================================================================
 
-  defp batch_event_coverage(city_ids) when is_list(city_ids) do
+  defp batch_event_coverage(city_ids, timeout \\ @default_timeout) when is_list(city_ids) do
     today = Date.utc_today()
     # Use -(@coverage_days - 1) to get exactly @coverage_days days including today
     start_date = Date.add(today, -(@coverage_days - 1))
@@ -343,16 +418,16 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
       )
 
     query
-    |> Repo.replica().all(timeout: 60_000)
+    |> Repo.replica().all(timeout: timeout)
     |> Enum.map(fn {city_id, days} ->
       {city_id, min(100, round(days / @coverage_days * 100))}
     end)
     |> Map.new()
   end
 
-  defp batch_source_activity(city_ids) when is_list(city_ids) do
+  defp batch_source_activity(city_ids, timeout \\ @default_timeout) when is_list(city_ids) do
     # Get city slugs for the ids
-    cities = Repo.replica().all(from(c in City, where: c.id in ^city_ids, select: {c.id, c.slug}))
+    cities = Repo.replica().all(from(c in City, where: c.id in ^city_ids, select: {c.id, c.slug}), timeout: timeout)
     city_slugs = Map.new(cities)
     slugs = Map.values(city_slugs)
 
@@ -376,7 +451,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
       # Map slug -> score
       slug_scores =
         query
-        |> Repo.replica().all(timeout: 60_000)
+        |> Repo.replica().all(timeout: timeout)
         |> Enum.map(fn {slug, total, successful} ->
           successful = successful || 0
           score = if total > 0, do: round(successful / total * 100), else: 100
@@ -395,7 +470,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     end
   end
 
-  defp batch_data_quality(city_ids) when is_list(city_ids) do
+  defp batch_data_quality(city_ids, timeout \\ @default_timeout) when is_list(city_ids) do
     query =
       from(pe in PublicEvent,
         join: v in Venue,
@@ -424,7 +499,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
       )
 
     query
-    |> Repo.replica().all(timeout: 60_000)
+    |> Repo.replica().all(timeout: timeout)
     |> Enum.map(fn {city_id, total, complete} ->
       complete = complete || 0
       score = if total > 0, do: round(complete / total * 100), else: 0
@@ -433,7 +508,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     |> Map.new()
   end
 
-  defp batch_venue_health(city_ids) when is_list(city_ids) do
+  defp batch_venue_health(city_ids, timeout \\ @default_timeout) when is_list(city_ids) do
     query =
       from(v in Venue,
         where: v.city_id in ^city_ids,
@@ -459,7 +534,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
       )
 
     query
-    |> Repo.replica().all(timeout: 60_000)
+    |> Repo.replica().all(timeout: timeout)
     |> Enum.map(fn {city_id, total, complete} ->
       complete = complete || 0
       score = if total > 0, do: round(complete / total * 100), else: 0
@@ -494,7 +569,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     Repo.replica().get(City, city_id)
   end
 
-  defp get_cities_with_event_counts(include_disabled, limit) do
+  defp get_cities_with_event_counts(include_disabled, limit, offset \\ 0, timeout \\ @default_timeout) do
     base_query =
       from(c in City,
         left_join: v in Venue,
@@ -522,12 +597,12 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
 
     query =
       if limit do
-        from(q in query, limit: ^limit)
+        from(q in query, limit: ^limit, offset: ^offset)
       else
-        query
+        from(q in query, offset: ^offset)
       end
 
-    Repo.replica().all(query, timeout: 60_000)
+    Repo.replica().all(query, timeout: timeout)
   end
 
   # ============================================================================
