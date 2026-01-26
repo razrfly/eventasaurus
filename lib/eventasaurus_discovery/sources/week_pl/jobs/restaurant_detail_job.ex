@@ -126,6 +126,14 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         )
 
         {:error, :timeout}
+
+      {:exit, reason} ->
+        Logger.error(
+          "[WeekPl.DetailJob] 💥 Task crashed for #{args["restaurant_name"]} " <>
+            "(timeout: #{div(@job_timeout_ms, 1000)}s): #{inspect(reason)}"
+        )
+
+        {:error, :uncategorized_error}
     end
   end
 

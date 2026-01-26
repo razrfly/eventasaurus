@@ -21,19 +21,16 @@ reviews:
     enabled: true
 
   # Path filters for what to review/ignore
+  # Use ! prefix to exclude paths
   path_filters:
-    # Always review these files
-    include:
-      - "lib/**/*.ex"
-      - "lib/**/*.heex"
-      - "test/**/*.exs"
-    # Ignore generated/vendored files to reduce noise
-    exclude:
-      - "**/*.lock"
-      - "**/deps/**"
-      - "**/node_modules/**"
-      - "**/_build/**"
-      - "**/priv/static/assets/**"
+    - "lib/**/*.ex"
+    - "lib/**/*.heex"
+    - "test/**/*.exs"
+    - "!**/*.lock"
+    - "!**/deps/**"
+    - "!**/node_modules/**"
+    - "!**/_build/**"
+    - "!**/priv/static/assets/**"
 
   # Path-based review instructions
   path_instructions:
