@@ -44,6 +44,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   - `:assign_auth_user` - Assigns authenticated user data to socket
   - `:require_authenticated_user` - Requires authentication, redirects if not found
   - `:assign_auth_user_and_theme` - Assigns user data and theme information
+  - `:admin_layout` - Tracks current path for admin navigation highlighting
   """
   @spec on_mount(atom(), map(), map(), Phoenix.LiveView.Socket.t()) ::
           {:cont, Phoenix.LiveView.Socket.t()} | {:halt, Phoenix.LiveView.Socket.t()}
@@ -130,6 +131,24 @@ defmodule EventasaurusWeb.Live.AuthHooks do
         end
       end)
       |> assign(:theme, :minimal)
+
+    {:cont, socket}
+  end
+
+  def on_mount(:admin_layout, _params, _session, socket) do
+    socket =
+      socket
+      |> assign(:current_path, nil)
+      |> attach_hook(:track_uri, :handle_params, fn _params, uri, socket ->
+        # Extract path from full URI
+        path =
+          case URI.parse(uri) do
+            %URI{path: path} when is_binary(path) -> path
+            _ -> "/"
+          end
+
+        {:cont, assign(socket, :current_path, path)}
+      end)
 
     {:cont, socket}
   end
