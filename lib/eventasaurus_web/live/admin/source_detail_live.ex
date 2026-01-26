@@ -24,7 +24,16 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Workers.ObanJobSanitizerWorker
   alias EventasaurusWeb.Components.Sparkline
+  # Data Quality & Geography tab dependencies
+  alias EventasaurusDiscovery.Admin.DataQualityChecker
+  alias EventasaurusDiscovery.Admin.DiscoveryStatsCollector
+  alias EventasaurusDiscovery.Services.FreshnessHealthChecker
+  alias EventasaurusDiscovery.Locations.CityHierarchy
+  alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusApp.Venues.FixVenueNamesJob
+  alias EventasaurusApp.Venues.Venue
   import Ecto.Query
+  require Logger
 
   @impl true
   def mount(%{"source_key" => source_key}, _session, socket) do
@@ -51,6 +60,12 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
           |> assign(:collisions_data, nil)
           |> assign(:jobs_view_mode, "list")
           |> assign(:show_collision_matrix, false)
+          # Phase 2: Data Quality & Geography tabs
+          |> assign(:data_quality, nil)
+          |> assign(:quality_recommendations, [])
+          |> assign(:freshness_health, nil)
+          |> assign(:events_by_city, [])
+          |> assign(:expanded_metro_areas, MapSet.new())
           |> load_source_data()
           |> assign(:loading, false)
 
@@ -80,7 +95,7 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
 
   @impl true
   def handle_event("change_tab", %{"tab" => tab}, socket)
-      when tab in ~w(overview scheduler coverage history queue_health) do
+      when tab in ~w(overview data_quality geography scheduler coverage history queue_health) do
     {:noreply, assign(socket, :active_tab, tab)}
   end
 
@@ -235,6 +250,92 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     end
   end
 
+  # Toggle metro area expansion in Geography tab
+  @impl true
+  def handle_event("toggle_metro_area", %{"city-id" => city_id}, socket) do
+    case safe_to_integer(city_id) do
+      {:ok, id} ->
+        expanded = socket.assigns.expanded_metro_areas
+
+        new_expanded =
+          if MapSet.member?(expanded, id) do
+            MapSet.delete(expanded, id)
+          else
+            MapSet.put(expanded, id)
+          end
+
+        {:noreply, assign(socket, :expanded_metro_areas, new_expanded)}
+
+      :error ->
+        {:noreply, socket}
+    end
+  end
+
+  # Fix Venue Names action
+  @impl true
+  def handle_event("fix_venue_names", _params, socket) do
+    source_key = socket.assigns.source_key
+    source_slug = String.replace(source_key, "_", "-")
+
+    # Find all cities that have venues from this source with potential quality issues
+    affected_cities = find_cities_with_venue_quality_issues(source_slug)
+
+    # Enqueue a job for each affected city
+    results =
+      Enum.map(affected_cities, fn city_id ->
+        %{city_id: city_id, severity: "all"}
+        |> FixVenueNamesJob.new()
+        |> Oban.insert()
+      end)
+
+    {successful, failed} = Enum.split_with(results, &match?({:ok, _}, &1))
+    jobs_enqueued = length(successful)
+    jobs_failed = length(failed)
+
+    # Log failures for debugging
+    Enum.each(failed, fn {:error, reason} ->
+      Logger.error("Failed to enqueue FixVenueNamesJob: #{inspect(reason)}")
+    end)
+
+    socket =
+      cond do
+        # No cities found with quality issues
+        Enum.empty?(affected_cities) ->
+          put_flash(
+            socket,
+            :warning,
+            "No cities found with venues that have quality issues."
+          )
+
+        # All jobs failed to enqueue
+        jobs_enqueued == 0 and jobs_failed > 0 ->
+          put_flash(
+            socket,
+            :error,
+            "Failed to enqueue #{jobs_failed} job(s). Check server logs for details."
+          )
+
+        # Partial success
+        jobs_failed > 0 ->
+          put_flash(
+            socket,
+            :warning,
+            "Enqueued #{jobs_enqueued} job(s) successfully, but #{jobs_failed} failed. Check logs for details."
+          )
+
+        # All successful
+        true ->
+          put_flash(
+            socket,
+            :info,
+            "Enqueued #{jobs_enqueued} venue name fix job(s) for #{jobs_enqueued} #{if jobs_enqueued == 1, do: "city", else: "cities"}. Jobs will process in the background."
+          )
+      end
+
+    {:noreply, socket}
+  end
+
+  # Helper to safely convert string to integer
   defp safe_to_integer(str) when is_binary(str) do
     case Integer.parse(str) do
       {int, ""} -> {:ok, int}
@@ -250,6 +351,8 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   defp load_source_data(socket) do
     source_key = socket.assigns.source_key
     hours = socket.assigns.time_range
+    # Convert source_key (underscores) to slug (hyphens) for DataQualityChecker
+    source_slug = String.replace(source_key, "_", "-")
 
     # Load health data for this source
     health_data = load_health_data(source_key, hours)
@@ -265,6 +368,12 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     chain_data = load_chain_data(source_key, hours)
     collisions_data = load_collisions_data(source_key, hours)
 
+    # Phase 2: Load data quality and geography data
+    data_quality = load_data_quality(source_slug)
+    quality_recommendations = load_quality_recommendations(source_slug)
+    freshness_health = load_freshness_health(source_slug)
+    events_by_city = load_events_by_city(source_slug)
+
     socket
     |> assign(:health_data, health_data)
     |> assign(:error_analysis, error_analysis)
@@ -276,6 +385,10 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     |> assign(:queue_health_data, queue_health_data)
     |> assign(:chain_data, chain_data)
     |> assign(:collisions_data, collisions_data)
+    |> assign(:data_quality, data_quality)
+    |> assign(:quality_recommendations, quality_recommendations)
+    |> assign(:freshness_health, freshness_health)
+    |> assign(:events_by_city, events_by_city)
   end
 
   defp load_health_data(source_key, hours) do
@@ -533,6 +646,183 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     end
   end
 
+  # Phase 2: Data Quality tab - load quality metrics
+  defp load_data_quality(source_slug) do
+    try do
+      quality = DataQualityChecker.check_quality(source_slug)
+
+      if Map.get(quality, :not_found, false) do
+        nil
+      else
+        # Build completeness map for template iteration
+        completeness = %{
+          venue: Map.get(quality, :venue_completeness, 0),
+          image: Map.get(quality, :image_completeness, 0),
+          category: Map.get(quality, :category_completeness, 0),
+          description: Map.get(quality, :description_quality, 0),
+          performer: Map.get(quality, :performer_completeness, 0),
+          price: Map.get(quality, :price_completeness, 0),
+          occurrence: Map.get(quality, :occurrence_richness, 0)
+        }
+
+        Map.put(quality, :completeness, completeness)
+      end
+    rescue
+      e ->
+        Logger.warning("Failed to load data quality for #{source_slug}: #{inspect(e)}")
+        nil
+    end
+  end
+
+  # Phase 2: Data Quality tab - load recommendations
+  defp load_quality_recommendations(source_slug) do
+    try do
+      source_slug
+      |> DataQualityChecker.get_recommendations()
+      |> Enum.map(&transform_recommendation/1)
+    rescue
+      e ->
+        Logger.warning("Failed to load quality recommendations for #{source_slug}: #{inspect(e)}")
+        []
+    end
+  end
+
+  # Transform string recommendation to map format expected by template
+  defp transform_recommendation(rec_string) when is_binary(rec_string) do
+    # Handle the "excellent" success message
+    if String.contains?(rec_string, "excellent") do
+      %{priority: :low, title: "Great job!", description: rec_string}
+    else
+      # Split on " - " to get title and description
+      case String.split(rec_string, " - ", parts: 2) do
+        [title, description] ->
+          %{
+            priority: determine_priority(title),
+            title: title,
+            description: description
+          }
+
+        [single] ->
+          %{priority: :medium, title: single, description: ""}
+      end
+    end
+  end
+
+  defp transform_recommendation(rec), do: rec
+
+  # Determine priority based on recommendation keywords
+  defp determine_priority(title) do
+    title_lower = String.downcase(title)
+
+    cond do
+      String.contains?(title_lower, "venue") -> :high
+      String.contains?(title_lower, "image") -> :high
+      String.contains?(title_lower, "category") -> :medium
+      String.contains?(title_lower, "performer") -> :medium
+      String.contains?(title_lower, "description") -> :low
+      String.contains?(title_lower, "translation") -> :low
+      String.contains?(title_lower, "price") -> :low
+      true -> :medium
+    end
+  end
+
+  # Phase 2: Load freshness health for overview
+  defp load_freshness_health(source_slug) do
+    try do
+      # Get source_id from slug
+      source_query =
+        from(s in EventasaurusDiscovery.Sources.Source,
+          where: s.slug == ^source_slug,
+          select: s.id
+        )
+
+      case Repo.replica().one(source_query) do
+        nil -> nil
+        source_id -> FreshnessHealthChecker.check_health(source_id)
+      end
+    rescue
+      e ->
+        Logger.warning("Failed to load freshness health for #{source_slug}: #{inspect(e)}")
+        nil
+    end
+  end
+
+  # Phase 2: Geography tab - load events by city with clustering
+  defp load_events_by_city(source_slug) do
+    try do
+      raw_city_data = DiscoveryStatsCollector.get_events_by_city_for_source(source_slug, 30)
+
+      if Enum.empty?(raw_city_data) do
+        []
+      else
+        # Load city slugs
+        city_ids = Enum.map(raw_city_data, & &1.city_id)
+        city_slugs = load_city_slugs(city_ids)
+
+        # Transform to format expected by clustering
+        city_stats =
+          Enum.map(raw_city_data, fn city ->
+            %{
+              city_id: city.city_id,
+              city_name: city.city_name,
+              city_slug: Map.get(city_slugs, city.city_id, ""),
+              count: city.event_count
+            }
+          end)
+
+        # Apply geographic clustering
+        CityHierarchy.aggregate_stats_by_cluster(city_stats)
+      end
+    rescue
+      e ->
+        Logger.warning("Failed to load events by city for #{source_slug}: #{inspect(e)}")
+        []
+    end
+  end
+
+  # Helper to load city slugs
+  defp load_city_slugs(city_ids) when is_list(city_ids) and city_ids != [] do
+    from(c in City,
+      where: c.id in ^city_ids,
+      select: {c.id, c.slug}
+    )
+    |> Repo.replica().all()
+    |> Map.new()
+  end
+
+  defp load_city_slugs(_), do: %{}
+
+  # Find cities with venues that may have quality issues for Fix Venue Names action
+  defp find_cities_with_venue_quality_issues(source_slug) do
+    # Get the source
+    source =
+      Repo.replica().one(
+        from(s in EventasaurusDiscovery.Sources.Source,
+          where: s.slug == ^source_slug,
+          select: s
+        )
+      )
+
+    if source do
+      # Find all cities with venues from this source that have metadata
+      # The job will filter by actual quality on execution
+      from(v in Venue,
+        join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+        on: pe.venue_id == v.id,
+        join: pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
+        on: pes.event_id == pe.id,
+        where: pes.source_id == ^source.id,
+        where: not is_nil(v.metadata),
+        where: not is_nil(v.city_id),
+        select: v.city_id,
+        distinct: true
+      )
+      |> Repo.replica().all()
+    else
+      []
+    end
+  end
+
   # Phase 2: Retry an Oban job by resetting its state
   defp retry_oban_job(job_id) do
     repo = EventasaurusApp.ObanRepo
@@ -678,6 +968,30 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
             </button>
             <button
               phx-click="change_tab"
+              phx-value-tab="data_quality"
+              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "data_quality", do: "border-blue-500 text-blue-600 dark:text-blue-400", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"}"}
+            >
+              Data Quality
+              <%= if @data_quality && @data_quality.quality_score < 80 do %>
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                  <%= @data_quality.quality_score %>%
+                </span>
+              <% end %>
+            </button>
+            <button
+              phx-click="change_tab"
+              phx-value-tab="geography"
+              class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "geography", do: "border-blue-500 text-blue-600 dark:text-blue-400", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"}"}
+            >
+              Geography
+              <%= if @events_by_city && length(@events_by_city) > 0 do %>
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                  <%= length(@events_by_city) %>
+                </span>
+              <% end %>
+            </button>
+            <button
+              phx-click="change_tab"
               phx-value-tab="scheduler"
               class={"py-4 px-1 border-b-2 font-medium text-sm #{if @active_tab == "scheduler", do: "border-blue-500 text-blue-600 dark:text-blue-400", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"}"}
             >
@@ -733,6 +1047,10 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
           <%= case @active_tab do %>
             <% "overview" -> %>
               <%= render_overview_tab(assigns) %>
+            <% "data_quality" -> %>
+              <%= render_data_quality_tab(assigns) %>
+            <% "geography" -> %>
+              <%= render_geography_tab(assigns) %>
             <% "scheduler" -> %>
               <%= render_scheduler_tab(assigns) %>
             <% "coverage" -> %>
@@ -806,6 +1124,41 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
           </div>
         </div>
       </div>
+
+      <!-- Freshness Health Card -->
+      <%= if @freshness_health do %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Freshness Checking</h3>
+            <span class={"px-3 py-1 rounded-full text-sm font-medium #{freshness_status_color(@freshness_health.status)}"}>
+              <%= freshness_status_label(@freshness_health.status) %>
+            </span>
+          </div>
+          <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            <%= @freshness_health.diagnosis %>
+          </p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <div class="text-gray-500 dark:text-gray-400">Total Events</div>
+              <div class="font-medium text-gray-900 dark:text-white"><%= @freshness_health.total_events %></div>
+            </div>
+            <div>
+              <div class="text-gray-500 dark:text-gray-400">Detail Jobs</div>
+              <div class="font-medium text-gray-900 dark:text-white"><%= Map.get(@freshness_health, :detail_jobs_executed, "--") %></div>
+            </div>
+            <div>
+              <div class="text-gray-500 dark:text-gray-400">Processing Rate</div>
+              <div class="font-medium text-gray-900 dark:text-white">
+                <%= if rate = Map.get(@freshness_health, :processing_rate), do: "#{Float.round(rate * 100, 1)}%", else: "--" %>
+              </div>
+            </div>
+            <div>
+              <div class="text-gray-500 dark:text-gray-400">Threshold</div>
+              <div class="font-medium text-gray-900 dark:text-white"><%= @freshness_health.threshold_hours %>h</div>
+            </div>
+          </div>
+        </div>
+      <% end %>
 
       <!-- Health Trend Chart -->
       <%= if @trend_data && length(@trend_data.data_points) > 0 do %>
@@ -1188,6 +1541,226 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
           <% end %>
         </div>
       </div>
+    </div>
+    """
+  end
+
+  # Data Quality Tab (migrated from DiscoveryStatsLive)
+  defp render_data_quality_tab(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <%= if @data_quality do %>
+        <!-- Quality Score Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Data Quality Score</h3>
+          <div class="flex items-center gap-6">
+            <div class={"text-5xl font-bold #{quality_score_color(@data_quality.quality_score)}"}>
+              <%= @data_quality.quality_score %>%
+            </div>
+            <div class="flex-1">
+              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                <div
+                  class={"h-4 rounded-full #{quality_score_bar_color(@data_quality.quality_score)}"}
+                  style={"width: #{@data_quality.quality_score}%"}
+                >
+                </div>
+              </div>
+              <div class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Based on <%= @data_quality.total_events %> events analyzed
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Completeness Metrics -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Field Completeness</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <%= for {field, percentage} <- @data_quality.completeness do %>
+              <div class="space-y-2">
+                <div class="flex justify-between text-sm">
+                  <span class="text-gray-700 dark:text-gray-300 capitalize"><%= humanize_field(field) %></span>
+                  <span class={"font-medium #{completeness_color(percentage)}"}><%= percentage %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div
+                    class={"h-2 rounded-full #{completeness_bar_color(percentage)}"}
+                    style={"width: #{percentage}%"}
+                  >
+                  </div>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+
+        <!-- Recommendations -->
+        <%= if length(@quality_recommendations) > 0 do %>
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Recommendations</h3>
+            <ul class="space-y-3">
+              <%= for rec <- @quality_recommendations do %>
+                <li class="flex items-start gap-3">
+                  <span class={"flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium #{priority_badge_color(rec.priority)}"}>
+                    <%= priority_icon(rec.priority) %>
+                  </span>
+                  <div>
+                    <div class="text-gray-900 dark:text-white font-medium"><%= rec.title %></div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400"><%= rec.description %></div>
+                  </div>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+
+        <!-- Actions -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Actions</h3>
+          <div class="flex flex-wrap gap-3">
+            <button
+              phx-click="fix_venue_names"
+              class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Fix Venue Names
+            </button>
+          </div>
+          <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
+            Enqueue background jobs to normalize venue names for cities with events from this source.
+          </p>
+        </div>
+      <% else %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
+          <div class="text-gray-500 dark:text-gray-400">
+            No data quality information available for this source.
+          </div>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  # Geography Tab (migrated from DiscoveryStatsLive)
+  defp render_geography_tab(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <%= if @events_by_city && length(@events_by_city) > 0 do %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Events by Location</h3>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead>
+                <tr>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Location
+                  </th>
+                  <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Events
+                  </th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Distribution
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <% max_count = Enum.reduce(@events_by_city, 0, fn city, acc -> max(city.count, acc) end) %>
+                <%= for city <- @events_by_city do %>
+                  <%= if Map.get(city, :is_cluster) do %>
+                    <!-- Metro Area Cluster -->
+                    <tr class="bg-gray-50 dark:bg-gray-750">
+                      <td class="px-4 py-3">
+                        <button
+                          phx-click="toggle_metro_area"
+                          phx-value-city-id={city.city_id}
+                          class="flex items-center gap-2 text-gray-900 dark:text-white font-medium hover:text-blue-600 dark:hover:text-blue-400"
+                        >
+                          <span class={"transform transition-transform #{if MapSet.member?(@expanded_metro_areas, city.city_id), do: "rotate-90", else: ""}"}>
+                            ▶
+                          </span>
+                          🏙️ <%= city.city_name %> Metro
+                        </button>
+                      </td>
+                      <td class="px-4 py-3 text-right text-gray-900 dark:text-white font-medium">
+                        <%= city.count %>
+                      </td>
+                      <td class="px-4 py-3">
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div
+                            class="h-2 rounded-full bg-blue-500"
+                            style={"width: #{if max_count > 0, do: city.count / max_count * 100, else: 0}%"}
+                          >
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    <!-- Expanded Cities within Metro -->
+                    <%= if MapSet.member?(@expanded_metro_areas, city.city_id) do %>
+                      <%= for sub_city <- Map.get(city, :cities, []) do %>
+                        <tr class="bg-gray-25 dark:bg-gray-775">
+                          <td class="px-4 py-2 pl-10">
+                            <.link
+                              navigate={"/admin/cities/#{sub_city.city_slug}"}
+                              class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                              <%= sub_city.city_name %>
+                            </.link>
+                          </td>
+                          <td class="px-4 py-2 text-right text-gray-600 dark:text-gray-400">
+                            <%= sub_city.count %>
+                          </td>
+                          <td class="px-4 py-2">
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                              <div
+                                class="h-1.5 rounded-full bg-blue-300"
+                                style={"width: #{if max_count > 0, do: sub_city.count / max_count * 100, else: 0}%"}
+                              >
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      <% end %>
+                    <% end %>
+                  <% else %>
+                    <!-- Regular City -->
+                    <tr>
+                      <td class="px-4 py-3">
+                        <.link
+                          navigate={"/admin/cities/#{city.city_slug}"}
+                          class="text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400"
+                        >
+                          <%= city.city_name %>
+                        </.link>
+                      </td>
+                      <td class="px-4 py-3 text-right text-gray-900 dark:text-white">
+                        <%= city.count %>
+                      </td>
+                      <td class="px-4 py-3">
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div
+                            class="h-2 rounded-full bg-blue-500"
+                            style={"width: #{if max_count > 0, do: city.count / max_count * 100, else: 0}%"}
+                          >
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  <% end %>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% else %>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
+          <div class="text-gray-500 dark:text-gray-400">
+            No geographic data available for this source.
+          </div>
+        </div>
+      <% end %>
     </div>
     """
   end
@@ -2737,4 +3310,56 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     </svg>
     """)
   end
+
+  # Data Quality Tab helpers
+  defp quality_score_color(score) when score >= 90, do: "text-green-600 dark:text-green-400"
+  defp quality_score_color(score) when score >= 70, do: "text-yellow-600 dark:text-yellow-400"
+  defp quality_score_color(_score), do: "text-red-600 dark:text-red-400"
+
+  defp quality_score_bar_color(score) when score >= 90, do: "bg-green-500"
+  defp quality_score_bar_color(score) when score >= 70, do: "bg-yellow-500"
+  defp quality_score_bar_color(_score), do: "bg-red-500"
+
+  defp completeness_color(percentage) when percentage >= 90, do: "text-green-600 dark:text-green-400"
+  defp completeness_color(percentage) when percentage >= 70, do: "text-yellow-600 dark:text-yellow-400"
+  defp completeness_color(_percentage), do: "text-red-600 dark:text-red-400"
+
+  defp completeness_bar_color(percentage) when percentage >= 90, do: "bg-green-500"
+  defp completeness_bar_color(percentage) when percentage >= 70, do: "bg-yellow-500"
+  defp completeness_bar_color(_percentage), do: "bg-red-500"
+
+  defp humanize_field(field) when is_atom(field), do: humanize_field(Atom.to_string(field))
+
+  defp humanize_field(field) when is_binary(field) do
+    field
+    |> String.replace("_", " ")
+    |> String.split(" ")
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
+
+  defp priority_badge_color(:high), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+  defp priority_badge_color(:medium), do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+  defp priority_badge_color(:low), do: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+  defp priority_badge_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+
+  defp priority_icon(:high), do: "!"
+  defp priority_icon(:medium), do: "•"
+  defp priority_icon(:low), do: "○"
+  defp priority_icon(_), do: "?"
+
+  # Freshness Health helpers
+  defp freshness_status_color(:healthy), do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+  defp freshness_status_color(:degraded), do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+  defp freshness_status_color(:warning), do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+  defp freshness_status_color(:broken), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+  defp freshness_status_color(:no_data), do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+  defp freshness_status_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+
+  defp freshness_status_label(:healthy), do: "Healthy"
+  defp freshness_status_label(:degraded), do: "Degraded"
+  defp freshness_status_label(:warning), do: "Warning"
+  defp freshness_status_label(:broken), do: "Broken"
+  defp freshness_status_label(:no_data), do: "No Data"
+  defp freshness_status_label(_), do: "Unknown"
 end
