@@ -41,7 +41,6 @@ defmodule EventasaurusWeb.Router do
       # Discovery Stats Dashboard (dev - no auth)
       live "/discovery/stats", Admin.DiscoveryStatsLive, :index
       live "/discovery/stats/source/:source_slug", Admin.DiscoveryStatsLive.SourceDetail, :show
-      live "/discovery/stats/city/:city_slug", Admin.DiscoveryStatsLive.CityDetail, :show
 
       # Job Execution Monitor (dev - no auth)
       live "/job-executions", Admin.JobExecutionMonitorLive
@@ -195,10 +194,6 @@ defmodule EventasaurusWeb.Router do
 
         live "/discovery/stats/source/:source_slug",
              EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail,
-             :show
-
-        live "/discovery/stats/city/:city_slug",
-             EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail,
              :show
 
         # Category Analysis with admin authentication

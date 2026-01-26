@@ -169,18 +169,16 @@ defmodule Mix.Tasks.Db.QueryProduction do
   # ============================================================================
 
   defp execute_query(query, timeout_seconds) do
-    # Escape the query for Elixir string embedding (double quotes need escaping)
-    escaped_query =
-      query
-      |> String.replace("\\", "\\\\")
-      |> String.replace("\"", "\\\"")
-
-    # Build the RPC command as a single line with semicolons
-    # We encode the result as JSON for easy parsing
+    # Base64-encode the query to safely pass it through shell and Elixir parsing layers.
+    # This prevents #{} interpolation injection attacks - the query is decoded on the
+    # remote side before being passed to Ecto, so no special characters are interpreted.
+    encoded_query = Base.encode64(query)
     timeout_ms = timeout_seconds * 1000
 
+    # Build the RPC command - the remote side decodes the Base64 to get the safe query
     rpc_code =
-      "result = Ecto.Adapters.SQL.query(EventasaurusApp.Repo, \"#{escaped_query}\", [], timeout: #{timeout_ms}); " <>
+      "safe_query = Base.decode64!(\"#{encoded_query}\"); " <>
+        "result = Ecto.Adapters.SQL.query(EventasaurusApp.Repo, safe_query, [], timeout: #{timeout_ms}); " <>
         "case result do " <>
         "{:ok, %{columns: cols, rows: rows}} -> IO.puts(\"__RESULT_START__\"); IO.puts(Jason.encode!(%{columns: cols, rows: rows})); IO.puts(\"__RESULT_END__\"); " <>
         "{:error, %Postgrex.Error{postgres: %{message: msg}}} -> IO.puts(\"__ERROR__:\" <> msg); " <>
