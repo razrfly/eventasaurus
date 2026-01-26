@@ -30,7 +30,6 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
 
   # Pagination settings - reduced from 100 to prevent OOM
   @default_page_size 10
-  @max_page_size 25
 
   # Query timeout reduced from 60s to 10s to prevent memory buildup
   @query_timeout 10_000
