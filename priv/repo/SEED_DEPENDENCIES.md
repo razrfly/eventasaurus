@@ -29,7 +29,7 @@ priv/repo/seeds.exs (Main Orchestrator)
 │
 ├─→ 1. Create Essential Users
 │   └─→ Holden's account (holden@gmail.com)
-│       └─→ With Supabase auth if service key available
+│       └─→ With Clerk auth if configured
 │
 ├─→ 2. Seed Locations
 │   └─→ priv/repo/seeds/locations.exs
@@ -91,7 +91,7 @@ priv/repo/dev_seeds/runner.exs (Main Orchestrator)
 │   │
 │   ├─→ USERS (dev_seeds/users.exs)
 │   │   ├─→ Base users (configurable count, default: 50)
-│   │   │   └─→ With Supabase auth if service key available
+│   │   │   └─→ With Clerk auth if configured
 │   │   │
 │   │   └─→ Persona users (4 personas)
 │   │       ├─→ admin@example.com
@@ -449,11 +449,11 @@ Approximate lines of code and execution time:
 
 **Bottlenecks**:
 1. **events.exs** (15-25s) - Creates many events with venues and images
-2. **users.exs** with auth (5-10s) - Supabase API calls for each user
+2. **users.exs** with auth (5-10s) - Clerk API calls for each user
 3. **poll_seed.exs** (5-10s) - Creates options and votes
 
 **Optimization Opportunities**:
-- Batch Supabase auth creation
+- Batch Clerk auth creation
 - Use `Repo.insert_all` for bulk inserts
 - Parallelize independent seeds
 - Cache venue/image lookups

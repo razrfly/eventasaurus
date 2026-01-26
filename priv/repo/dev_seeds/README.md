@@ -60,7 +60,7 @@ mix seed.dev --quiet
 **What It Does**:
 1. Optionally cleans existing development data
 2. Runs production seeds (`priv/repo/seeds.exs`) for essential reference data
-3. Creates test users with optional Supabase authentication
+3. Creates test users with Clerk authentication
 4. Creates persona users (admin, demo, organizer, participant, movie_buff, foodie_friend)
 5. Creates groups with various privacy settings
 6. Creates events (past, upcoming, future) with realistic data
@@ -113,7 +113,7 @@ These create the foundational data that other seeds depend on.
 #### `users.exs` (via `DevSeeds.Users` module)
 - **Purpose**: Creates test users with realistic profiles
 - **Features**:
-  - Optional Supabase authentication (if `SUPABASE_SERVICE_ROLE_KEY` is set)
+  - Clerk authentication for test users
   - Persona users for specific testing scenarios
   - Configurable quantity via `--users` flag
 - **Default**: 50 users + 4 personas
@@ -275,7 +275,7 @@ Reusable service modules for complex seed data creation.
 - **Purpose**: Shared helper functions for seeding
 - **Features**:
   - Colorful logging (`log`, `success`, `error`, `section`)
-  - User creation with Supabase auth (`get_or_create_user`, `create_users`)
+  - User creation with Clerk auth (`get_or_create_user`, `create_users`)
   - Batch user creation for performance
   - Random image selection (`get_random_image_attrs`)
   - Event state helpers
@@ -572,10 +572,10 @@ mix seed.dev --users 500 --events 1000
 **Problem**: "Could not create auth for email" errors
 
 **Solutions**:
-- Verify `SUPABASE_SERVICE_ROLE_KEY` is set correctly
-- Check Supabase project settings
-- Ensure email confirmation is disabled for dev environment
-- Verify service role key has correct permissions
+- Verify Clerk keys are set correctly in `.env`
+- Check Clerk dashboard settings
+- Ensure test mode is enabled for dev environment
+- Verify API keys have correct permissions
 
 ### Seeds Fail on Fresh Database
 
@@ -590,8 +590,8 @@ mix seed.dev --users 500 --events 1000
 
 ### Required (for full functionality)
 
-- `SUPABASE_SERVICE_ROLE_KEY` - For creating authenticated test users
-- `SUPABASE_URL` - Supabase project URL
+- `CLERK_SECRET_KEY` - For creating authenticated test users
+- `CLERK_PUBLISHABLE_KEY` - Clerk frontend key
 
 ### Optional
 
@@ -685,8 +685,8 @@ See [Issue #2239](https://github.com/razrfly/eventasaurus/issues/2239) for detai
 - No, if it's just a few lines - add to existing seed
 - No, if it's helper logic - add to helpers.exs or services/
 
-**How do I test Supabase auth locally?**
-1. Set `SUPABASE_SERVICE_ROLE_KEY` in `.env`
+**How do I test Clerk auth locally?**
+1. Set `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` in `.env`
 2. Run `mix seed.dev`
 3. Seeds will create users with authentication
 4. Login with test accounts to verify

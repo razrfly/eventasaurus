@@ -103,5 +103,8 @@ scripts/clerk-migration/node_modules/
 /backups/
 *.dump
 
+# Production database dumps (contains sensitive production data!)
+/priv/dumps/
+
 # Performance baselines (development artifacts, not needed in version control)
 .baselines/

@@ -339,7 +339,7 @@ Helpers.random_datetime_forward(30)     # Random future datetime
 Helpers.random_datetime_past(30)        # Random past datetime
 
 # User creation
-Helpers.create_user_with_auth(%{        # User with Supabase auth
+Helpers.create_user_with_auth(%{        # User with Clerk auth
   email: "test@example.com",
   name: "Test User"
 })

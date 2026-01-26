@@ -40,7 +40,7 @@ mix ecto.setup  # Includes seeds
 **`seeds.exs`** - Main orchestrator that:
 1. Creates essential user accounts (Holden's personal account)
 2. Calls all individual seed files below
-3. Validates Supabase authentication if service role key is available
+3. Validates authentication configuration
 
 ### Reference Data Seeds
 
