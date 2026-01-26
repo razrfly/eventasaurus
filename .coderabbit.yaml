@@ -11,7 +11,8 @@ reviews:
   review_status: true
 
   # Request changes workflow
-  request_changes_workflow: true
+  # Set to false so CodeRabbit comments don't block merging
+  request_changes_workflow: false
 
   # Collapse walkthrough for cleaner view
   collapse_walkthrough: false
