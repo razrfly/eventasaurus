@@ -1,124 +1,144 @@
 # Deployment Guide
 
+## Infrastructure
+
+Eventasaurus is deployed on **Fly.io** with:
+- **Fly Managed Postgres (MPG)** - Production database
+- **Clerk** - Authentication provider
+- **Cloudflare** - CDN and DNS
+
 ## Environment Variables
 
 ### Required Variables
-- `SUPABASE_URL` - Your Supabase project URL
-- `SUPABASE_ANON_KEY` - Your Supabase anonymous key
-- `SUPABASE_DATABASE_URL` - Database connection string from Supabase
+- `DATABASE_URL` - PostgreSQL connection string (provided by Fly MPG)
 - `SECRET_KEY_BASE` - Phoenix secret key base
+- `CLERK_SECRET_KEY` - Clerk authentication secret
+- `CLERK_PUBLISHABLE_KEY` - Clerk frontend key
 
 ### Optional Variables
 - `POOL_SIZE` - Database connection pool size (default: 5)
 - `SITE_URL` - Your site URL (default: "https://eventasaur.us")
-- `SSL_VERIFY_PEER` - Enable SSL certificate verification (default: false)
-
-## SSL Configuration
-
-### SSL_VERIFY_PEER Environment Variable
-
-**Default Behavior**: SSL certificate verification is **disabled** (`verify_none`) for Supabase compatibility.
-
-**Purpose**: The `SSL_VERIFY_PEER` environment variable controls database SSL certificate verification.
-
-**Values**:
-- `SSL_VERIFY_PEER=true` - Enables SSL certificate verification (`verify_peer`)
-- `SSL_VERIFY_PEER=false` or unset - Disables SSL verification (`verify_none`) - **Default**
-
-### Why SSL Verification is Disabled by Default
-
-**Supabase Compatibility**: Supabase uses cloud-managed SSL certificates that may not work with standard certificate verification in containerized environments like Fly.io.
-
-**Production Considerations**:
-- Supabase provides secure, managed database connections
-- Cloud-managed certificates don't require custom CA bundles
-- Disabling verification is a common practice with managed database services
-- The connection is still encrypted (SSL/TLS is still active)
-
-### Security Guidelines
-
-#### ✅ **SAFE to use `SSL_VERIFY_PEER=false` when**:
-- Using Supabase (recommended)
-- Using other managed database services (RDS, Cloud SQL, etc.)
-- Deploying to containerized environments (Docker, Fly.io, etc.)
-
-#### ⚠️ **CONSIDER enabling `SSL_VERIFY_PEER=true` when**:
-- Using self-managed PostgreSQL with proper CA certificates
-- Corporate environments with custom certificate authorities
-- Specific compliance requirements mandate certificate verification
-
-#### 🚨 **MONITORING**:
-- The application logs a warning when SSL verification is disabled
-- Monitor deployment logs to ensure this is intentional
-- Review SSL settings during security audits
-
-### Setting SSL Verification
-
-#### Development/Testing
-```bash
-# In .env file
-SSL_VERIFY_PEER=false  # Default - works with Supabase
-```
-
-#### Production (Fly.io)
-```bash
-# Set via fly secrets
-fly secrets set SSL_VERIFY_PEER=false
-
-# Or to enable verification (may cause connection issues with Supabase)
-fly secrets set SSL_VERIFY_PEER=true
-```
-
-### Troubleshooting SSL Issues
-
-#### Connection Errors with SSL_VERIFY_PEER=true
-If you encounter errors like:
-```
-(DBConnection.ConnectionError) failed to connect: options cannot be combined: [{verify,verify_peer}, {cacerts,undefined}]
-```
-
-**Solution**: Set `SSL_VERIFY_PEER=false` (or leave unset) for Supabase connections.
-
-#### Certificate Verification Failures
-If you need certificate verification, ensure:
-1. Your environment has access to CA certificate bundles
-2. Custom certificates are properly configured
-3. Network policies allow certificate validation
-
-### Example Configurations
-
-#### Supabase (Recommended)
-```bash
-SUPABASE_DATABASE_URL=postgresql://postgres:[password]@[host]:5432/postgres
-SSL_VERIFY_PEER=false  # Or leave unset
-```
-
-#### Self-Managed PostgreSQL
-```bash
-DATABASE_URL=postgresql://user:pass@your-server:5432/database
-SSL_VERIFY_PEER=true  # Only if you have proper CA certificates
-```
+- `PHX_HOST` - Phoenix host configuration
 
 ## Database Configuration
 
-The application uses the following database configuration:
+### Fly Managed Postgres
+
+The application uses Fly Managed Postgres for production:
+
+- **Cluster ID**: `k1v53olmn9pr8q6p`
+- **Database**: `eventasaurus`
+- **Organization**: `teamups`
+
+### Connection Configuration
 
 ```elixir
 config :eventasaurus, EventasaurusApp.Repo,
-  url: System.get_env("SUPABASE_DATABASE_URL"),
-  database: "postgres",
+  url: System.get_env("DATABASE_URL"),
   pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
   queue_target: 5000,
   queue_interval: 30000,
-  ssl: true,
-  ssl_opts: [verify: ssl_verify]  # Controlled by SSL_VERIFY_PEER
+  ssl: true
 ```
+
+### Connecting to Production Database
+
+```bash
+# Via fly mpg connect
+fly mpg connect k1v53olmn9pr8q6p -d eventasaurus
+
+# Via app SSH (recommended - uses app's connection pool)
+fly ssh console -a eventasaurus -C '/app/bin/eventasaurus rpc "
+{:ok, result} = Ecto.Adapters.SQL.query(EventasaurusApp.ObanRepo, \"SELECT 1\")
+IO.inspect(result)
+"'
+```
+
+### Syncing Production to Local
+
+Use the `mix db.sync_production` task to sync production data to local development:
+
+```bash
+# Full sync (export + import)
+mix db.sync_production
+
+# Export only (save dump for later import)
+mix db.sync_production --export-only
+
+# Import from existing dump
+mix db.sync_production --import-only --dump-path priv/dumps/eventasaurus_20250126.dump
+```
+
+See CLAUDE.md for detailed usage and options.
 
 ## Deployment Checklist
 
-1. ✅ Set required environment variables
-2. ✅ Configure SSL settings for your database provider
-3. ✅ Verify database connectivity
-4. ✅ Check application logs for SSL warnings
-5. ✅ Test authentication flow
-6. ✅ Confirm Phoenix socket origin settings 
+### Pre-Deployment
+1. ✅ Run tests: `mix test`
+2. ✅ Check formatting: `mix format --check-formatted`
+3. ✅ Compile without warnings: `mix compile --warnings-as-errors`
+4. ✅ Run migrations locally to test
+
+### Deployment
+1. ✅ Set required environment variables via `fly secrets set`
+2. ✅ Deploy: `fly deploy`
+3. ✅ Run migrations: `fly ssh console -C '/app/bin/eventasaurus migrate'`
+4. ✅ Check application logs: `fly logs`
+
+### Post-Deployment
+1. ✅ Verify health check endpoint
+2. ✅ Test authentication flow
+3. ✅ Check Oban job processing
+4. ✅ Verify CDN caching behavior
+
+## Secrets Management
+
+```bash
+# List current secrets
+fly secrets list -a eventasaurus
+
+# Set a secret
+fly secrets set MY_SECRET=value -a eventasaurus
+
+# Deploy after setting secrets (if not auto-deployed)
+fly deploy -a eventasaurus
+```
+
+## Monitoring
+
+### Application Logs
+```bash
+fly logs -a eventasaurus
+```
+
+### Database Status
+```bash
+fly mpg status k1v53olmn9pr8q6p
+```
+
+### Machine Status
+```bash
+fly status -a eventasaurus
+fly machine list -a eventasaurus
+```
+
+## Troubleshooting
+
+### Database Connection Errors
+- Verify `DATABASE_URL` is set correctly: `fly secrets list`
+- Check MPG cluster status: `fly mpg status k1v53olmn9pr8q6p`
+- Test connection via proxy: `fly mpg connect k1v53olmn9pr8q6p -d eventasaurus`
+
+### Migration Failures
+- Check migration status: `fly ssh console -C '/app/bin/eventasaurus eval "Ecto.Migrator.migrations(EventasaurusApp.Repo)"'`
+- Run migrations manually: `fly ssh console -C '/app/bin/eventasaurus migrate'`
+
+### Authentication Issues
+- Verify Clerk keys are set correctly
+- Check Clerk dashboard for webhook status
+- Verify `PHX_HOST` matches your domain
+
+### Asset/CDN Issues
+- Clear Cloudflare cache if serving stale assets
+- Check `cache_manifest.json` was generated
+- Verify asset digests in HTML responses

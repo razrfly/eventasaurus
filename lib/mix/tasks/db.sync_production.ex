@@ -490,21 +490,28 @@ defmodule Mix.Tasks.Db.SyncProduction do
       {output, 0} ->
         # Parse the DATABASE_URL
         # Format: postgresql://user:pass@host/db
-        url =
+        found_line =
           output
           |> String.split("\n")
           |> Enum.find(&String.starts_with?(&1, "postgresql://"))
-          |> String.trim()
 
-        case parse_database_url(url) do
-          {:ok, creds} ->
-            info("  ✓ Credentials retrieved from #{@fly_app}")
-            verbose_info("  → Database: #{creds.database}")
-            verbose_info("  → User: #{creds.username}")
-            {:ok, creds}
+        case found_line do
+          nil ->
+            {:error, "DATABASE_URL not found in output. Expected line starting with 'postgresql://'"}
 
-          {:error, reason} ->
-            {:error, reason}
+          line ->
+            url = String.trim(line)
+
+            case parse_database_url(url) do
+              {:ok, creds} ->
+                info("  ✓ Credentials retrieved from #{@fly_app}")
+                verbose_info("  → Database: #{creds.database}")
+                verbose_info("  → User: #{creds.username}")
+                {:ok, creds}
+
+              {:error, reason} ->
+                {:error, reason}
+            end
         end
 
       {output, _} ->
@@ -517,7 +524,12 @@ defmodule Mix.Tasks.Db.SyncProduction do
     case URI.parse(url) do
       %URI{userinfo: userinfo, host: host, path: "/" <> database, port: _port}
       when is_binary(userinfo) and is_binary(host) ->
-        [username, password] = String.split(userinfo, ":", parts: 2)
+        # Safely split userinfo - password may be absent (e.g., "user" vs "user:pass")
+        {username, password} =
+          case String.split(userinfo, ":", parts: 2) do
+            [user, pass] -> {user, pass}
+            [user] -> {user, ""}
+          end
 
         {:ok,
          %{
@@ -1135,7 +1147,10 @@ defmodule Mix.Tasks.Db.SyncProduction do
         Enum.each(rows, fn [view_name] ->
           verbose_info("    Refreshing #{view_name}...")
 
-          case EventasaurusApp.Repo.query("REFRESH MATERIALIZED VIEW #{view_name}") do
+          # Use quoted identifier to prevent SQL injection and handle special characters
+          quoted_view = ~s("#{String.replace(view_name, "\"", "\"\"")}")
+
+          case EventasaurusApp.Repo.query("REFRESH MATERIALIZED VIEW #{quoted_view}") do
             {:ok, _} -> :ok
             {:error, reason} -> verbose_info("    Warning: #{inspect(reason)}")
           end

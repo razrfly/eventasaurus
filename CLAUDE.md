@@ -441,6 +441,70 @@ mix audit.date_coverage --source repertuary
 - Coverage percentage per day
 - Alerts for missing or low-coverage dates
 
+## Production Database Sync (mix db.sync_production)
+
+Syncs the production Fly Managed Postgres database to your local development database. This is useful for debugging production issues or testing with real data.
+
+### Basic Usage
+
+```bash
+# Interactive mode (prompts for confirmation)
+mix db.sync_production
+
+# Non-interactive mode (skips confirmation)
+mix db.sync_production --yes
+```
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `--yes` | Skip confirmation prompts |
+| `--import-only` | Skip export, use existing dump file |
+| `--keep-dump` | Keep dump file after import (default: true) |
+| `--no-keep-dump` | Delete dump file after successful import |
+
+### How It Works
+
+1. **Pre-flight Checks**: Verifies Fly CLI, authentication, and disk space
+2. **Export**: Starts fly proxy, connects via PgBouncer, runs pg_dump
+3. **Import**: Drops/recreates local DB, runs pg_restore
+4. **Cleanup**: Deletes Oban jobs, resets sequences, refreshes materialized views
+5. **Verification**: Checks critical tables have data
+
+### File Storage
+
+- **Location**: `priv/dumps/`
+- **Format**: `production_YYYYMMDD_HHMMSS.dump` (PostgreSQL custom format)
+- **Size**: ~190 MB for current production data
+- **Security**: Contains production data - files are gitignored but handle with care
+
+### Performance
+
+- **Full sync**: ~20 minutes (export ~18 min, import ~2 min)
+- **Import only**: ~2 minutes (with existing dump)
+
+### Example Workflows
+
+```bash
+# First-time sync with data
+mix db.sync_production --yes
+
+# Re-import from existing dump (faster)
+mix db.sync_production --import-only
+
+# Sync and delete dump file to save space
+mix db.sync_production --yes --no-keep-dump
+```
+
+### Troubleshooting
+
+**"Connection refused" errors**: The fly proxy may take a few seconds to start. The task retries automatically.
+
+**"Database in use" errors**: The task terminates existing connections before dropping. If it still fails, manually stop any psql sessions or running Phoenix servers.
+
+**Disk space**: Ensure you have ~500 MB free (dump file + temporary space during import).
+
 ## Data Maintenance Tasks
 
 Tasks for fixing data quality issues and cleaning up corrupted data.
@@ -859,6 +923,7 @@ gt stack submit
 - BaseJob: `lib/eventasaurus_discovery/sources/base_job.ex` - Base behavior for standard jobs
 
 **CLI Tools Quick Reference:**
+- `mix db.sync_production` - Sync production database to local
 - `mix monitor.jobs` - Real-time job execution monitoring
 - `mix monitor.collisions` - Collision/deduplication metrics
 - `mix monitor.health` - Health and SLO compliance

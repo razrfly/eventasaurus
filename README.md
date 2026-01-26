@@ -30,7 +30,7 @@ A modern event planning and management platform built with Phoenix LiveView, des
 - Phoenix 1.7 or later
 - PostgreSQL 14 or later
 - Node.js 18 or later
-- Supabase CLI (for local development)
+- Fly CLI (for production database sync)
 
 ## Installation
 
@@ -56,10 +56,8 @@ cd assets && npm install && cd ..
 Create a `.env` file in the project root or add these to your shell profile:
 
 ```bash
-# Required: Supabase (local development)
-export SUPABASE_URL=http://127.0.0.1:54321
-export SUPABASE_API_KEY=your_supabase_anon_key
-export SUPABASE_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+# Required: Local PostgreSQL (development)
+export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/eventasaurus_dev
 
 # Optional: External services
 export STRIPE_SECRET_KEY=sk_test_your_stripe_test_key
@@ -71,14 +69,14 @@ export RESEND_API_KEY=your_resend_api_key
 export UNSPLASH_ACCESS_KEY=your_unsplash_access_key
 ```
 
-### 4. Start Supabase locally
+### 4. Start PostgreSQL locally
 
 ```bash
-# Install Supabase CLI if you haven't already
-brew install supabase/tap/supabase
+# macOS with Homebrew
+brew services start postgresql@14
 
-# Start Supabase
-supabase start
+# Or use Docker
+docker run --name eventasaurus-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:14
 ```
 
 ### 5. Set up the database
@@ -91,27 +89,17 @@ mix ecto.setup
 mix ecto.migrate
 ```
 
-### 6. Seed development data with authenticated users
-
-For the seeding to create users that can actually log in, you need the Supabase service role key:
+### 6. Seed development data
 
 ```bash
-# Get the service role key from Supabase
-supabase status | grep "service_role key"
-
-# Export it for the current session
-export SUPABASE_SERVICE_ROLE_KEY_LOCAL="<your-service-role-key>"
-
-# Security note:
-# - Never commit SUPABASE_SERVICE_ROLE_KEY* to the repo or share it.
-# - Store it in a local .env file and ensure .env is gitignored.
-# - Use different keys per environment.
-
-# Run the main seeds (creates holden@gmail.com account)
+# Run the main seeds
 mix run priv/repo/seeds.exs
 
+# Create development data (users, events, groups)
 mix seed.dev --users 5 --events 10 --groups 2
 ```
+
+**Note:** Authentication is handled by Clerk. Users created via seeds will need to authenticate through Clerk's login flow.
 
 ### 7. Start the Phoenix server
 
@@ -141,31 +129,40 @@ mix ecto.reset
 # Reset and seed with dev data
 mix ecto.reset.dev
 
-# Drop and recreate Supabase database completely
-supabase db reset
+# Sync production database to local (for debugging with real data)
+mix db.sync_production
 ```
 
-#### Complete Database Reset with Authenticated Users
+#### Syncing Production Database to Local
 
-When you need to completely reset everything and create users that can log in:
+For debugging production issues or testing with real data, sync the production Fly Managed Postgres to your local database:
 
 ```bash
-# 1. Reset Supabase database (clears everything including auth users)
-supabase db reset
+mix db.sync_production              # Interactive mode
+mix db.sync_production --yes        # Skip confirmation
+mix db.sync_production --import-only # Use existing dump (faster)
+```
 
-# 2. Get and export the service role key
-supabase status | grep "service_role key"
-export SUPABASE_SERVICE_ROLE_KEY_LOCAL="<your-service-role-key>"
+**What it does:** Exports via fly proxy (~18 min), imports to local (~2 min), cleans up Oban jobs, resets sequences.
 
-# 3. Run migrations
-mix ecto.migrate
+**Requirements:** Fly CLI authenticated, ~500 MB disk space. Dumps saved to `priv/dumps/`.
 
-# 4. Create personal login account
+#### Complete Database Reset
+
+When you need to completely reset everything:
+
+```bash
+# 1. Reset database (drop, create, migrate)
+mix ecto.reset
+
+# 2. Run seeds
 mix run priv/repo/seeds.exs
 
-# 5. Create test accounts and development data
+# 3. Create development data
 mix seed.dev --users 5 --events 10 --groups 2
 ```
+
+**Note:** Authentication is handled by Clerk. Users authenticate via Clerk's OAuth/passwordless flow.
 
 ### Development Seeding
 
@@ -209,7 +206,7 @@ The seeding process creates test accounts you can use for development:
 - Email: `holden@gmail.com`
 - Password: `sawyer1234`
 
-**Test Accounts (created via dev seeds with SUPABASE_SERVICE_ROLE_KEY_LOCAL):**
+**Test Accounts (created via dev seeds):**
 - Admin: `admin@example.com` / `testpass123`
 - Demo: `demo@example.com` / `testpass123`
 
@@ -907,7 +904,7 @@ Validate your pages with these tools:
 ### Common Issues
 
 **Database connection errors:**
-- Ensure PostgreSQL/Supabase is running
+- Ensure PostgreSQL is running
 - Check DATABASE_URL in your environment
 
 **Asset compilation errors:**
