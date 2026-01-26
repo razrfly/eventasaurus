@@ -505,6 +505,57 @@ mix db.sync_production --yes --no-keep-dump
 
 **Disk space**: Ensure you have ~500 MB free (dump file + temporary space during import).
 
+## Production Database Queries (mix db.query_production)
+
+Run read-only SQL queries directly against the production database without needing a local sync.
+
+### Basic Usage
+
+```bash
+# Simple query with table output (default)
+mix db.query_production "SELECT COUNT(*) FROM public_events"
+
+# Query with JSON output (for parsing)
+mix db.query_production "SELECT id, slug FROM cities LIMIT 5" --format json
+
+# Query with CSV output (for export)
+mix db.query_production "SELECT id, name FROM venues" --format csv > venues.csv
+
+# Dry run (show query without executing)
+mix db.query_production "SELECT 1" --dry-run
+
+# Custom timeout (default 30s)
+mix db.query_production "SELECT * FROM large_table" --timeout 60
+```
+
+### Output Formats
+
+- `table` (default) - ASCII table, human-readable
+- `json` - JSON array of objects for programmatic use
+- `csv` - CSV with headers for spreadsheets/export
+- `raw` - Elixir term for debugging
+
+### Safety Features
+
+This task enforces **read-only access** by:
+1. Only allowing SELECT, WITH, EXPLAIN, SHOW queries
+2. Rejecting queries with semicolons (no multi-statement injection)
+3. Blocking INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE, etc.
+
+```bash
+# These are rejected:
+mix db.query_production "DELETE FROM cities WHERE id = 1"
+# ❌ Query rejected: Write operations not allowed (found dangerous keyword)
+
+mix db.query_production "SELECT 1; DROP TABLE users"
+# ❌ Query rejected: Multi-statement queries not allowed (found ';')
+```
+
+### Prerequisites
+
+1. Fly CLI installed and authenticated (`fly auth login`)
+2. Production app running on Fly.io
+
 ## Data Maintenance Tasks
 
 Tasks for fixing data quality issues and cleaning up corrupted data.
@@ -924,6 +975,7 @@ gt stack submit
 
 **CLI Tools Quick Reference:**
 - `mix db.sync_production` - Sync production database to local
+- `mix db.query_production` - Run read-only SQL queries against production
 - `mix monitor.jobs` - Real-time job execution monitoring
 - `mix monitor.collisions` - Collision/deduplication metrics
 - `mix monitor.health` - Health and SLO compliance

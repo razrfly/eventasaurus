@@ -44,7 +44,6 @@ defmodule EventasaurusDiscovery.Admin.CityHealthMonitorJob do
 
   @critical_threshold 60
   @warning_threshold 80
-  @significant_drop_threshold 20
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
