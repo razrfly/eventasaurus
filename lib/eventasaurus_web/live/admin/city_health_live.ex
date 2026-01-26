@@ -966,7 +966,11 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
         <% max_page = max(1, ceil(@total_cities / @page_size)) %>
         <div class="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
           <div class="text-sm text-gray-600">
-            Showing <%= (@page - 1) * @page_size + 1 %>-<%= min(@page * @page_size, @total_cities) %> of <%= @total_cities %> cities
+            <%= if @total_cities == 0 do %>
+              No cities to display
+            <% else %>
+              Showing <%= (@page - 1) * @page_size + 1 %>-<%= min(@page * @page_size, @total_cities) %> of <%= @total_cities %> cities
+            <% end %>
           </div>
           <div class="flex items-center gap-2">
             <button

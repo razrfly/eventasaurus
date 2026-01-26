@@ -94,12 +94,14 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   """
   def calculate_all_cities_health(opts \\ []) do
     include_disabled = Keyword.get(opts, :include_disabled, false)
+    active_only = Keyword.get(opts, :active_only, false)
     limit = Keyword.get(opts, :limit, nil)
     offset = Keyword.get(opts, :offset, 0)
     timeout = Keyword.get(opts, :timeout, @default_timeout)
 
     # Get cities ordered by event count
-    cities = get_cities_with_event_counts(include_disabled, limit, offset, timeout)
+    # When active_only is true, HAVING clause filters to event_count > 0 BEFORE pagination
+    cities = get_cities_with_event_counts(include_disabled, limit, offset, timeout, active_only)
 
     # Batch calculate all component data
     city_ids = Enum.map(cities, & &1.id)
@@ -167,19 +169,24 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   Note: event_count includes all events associated with the city,
   not just recent ones. The health score components (event_coverage,
   source_activity, etc.) use time-windowed queries for accuracy.
+
+  Important: The active_only filter (event_count > 0) is applied BEFORE
+  pagination to ensure consistent page sizes.
   """
   def get_active_cities_health(opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
     offset = Keyword.get(opts, :offset, 0)
     timeout = Keyword.get(opts, :timeout, @default_timeout)
 
+    # Pass active_only: true to filter at query level BEFORE pagination
+    # This ensures page sizes are consistent (no post-fetch filtering)
     calculate_all_cities_health(
       include_disabled: false,
+      active_only: true,
       limit: limit,
       offset: offset,
       timeout: timeout
     )
-    |> Enum.filter(fn city -> city.event_count > 0 end)
   end
 
   @doc """
@@ -569,7 +576,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     Repo.replica().get(City, city_id)
   end
 
-  defp get_cities_with_event_counts(include_disabled, limit, offset \\ 0, timeout \\ @default_timeout) do
+  defp get_cities_with_event_counts(include_disabled, limit, offset \\ 0, timeout \\ @default_timeout, active_only \\ false) do
     base_query =
       from(c in City,
         left_join: v in Venue,
@@ -593,6 +600,15 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
         base_query
       else
         from([c, v, e] in base_query, where: c.discovery_enabled == true)
+      end
+
+    # Apply HAVING clause to filter cities with events BEFORE pagination
+    # This ensures consistent page sizes when active_only is true
+    query =
+      if active_only do
+        from([c, v, e] in query, having: count(e.id, :distinct) > 0)
+      else
+        query
       end
 
     query =
