@@ -19,21 +19,21 @@ reviews:
   # Review large PRs (don't skip based on size)
   auto_review:
     enabled: true
-    # Increase limits for larger PRs
-    max_files: 75
-    max_lines: 7500
+
+  # Path filters for what to review/ignore
+  path_filters:
+    # Always review these files
+    include:
+      - "lib/**/*.ex"
+      - "lib/**/*.heex"
+      - "test/**/*.exs"
     # Ignore generated/vendored files to reduce noise
-    ignore_paths:
+    exclude:
       - "**/*.lock"
       - "**/deps/**"
       - "**/node_modules/**"
       - "**/_build/**"
       - "**/priv/static/assets/**"
-    # Always review these even if large
-    review_paths:
-      - "lib/**/*.ex"
-      - "lib/**/*.heex"
-      - "test/**/*.exs"
 
   # Path-based review instructions
   path_instructions:
