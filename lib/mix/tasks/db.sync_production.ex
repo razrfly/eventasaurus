@@ -489,15 +489,17 @@ defmodule Mix.Tasks.Db.SyncProduction do
     case System.cmd("sh", ["-c", cmd], stderr_to_stdout: true) do
       {output, 0} ->
         # Parse the DATABASE_URL
-        # Format: postgresql://user:pass@host/db
+        # Format: postgresql://user:pass@host/db or postgres://user:pass@host/db
         found_line =
           output
           |> String.split("\n")
-          |> Enum.find(&String.starts_with?(&1, "postgresql://"))
+          |> Enum.find(fn line ->
+            String.starts_with?(line, "postgresql://") or String.starts_with?(line, "postgres://")
+          end)
 
         case found_line do
           nil ->
-            {:error, "DATABASE_URL not found in output. Expected line starting with 'postgresql://'"}
+            {:error, "DATABASE_URL not found in output. Expected line starting with 'postgresql://' or 'postgres://'"}
 
           line ->
             url = String.trim(line)
@@ -1147,8 +1149,18 @@ defmodule Mix.Tasks.Db.SyncProduction do
         Enum.each(rows, fn [view_name] ->
           verbose_info("    Refreshing #{view_name}...")
 
-          # Use quoted identifier to prevent SQL injection and handle special characters
-          quoted_view = ~s("#{String.replace(view_name, "\"", "\"\"")}")
+          # Properly quote schema-qualified identifiers (e.g., "public"."my_view")
+          # to prevent SQL injection and handle special characters
+          quoted_view =
+            case String.split(view_name, ".", parts: 2) do
+              [schema, relation] ->
+                quoted_schema = ~s("#{String.replace(schema, "\"", "\"\"")}")
+                quoted_relation = ~s("#{String.replace(relation, "\"", "\"\"")}")
+                "#{quoted_schema}.#{quoted_relation}"
+
+              [single_name] ->
+                ~s("#{String.replace(single_name, "\"", "\"\"")}")
+            end
 
           case EventasaurusApp.Repo.query("REFRESH MATERIALIZED VIEW #{quoted_view}") do
             {:ok, _} -> :ok

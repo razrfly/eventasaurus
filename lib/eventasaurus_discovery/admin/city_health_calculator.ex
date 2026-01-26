@@ -408,7 +408,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   # Batch Calculations (for calculating all cities efficiently)
   # ============================================================================
 
-  defp batch_event_coverage(city_ids, timeout \\ @default_timeout) when is_list(city_ids) do
+  defp batch_event_coverage(city_ids, timeout) when is_list(city_ids) do
     today = Date.utc_today()
     # Use -(@coverage_days - 1) to get exactly @coverage_days days including today
     start_date = Date.add(today, -(@coverage_days - 1))
@@ -432,7 +432,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     |> Map.new()
   end
 
-  defp batch_source_activity(city_ids, timeout \\ @default_timeout) when is_list(city_ids) do
+  defp batch_source_activity(city_ids, timeout) when is_list(city_ids) do
     # Get city slugs for the ids
     cities = Repo.replica().all(from(c in City, where: c.id in ^city_ids, select: {c.id, c.slug}), timeout: timeout)
     city_slugs = Map.new(cities)
@@ -477,7 +477,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     end
   end
 
-  defp batch_data_quality(city_ids, timeout \\ @default_timeout) when is_list(city_ids) do
+  defp batch_data_quality(city_ids, timeout) when is_list(city_ids) do
     query =
       from(pe in PublicEvent,
         join: v in Venue,
@@ -515,7 +515,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     |> Map.new()
   end
 
-  defp batch_venue_health(city_ids, timeout \\ @default_timeout) when is_list(city_ids) do
+  defp batch_venue_health(city_ids, timeout) when is_list(city_ids) do
     query =
       from(v in Venue,
         where: v.city_id in ^city_ids,
@@ -576,7 +576,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     Repo.replica().get(City, city_id)
   end
 
-  defp get_cities_with_event_counts(include_disabled, limit, offset \\ 0, timeout \\ @default_timeout, active_only \\ false) do
+  defp get_cities_with_event_counts(include_disabled, limit, offset, timeout, active_only) do
     base_query =
       from(c in City,
         left_join: v in Venue,
