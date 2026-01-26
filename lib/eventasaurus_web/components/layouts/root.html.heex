@@ -315,16 +315,25 @@
     style={assigns[:css_variables] && assigns[:css_variables]}
     phx-hook="AuthHandler"
   >
+    <%
+      # Check if we're on an admin route (to hide user navigation)
+      is_admin_route = case @conn.request_path do
+        "/admin" <> _ -> true
+        _ -> false
+      end
+    %>
+
+    <%= unless is_admin_route do %>
     <!-- Gradient Background for pages that need it -->
     <%= unless assigns[:hide_gradient] do %>
       <div class="fixed inset-0 -z-10 overflow-hidden">
         <.gradient_background theme="default" />
       </div>
     <% end %>
-    
+
     <!-- Mobile Menu Overlay -->
     <div id="mobile-menu-overlay" class="fixed inset-0 bg-black/50 z-40 opacity-0 pointer-events-none transition-opacity duration-300 lg:hidden"></div>
-    
+
     <!-- Navbar - Protected UI Element (always uses Inter font) -->
     <header class="navbar border-b border-white/10 backdrop-blur-md sticky top-0 z-50 flex-shrink-0">
       <.container class="py-4">
@@ -524,12 +533,14 @@
         </div>
       </div>
     </div>
+    <% end %> <!-- end unless is_admin_route -->
 
     <!-- Main content wrapper - Theme fonts apply here, grows to fill available space -->
-    <main class="main-content flex-grow">
+    <main class={["main-content flex-grow", if(is_admin_route, do: "!p-0")]}>
       <%= @inner_content %>
     </main>
 
+    <%= unless is_admin_route do %>
     <!-- Footer - Protected UI Element (always uses Inter font) -->
     <footer class="footer bg-gray-950 text-white mt-0 flex-shrink-0">
       <.container class="py-8 lg:py-12">
@@ -614,6 +625,7 @@
         </div>
       </.container>
     </footer>
+    <% end %> <!-- end unless is_admin_route (footer) -->
 
     <!-- Toast notification container - Protected UI Element (always uses Inter font) -->
     <div class="toast-container fixed bottom-4 right-4 z-50">

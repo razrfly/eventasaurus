@@ -108,3 +108,6 @@ scripts/clerk-migration/node_modules/
 
 # Performance baselines (development artifacts, not needed in version control)
 .baselines/
+
+# Licensed/commercial UI kits (cannot be committed due to license restrictions)
+/assets/vendor/catalyst-ui-kit/

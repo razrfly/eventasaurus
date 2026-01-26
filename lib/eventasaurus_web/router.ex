@@ -22,89 +22,99 @@ defmodule EventasaurusWeb.Router do
       get "/cdn-test", Dev.CdnTestController, :index
     end
 
-    # Admin routes (dev - no auth, mirrors production paths)
+    # Admin LiveView routes (dev - no auth, mirrors production paths)
+    # Use live_session to apply admin layout to all LiveViews
+    live_session :admin_dev,
+      layout: {EventasaurusWeb.Layouts, :admin},
+      on_mount: [{EventasaurusWeb.Live.AuthHooks, :admin_layout}] do
+      scope "/admin", EventasaurusWeb do
+        pipe_through :browser
+
+        # Main Admin Dashboard (dev - no auth)
+        live "/", Admin.AdminDashboardLive
+
+        # Sitemap Statistics (dev - no auth)
+        live "/sitemap", Admin.SitemapLive
+
+        # Discovery Dashboard (dev - no auth)
+        live "/imports", Admin.DiscoveryDashboardLive
+
+        # Discovery Stats Dashboard (dev - no auth)
+        live "/discovery/stats", Admin.DiscoveryStatsLive, :index
+        live "/discovery/stats/source/:source_slug", Admin.DiscoveryStatsLive.SourceDetail, :show
+
+        # Job Execution Monitor (dev - no auth)
+        live "/job-executions", Admin.JobExecutionMonitorLive
+        live "/job-executions/sources/:source_slug", Admin.SourcePipelineMonitorLive
+        live "/job-executions/:worker", Admin.JobTypeMonitorLive
+
+        # Unified Monitoring Dashboard (Issue #3048)
+        # Replaces deprecated /scraper-logs and /error-trends
+        live "/monitoring", Admin.MonitoringDashboardLive
+        live "/monitoring/sources/:source_key", Admin.SourceDetailLive
+
+        # Movie Matching Dashboard (Issue #3067 - Epic #3077 Phase 3)
+        live "/movies", Admin.MovieMatchingLive
+
+        # Category Analysis (dev - no auth)
+        live "/discovery/category-analysis/:source_slug", Admin.CategoryAnalysisLive, :show
+
+        # Geocoding Cost Dashboard (dev - no auth)
+        live "/geocoding", Admin.GeocodingDashboardLive
+        live "/geocoding/providers", Admin.GeocodingProviderLive, :index
+
+        # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
+
+        # Image Cache Dashboard (dev - no auth)
+        live "/images", Admin.ImageCacheDashboardLive
+
+        # Venue Duplicate Management (dev - no auth)
+        live "/venues/duplicates", Admin.VenueDuplicatesLive
+
+        # City Discovery Configuration (dev - no auth)
+        live "/discovery/config", Admin.CityDiscoveryConfigLive, :index
+        live "/discovery/config/:slug", Admin.CityDiscoveryConfigLive, :show
+
+        # Category Management (dev - no auth)
+        live "/categories", Admin.CategoryDashboardLive, :index
+        live "/categories/list", Admin.CategoryIndexLive, :index
+        live "/categories/hierarchy", Admin.CategoryHierarchyLive, :index
+        live "/categories/insights", Admin.CategoryInsightsLive, :index
+        live "/categories/new", Admin.CategoryFormLive, :new
+        live "/categories/:id/edit", Admin.CategoryFormLive, :edit
+
+        # Source Management (dev - no auth)
+        live "/sources", Admin.SourceIndexLive, :index
+        live "/sources/new", Admin.SourceFormLive, :new
+        live "/sources/:id/edit", Admin.SourceFormLive, :edit
+
+        # City Management (dev - no auth)
+        live "/cities", Admin.CityIndexLive, :index
+        live "/cities/new", Admin.CityFormLive, :new
+        live "/cities/:id/edit", Admin.CityFormLive, :edit
+        live "/cities/duplicates", Admin.CityDuplicatesLive, :index
+        live "/cities/cleanup", Admin.CityCleanupLive
+        live "/cities/health", Admin.CityHealthLive, :index
+        live "/cities/:city_slug/health", Admin.CityHealthDetailLive, :show
+
+        # Venue Country Mismatches (dev - no auth)
+        live "/venues/country-mismatches", Admin.VenueCountryMismatchesLive, :index
+
+        # Design tools (dev - no auth)
+        live "/design/social-cards", Admin.SocialCardsPreviewLive
+      end
+    end
+
+    # Oban Web UI and non-LiveView routes must be outside live_session
     scope "/admin", EventasaurusWeb do
       pipe_through :browser
 
-      # Main Admin Dashboard (dev - no auth)
-      live "/", Admin.AdminDashboardLive
-
-      # Oban Web UI for monitoring background jobs (dev - no auth)
+      # Oban Web UI (creates its own live_session)
       oban_dashboard("/oban")
-
-      # Sitemap Statistics (dev - no auth)
-      live "/sitemap", Admin.SitemapLive
-
-      # Discovery Dashboard (dev - no auth)
-      live "/imports", Admin.DiscoveryDashboardLive
-
-      # Discovery Stats Dashboard (dev - no auth)
-      live "/discovery/stats", Admin.DiscoveryStatsLive, :index
-      live "/discovery/stats/source/:source_slug", Admin.DiscoveryStatsLive.SourceDetail, :show
-
-      # Job Execution Monitor (dev - no auth)
-      live "/job-executions", Admin.JobExecutionMonitorLive
-      live "/job-executions/sources/:source_slug", Admin.SourcePipelineMonitorLive
-      live "/job-executions/:worker", Admin.JobTypeMonitorLive
-
-      # Unified Monitoring Dashboard (Issue #3048)
-      # Replaces deprecated /scraper-logs and /error-trends
-      live "/monitoring", Admin.MonitoringDashboardLive
-      live "/monitoring/sources/:source_key", Admin.SourceDetailLive
-
-      # Movie Matching Dashboard (Issue #3067 - Epic #3077 Phase 3)
-      live "/movies", Admin.MovieMatchingLive
 
       # Deprecated route redirects (Issue #3048 Phase 3)
       get "/scraper-logs", Admin.RedirectController, :to_monitoring
       get "/error-trends", Admin.RedirectController, :to_monitoring
-
-      # Category Analysis (dev - no auth)
-      live "/discovery/category-analysis/:source_slug", Admin.CategoryAnalysisLive, :show
-
-      # Geocoding Cost Dashboard (dev - no auth)
-      live "/geocoding", Admin.GeocodingDashboardLive
-      live "/geocoding/providers", Admin.GeocodingProviderLive, :index
-
-      # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
-
-      # Image Cache Dashboard (dev - no auth)
-      live "/images", Admin.ImageCacheDashboardLive
-
-      # Venue Duplicate Management (dev - no auth)
-      live "/venues/duplicates", Admin.VenueDuplicatesLive
-
-      # City Discovery Configuration (dev - no auth)
-      live "/discovery/config", Admin.CityDiscoveryConfigLive, :index
-      live "/discovery/config/:slug", Admin.CityDiscoveryConfigLive, :show
-
-      # Category Management (dev - no auth)
-      live "/categories", Admin.CategoryDashboardLive, :index
-      live "/categories/list", Admin.CategoryIndexLive, :index
-      live "/categories/hierarchy", Admin.CategoryHierarchyLive, :index
-      live "/categories/insights", Admin.CategoryInsightsLive, :index
-      live "/categories/new", Admin.CategoryFormLive, :new
-      live "/categories/:id/edit", Admin.CategoryFormLive, :edit
-
-      # Source Management (dev - no auth)
-      live "/sources", Admin.SourceIndexLive, :index
-      live "/sources/new", Admin.SourceFormLive, :new
-      live "/sources/:id/edit", Admin.SourceFormLive, :edit
-
-      # City Management (dev - no auth)
-      live "/cities", Admin.CityIndexLive, :index
-      live "/cities/new", Admin.CityFormLive, :new
-      live "/cities/:id/edit", Admin.CityFormLive, :edit
-      live "/cities/duplicates", Admin.CityDuplicatesLive, :index
-      live "/cities/cleanup", Admin.CityCleanupLive
-      live "/cities/health", Admin.CityHealthLive, :index
-      live "/cities/:city_slug/health", Admin.CityHealthDetailLive, :show
-
-      # Venue Country Mismatches (dev - no auth)
-      live "/venues/country-mismatches", Admin.VenueCountryMismatchesLive, :index
-
-      # Design tools (dev - no auth)
-      live "/design/social-cards", Admin.SocialCardsPreviewLive
 
       # Unsplash Integration (dev - no auth)
       get "/unsplash", Admin.UnsplashTestController, :index
@@ -159,7 +169,11 @@ defmodule EventasaurusWeb.Router do
     # This enables the connect_params fallback for Clerk token verification
     # when the Phoenix session cookie is missing due to CDN caching
     live_session :admin_authenticated,
-      on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}],
+      layout: {EventasaurusWeb.Layouts, :admin},
+      on_mount: [
+        {EventasaurusWeb.Live.AuthHooks, :require_authenticated_user},
+        {EventasaurusWeb.Live.AuthHooks, :admin_layout}
+      ],
       session: {__MODULE__, :extract_auth_session, []} do
       scope "/admin" do
         pipe_through :oban_admin

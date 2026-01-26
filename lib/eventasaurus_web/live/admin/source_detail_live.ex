@@ -271,7 +271,7 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     end
   end
 
-  # Fix Venue Names action
+  # Fix Venue Names action - uses batch insert for efficiency
   @impl true
   def handle_event("fix_venue_names", _params, socket) do
     source_key = socket.assigns.source_key
@@ -280,56 +280,39 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     # Find all cities that have venues from this source with potential quality issues
     affected_cities = find_cities_with_venue_quality_issues(source_slug)
 
-    # Enqueue a job for each affected city
-    results =
-      Enum.map(affected_cities, fn city_id ->
-        %{city_id: city_id, severity: "all"}
-        |> FixVenueNamesJob.new()
-        |> Oban.insert()
-      end)
-
-    {successful, failed} = Enum.split_with(results, &match?({:ok, _}, &1))
-    jobs_enqueued = length(successful)
-    jobs_failed = length(failed)
-
-    # Log failures for debugging
-    Enum.each(failed, fn {:error, reason} ->
-      Logger.error("Failed to enqueue FixVenueNamesJob: #{inspect(reason)}")
-    end)
-
     socket =
-      cond do
-        # No cities found with quality issues
-        Enum.empty?(affected_cities) ->
-          put_flash(
-            socket,
-            :warning,
-            "No cities found with venues that have quality issues."
-          )
+      case affected_cities do
+        [] ->
+          put_flash(socket, :info, "No cities found with venues that have quality issues.")
 
-        # All jobs failed to enqueue
-        jobs_enqueued == 0 and jobs_failed > 0 ->
-          put_flash(
-            socket,
-            :error,
-            "Failed to enqueue #{jobs_failed} job(s). Check server logs for details."
-          )
+        city_ids ->
+          # Build all job changesets for batch insertion
+          job_changesets =
+            Enum.map(city_ids, fn city_id ->
+              FixVenueNamesJob.new(%{city_id: city_id, severity: "all"})
+            end)
 
-        # Partial success
-        jobs_failed > 0 ->
-          put_flash(
-            socket,
-            :warning,
-            "Enqueued #{jobs_enqueued} job(s) successfully, but #{jobs_failed} failed. Check logs for details."
-          )
+          # Use Oban.insert_all for efficient batch insertion (single DB transaction)
+          case Oban.insert_all(job_changesets) do
+            jobs when is_list(jobs) ->
+              count = length(jobs)
+              city_word = if count == 1, do: "city", else: "cities"
 
-        # All successful
-        true ->
-          put_flash(
-            socket,
-            :info,
-            "Enqueued #{jobs_enqueued} venue name fix job(s) for #{jobs_enqueued} #{if jobs_enqueued == 1, do: "city", else: "cities"}. Jobs will process in the background."
-          )
+              put_flash(
+                socket,
+                :info,
+                "Enqueued #{count} venue name fix job(s) for #{count} #{city_word}. Jobs will process in the background."
+              )
+
+            {:error, reason} ->
+              Logger.error("Failed to batch enqueue FixVenueNamesJobs: #{inspect(reason)}")
+
+              put_flash(
+                socket,
+                :error,
+                "Failed to enqueue jobs. Check server logs for details."
+              )
+          end
       end
 
     {:noreply, socket}
@@ -1671,7 +1654,7 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
                 <%= for city <- @events_by_city do %>
                   <%= if Map.get(city, :is_cluster) do %>
                     <!-- Metro Area Cluster -->
-                    <tr class="bg-gray-50 dark:bg-gray-750">
+                    <tr class="bg-gray-50 dark:bg-gray-700">
                       <td class="px-4 py-3">
                         <button
                           phx-click="toggle_metro_area"
@@ -1700,7 +1683,7 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
                     <!-- Expanded Cities within Metro -->
                     <%= if MapSet.member?(@expanded_metro_areas, city.city_id) do %>
                       <%= for sub_city <- Map.get(city, :cities, []) do %>
-                        <tr class="bg-gray-25 dark:bg-gray-775">
+                        <tr class="bg-white dark:bg-gray-800">
                           <td class="px-4 py-2 pl-10">
                             <.link
                               navigate={"/admin/cities/#{sub_city.city_slug}"}
