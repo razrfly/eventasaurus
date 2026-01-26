@@ -668,6 +668,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   end
 
   defp count_venues_with_low_quality_names(source_id) do
+    # Sample up to 2000 events for venue name quality analysis
+    # This provides sufficient data without loading all events for large sources
     query =
       from(e in PublicEvent,
         join: pes in PublicEventSource,
@@ -682,11 +684,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           venue_id: v.id,
           venue_name: v.name,
           metadata: v.metadata
-        }
+        },
+        limit: 2000
       )
 
-    # Get all events with venues that have metadata
-    events_with_venues = repo().all(query)
+    # Get events with venues that have metadata (with timeout protection)
+    events_with_venues = repo().all(query, timeout: 10_000)
 
     # Calculate how many unique venues have low-quality names
     {low_quality_ids, examples_by_venue} =
@@ -1257,6 +1260,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   # 1. Performers table (public_event_performers) - traditional approach
   # 2. Metadata field (pes.metadata["quizmaster"]) - hybrid approach used by Geeks Who Drink
   defp calculate_performer_completeness(source_id) do
+    # Sample up to 2000 events for performer completeness analysis
+    # This provides sufficient data without loading all events for large sources
     query =
       from(e in PublicEvent,
         join: pes in PublicEventSource,
@@ -1276,10 +1281,11 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
               "CASE WHEN jsonb_exists(?, 'quizmaster') THEN 1 ELSE 0 END",
               pes.metadata
             )
-        }
+        },
+        limit: 2000
       )
 
-    performer_data = repo().all(query)
+    performer_data = repo().all(query, timeout: 10_000)
     total_events = length(performer_data)
 
     if total_events == 0 do
@@ -1656,7 +1662,10 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   #
   # Time quality is crucial for event scheduling and user experience.
   defp calculate_time_quality(source_id) do
-    # Get occurrence data per event
+    # Get occurrence data per event (sampled for performance)
+    # We limit to 1000 events as a statistical sample - this provides
+    # sufficient data for quality analysis without loading all events.
+    # For sources with <1000 events, we get all of them.
     query =
       from(e in PublicEvent,
         join: pes in PublicEventSource,
@@ -1667,10 +1676,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: %{
           event_id: e.id,
           occurrences: e.occurrences
-        }
+        },
+        limit: 1000
       )
 
-    occurrence_data = repo().all(query)
+    # Use a timeout to prevent long-running queries from crashing the view
+    occurrence_data = repo().all(query, timeout: 10_000)
     total_events = length(occurrence_data)
 
     if total_events == 0 do
