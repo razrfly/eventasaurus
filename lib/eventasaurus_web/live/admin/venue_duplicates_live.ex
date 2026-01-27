@@ -74,7 +74,9 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
         assign(socket, :selected_city_id, city.id)
 
       :error ->
-        put_flash(socket, :info, "City '#{city_slug}' not found, showing all cities")
+        socket
+        |> assign(:selected_city_id, nil)
+        |> put_flash(:info, "City '#{city_slug}' not found, showing all cities")
     end
   end
 
