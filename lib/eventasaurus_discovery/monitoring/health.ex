@@ -915,17 +915,16 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
     end
   end
 
-  # Dynamically generate worker pattern from source name
-  # e.g., "cinema_city" -> "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%"
-  #       "pubquiz" -> "EventasaurusDiscovery.Sources.Pubquiz.Jobs.%"
+  # Dynamically generate worker pattern from source slug
+  # Accepts both canonical hyphenated slugs and legacy underscore format:
+  #   "cinema-city" -> "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%"
+  #   "cinema_city" -> "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%"
+  #   "pubquiz" -> "EventasaurusDiscovery.Sources.Pubquiz.Jobs.%"
   defp get_source_pattern(source) when is_binary(source) do
-    # Convert snake_case source name to PascalCase module name
-    module_name =
-      source
-      |> String.split("_")
-      |> Enum.map(&String.capitalize/1)
-      |> Enum.join("")
+    alias EventasaurusDiscovery.Sources.Source
 
+    # Use centralized slug_to_module_name which handles both - and _ separators
+    module_name = Source.slug_to_module_name(source)
     pattern = "EventasaurusDiscovery.Sources.#{module_name}.Jobs.%"
     {:ok, pattern}
   end

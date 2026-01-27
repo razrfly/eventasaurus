@@ -176,10 +176,10 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   @impl true
   def handle_event("change_date_range", %{"date_range" => date_range}, socket) do
     date_range = parse_date_range(date_range)
-    city = socket.assigns.city
+    cluster_city_ids = socket.assigns.cluster_city_ids
 
-    # Get new chart data for the selected date range
-    chart_data = get_chart_data(city.id, date_range)
+    # Get new chart data for the selected date range (using cluster for metro area consistency)
+    chart_data = get_chart_data(cluster_city_ids, date_range)
 
     socket =
       socket
@@ -263,6 +263,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   defp load_city_health_data_with_health(socket, city, cluster_city_ids, health_data) do
     # Get additional metrics
     event_count = count_events(cluster_city_ids)
+    upcoming_event_count = count_upcoming_events(cluster_city_ids)
     venue_count = count_venues(cluster_city_ids)
     category_count = count_categories(cluster_city_ids)
     source_data = get_source_data(cluster_city_ids)
@@ -285,8 +286,8 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     # Preserve date range if already set, otherwise default to 30 days
     date_range = Map.get(socket.assigns, :date_range, 30)
 
-    # Get chart data for the trend chart
-    chart_data = get_chart_data(city.id, date_range)
+    # Get chart data for the trend chart (using cluster for metro area consistency)
+    chart_data = get_chart_data(cluster_city_ids, date_range)
 
     # Get source table stats using UnifiedDashboardStats (same format as admin dashboard)
     # Preserve sort state or initialize to health_score descending
@@ -314,6 +315,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     |> assign(:cluster_city_ids, cluster_city_ids)
     |> assign(:metro_cities, metro_cities)
     |> assign(:event_count, event_count)
+    |> assign(:upcoming_event_count, upcoming_event_count)
     |> assign(:venue_count, venue_count)
     |> assign(:category_count, category_count)
     |> assign(:source_data, source_data)
@@ -382,11 +384,11 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
           <!-- Health Overview (Admin Dashboard Style) -->
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <.admin_stat_card
-              title="Total Events"
+              title="Events Discovered"
               value={format_number(@event_count)}
               icon_type={:chart}
               color={:blue}
-              subtitle={"#{format_change(@weekly_change)} this week"}
+              subtitle={"#{format_number(@upcoming_event_count)} upcoming • #{format_change(@weekly_change)} this week"}
             />
             <.admin_stat_card
               title="Active Sources"
@@ -781,6 +783,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     |> Repo.one()
   end
 
+  # Count events added to DB in last 30 days (discovery activity)
   defp count_events(city_ids) do
     now = DateTime.utc_now()
     thirty_days_ago = DateTime.add(now, -30, :day)
@@ -790,6 +793,19 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
       on: v.id == e.venue_id,
       where: v.city_id in ^city_ids,
       where: e.inserted_at >= ^thirty_days_ago
+    )
+    |> Repo.replica().aggregate(:count, :id, timeout: 30_000)
+  end
+
+  # Count events with future start dates (upcoming events for users)
+  defp count_upcoming_events(city_ids) do
+    now = NaiveDateTime.utc_now()
+
+    from(e in PublicEvent,
+      join: v in Venue,
+      on: v.id == e.venue_id,
+      where: v.city_id in ^city_ids,
+      where: e.starts_at > ^now
     )
     |> Repo.replica().aggregate(:count, :id, timeout: 30_000)
   end
@@ -879,9 +895,9 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     )
     |> Repo.replica().all(timeout: 30_000)
     |> Enum.reduce(%{}, fn row, acc ->
-      # Convert PascalCase source match to snake_case slug
-      # CinemaCity -> cinema_city
-      slug = Macro.underscore(row.source_match || "")
+      # Convert PascalCase source match to canonical hyphenated slug
+      # CinemaCity -> cinema-city (matches database slug format)
+      slug = Source.module_name_to_slug(row.source_match || "")
 
       # Find the source by slug to get the ID
       source = Enum.find(sources, fn s -> s.slug == slug end)
@@ -931,7 +947,8 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
       source_match = Regex.run(~r/Sources\.([^.]+)\.Jobs/, job.worker)
 
       if source_match do
-        slug = source_match |> List.last() |> Macro.underscore()
+        # Convert PascalCase module name to canonical hyphenated slug
+        slug = source_match |> List.last() |> Source.module_name_to_slug()
 
         # Only add if we have this source and haven't exceeded 10 jobs
         if Enum.any?(sources, fn s -> s.slug == slug end) do
@@ -997,8 +1014,8 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     )
     |> Repo.replica().all(timeout: 30_000)
     |> Enum.reduce(%{}, fn row, acc ->
-      # Convert PascalCase source match to snake_case slug (CinemaCity -> cinema_city)
-      slug = Macro.underscore(row.source_match || "")
+      # Convert PascalCase source match to canonical hyphenated slug (CinemaCity -> cinema-city)
+      slug = Source.module_name_to_slug(row.source_match || "")
 
       # Find the source by slug to get the ID
       source = Enum.find(sources, fn s -> s.slug == slug end)
@@ -1102,9 +1119,9 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     end
   end
 
-  defp get_chart_data(city_id, date_range) do
-    # Get event trend data for the chart
-    city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, date_range)
+  defp get_chart_data(city_ids, date_range) do
+    # Get event trend data for the chart (supports single city or metro cluster)
+    city_event_trend = TrendAnalyzer.get_city_event_trend(city_ids, date_range)
     TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
   end
 
