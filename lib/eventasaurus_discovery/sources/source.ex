@@ -218,4 +218,107 @@ defmodule EventasaurusDiscovery.Sources.Source do
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
   end
+
+  @doc """
+  Convert a PascalCase module name to a canonical hyphenated slug.
+
+  This is the single source of truth for converting module names to slugs.
+  Database slugs use hyphens (e.g., "cinema-city", "resident-advisor").
+
+  ## Parameters
+
+    - `module_name` - PascalCase module name (e.g., "CinemaCity", "ResidentAdvisor")
+
+  ## Returns
+
+  The canonical hyphenated slug (e.g., "cinema-city", "resident-advisor")
+
+  ## Examples
+
+      iex> Source.module_name_to_slug("CinemaCity")
+      "cinema-city"
+
+      iex> Source.module_name_to_slug("ResidentAdvisor")
+      "resident-advisor"
+
+      iex> Source.module_name_to_slug("Bandsintown")
+      "bandsintown"
+
+  """
+  def module_name_to_slug(module_name) when is_binary(module_name) do
+    module_name
+    |> Macro.underscore()
+    |> String.replace("_", "-")
+  end
+
+  def module_name_to_slug(_), do: nil
+
+  @doc """
+  Extract the canonical source slug from an Oban worker module path.
+
+  Parses worker names like "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob"
+  and returns the canonical hyphenated slug (e.g., "cinema-city").
+
+  ## Parameters
+
+    - `worker` - Full worker module path string
+
+  ## Returns
+
+  The canonical slug or nil if the worker path doesn't match expected format.
+
+  ## Examples
+
+      iex> Source.worker_to_slug("EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob")
+      "cinema-city"
+
+      iex> Source.worker_to_slug("EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob")
+      "resident-advisor"
+
+      iex> Source.worker_to_slug("SomeOtherWorker")
+      nil
+
+  """
+  def worker_to_slug(worker) when is_binary(worker) do
+    case Regex.run(~r/Sources\.(\w+)\.Jobs/, worker) do
+      [_, module_name] -> module_name_to_slug(module_name)
+      _ -> nil
+    end
+  end
+
+  def worker_to_slug(_), do: nil
+
+  @doc """
+  Convert a slug (hyphenated or underscored) to a PascalCase module name.
+
+  This handles both the canonical hyphenated format and legacy underscore format.
+
+  ## Parameters
+
+    - `slug` - Source slug (e.g., "cinema-city" or "cinema_city")
+
+  ## Returns
+
+  The PascalCase module name (e.g., "CinemaCity")
+
+  ## Examples
+
+      iex> Source.slug_to_module_name("cinema-city")
+      "CinemaCity"
+
+      iex> Source.slug_to_module_name("cinema_city")
+      "CinemaCity"
+
+      iex> Source.slug_to_module_name("bandsintown")
+      "Bandsintown"
+
+  """
+  def slug_to_module_name(slug) when is_binary(slug) do
+    slug
+    |> String.split(~r/[-_]/)
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join("")
+  end
+
+  def slug_to_module_name(_), do: nil
 end

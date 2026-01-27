@@ -72,13 +72,13 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
   end
 
   @doc """
-  Get event count trend for a city over the specified number of days.
+  Get event count trend for a city (or cities) over the specified number of days.
 
   Returns a list of {date, count} tuples for each day.
 
   ## Parameters
 
-    * `city_id` - The city ID (integer)
+    * `city_id_or_ids` - A single city ID (integer) or list of city IDs
     * `days` - Number of days to look back (default: 30)
 
   ## Returns
@@ -86,7 +86,12 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
   List of maps with :date and :count keys.
   """
   def get_city_event_trend(city_id, days \\ 30)
-      when is_integer(city_id) and is_integer(days) do
+
+  def get_city_event_trend(city_id, days) when is_integer(city_id) and is_integer(days) do
+    get_city_event_trend([city_id], days)
+  end
+
+  def get_city_event_trend(city_ids, days) when is_list(city_ids) and is_integer(days) do
     today = Date.utc_today()
 
     0..(days - 1)
@@ -102,7 +107,7 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
         from(e in PublicEvent,
           join: v in EventasaurusApp.Venues.Venue,
           on: v.id == e.venue_id,
-          where: v.city_id == ^city_id,
+          where: v.city_id in ^city_ids,
           where: e.inserted_at >= ^date_start and e.inserted_at < ^date_end,
           select: count(e.id)
         )

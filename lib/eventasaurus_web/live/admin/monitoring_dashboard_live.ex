@@ -84,13 +84,12 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
     |> Enum.sort()
   end
 
-  # Extract source name from worker module name
-  # e.g., "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob" -> "cinema_city"
+  # Extract canonical source slug from worker module name
+  # e.g., "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob" -> "cinema-city"
+  # Uses centralized Source.worker_to_slug for consistent hyphenated slugs
   defp extract_source_from_worker(worker) when is_binary(worker) do
-    case Regex.run(~r/Sources\.(\w+)\.Jobs/, worker) do
-      [_, source] -> Macro.underscore(source)
-      _ -> nil
-    end
+    alias EventasaurusDiscovery.Sources.Source
+    Source.worker_to_slug(worker)
   end
 
   defp extract_source_from_worker(_), do: nil
