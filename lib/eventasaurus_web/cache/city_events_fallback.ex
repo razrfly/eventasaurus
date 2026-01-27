@@ -249,8 +249,8 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
 
       total_count = length(all_events)
 
-      # Calculate date counts from the full list (use raw events for accurate counts)
-      date_counts = calculate_date_range_counts(raw_events)
+      # Calculate date counts from aggregated list so counts match displayed cards
+      date_counts = calculate_date_range_counts(all_events)
 
       # Paginate
       offset = (page - 1) * page_size
@@ -400,7 +400,8 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
     DateTime.from_naive!(ndt, "Etc/UTC")
   end
 
-  # Calculate date range counts from a list of events
+  # Calculate date range counts from a list of events/movie groups
+  # Handles both regular events (with starts_at) and AggregatedMovieGroup (with earliest_starts_at)
   # Matches the format expected by CityPageFilters
   defp calculate_date_range_counts(events) do
     now = DateTime.utc_now()
@@ -420,9 +421,10 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
 
       count =
         Enum.count(events, fn event ->
-          starts_at = event.starts_at
+          starts_at = get_starts_at(event)
 
           cond do
+            is_nil(starts_at) -> false
             DateTime.compare(starts_at, now) == :lt -> false
             start_date && DateTime.compare(starts_at, start_date) == :lt -> false
             end_date && DateTime.compare(starts_at, end_date) == :gt -> false
@@ -433,6 +435,11 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
       Map.put(acc, range_atom, count)
     end)
   end
+
+  # Extract starts_at from either a regular event or an AggregatedMovieGroup
+  defp get_starts_at(%AggregatedMovieGroup{earliest_starts_at: starts_at}), do: starts_at
+  defp get_starts_at(%{starts_at: starts_at}), do: starts_at
+  defp get_starts_at(_), do: nil
 
   # Aggregate movie events into AggregatedMovieGroup structs
   # This prevents duplicate movie cards when the same movie shows at multiple venues
@@ -455,11 +462,13 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
       |> Enum.reject(&is_nil/1)
 
     # Combine movie groups with non-movie events
-    # Sort by starts_at: movie groups sort to top (like PublicEventsEnhanced)
+    # Sort by earliest start time for deterministic ordering
+    far_future = DateTime.add(DateTime.utc_now(), 365 * 24 * 60 * 60, :second)
+
     (movie_groups ++ non_movie_events)
     |> Enum.sort_by(fn
-      %AggregatedMovieGroup{} -> DateTime.utc_now()
-      event -> event.starts_at || DateTime.utc_now()
+      %AggregatedMovieGroup{earliest_starts_at: starts_at} -> starts_at || far_future
+      event -> event.starts_at || far_future
     end)
   end
 
@@ -482,6 +491,13 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
         |> Enum.reject(&is_nil/1)
         |> Enum.uniq_by(fn cat -> cat.id end)
 
+      # Find earliest screening time for deterministic sorting
+      earliest_starts_at =
+        events
+        |> Enum.map(fn e -> e.starts_at end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.min(DateTime, fn -> nil end)
+
       # Build the city struct (simplified, from first event's venue)
       city = first_event.venue.city
 
@@ -496,7 +512,8 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
         city: city,
         screening_count: length(events),
         venue_count: unique_venue_count,
-        categories: all_categories
+        categories: all_categories,
+        earliest_starts_at: earliest_starts_at
       }
     else
       nil
