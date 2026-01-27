@@ -144,33 +144,58 @@
     <%= if @search_results != [] do %>
       <div class="mt-3 border border-gray-200 rounded-md max-h-64 overflow-y-auto">
         <%= for venue <- @search_results do %>
-          <.link
-            navigate={~p"/admin/cities/#{venue.city_ref.slug}/health"}
-            class={"block px-3 sm:px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors #{if Map.get(venue, :duplicate_count, 0) > 0, do: "bg-amber-50 hover:bg-amber-100", else: ""}"}
-          >
-            <div class="flex justify-between items-center gap-2">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-sm font-medium text-gray-900 truncate"><%= venue.name %></span>
-                  <%= if Map.get(venue, :duplicate_count, 0) > 0 do %>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 shadow-sm">
-                      ⚠ <%= venue.duplicate_count %> <%= if venue.duplicate_count == 1, do: "duplicate", else: "duplicates" %>
-                    </span>
-                  <% end %>
+          <%= if venue.city_ref do %>
+            <.link
+              navigate={~p"/admin/cities/#{venue.city_ref.slug}/health"}
+              class={"block px-3 sm:px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors #{if Map.get(venue, :duplicate_count, 0) > 0, do: "bg-amber-50 hover:bg-amber-100", else: ""}"}
+            >
+              <div class="flex justify-between items-center gap-2">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-medium text-gray-900 truncate"><%= venue.name %></span>
+                    <%= if Map.get(venue, :duplicate_count, 0) > 0 do %>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 shadow-sm">
+                        ⚠ <%= venue.duplicate_count %> <%= if venue.duplicate_count == 1, do: "duplicate", else: "duplicates" %>
+                      </span>
+                    <% end %>
+                  </div>
+                  <div class="text-xs text-gray-500 truncate mt-0.5">
+                    <%= venue.city_ref.name %>
+                    <%= if venue.address, do: " · #{venue.address}" %>
+                  </div>
                 </div>
-                <div class="text-xs text-gray-500 truncate mt-0.5">
-                  <%= if venue.city_ref, do: venue.city_ref.name, else: "Unknown city" %>
-                  <%= if venue.address, do: " · #{venue.address}" %>
+                <div class="flex-shrink-0 text-xs text-gray-400 hidden sm:block">
+                  View in city →
+                </div>
+                <svg class="h-4 w-4 text-gray-400 sm:hidden flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </.link>
+          <% else %>
+            <!-- Non-navigable fallback for venues without city_ref -->
+            <div class={"block px-3 sm:px-4 py-3 border-b border-gray-100 last:border-b-0 #{if Map.get(venue, :duplicate_count, 0) > 0, do: "bg-amber-50", else: ""}"}>
+              <div class="flex justify-between items-center gap-2">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-medium text-gray-900 truncate"><%= venue.name %></span>
+                    <%= if Map.get(venue, :duplicate_count, 0) > 0 do %>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 shadow-sm">
+                        ⚠ <%= venue.duplicate_count %> <%= if venue.duplicate_count == 1, do: "duplicate", else: "duplicates" %>
+                      </span>
+                    <% end %>
+                  </div>
+                  <div class="text-xs text-gray-500 truncate mt-0.5">
+                    Unknown city
+                    <%= if venue.address, do: " · #{venue.address}" %>
+                  </div>
+                </div>
+                <div class="flex-shrink-0 text-xs text-gray-400 hidden sm:block">
+                  No city linked
                 </div>
               </div>
-              <div class="flex-shrink-0 text-xs text-gray-400 hidden sm:block">
-                View in city →
-              </div>
-              <svg class="h-4 w-4 text-gray-400 sm:hidden flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
             </div>
-          </.link>
+          <% end %>
         <% end %>
       </div>
     <% end %>

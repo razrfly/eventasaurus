@@ -617,8 +617,10 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   @doc """
   Gets all cities that have potential venue duplicates using strict criteria.
 
-  Returns a list of maps with:
-  - :city - the city struct
+  Returns a list of flat maps, each containing:
+  - :id - the city ID
+  - :name - the city name
+  - :slug - the city slug (used for navigation)
   - :duplicate_count - number of potential duplicate pairs
 
   Uses stricter criteria than city-level detection:
