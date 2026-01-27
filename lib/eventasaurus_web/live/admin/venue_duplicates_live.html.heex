@@ -1,587 +1,307 @@
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <div class="sm:flex sm:items-center sm:justify-between mb-6">
-    <div>
-      <.link
-        navigate="/admin/imports"
-        class="text-sm text-blue-600 hover:text-blue-800 inline-block mb-2"
-      >
-        ← Back to Discovery Dashboard
-      </.link>
-      <h1 class="text-2xl font-semibold text-gray-900">Venue Duplicates</h1>
-      <p class="mt-2 text-sm text-gray-700">
-        Detect and merge duplicate venues based on name similarity and GPS proximity.
-      </p>
-    </div>
-    <div class="mt-4 sm:mt-0 flex gap-2">
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+  <!-- Phase 3: CSS for animations -->
+  <style>
+    /* Staggered fade-in animation */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-fade-in-up {
+      animation: fadeInUp 0.3s ease-out forwards;
+      opacity: 0;
+    }
+
+    /* Stagger delays for city cards */
+    .stagger-1 { animation-delay: 0.05s; }
+    .stagger-2 { animation-delay: 0.1s; }
+    .stagger-3 { animation-delay: 0.15s; }
+    .stagger-4 { animation-delay: 0.2s; }
+    .stagger-5 { animation-delay: 0.25s; }
+    .stagger-6 { animation-delay: 0.3s; }
+    .stagger-7 { animation-delay: 0.35s; }
+    .stagger-8 { animation-delay: 0.4s; }
+    .stagger-9 { animation-delay: 0.45s; }
+    .stagger-10 { animation-delay: 0.5s; }
+
+    /* Card hover micro-animation */
+    .city-card {
+      transition: all 0.2s ease-out;
+    }
+
+    .city-card:hover {
+      transform: translateX(4px);
+    }
+
+    .city-card:hover .card-arrow {
+      transform: translateX(3px);
+    }
+
+    .card-arrow {
+      transition: transform 0.2s ease-out;
+    }
+
+    /* Badge pulse on hover */
+    .badge-enhanced {
+      transition: all 0.2s ease-out;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .city-card:hover .badge-enhanced {
+      transform: scale(1.05);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Avatar pop on hover */
+    .avatar-circle {
+      transition: all 0.2s ease-out;
+    }
+
+    .city-card:hover .avatar-circle {
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+  </style>
+
+  <!-- Header -->
+  <div class="mb-4 sm:mb-6">
+    <.link
+      navigate="/admin/imports"
+      class="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 mb-2 transition-colors"
+    >
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to Discovery Dashboard
+    </.link>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold text-gray-900">Venue Duplicates</h1>
+        <p class="mt-1 text-sm text-gray-600 hidden sm:block">
+          Cities with potential duplicate venues (within 100m, 60%+ name similarity)
+        </p>
+      </div>
       <button
-        phx-click="toggle_merge_history"
-        class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-      >
-        <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-        </svg>
-        Merge History
-      </button>
-      <button
-        phx-click="detect_duplicates"
-        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        phx-click="refresh"
+        class="inline-flex items-center justify-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
         disabled={@loading}
       >
         <%= if @loading do %>
-          <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <svg class="animate-spin -ml-0.5 mr-2 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          Detecting...
+          Loading...
         <% else %>
-          <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+          <svg class="-ml-0.5 mr-2 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Refresh Duplicates
+          Refresh
         <% end %>
       </button>
     </div>
   </div>
 
   <!-- Search Section -->
-  <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-lg mb-6">
-    <div class="p-6">
-      <h2 class="text-lg font-medium text-gray-900 mb-4">Search for a Venue</h2>
-      <p class="text-sm text-gray-600 mb-4">
-        Search for any venue to find its potential duplicates. You can then compare and merge pairs individually.
-      </p>
-
-      <div class="flex gap-4">
-        <!-- City Filter -->
-        <div class="w-48">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Filter by City</label>
-          <select
-            phx-change="filter_by_city"
-            name="city_id"
-            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+  <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+    <form phx-change="search_venues" phx-submit="search_venues">
+      <div class="relative">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+        <input
+          type="text"
+          name="query"
+          value={@search_query}
+          placeholder="Search for a venue..."
+          class="block w-full pl-10 pr-10 py-2.5 sm:py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base sm:text-sm transition-shadow"
+          autocomplete="off"
+          phx-debounce="300"
+        />
+        <%= if @search_query != "" do %>
+          <button
+            type="button"
+            phx-click="clear_search"
+            class="absolute inset-y-0 right-0 pr-3 flex items-center group"
           >
-            <option value="">All Cities</option>
-            <%= for {name, id} <- @cities do %>
-              <option value={id} selected={@selected_city_id == id}><%= name %></option>
-            <% end %>
-          </select>
-        </div>
-
-        <!-- Search Input -->
-        <div class="flex-1">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Venue Name</label>
-          <input
-            type="text"
-            name="query"
-            value={@search_query}
-            placeholder="Type at least 2 characters to search..."
-            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            autocomplete="off"
-            phx-change="search_venues"
-            phx-debounce="300"
-          />
-        </div>
+            <svg class="h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        <% end %>
       </div>
+    </form>
 
-      <!-- Search Results -->
-      <%= if @search_results != [] do %>
-        <div class="mt-4 border border-gray-200 rounded-md max-h-64 overflow-y-auto">
-          <%= for venue <- @search_results do %>
-            <button
-              type="button"
-              phx-click="select_venue"
-              phx-value-venue_id={venue.id}
-              class="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 flex justify-between items-center"
-            >
-              <div>
-                <div class="text-sm font-medium text-gray-900"><%= venue.name %></div>
-                <div class="text-xs text-gray-500">
-                  <%= if venue.city, do: venue.city.name, else: "Unknown city" %>
+    <!-- Search Results -->
+    <%= if @search_results != [] do %>
+      <div class="mt-3 border border-gray-200 rounded-md max-h-64 overflow-y-auto">
+        <%= for venue <- @search_results do %>
+          <.link
+            navigate={~p"/admin/cities/#{venue.city_ref.slug}/health"}
+            class={"block px-3 sm:px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors #{if Map.get(venue, :duplicate_count, 0) > 0, do: "bg-amber-50 hover:bg-amber-100", else: ""}"}
+          >
+            <div class="flex justify-between items-center gap-2">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-medium text-gray-900 truncate"><%= venue.name %></span>
+                  <%= if Map.get(venue, :duplicate_count, 0) > 0 do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 shadow-sm">
+                      ⚠ <%= venue.duplicate_count %> <%= if venue.duplicate_count == 1, do: "duplicate", else: "duplicates" %>
+                    </span>
+                  <% end %>
+                </div>
+                <div class="text-xs text-gray-500 truncate mt-0.5">
+                  <%= if venue.city_ref, do: venue.city_ref.name, else: "Unknown city" %>
                   <%= if venue.address, do: " · #{venue.address}" %>
                 </div>
               </div>
-              <div class="text-xs text-gray-500">
-                <%= venue.event_count %> events
+              <div class="flex-shrink-0 text-xs text-gray-400 hidden sm:block">
+                View in city →
               </div>
-            </button>
-          <% end %>
-        </div>
-      <% end %>
-    </div>
+              <svg class="h-4 w-4 text-gray-400 sm:hidden flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </.link>
+        <% end %>
+      </div>
+    <% end %>
   </div>
 
-  <!-- Selected Venue & Duplicates Section -->
-  <%= if @selected_venue do %>
-    <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-lg mb-6">
-      <div class="p-6">
-        <div class="flex justify-between items-start mb-4">
-          <div>
-            <h2 class="text-lg font-medium text-gray-900">
-              Duplicates for: <%= @selected_venue.name %>
-            </h2>
-            <p class="text-sm text-gray-600">
-              ID: <%= @selected_venue.id %>
-              · <%= if @selected_venue.city, do: @selected_venue.city.name, else: "Unknown city" %>
-              · <%= @selected_venue.event_count %> events
-            </p>
-          </div>
-          <button
-            phx-click="clear_selection"
-            class="text-sm text-gray-500 hover:text-gray-700"
-          >
-            ✕ Clear Selection
-          </button>
-        </div>
-
-        <%= if @venue_duplicates == nil do %>
-          <div class="text-center py-8">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p class="mt-2 text-gray-600">Finding duplicates...</p>
-          </div>
+  <!-- Summary -->
+  <%= if not @loading do %>
+    <div class="mb-3 sm:mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+      <div class="text-sm text-gray-600">
+        <%= if @total_duplicate_count > 0 do %>
+          <span class="font-semibold text-gray-900"><%= @total_duplicate_count %></span>
+          potential duplicate <%= if @total_duplicate_count == 1, do: "pair", else: "pairs" %>
+          across
+          <span class="font-semibold text-gray-900"><%= length(@cities_with_duplicates) %></span>
+          <%= if length(@cities_with_duplicates) == 1, do: "city", else: "cities" %>
         <% else %>
-          <%= if Enum.empty?(@venue_duplicates) do %>
-            <div class="text-center py-8 text-gray-500">
-              <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p class="mt-2">No potential duplicates found within 2km.</p>
-            </div>
-          <% else %>
-            <div class="space-y-3">
-              <%= for dup <- @venue_duplicates do %>
-                <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <.link
-                        navigate={~p"/venues/#{dup.venue.slug}"}
-                        class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                      >
-                        <%= dup.venue.name %>
-                      </.link>
-                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                        ID: <%= dup.venue.id %>
-                      </span>
-                    </div>
-                    <div class="mt-1 text-xs text-gray-500 flex items-center gap-3">
-                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                        <%= Float.round(dup.similarity_score * 100, 1) %>% match
-                      </span>
-                      <%= if dup.distance_meters do %>
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                          <%= Float.round(dup.distance_meters, 0) %>m away
-                        </span>
-                      <% end %>
-                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                        <%= dup.event_count %> events
-                      </span>
-                    </div>
-                    <%= if dup.venue.address do %>
-                      <div class="mt-1 text-xs text-gray-400"><%= dup.venue.address %></div>
-                    <% end %>
-                  </div>
-                  <div class="flex gap-2">
-                    <button
-                      phx-click="compare_venues"
-                      phx-value-venue_a_id={@selected_venue.id}
-                      phx-value-venue_b_id={dup.venue.id}
-                      class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                    >
-                      Compare
-                    </button>
-                    <button
-                      phx-click="exclude_pair"
-                      phx-value-venue_id_1={@selected_venue.id}
-                      phx-value-venue_id_2={dup.venue.id}
-                      class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                      title="Mark as not duplicates"
-                    >
-                      Not a Duplicate
-                    </button>
-                  </div>
-                </div>
-              <% end %>
-            </div>
-          <% end %>
+          No potential duplicates found
         <% end %>
       </div>
-    </div>
-  <% end %>
-
-  <!-- Comparison Modal -->
-  <%= if @comparison_mode && @venue_a && @venue_b do %>
-    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-50" phx-click="close_comparison"></div>
-    <div class="fixed inset-0 z-50 overflow-y-auto">
-      <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-        <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-4xl">
-          <div class="bg-white px-4 pb-4 pt-5 sm:p-6">
-            <div class="flex justify-between items-center mb-4">
-              <h3 class="text-lg font-semibold text-gray-900">Compare Venues</h3>
-              <button phx-click="close_comparison" class="text-gray-400 hover:text-gray-500">
-                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div class="grid grid-cols-2 gap-6">
-              <!-- Venue A -->
-              <div class="border border-gray-200 rounded-lg p-4">
-                <div class="text-center mb-4">
-                  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                    Venue A
-                  </span>
-                </div>
-                <h4 class="text-lg font-medium text-gray-900 mb-2"><%= @venue_a.name %></h4>
-                <dl class="space-y-2 text-sm">
-                  <div class="flex justify-between">
-                    <dt class="text-gray-500">ID:</dt>
-                    <dd class="text-gray-900"><%= @venue_a.id %></dd>
-                  </div>
-                  <div class="flex justify-between">
-                    <dt class="text-gray-500">Events:</dt>
-                    <dd class="text-gray-900"><%= @venue_a.event_count %></dd>
-                  </div>
-                  <div class="flex justify-between">
-                    <dt class="text-gray-500">City:</dt>
-                    <dd class="text-gray-900"><%= if @venue_a.city, do: @venue_a.city.name, else: "-" %></dd>
-                  </div>
-                  <div>
-                    <dt class="text-gray-500 mb-1">Address:</dt>
-                    <dd class="text-gray-900"><%= @venue_a.address || "-" %></dd>
-                  </div>
-                  <div class="flex justify-between">
-                    <dt class="text-gray-500">GPS:</dt>
-                    <dd class="text-gray-900 text-xs">
-                      <%= if @venue_a.latitude && @venue_a.longitude do %>
-                        <%= Float.round(@venue_a.latitude, 5) %>, <%= Float.round(@venue_a.longitude, 5) %>
-                      <% else %>
-                        -
-                      <% end %>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt class="text-gray-500 mb-1">Normalized:</dt>
-                    <dd class="text-gray-900 text-xs"><%= @venue_a.normalized_name || "-" %></dd>
-                  </div>
-                </dl>
-                <div class="mt-4">
-                  <button
-                    phx-click="merge_pair"
-                    phx-value-source_id={@venue_b.id}
-                    phx-value-target_id={@venue_a.id}
-                    class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
-                    data-confirm={"Merge #{@venue_b.name} into this venue? This will transfer all events and delete the other venue."}
-                  >
-                    ← Keep This Venue
-                  </button>
-                </div>
-              </div>
-
-              <!-- Venue B -->
-              <div class="border border-gray-200 rounded-lg p-4">
-                <div class="text-center mb-4">
-                  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-                    Venue B
-                  </span>
-                </div>
-                <h4 class="text-lg font-medium text-gray-900 mb-2"><%= @venue_b.name %></h4>
-                <dl class="space-y-2 text-sm">
-                  <div class="flex justify-between">
-                    <dt class="text-gray-500">ID:</dt>
-                    <dd class="text-gray-900"><%= @venue_b.id %></dd>
-                  </div>
-                  <div class="flex justify-between">
-                    <dt class="text-gray-500">Events:</dt>
-                    <dd class="text-gray-900"><%= @venue_b.event_count %></dd>
-                  </div>
-                  <div class="flex justify-between">
-                    <dt class="text-gray-500">City:</dt>
-                    <dd class="text-gray-900"><%= if @venue_b.city, do: @venue_b.city.name, else: "-" %></dd>
-                  </div>
-                  <div>
-                    <dt class="text-gray-500 mb-1">Address:</dt>
-                    <dd class="text-gray-900"><%= @venue_b.address || "-" %></dd>
-                  </div>
-                  <div class="flex justify-between">
-                    <dt class="text-gray-500">GPS:</dt>
-                    <dd class="text-gray-900 text-xs">
-                      <%= if @venue_b.latitude && @venue_b.longitude do %>
-                        <%= Float.round(@venue_b.latitude, 5) %>, <%= Float.round(@venue_b.longitude, 5) %>
-                      <% else %>
-                        -
-                      <% end %>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt class="text-gray-500 mb-1">Normalized:</dt>
-                    <dd class="text-gray-900 text-xs"><%= @venue_b.normalized_name || "-" %></dd>
-                  </div>
-                </dl>
-                <div class="mt-4">
-                  <button
-                    phx-click="merge_pair"
-                    phx-value-source_id={@venue_a.id}
-                    phx-value-target_id={@venue_b.id}
-                    class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
-                    data-confirm={"Merge #{@venue_a.name} into this venue? This will transfer all events and delete the other venue."}
-                  >
-                    Keep This Venue →
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="mt-6 flex justify-center gap-4">
-              <button
-                phx-click="exclude_pair"
-                phx-value-venue_id_1={@venue_a.id}
-                phx-value-venue_id_2={@venue_b.id}
-                class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-              >
-                <svg class="-ml-1 mr-2 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                </svg>
-                Not Duplicates
-              </button>
-              <button
-                phx-click="close_comparison"
-                class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+      <%= if @last_loaded_at do %>
+        <div class="text-xs text-gray-400">
+          Last checked: <%= Calendar.strftime(@last_loaded_at, "%b %d, %Y at %H:%M UTC") %>
         </div>
-      </div>
-    </div>
-  <% end %>
-
-  <!-- Merge History Panel -->
-  <%= if @show_merge_history do %>
-    <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-lg mb-6">
-      <div class="p-6">
-        <h2 class="text-lg font-medium text-gray-900 mb-4">Recent Merge History</h2>
-        <%= if Enum.empty?(@recent_merges) do %>
-          <p class="text-sm text-gray-500">No merges have been recorded yet.</p>
-        <% else %>
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead>
-                <tr>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Source Venue</th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Target Venue</th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Events Moved</th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Merged By</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200">
-                <%= for merge <- @recent_merges do %>
-                  <tr class="hover:bg-gray-50">
-                    <td class="px-3 py-2 text-sm text-gray-500">
-                      <%= Calendar.strftime(merge.inserted_at, "%Y-%m-%d %H:%M") %>
-                    </td>
-                    <td class="px-3 py-2 text-sm text-gray-900">
-                      <%= if merge.source_venue_snapshot["name"] do %>
-                        <span class="text-gray-400">(deleted)</span>
-                        <%= merge.source_venue_snapshot["name"] %>
-                      <% else %>
-                        ID: <%= merge.source_venue_id %>
-                      <% end %>
-                    </td>
-                    <td class="px-3 py-2 text-sm text-gray-900">
-                      <%= if merge.target_venue do %>
-                        <.link navigate={~p"/venues/#{merge.target_venue.slug}"} class="text-blue-600 hover:underline">
-                          <%= merge.target_venue.name %>
-                        </.link>
-                      <% else %>
-                        ID: <%= merge.target_venue_id %>
-                      <% end %>
-                    </td>
-                    <td class="px-3 py-2 text-sm text-gray-500">
-                      <%= merge.events_reassigned + merge.public_events_reassigned %>
-                    </td>
-                    <td class="px-3 py-2 text-sm text-gray-500">
-                      <%= if merge.merged_by_user, do: merge.merged_by_user.email, else: "System" %>
-                    </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
-          </div>
-        <% end %>
-      </div>
-    </div>
-  <% end %>
-
-  <!-- Duplicate Groups (Original Functionality) -->
-  <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-lg">
-    <div class="p-6">
-      <h2 class="text-lg font-medium text-gray-900 mb-4">Auto-Detected Duplicate Groups</h2>
-
-      <%= if is_nil(@duplicate_groups) do %>
-        <!-- Loading State -->
-        <div class="text-center py-12">
-          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p class="mt-4 text-gray-600">Loading duplicate venues...</p>
-        </div>
-      <% else %>
-        <%= if Enum.empty?(@duplicate_groups) do %>
-          <!-- No Duplicates Found -->
-          <div class="text-center py-12">
-            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h3 class="mt-2 text-sm font-medium text-gray-900">No duplicates found</h3>
-            <p class="mt-1 text-sm text-gray-500">
-              Great! All venues appear to be unique. Click "Refresh Duplicates" to scan again.
-            </p>
-          </div>
-        <% else %>
-          <!-- Duplicate Groups -->
-          <div class="space-y-6">
-            <%= for {group, group_idx} <- Enum.with_index(@duplicate_groups) do %>
-              <div class="border border-gray-200 rounded-lg overflow-hidden">
-                <div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                  <h3 class="text-sm font-medium text-gray-900">
-                    Duplicate Group <%= group_idx + 1 %>
-                    <span class="ml-2 text-xs text-gray-500">
-                      <%= if map_size(group.similarities) > 0 do %>
-                        <% similarity_values = Map.values(group.similarities) %>
-                        <% avg_similarity = Enum.sum(similarity_values) / length(similarity_values) %>
-                        <% max_dist = if(map_size(group.distances) > 0, do: Enum.max(Map.values(group.distances)), else: 0) %>
-                        (<%= length(group.venues) %> venues, avg similarity: <%= Float.round(avg_similarity * 100, 1) %>%, max distance: <%= Float.round(max_dist, 0) %>m)
-                      <% else %>
-                        (<%= length(group.venues) %> venues)
-                      <% end %>
-                    </span>
-                  </h3>
-                </div>
-
-                <div class="p-4">
-                  <div class="space-y-3">
-                    <%= for venue <- group.venues do %>
-                      <div class="flex items-start justify-between p-3 bg-white border border-gray-200 rounded-md">
-                        <div class="flex-1">
-                          <div class="flex items-center">
-                            <.link
-                              navigate={~p"/venues/#{venue.slug}"}
-                              class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                            >
-                              <%= venue.name %>
-                            </.link>
-                            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                              ID: <%= venue.id %>
-                            </span>
-                            <%= if venue.event_count > 0 do %>
-                              <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                <%= venue.event_count %> events
-                              </span>
-                            <% else %>
-                              <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                                0 events
-                              </span>
-                            <% end %>
-                          </div>
-
-                          <%= if venue.address do %>
-                            <div class="mt-1 text-xs text-gray-500">
-                              Address: <%= venue.address %>
-                            </div>
-                          <% end %>
-
-                          <%= if venue.latitude && venue.longitude do %>
-                            <div class="mt-1 text-xs text-gray-500">
-                              GPS: <%= venue.latitude %>, <%= venue.longitude %>
-                            </div>
-                          <% end %>
-
-                          <%= if venue.normalized_name do %>
-                            <div class="mt-1 text-xs text-gray-400">
-                              Normalized: <%= venue.normalized_name %>
-                            </div>
-                          <% end %>
-                        </div>
-                        <button
-                          type="button"
-                          phx-click="select_venue"
-                          phx-value-venue_id={venue.id}
-                          class="ml-2 text-xs text-blue-600 hover:text-blue-800"
-                        >
-                          Find duplicates →
-                        </button>
-                      </div>
-                    <% end %>
-                  </div>
-
-                  <!-- Merge Form -->
-                  <form phx-submit="merge_venues" class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                    <h4 class="text-sm font-medium text-yellow-900 mb-3">Merge All Venues in Group</h4>
-                    <div class="space-y-3">
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                          Keep which venue? (Primary)
-                        </label>
-                        <select
-                          name="primary_id"
-                          required
-                          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        >
-                          <%= for venue <- group.venues do %>
-                            <option value={venue.id}>
-                              <%= venue.name %> (ID: <%= venue.id %>) - <%= venue.event_count %> events
-                            </option>
-                          <% end %>
-                        </select>
-                        <p class="mt-1 text-xs text-gray-500">
-                          All events, activities, and data will be transferred to this venue
-                        </p>
-                      </div>
-
-                      <input type="hidden" name="all_ids" value={group.venues |> Enum.map(& &1.id) |> Enum.join(",")} />
-
-                      <button
-                        type="submit"
-                        class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                        data-confirm="Are you sure you want to merge all venues in this group? This action cannot be undone."
-                      >
-                        <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                        </svg>
-                        Merge All in Group
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            <% end %>
-          </div>
-        <% end %>
       <% end %>
     </div>
+  <% end %>
+
+  <!-- Cities List -->
+  <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg overflow-hidden">
+    <%= if @loading do %>
+      <!-- Loading State -->
+      <div class="p-8 sm:p-12 text-center">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p class="mt-3 text-sm text-gray-600">Finding duplicate venues...</p>
+      </div>
+    <% else %>
+      <%= if Enum.empty?(@cities_with_duplicates) do %>
+        <!-- Empty State with animation -->
+        <div class="p-8 sm:p-12 text-center animate-fade-in-up">
+          <div class="inline-flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+            <svg class="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 class="text-base font-medium text-gray-900">All Clear!</h3>
+          <p class="mt-1 text-sm text-gray-500">
+            No duplicate venues found based on strict matching criteria.
+          </p>
+        </div>
+      <% else %>
+        <!-- City List with staggered animation -->
+        <ul class="divide-y divide-gray-200">
+          <%= for {city, index} <- Enum.with_index(@cities_with_duplicates) do %>
+            <%
+              # Color coding based on severity
+              severity = cond do
+                city.duplicate_count >= 10 -> :critical
+                city.duplicate_count >= 5 -> :warning
+                true -> :low
+              end
+
+              {bg_class, badge_class, avatar_bg, avatar_text, badge_icon} = case severity do
+                :critical -> {"bg-red-50", "bg-red-100 text-red-800 ring-1 ring-red-200", "bg-red-100", "text-red-700", "🔴"}
+                :warning -> {"bg-amber-50", "bg-amber-100 text-amber-800 ring-1 ring-amber-200", "bg-amber-100", "text-amber-700", "🟡"}
+                :low -> {"bg-white", "bg-gray-100 text-gray-700 ring-1 ring-gray-200", "bg-blue-100", "text-blue-700", ""}
+              end
+
+              # Stagger class (max 10)
+              stagger_class = "stagger-#{min(index + 1, 10)}"
+            %>
+            <li class={"animate-fade-in-up #{stagger_class}"}>
+              <.link
+                navigate={~p"/admin/cities/#{city.slug}/health"}
+                class={"city-card block px-3 sm:px-6 py-3 sm:py-4 #{bg_class}"}
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center min-w-0 gap-3 sm:gap-4">
+                    <div class="flex-shrink-0">
+                      <span class={"avatar-circle inline-flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 rounded-full #{avatar_bg}"}>
+                        <span class={"text-sm font-semibold #{avatar_text}"}>
+                          <%= String.first(city.name) %>
+                        </span>
+                      </span>
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium text-gray-900 truncate">
+                        <%= city.name %>
+                      </p>
+                      <p class="text-xs text-gray-500 sm:hidden">
+                        <%= city.duplicate_count %> <%= if city.duplicate_count == 1, do: "duplicate pair", else: "duplicate pairs" %>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 sm:gap-4">
+                    <div class="text-right hidden sm:block">
+                      <span class={"badge-enhanced inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold #{badge_class}"}>
+                        <%= if badge_icon != "", do: badge_icon <> " " %><%= city.duplicate_count %> <%= if city.duplicate_count == 1, do: "pair", else: "pairs" %>
+                      </span>
+                    </div>
+                    <!-- Mobile badge -->
+                    <div class="sm:hidden">
+                      <span class={"badge-enhanced inline-flex items-center justify-center min-w-[2rem] px-2 py-1 rounded-full text-xs font-bold #{badge_class}"}>
+                        <%= city.duplicate_count %>
+                      </span>
+                    </div>
+                    <svg class="card-arrow h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </.link>
+            </li>
+          <% end %>
+        </ul>
+      <% end %>
+    <% end %>
   </div>
 
   <!-- Info Box -->
-  <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-    <div class="flex">
+  <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+    <div class="flex gap-3">
       <div class="flex-shrink-0">
-        <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+        <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       </div>
-      <div class="ml-3">
-        <h3 class="text-sm font-medium text-blue-800">About Duplicate Detection</h3>
-        <div class="mt-2 text-sm text-blue-700">
-          <ul class="list-disc list-inside space-y-1">
-            <li>Venues within 1km with 50%+ name similarity are flagged as potential duplicates</li>
-            <li>Use the search to find duplicates for any specific venue (searches up to 2km)</li>
-            <li>Compare venues side-by-side before merging to verify they're truly duplicates</li>
-            <li>Click "Not a Duplicate" to permanently exclude a pair from future detection</li>
-            <li>Merging transfers all events, public events, groups, images, and provider IDs</li>
-            <li>All merges are logged with full audit trail for accountability</li>
-          </ul>
-        </div>
+      <div class="text-sm text-blue-700">
+        <p>
+          <strong>Strict matching:</strong> Only shows venues within 100m with 60%+ name similarity or substring match.
+          Click a city to view and manage duplicates on the city health page.
+        </p>
       </div>
     </div>
   </div>

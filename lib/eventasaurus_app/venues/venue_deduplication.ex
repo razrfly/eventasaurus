@@ -611,6 +611,140 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   defp calculate_distance(_, _), do: nil
 
   # ===========================================================================
+  # Cities with Duplicates (for Admin Index Page)
+  # ===========================================================================
+
+  @doc """
+  Gets all cities that have potential venue duplicates using strict criteria.
+
+  Returns a list of maps with:
+  - :city - the city struct
+  - :duplicate_count - number of potential duplicate pairs
+
+  Uses stricter criteria than city-level detection:
+  - Distance: <100m (not 500m)
+  - Similarity: >60% OR substring match (not 40%)
+
+  Only returns cities with ≥1 duplicate pair, sorted by count descending.
+
+  Options:
+  - :distance_meters - max distance (default: 100)
+  - :min_similarity - min name similarity (default: 0.6)
+  """
+  @spec get_cities_with_duplicates(keyword()) :: [map()]
+  def get_cities_with_duplicates(opts \\ []) do
+    max_distance = Keyword.get(opts, :distance_meters, 100)
+    min_similarity = Keyword.get(opts, :min_similarity, 0.6)
+
+    query = """
+    WITH duplicate_pairs AS (
+      SELECT
+        LEAST(v1.city_id, v2.city_id) as city_id,
+        v1.id as id1,
+        v2.id as id2,
+        ST_Distance(
+          ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography
+        ) as distance,
+        similarity(v1.name, v2.name) as name_similarity,
+        -- Check for substring match (either direction)
+        (LOWER(v1.name) LIKE '%' || LOWER(v2.name) || '%' OR
+         LOWER(v2.name) LIKE '%' || LOWER(v1.name) || '%') as is_substring_match
+      FROM venues v1
+      INNER JOIN venues v2 ON v1.id < v2.id AND v1.city_id = v2.city_id
+      WHERE v1.latitude IS NOT NULL
+        AND v1.longitude IS NOT NULL
+        AND v2.latitude IS NOT NULL
+        AND v2.longitude IS NOT NULL
+        AND NOT (v1.latitude = v2.latitude AND v1.longitude = v2.longitude)
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,
+          $1
+        )
+        -- Exclude pairs marked as "not duplicates"
+        AND NOT EXISTS (
+          SELECT 1 FROM venue_duplicate_exclusions e
+          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+        )
+    ),
+    filtered_pairs AS (
+      SELECT * FROM duplicate_pairs
+      WHERE name_similarity >= $2 OR is_substring_match = true
+    ),
+    city_counts AS (
+      SELECT city_id, COUNT(*) as pair_count
+      FROM filtered_pairs
+      GROUP BY city_id
+      HAVING COUNT(*) > 0
+    )
+    SELECT c.id, c.name, c.slug, cc.pair_count
+    FROM city_counts cc
+    INNER JOIN cities c ON c.id = cc.city_id
+    ORDER BY cc.pair_count DESC, c.name ASC
+    """
+
+    case Repo.query(query, [max_distance, min_similarity]) do
+      {:ok, %{rows: rows}} ->
+        Enum.map(rows, fn [id, name, slug, pair_count] ->
+          %{
+            id: id,
+            name: name,
+            slug: slug,
+            duplicate_count: pair_count
+          }
+        end)
+
+      {:error, error} ->
+        Logger.error("Failed to get cities with duplicates: #{inspect(error)}")
+        []
+    end
+  end
+
+  @doc """
+  Gets the total count of potential duplicate pairs across all cities.
+
+  Uses the same strict criteria as get_cities_with_duplicates/1.
+  """
+  @spec get_total_duplicate_count(keyword()) :: integer()
+  def get_total_duplicate_count(opts \\ []) do
+    max_distance = Keyword.get(opts, :distance_meters, 100)
+    min_similarity = Keyword.get(opts, :min_similarity, 0.6)
+
+    query = """
+    SELECT COUNT(*) FROM (
+      SELECT v1.id
+      FROM venues v1
+      INNER JOIN venues v2 ON v1.id < v2.id AND v1.city_id = v2.city_id
+      WHERE v1.latitude IS NOT NULL
+        AND v1.longitude IS NOT NULL
+        AND v2.latitude IS NOT NULL
+        AND v2.longitude IS NOT NULL
+        AND NOT (v1.latitude = v2.latitude AND v1.longitude = v2.longitude)
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,
+          $1
+        )
+        AND (similarity(v1.name, v2.name) >= $2
+             OR LOWER(v1.name) LIKE '%' || LOWER(v2.name) || '%'
+             OR LOWER(v2.name) LIKE '%' || LOWER(v1.name) || '%')
+        AND NOT EXISTS (
+          SELECT 1 FROM venue_duplicate_exclusions e
+          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+        )
+    ) as pairs
+    """
+
+    case Repo.query(query, [max_distance, min_similarity]) do
+      {:ok, %{rows: [[count]]}} -> count
+      {:error, _} -> 0
+    end
+  end
+
+  # ===========================================================================
   # Merging Venues
   # ===========================================================================
 
@@ -792,6 +926,10 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   @doc """
   Searches for venues by name with optional city filter.
 
+  Returns venues with:
+  - :event_count - number of events at the venue
+  - :duplicate_count - number of potential duplicate pairs this venue appears in
+
   Options:
   - :city_id - filter to specific city
   - :limit - maximum results (default: 20)
@@ -805,7 +943,7 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
         where: ilike(v.name, ^"%#{query}%"),
         order_by: [asc: v.name],
         limit: ^limit,
-        preload: [:city]
+        preload: [:city_ref]
       )
 
     base_query =
@@ -816,11 +954,96 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
       end
 
     venues = Repo.all(base_query)
+    venue_ids = Enum.map(venues, & &1.id)
 
-    # Add event counts
+    # Batch get duplicate counts for all venues
+    duplicate_counts = get_duplicate_counts_batch(venue_ids)
+
+    # Add event counts and duplicate counts
     Enum.map(venues, fn venue ->
-      Map.put(venue, :event_count, count_events(venue.id))
+      venue
+      |> Map.put(:event_count, count_events(venue.id))
+      |> Map.put(:duplicate_count, Map.get(duplicate_counts, venue.id, 0))
     end)
+  end
+
+  @doc """
+  Gets the count of potential duplicate pairs for each venue in the list.
+
+  Uses the same strict criteria as get_cities_with_duplicates:
+  - Distance: <100m
+  - Similarity: >60% OR substring match
+
+  Returns a map of venue_id => duplicate_pair_count
+  """
+  @spec get_duplicate_counts_batch([integer()]) :: map()
+  def get_duplicate_counts_batch([]), do: %{}
+
+  def get_duplicate_counts_batch(venue_ids) do
+    max_distance = 100
+    min_similarity = 0.6
+
+    query = """
+    SELECT venue_id, COUNT(*) as pair_count FROM (
+      SELECT v1.id as venue_id
+      FROM venues v1
+      INNER JOIN venues v2 ON v1.id < v2.id AND v1.city_id = v2.city_id
+      WHERE v1.id = ANY($1::int[])
+        AND v1.latitude IS NOT NULL
+        AND v1.longitude IS NOT NULL
+        AND v2.latitude IS NOT NULL
+        AND v2.longitude IS NOT NULL
+        AND NOT (v1.latitude = v2.latitude AND v1.longitude = v2.longitude)
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,
+          $2
+        )
+        AND (similarity(v1.name, v2.name) >= $3
+             OR LOWER(v1.name) LIKE '%' || LOWER(v2.name) || '%'
+             OR LOWER(v2.name) LIKE '%' || LOWER(v1.name) || '%')
+        AND NOT EXISTS (
+          SELECT 1 FROM venue_duplicate_exclusions e
+          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+        )
+
+      UNION ALL
+
+      SELECT v2.id as venue_id
+      FROM venues v1
+      INNER JOIN venues v2 ON v1.id < v2.id AND v1.city_id = v2.city_id
+      WHERE v2.id = ANY($1::int[])
+        AND v1.latitude IS NOT NULL
+        AND v1.longitude IS NOT NULL
+        AND v2.latitude IS NOT NULL
+        AND v2.longitude IS NOT NULL
+        AND NOT (v1.latitude = v2.latitude AND v1.longitude = v2.longitude)
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,
+          $2
+        )
+        AND (similarity(v1.name, v2.name) >= $3
+             OR LOWER(v1.name) LIKE '%' || LOWER(v2.name) || '%'
+             OR LOWER(v2.name) LIKE '%' || LOWER(v1.name) || '%')
+        AND NOT EXISTS (
+          SELECT 1 FROM venue_duplicate_exclusions e
+          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+        )
+    ) as pairs
+    GROUP BY venue_id
+    """
+
+    case Repo.query(query, [venue_ids, max_distance, min_similarity]) do
+      {:ok, %{rows: rows}} ->
+        Map.new(rows, fn [venue_id, count] -> {venue_id, count} end)
+
+      {:error, error} ->
+        Logger.error("Failed to get duplicate counts: #{inspect(error)}")
+        %{}
+    end
   end
 
   # ===========================================================================
