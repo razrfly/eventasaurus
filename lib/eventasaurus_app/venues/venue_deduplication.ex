@@ -60,11 +60,478 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
             event_count: event_count
           }
         end)
-        |> Enum.filter(fn %{similarity_score: score} -> score >= min_similarity end)
+        # Use distance-based thresholds (revised per Phase 1 audit - issue #3430)
+        |> Enum.filter(fn %{similarity_score: score, distance_meters: dist} ->
+          min_required =
+            cond do
+              dist && dist < 50 -> 0.30   # Close: require 30% similarity
+              dist && dist < 100 -> 0.40  # Very close: require 40%
+              dist && dist < 200 -> 0.45  # Nearby: require 45%
+              true -> min_similarity      # Distant: use param (default 0.3)
+            end
+
+          score >= min_required
+        end)
         |> Enum.sort_by(fn %{similarity_score: score} -> score end, :desc)
         |> Enum.take(limit)
 
       {:ok, duplicates}
+    end
+  end
+
+  # ===========================================================================
+  # City-Scoped Duplicates (for City Health Page)
+  # ===========================================================================
+
+  @doc """
+  Finds potential duplicate venue groups within a city or metro area.
+
+  Returns a list of duplicate groups, each containing:
+  - :venues - list of venue structs in the group
+  - :distances - map of {venue_id, venue_id} => distance_meters
+  - :similarities - map of {venue_id, venue_id} => similarity_score
+  - :confidence - aggregate confidence score (0.0 to 1.0)
+  - :total_events - total events across all venues in group
+
+  Options:
+  - :distance_meters - maximum distance to search (default: 500)
+  - :min_similarity - minimum name similarity score (default: 0.4)
+  - :limit - maximum groups to return (default: 50)
+  """
+  @spec find_duplicates_for_city([integer()], keyword()) :: [map()]
+  def find_duplicates_for_city(city_ids, opts \\ []) when is_list(city_ids) do
+    max_distance = Keyword.get(opts, :distance_meters, 500)
+    min_similarity = Keyword.get(opts, :min_similarity, 0.4)
+    limit = Keyword.get(opts, :limit, 50)
+    row_limit = Keyword.get(opts, :row_limit, 300)
+
+    if Enum.empty?(city_ids) do
+      []
+    else
+      find_duplicate_pairs_for_city(city_ids, max_distance, min_similarity, row_limit)
+      |> group_into_clusters()
+      |> Enum.map(&enrich_group_with_metrics/1)
+      |> Enum.sort_by(& &1.confidence, :desc)
+      |> Enum.take(limit)
+    end
+  end
+
+  @doc """
+  Finds potential duplicate venue PAIRS within a city (no transitive grouping).
+
+  Unlike `find_duplicates_for_city/2`, this returns individual pairs with their
+  own confidence scores. This avoids the "super-group" problem where A↔B and B↔C
+  would incorrectly group A,B,C together even if A and C have nothing in common.
+
+  Returns a list of pair maps:
+  - :venue_a - first venue in the pair
+  - :venue_b - second venue in the pair
+  - :similarity - name similarity (0.0 to 1.0)
+  - :distance - distance between venues in meters
+  - :confidence - confidence score (0.0 to 1.0) based on similarity + distance
+  - :event_count_a - events at venue_a
+  - :event_count_b - events at venue_b
+
+  Options:
+  - :distance_meters - maximum distance to search (default: 500)
+  - :min_similarity - minimum name similarity score (default: 0.4)
+  - :limit - maximum pairs to return (default: 100)
+  """
+  @spec find_duplicate_pairs([integer()], keyword()) :: [map()]
+  def find_duplicate_pairs(city_ids, opts \\ []) when is_list(city_ids) do
+    max_distance = Keyword.get(opts, :distance_meters, 500)
+    min_similarity = Keyword.get(opts, :min_similarity, 0.4)
+    limit = Keyword.get(opts, :limit, 100)
+    row_limit = Keyword.get(opts, :row_limit, 300)
+
+    if Enum.empty?(city_ids) do
+      []
+    else
+      find_duplicate_pairs_for_city(city_ids, max_distance, min_similarity, row_limit)
+      |> Enum.map(&enrich_pair_with_metrics/1)
+      |> Enum.sort_by(& &1.confidence, :desc)
+      |> Enum.take(limit)
+    end
+  end
+
+  # Enrich a pair with event counts and confidence score
+  defp enrich_pair_with_metrics(pair) do
+    event_count_a = count_events(pair.venue1.id)
+    event_count_b = count_events(pair.venue2.id)
+    confidence = calculate_pair_confidence(pair.similarity, pair.distance)
+
+    %{
+      venue_a: Map.put(pair.venue1, :event_count, event_count_a),
+      venue_b: Map.put(pair.venue2, :event_count, event_count_b),
+      similarity: pair.similarity,
+      distance: pair.distance,
+      confidence: confidence,
+      event_count_a: event_count_a,
+      event_count_b: event_count_b
+    }
+  end
+
+  # Calculate confidence score for a single pair based on similarity and distance
+  defp calculate_pair_confidence(similarity, distance) do
+    # Distance weight: closer venues get higher confidence boost
+    distance_weight =
+      cond do
+        distance < 20 -> 1.0    # Same building
+        distance < 50 -> 0.95   # Very close
+        distance < 100 -> 0.85  # Close
+        distance < 200 -> 0.70  # Nearby
+        distance < 500 -> 0.50  # In area
+        true -> 0.30            # Distant
+      end
+
+    # Base confidence from similarity, boosted by proximity
+    # High similarity (>0.6) with close distance = high confidence
+    # Low similarity (<0.4) with any distance = low confidence
+    base = similarity * 0.7 + distance_weight * 0.3
+
+    # Clamp to 0.0-1.0
+    min(1.0, max(0.0, base))
+  end
+
+  @doc """
+  Calculates duplicate venue metrics for a city or metro area using PAIR-based detection.
+
+  Returns a map with:
+  - :pair_count - number of distinct duplicate pairs
+  - :unique_venue_count - number of unique venues involved in pairs
+  - :affected_events - approximate count of events across duplicate venues
+  - :high_confidence_count - pairs with confidence >= 0.8
+  - :medium_confidence_count - pairs with confidence 0.5-0.8
+  - :low_confidence_count - pairs with confidence < 0.5
+  - :severity - :critical, :warning, or :healthy based on impact
+  - :duplicate_pairs - list of enriched pair maps for display
+
+  Options:
+  - :distance_meters - maximum distance to search (default: 500)
+  - :min_similarity - minimum name similarity score (default: 0.4)
+  """
+  @spec calculate_duplicate_metrics([integer()], keyword()) :: map()
+  def calculate_duplicate_metrics(city_ids, opts \\ []) when is_list(city_ids) do
+    # Get all duplicate pairs (no limit for metrics calculation)
+    pairs = find_duplicate_pairs(city_ids, Keyword.merge(opts, limit: 200))
+
+    if Enum.empty?(pairs) do
+      %{
+        pair_count: 0,
+        unique_venue_count: 0,
+        affected_events: 0,
+        high_confidence_count: 0,
+        medium_confidence_count: 0,
+        low_confidence_count: 0,
+        severity: :healthy,
+        duplicate_pairs: [],
+        # Legacy fields for backwards compatibility
+        duplicate_count: 0,
+        duplicate_groups_count: 0,
+        duplicate_groups: []
+      }
+    else
+      # Count unique venues in pairs
+      all_venue_ids =
+        pairs
+        |> Enum.flat_map(fn p -> [p.venue_a.id, p.venue_b.id] end)
+        |> Enum.uniq()
+
+      unique_venue_count = length(all_venue_ids)
+
+      # Sum affected events
+      affected_events = Enum.sum(Enum.map(pairs, fn p -> p.event_count_a + p.event_count_b end))
+
+      # Categorize by confidence
+      {high, medium, low} =
+        Enum.reduce(pairs, {0, 0, 0}, fn pair, {h, m, l} ->
+          cond do
+            pair.confidence >= 0.8 -> {h + 1, m, l}
+            pair.confidence >= 0.5 -> {h, m + 1, l}
+            true -> {h, m, l + 1}
+          end
+        end)
+
+      # Determine severity based on impact
+      severity =
+        cond do
+          high >= 5 or affected_events >= 100 -> :critical
+          high >= 2 or unique_venue_count >= 10 -> :warning
+          true -> :healthy
+        end
+
+      %{
+        pair_count: length(pairs),
+        unique_venue_count: unique_venue_count,
+        affected_events: affected_events,
+        high_confidence_count: high,
+        medium_confidence_count: medium,
+        low_confidence_count: low,
+        severity: severity,
+        duplicate_pairs: pairs,
+        # Legacy fields for backwards compatibility
+        duplicate_count: unique_venue_count,
+        duplicate_groups_count: length(pairs),
+        duplicate_groups: []
+      }
+    end
+  end
+
+  # Find duplicate pairs within specified cities using PostGIS
+  defp find_duplicate_pairs_for_city(city_ids, max_distance, min_similarity, row_limit) do
+    # Pass city_ids list directly - Postgrex will encode it as int[]
+    city_ids_array = city_ids
+
+    # Query for venue pairs in the specified cities
+    query = """
+    WITH venue_pairs AS (
+      SELECT
+        v1.id as id1,
+        v1.name as name1,
+        v1.address as address1,
+        v1.latitude as lat1,
+        v1.longitude as lng1,
+        v1.slug as slug1,
+        v1.city_id as city_id1,
+        v2.id as id2,
+        v2.name as name2,
+        v2.address as address2,
+        v2.latitude as lat2,
+        v2.longitude as lng2,
+        v2.slug as slug2,
+        v2.city_id as city_id2,
+        ST_Distance(
+          ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography
+        ) as distance,
+        similarity(v1.name, v2.name) as name_similarity
+      FROM venues v1
+      INNER JOIN venues v2 ON v1.id < v2.id
+      WHERE v1.city_id = ANY($1::int[])
+        AND v2.city_id = ANY($1::int[])
+        AND v1.latitude IS NOT NULL
+        AND v1.longitude IS NOT NULL
+        AND v2.latitude IS NOT NULL
+        AND v2.longitude IS NOT NULL
+        AND NOT (v1.latitude = v2.latitude AND v1.longitude = v2.longitude)
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,
+          $2
+        )
+        -- Exclude pairs marked as "not duplicates" (issue #3431)
+        AND NOT EXISTS (
+          SELECT 1 FROM venue_duplicate_exclusions e
+          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+        )
+    )
+    SELECT * FROM venue_pairs
+    WHERE
+      -- Distance-based similarity thresholds (revised per Phase 1 audit - issue #3430)
+      CASE
+        WHEN distance < 50 THEN name_similarity >= 0.30  -- Close: require 30% similarity
+        WHEN distance < 100 THEN name_similarity >= 0.40 -- Very close: require 40%
+        WHEN distance < 200 THEN name_similarity >= 0.45 -- Nearby: require 45%
+        ELSE name_similarity >= $3                       -- Distant: use min_similarity param
+      END
+    ORDER BY name_similarity DESC, distance ASC
+    LIMIT $4
+    """
+
+    case Repo.query(query, [city_ids_array, max_distance, min_similarity, row_limit]) do
+      {:ok, %{rows: rows}} ->
+        Enum.map(rows, fn row ->
+          [
+            id1,
+            name1,
+            addr1,
+            lat1,
+            lng1,
+            slug1,
+            city_id1,
+            id2,
+            name2,
+            addr2,
+            lat2,
+            lng2,
+            slug2,
+            city_id2,
+            distance,
+            name_similarity
+          ] = row
+
+          %{
+            venue1: %Venue{
+              id: id1,
+              name: name1,
+              address: addr1,
+              latitude: lat1,
+              longitude: lng1,
+              slug: slug1,
+              city_id: city_id1
+            },
+            venue2: %Venue{
+              id: id2,
+              name: name2,
+              address: addr2,
+              latitude: lat2,
+              longitude: lng2,
+              slug: slug2,
+              city_id: city_id2
+            },
+            distance: distance,
+            similarity: name_similarity
+          }
+        end)
+
+      {:error, error} ->
+        Logger.error("Failed to find duplicate pairs for city: #{inspect(error)}")
+        []
+    end
+  end
+
+  # Group pairs into connected clusters using union-find algorithm
+  defp group_into_clusters(pairs) do
+    if Enum.empty?(pairs) do
+      []
+    else
+      # Build adjacency map and collect metrics
+      {adjacency, distances, similarities, venues_map} =
+        Enum.reduce(pairs, {%{}, %{}, %{}, %{}}, fn pair, {adj, dist, sim, venues} ->
+          v1 = pair.venue1
+          v2 = pair.venue2
+
+          adj =
+            adj
+            |> Map.update(v1.id, [v2.id], &[v2.id | &1])
+            |> Map.update(v2.id, [v1.id], &[v1.id | &1])
+
+          # Store with normalized key (smaller id first)
+          key = if v1.id < v2.id, do: {v1.id, v2.id}, else: {v2.id, v1.id}
+          dist = Map.put(dist, key, pair.distance)
+          sim = Map.put(sim, key, pair.similarity)
+
+          venues =
+            venues
+            |> Map.put(v1.id, v1)
+            |> Map.put(v2.id, v2)
+
+          {adj, dist, sim, venues}
+        end)
+
+      # Find connected components using DFS
+      {groups, _visited} =
+        Enum.reduce(Map.keys(adjacency), {[], MapSet.new()}, fn venue_id, {groups, visited} ->
+          if MapSet.member?(visited, venue_id) do
+            {groups, visited}
+          else
+            {component, visited} = dfs_collect(venue_id, adjacency, visited)
+
+            group = %{
+              venue_ids: component,
+              venues: Enum.map(component, &Map.get(venues_map, &1)),
+              distances: filter_map_by_keys(distances, component),
+              similarities: filter_map_by_keys(similarities, component)
+            }
+
+            {[group | groups], visited}
+          end
+        end)
+
+      groups
+    end
+  end
+
+  # DFS to collect all connected venue IDs
+  defp dfs_collect(start_id, adjacency, visited) do
+    do_dfs([start_id], adjacency, visited, [])
+  end
+
+  defp do_dfs([], _adjacency, visited, collected) do
+    {collected, visited}
+  end
+
+  defp do_dfs([current | rest], adjacency, visited, collected) do
+    if MapSet.member?(visited, current) do
+      do_dfs(rest, adjacency, visited, collected)
+    else
+      visited = MapSet.put(visited, current)
+      neighbors = Map.get(adjacency, current, [])
+      do_dfs(neighbors ++ rest, adjacency, visited, [current | collected])
+    end
+  end
+
+  # Filter distance/similarity maps to only include keys for venues in the component
+  defp filter_map_by_keys(map, venue_ids) do
+    venue_set = MapSet.new(venue_ids)
+
+    map
+    |> Enum.filter(fn {{id1, id2}, _v} ->
+      MapSet.member?(venue_set, id1) and MapSet.member?(venue_set, id2)
+    end)
+    |> Map.new()
+  end
+
+  # Enrich group with event counts and confidence score
+  defp enrich_group_with_metrics(group) do
+    # Count events for each venue
+    venues_with_events =
+      Enum.map(group.venues, fn venue ->
+        event_count = count_events(venue.id)
+        Map.put(venue, :event_count, event_count)
+      end)
+
+    total_events = Enum.sum(Enum.map(venues_with_events, & &1.event_count))
+
+    # Calculate confidence based on similarity and distance
+    confidence = calculate_group_confidence(group)
+
+    # Calculate average distance across all pairs
+    avg_distance =
+      if map_size(group.distances) > 0 do
+        distances = Map.values(group.distances)
+        Enum.sum(distances) / length(distances)
+      else
+        nil
+      end
+
+    %{
+      venues: venues_with_events,
+      distances: group.distances,
+      similarities: group.similarities,
+      confidence: confidence,
+      total_events: total_events,
+      avg_distance: avg_distance
+    }
+  end
+
+  # Calculate confidence score for a duplicate group
+  defp calculate_group_confidence(group) do
+    if Enum.empty?(group.similarities) do
+      0.0
+    else
+      # Average similarity weighted by closeness (closer = higher weight)
+      weighted_scores =
+        Enum.map(group.similarities, fn {key, similarity} ->
+          distance = Map.get(group.distances, key, 500)
+
+          # Weight: closer venues get higher weight
+          distance_weight =
+            cond do
+              distance < 50 -> 1.0
+              distance < 100 -> 0.9
+              distance < 200 -> 0.7
+              true -> 0.5
+            end
+
+          similarity * distance_weight
+        end)
+
+      avg_weighted = Enum.sum(weighted_scores) / length(weighted_scores)
+
+      # Clamp to 0.0-1.0
+      min(1.0, max(0.0, avg_weighted))
     end
   end
 

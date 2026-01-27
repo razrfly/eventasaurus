@@ -54,49 +54,71 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
-    # Handle venue_id URL parameter to pre-select a venue
+    # Handle URL parameters: city (slug) and venue_id
     socket =
-      case params do
-        %{"venue_id" => venue_id_str} ->
-          if connected?(socket) do
-            case Integer.parse(venue_id_str) do
-              {venue_id, ""} ->
-                # Find duplicates for this venue (similar to select_venue handler)
-                case VenueDeduplication.find_duplicates_for_venue(venue_id,
-                       distance_meters: 2000,
-                       min_similarity: 0.3,
-                       limit: 20
-                     ) do
-                  {:ok, duplicates} ->
-                    case Repo.get(Venues.Venue, venue_id) do
-                      nil ->
-                        put_flash(socket, :error, "Venue not found")
-
-                      venue ->
-                        venue = Repo.preload(venue, :city)
-                        venue = Map.put(venue, :event_count, count_events_for_venue(venue.id))
-
-                        socket
-                        |> assign(:selected_venue, venue)
-                        |> assign(:venue_duplicates, duplicates)
-                    end
-
-                  {:error, _reason} ->
-                    put_flash(socket, :error, "Venue not found")
-                end
-
-              _ ->
-                put_flash(socket, :error, "Invalid venue ID")
-            end
-          else
-            socket
-          end
-
-        _ ->
-          socket
+      if connected?(socket) do
+        socket
+        |> maybe_apply_city_filter(params)
+        |> maybe_select_venue(params)
+      else
+        socket
       end
 
     {:noreply, socket}
+  end
+
+  # Apply city filter from URL param (e.g., ?city=krakow)
+  defp maybe_apply_city_filter(socket, %{"city" => city_slug}) when is_binary(city_slug) do
+    case find_city_by_slug(city_slug) do
+      {:ok, city} ->
+        assign(socket, :selected_city_id, city.id)
+
+      :error ->
+        put_flash(socket, :info, "City '#{city_slug}' not found, showing all cities")
+    end
+  end
+
+  defp maybe_apply_city_filter(socket, _params), do: socket
+
+  # Select venue from URL param (e.g., ?venue_id=123)
+  defp maybe_select_venue(socket, %{"venue_id" => venue_id_str}) do
+    case Integer.parse(venue_id_str) do
+      {venue_id, ""} ->
+        case VenueDeduplication.find_duplicates_for_venue(venue_id,
+               distance_meters: 2000,
+               min_similarity: 0.3,
+               limit: 20
+             ) do
+          {:ok, duplicates} ->
+            case Repo.get(Venues.Venue, venue_id) do
+              nil ->
+                put_flash(socket, :error, "Venue not found")
+
+              venue ->
+                venue = Repo.preload(venue, :city_ref)
+                venue = Map.put(venue, :event_count, count_events_for_venue(venue.id))
+
+                socket
+                |> assign(:selected_venue, venue)
+                |> assign(:venue_duplicates, duplicates)
+            end
+
+          {:error, _reason} ->
+            put_flash(socket, :error, "Venue not found")
+        end
+
+      _ ->
+        put_flash(socket, :error, "Invalid venue ID")
+    end
+  end
+
+  defp maybe_select_venue(socket, _params), do: socket
+
+  defp find_city_by_slug(slug) do
+    case Repo.get_by(EventasaurusDiscovery.Locations.City, slug: slug) do
+      nil -> :error
+      city -> {:ok, city}
+    end
   end
 
   @impl true
@@ -185,7 +207,7 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
             {:noreply, put_flash(socket, :error, "Venue not found")}
 
           venue ->
-            venue = Repo.preload(venue, :city)
+            venue = Repo.preload(venue, :city_ref)
             venue = Map.put(venue, :event_count, count_events_for_venue(venue.id))
 
             {:noreply,
@@ -224,12 +246,12 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
          venue_b when not is_nil(venue_b) <- Repo.get(Venues.Venue, String.to_integer(venue_b_id)) do
       venue_a =
         venue_a
-        |> Repo.preload(:city)
+        |> Repo.preload(:city_ref)
         |> Map.put(:event_count, count_events_for_venue(venue_a.id))
 
       venue_b =
         venue_b
-        |> Repo.preload(:city)
+        |> Repo.preload(:city_ref)
         |> Map.put(:event_count, count_events_for_venue(venue_b.id))
 
       {:noreply,

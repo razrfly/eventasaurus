@@ -628,11 +628,11 @@ defmodule EventasaurusApp.Venues do
     # Add a row limit to prevent OOM on large datasets (default: 500 pairs)
     row_limit = Keyword.get(opts, :row_limit, 500)
 
-    # Use distance-based similarity thresholds matching DuplicateDetection module:
-    # - < 50m: 0% similarity (same location = same venue)
+    # Use distance-based similarity thresholds (revised based on Phase 1 audit):
+    # - < 50m: 30% similarity (was 0% - caused 76% false positive rate)
     # - 50-100m: 40% similarity
-    # - 100-200m: 50% similarity
-    # - > 200m: 60% similarity
+    # - 100-200m: 45% similarity
+    # - > 200m: 50% similarity
     #
     # Uses a CTE to calculate distance first, then applies thresholds
     query = """
@@ -670,15 +670,21 @@ defmodule EventasaurusApp.Venues do
           ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,
           $1
         )
+        -- Exclude pairs marked as "not duplicates" (issue #3431)
+        AND NOT EXISTS (
+          SELECT 1 FROM venue_duplicate_exclusions e
+          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+        )
     )
     SELECT * FROM venue_pairs
     WHERE
-      -- Distance-based similarity thresholds (matching DuplicateDetection module)
+      -- Distance-based similarity thresholds (revised per Phase 1 audit - issue #3430)
       CASE
-        WHEN distance < 50 THEN name_similarity >= 0.0   -- Same location = same venue
-        WHEN distance < 100 THEN name_similarity >= 0.4  -- Very close = low bar
-        WHEN distance < 200 THEN name_similarity >= 0.5  -- Nearby = moderate bar
-        ELSE name_similarity >= 0.6                      -- Distant = high bar
+        WHEN distance < 50 THEN name_similarity >= 0.30  -- Close: require 30% similarity
+        WHEN distance < 100 THEN name_similarity >= 0.40 -- Very close: require 40%
+        WHEN distance < 200 THEN name_similarity >= 0.45 -- Nearby: require 45%
+        ELSE name_similarity >= 0.50                     -- Distant: require 50%
       END
     ORDER BY name_similarity DESC, distance ASC
     LIMIT $2
