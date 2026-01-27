@@ -57,7 +57,7 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
 
   # Load city from slug parameter
   defp load_city(socket, %{"city" => city_slug}) when is_binary(city_slug) do
-    case Repo.get_by(EventasaurusDiscovery.Locations.City, slug: city_slug) do
+    case Repo.replica().get_by(EventasaurusDiscovery.Locations.City, slug: city_slug) do
       nil ->
         socket
         |> put_flash(:error, "City '#{city_slug}' not found")
@@ -114,14 +114,14 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
       |> Enum.uniq()
       |> Enum.reject(&is_nil/1)
 
-    # Batch load cities
+    # Batch load cities (read-only, use replica)
     cities_map =
       if Enum.empty?(city_ids) do
         %{}
       else
         import Ecto.Query
         from(c in EventasaurusDiscovery.Locations.City, where: c.id in ^city_ids)
-        |> Repo.all()
+        |> Repo.replica().all()
         |> Map.new(fn city -> {city.id, city} end)
       end
 
@@ -147,12 +147,21 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
     Enum.filter(pairs, &(&1.confidence < 0.5))
   end
 
-  # Apply index from URL
+  # Apply index from URL (with safe parsing to avoid crashes on malformed input)
   defp apply_index(%{assigns: %{pairs: pairs, total_pairs: total}} = socket, params) do
     index =
       case params["index"] do
-        nil -> 0
-        str -> min(max(String.to_integer(str), 0), max(total - 1, 0))
+        nil ->
+          0
+
+        str when is_binary(str) ->
+          case Integer.parse(str) do
+            {i, _} -> min(max(i, 0), max(total - 1, 0))
+            :error -> 0
+          end
+
+        _ ->
+          0
       end
 
     current_pair = Enum.at(pairs, index)
@@ -257,9 +266,10 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
   defp reload_and_advance(socket) do
     %{city: city, confidence_filter: filter, current_index: index} = socket.assigns
 
-    # Reload pairs
+    # Reload pairs and preload city associations (same pattern as load_pairs)
     pairs = VenueDeduplication.find_duplicate_pairs([city.id], limit: 100)
-    filtered_pairs = filter_by_confidence(pairs, filter)
+    pairs_with_cities = preload_venue_cities(pairs)
+    filtered_pairs = filter_by_confidence(pairs_with_cities, filter)
     total = length(filtered_pairs)
 
     # Stay at same index if there are still pairs, otherwise go back
