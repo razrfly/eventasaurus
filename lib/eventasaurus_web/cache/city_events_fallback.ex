@@ -15,6 +15,14 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
   The materialized view provides a single source of truth - both counts
   and events come from the same query, guaranteeing consistency.
 
+  ## Movie Aggregation
+
+  Movies showing at multiple venues are aggregated into `AggregatedMovieGroup`
+  structs, matching the behavior of `PublicEventsEnhanced.aggregate_events/2`.
+  This prevents duplicate movie cards on the city page.
+
+  See: https://github.com/anthropics/eventasaurus/issues/3423
+
   ## Usage
 
       alias EventasaurusWeb.Cache.CityEventsFallback
@@ -36,6 +44,7 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
   import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
 
   @doc """
   Get events from the materialized view for a city.
@@ -79,25 +88,27 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
       # Apply date filters if provided
       query = apply_date_filters(query, start_date, end_date)
 
-      # Get total count
-      total_count = Repo.replica().aggregate(query, :count, :event_id)
-
-      # Get paginated events
-      offset = (page - 1) * page_size
-
-      events =
+      # Get all events for aggregation (we need all to properly count)
+      all_raw_events =
         query
         |> order_by([e], asc: e.starts_at)
-        |> limit(^page_size)
-        |> offset(^offset)
         |> Repo.replica().all()
         |> Enum.map(&transform_row/1)
+
+      # Aggregate movies - this reduces duplicate movie cards to single groups
+      aggregated = aggregate_movie_events(all_raw_events, city_slug)
+
+      total_count = length(aggregated)
+
+      # Paginate the aggregated results
+      offset = (page - 1) * page_size
+      page_events = Enum.slice(aggregated, offset, page_size)
 
       duration_ms = System.monotonic_time(:millisecond) - start_time
 
       {:ok,
        %{
-         events: events,
+         events: page_events,
          total_count: total_count,
          all_events_count: total_count,
          cached_at: DateTime.utc_now(),
@@ -131,11 +142,14 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
     start_time = System.monotonic_time(:millisecond)
 
     try do
-      events =
+      raw_events =
         base_query(city_slug)
         |> order_by([e], asc: e.starts_at)
         |> Repo.replica().all()
         |> Enum.map(&transform_row/1)
+
+      # Aggregate movies - this reduces duplicate movie cards to single groups
+      events = aggregate_movie_events(raw_events, city_slug)
 
       duration_ms = System.monotonic_time(:millisecond) - start_time
 
@@ -224,16 +238,19 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
 
     try do
       # Get all events in one query
-      all_events =
+      raw_events =
         base_query(city_slug)
         |> order_by([e], asc: e.starts_at)
         |> Repo.replica().all()
         |> Enum.map(&transform_row/1)
 
+      # Aggregate movies - this reduces duplicate movie cards to single groups
+      all_events = aggregate_movie_events(raw_events, city_slug)
+
       total_count = length(all_events)
 
-      # Calculate date counts from the full list
-      date_counts = calculate_date_range_counts(all_events)
+      # Calculate date counts from the full list (use raw events for accurate counts)
+      date_counts = calculate_date_range_counts(raw_events)
 
       # Paginate
       offset = (page - 1) * page_size
@@ -281,6 +298,11 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
         category_id: e.category_id,
         category_name: e.category_name,
         category_slug: e.category_slug,
+        # Movie identification columns added in migration 20260127105300
+        movie_id: e.movie_id,
+        movie_title: e.movie_title,
+        movie_slug: e.movie_slug,
+        movie_release_date: e.movie_release_date,
         # Image columns added in migration 20260124154631
         movie_poster_url: e.movie_poster_url,
         movie_backdrop_url: e.movie_backdrop_url,
@@ -340,6 +362,13 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
         else
           nil
         end,
+      # Movie fields for aggregation (added in migration 20260127105300)
+      movie_id: row.movie_id,
+      movie_title: row.movie_title,
+      movie_slug: row.movie_slug,
+      movie_release_date: row.movie_release_date,
+      movie_poster_url: row.movie_poster_url,
+      movie_backdrop_url: row.movie_backdrop_url,
       # Cover image using same priority as PublicEventsEnhanced.get_cover_image_url:
       # 1. Movie backdrop (highest quality)
       # 2. Movie poster
@@ -403,5 +432,74 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
 
       Map.put(acc, range_atom, count)
     end)
+  end
+
+  # Aggregate movie events into AggregatedMovieGroup structs
+  # This prevents duplicate movie cards when the same movie shows at multiple venues
+  #
+  # Similar to PublicEventsEnhanced.aggregate_events/2 but works with MV data
+  defp aggregate_movie_events(events, city_slug) do
+    # Separate movie events from non-movie events
+    {movie_events, non_movie_events} =
+      Enum.split_with(events, fn event ->
+        event.movie_id != nil
+      end)
+
+    # Group movie events by movie_id
+    movie_groups =
+      movie_events
+      |> Enum.group_by(& &1.movie_id)
+      |> Enum.map(fn {movie_id, grouped_events} ->
+        build_movie_group(movie_id, grouped_events, city_slug)
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    # Combine movie groups with non-movie events
+    # Sort by starts_at: movie groups sort to top (like PublicEventsEnhanced)
+    (movie_groups ++ non_movie_events)
+    |> Enum.sort_by(fn
+      %AggregatedMovieGroup{} -> DateTime.utc_now()
+      event -> event.starts_at || DateTime.utc_now()
+    end)
+  end
+
+  # Build an AggregatedMovieGroup from a list of events for the same movie
+  defp build_movie_group(movie_id, events, _city_slug) do
+    first_event = List.first(events)
+
+    if first_event do
+      # Get unique venues
+      unique_venue_count =
+        events
+        |> Enum.map(fn e -> e.venue.id end)
+        |> Enum.uniq()
+        |> length()
+
+      # Get all categories from events
+      all_categories =
+        events
+        |> Enum.map(fn e -> e.category end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq_by(fn cat -> cat.id end)
+
+      # Build the city struct (simplified, from first event's venue)
+      city = first_event.venue.city
+
+      %AggregatedMovieGroup{
+        movie_id: movie_id,
+        movie_slug: first_event.movie_slug,
+        movie_title: first_event.movie_title,
+        movie_backdrop_url: first_event.movie_backdrop_url,
+        movie_poster_url: first_event.movie_poster_url,
+        movie_release_date: first_event.movie_release_date,
+        city_id: city.id,
+        city: city,
+        screening_count: length(events),
+        venue_count: unique_venue_count,
+        categories: all_categories
+      }
+    else
+      nil
+    end
   end
 end
