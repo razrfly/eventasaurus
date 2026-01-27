@@ -108,9 +108,20 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
     if Enum.empty?(city_ids) do
       []
     else
-      find_duplicate_pairs_for_city(city_ids, max_distance, min_similarity, row_limit)
-      |> group_into_clusters()
-      |> Enum.map(&enrich_group_with_metrics/1)
+      groups =
+        find_duplicate_pairs_for_city(city_ids, max_distance, min_similarity, row_limit)
+        |> group_into_clusters()
+
+      # Batch fetch event counts to avoid N+1 queries
+      all_venue_ids =
+        groups
+        |> Enum.flat_map(fn group -> Enum.map(group.venues, & &1.id) end)
+        |> Enum.uniq()
+
+      event_counts_map = count_events_batch(all_venue_ids)
+
+      groups
+      |> Enum.map(&enrich_group_with_metrics(&1, event_counts_map))
       |> Enum.sort_by(& &1.confidence, :desc)
       |> Enum.take(limit)
     end
@@ -147,17 +158,27 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
     if Enum.empty?(city_ids) do
       []
     else
-      find_duplicate_pairs_for_city(city_ids, max_distance, min_similarity, row_limit)
-      |> Enum.map(&enrich_pair_with_metrics/1)
+      pairs = find_duplicate_pairs_for_city(city_ids, max_distance, min_similarity, row_limit)
+
+      # Batch fetch event counts to avoid N+1 queries
+      all_venue_ids =
+        pairs
+        |> Enum.flat_map(fn pair -> [pair.venue1.id, pair.venue2.id] end)
+        |> Enum.uniq()
+
+      event_counts_map = count_events_batch(all_venue_ids)
+
+      pairs
+      |> Enum.map(&enrich_pair_with_metrics(&1, event_counts_map))
       |> Enum.sort_by(& &1.confidence, :desc)
       |> Enum.take(limit)
     end
   end
 
   # Enrich a pair with event counts and confidence score
-  defp enrich_pair_with_metrics(pair) do
-    event_count_a = count_events(pair.venue1.id)
-    event_count_b = count_events(pair.venue2.id)
+  defp enrich_pair_with_metrics(pair, event_counts_map) do
+    event_count_a = Map.get(event_counts_map, pair.venue1.id, 0)
+    event_count_b = Map.get(event_counts_map, pair.venue2.id, 0)
     confidence = calculate_pair_confidence(pair.similarity, pair.distance)
 
     %{
@@ -212,8 +233,8 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   """
   @spec calculate_duplicate_metrics([integer()], keyword()) :: map()
   def calculate_duplicate_metrics(city_ids, opts \\ []) when is_list(city_ids) do
-    # Get all duplicate pairs (no limit for metrics calculation)
-    pairs = find_duplicate_pairs(city_ids, Keyword.merge(opts, limit: 200))
+    # Get duplicate pairs (limit configurable via :limit opt, defaults to 100 per find_duplicate_pairs)
+    pairs = find_duplicate_pairs(city_ids, opts)
 
     if Enum.empty?(pairs) do
       %{
@@ -474,11 +495,11 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   end
 
   # Enrich group with event counts and confidence score
-  defp enrich_group_with_metrics(group) do
-    # Count events for each venue
+  defp enrich_group_with_metrics(group, event_counts_map) do
+    # Look up event counts from precomputed map
     venues_with_events =
       Enum.map(group.venues, fn venue ->
-        event_count = count_events(venue.id)
+        event_count = Map.get(event_counts_map, venue.id, 0)
         Map.put(venue, :event_count, event_count)
       end)
 
@@ -856,5 +877,40 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
       |> Repo.aggregate(:count, :id)
 
     events + public_events
+  end
+
+  # Batch count events for multiple venues to avoid N+1 queries
+  # Returns a map of venue_id => total_event_count
+  defp count_events_batch([]), do: %{}
+
+  defp count_events_batch(venue_ids) do
+    # Count events from events table
+    events_counts =
+      from(e in EventasaurusApp.Events.Event,
+        where: e.venue_id in ^venue_ids,
+        group_by: e.venue_id,
+        select: {e.venue_id, count(e.id)}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    # Count events from public_events table
+    public_events_counts =
+      from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+        where: pe.venue_id in ^venue_ids,
+        group_by: pe.venue_id,
+        select: {pe.venue_id, count(pe.id)}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    # Merge counts for each venue
+    venue_ids
+    |> Enum.map(fn venue_id ->
+      events = Map.get(events_counts, venue_id, 0)
+      public_events = Map.get(public_events_counts, venue_id, 0)
+      {venue_id, events + public_events}
+    end)
+    |> Map.new()
   end
 end

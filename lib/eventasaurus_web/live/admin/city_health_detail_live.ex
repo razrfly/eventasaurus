@@ -647,12 +647,20 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
                   <h2 class="text-xl font-semibold text-gray-900">Duplicate Venues</h2>
                   <.duplicate_severity_badge severity={@duplicate_metrics.severity} />
                 </div>
-                <.link
-                  navigate={~p"/admin/venues/duplicates?city=#{@city.slug}"}
-                  class="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Manage Duplicates &rarr;
-                </.link>
+                <div class="flex items-center gap-3">
+                  <.link
+                    navigate={~p"/admin/venues/duplicates/review?#{[city: @city.slug]}"}
+                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                  >
+                    Review Pairs
+                  </.link>
+                  <.link
+                    navigate={~p"/admin/venues/duplicates?#{[city: @city.slug]}"}
+                    class="text-sm text-gray-600 hover:text-gray-800"
+                  >
+                    Advanced &rarr;
+                  </.link>
+                </div>
               </div>
 
               <!-- Summary Stats -->
@@ -751,10 +759,10 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
                   <%= if length(@duplicate_metrics.duplicate_pairs) > 10 do %>
                     <div class="px-4 py-3 border-t bg-gray-50 text-center">
                       <.link
-                        navigate={~p"/admin/venues/duplicates?city=#{@city.slug}"}
+                        navigate={~p"/admin/venues/duplicates/review?#{[city: @city.slug]}"}
                         class="text-sm text-blue-600 hover:text-blue-800"
                       >
-                        View all <%= length(@duplicate_metrics.duplicate_pairs) %> duplicate pairs &rarr;
+                        Review all <%= length(@duplicate_metrics.duplicate_pairs) %> duplicate pairs &rarr;
                       </.link>
                     </div>
                   <% end %>
@@ -1263,10 +1271,10 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   defp format_number(num) when num >= 1_000, do: "#{Float.round(num / 1_000, 1)}K"
   defp format_number(num), do: to_string(num)
 
-  # Format duplicate metrics for venue stat card subtitle
-  defp format_duplicate_subtitle(%{duplicate_count: 0}), do: nil
+  # Format duplicate metrics for venue stat card subtitle (using pair-based fields)
+  defp format_duplicate_subtitle(%{pair_count: 0}), do: nil
 
-  defp format_duplicate_subtitle(%{duplicate_count: count, duplicate_groups_count: groups, severity: severity}) do
+  defp format_duplicate_subtitle(%{pair_count: pair_count, unique_venue_count: unique_venue_count, severity: severity}) do
     severity_indicator =
       case severity do
         :critical -> "⚠️ "
@@ -1274,7 +1282,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
         :healthy -> ""
       end
 
-    "#{severity_indicator}#{count} potential duplicates (#{groups} groups)"
+    "#{severity_indicator}#{pair_count} potential duplicate pairs (#{unique_venue_count} venues)"
   end
 
   defp format_duplicate_subtitle(_), do: nil
