@@ -478,6 +478,9 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   end
 
   defp batch_data_quality(city_ids, timeout) when is_list(city_ids) do
+    # Use the same logic as calculate_data_quality/1:
+    # Check for categories via the public_event_categories join table,
+    # NOT the deprecated category_id column on public_events.
     query =
       from(pe in PublicEvent,
         join: v in Venue,
@@ -493,13 +496,13 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
               CASE WHEN
                 ? IS NOT NULL AND ? != '' AND
                 ? IS NOT NULL AND
-                ? IS NOT NULL
+                EXISTS (SELECT 1 FROM public_event_categories pec WHERE pec.event_id = ?)
               THEN 1 ELSE 0 END
               """,
               pe.title,
               pe.title,
               pe.venue_id,
-              pe.category_id
+              pe.id
             )
           )
         }

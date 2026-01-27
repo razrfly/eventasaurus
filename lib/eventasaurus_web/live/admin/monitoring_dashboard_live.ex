@@ -680,8 +680,8 @@ defmodule EventasaurusWeb.Admin.MonitoringDashboardLive do
 
   defp format_source_name(source) do
     source
-    |> String.replace("_", " ")
-    |> String.split(" ")
+    |> String.replace(~r/[-_]/, " ")
+    |> String.split()
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
   end
