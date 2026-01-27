@@ -17,6 +17,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
+  alias EventasaurusApp.Venues.VenueDeduplication
   alias EventasaurusApp.Venues.RegenerateSlugsByCityJob
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Locations.CityHierarchy
@@ -274,6 +275,9 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     top_venues = get_top_venues(cluster_city_ids, 10)
     category_distribution = get_category_distribution(cluster_city_ids)
 
+    # Get duplicate venue metrics (Phase 6)
+    duplicate_metrics = VenueDeduplication.calculate_duplicate_metrics(cluster_city_ids)
+
     # Get metro area info
     metro_cities = get_metro_cities(cluster_city_ids, city.id)
 
@@ -335,6 +339,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     |> assign(:venue_sort_dir, venue_sort_dir)
     |> assign(:category_sort_by, category_sort_by)
     |> assign(:category_sort_dir, category_sort_dir)
+    |> assign(:duplicate_metrics, duplicate_metrics)
     |> assign(:last_updated, DateTime.utc_now())
   end
 
@@ -402,6 +407,7 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
               value={format_number(@venue_count)}
               icon_type={:location}
               color={:green}
+              subtitle={format_duplicate_subtitle(@duplicate_metrics)}
             />
             <.admin_stat_card
               title="Categories"
@@ -632,6 +638,130 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
               </div>
             <% end %>
           </div>
+
+          <!-- Duplicate Venues (Phase 6) -->
+          <%= if @duplicate_metrics.pair_count > 0 do %>
+            <div class="mb-6">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                  <h2 class="text-xl font-semibold text-gray-900">Duplicate Venues</h2>
+                  <.duplicate_severity_badge severity={@duplicate_metrics.severity} />
+                </div>
+                <.link
+                  navigate={~p"/admin/venues/duplicates?city=#{@city.slug}"}
+                  class="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Manage Duplicates &rarr;
+                </.link>
+              </div>
+
+              <!-- Summary Stats -->
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div class="bg-white rounded-lg border p-4">
+                  <div class="text-2xl font-bold text-gray-900"><%= @duplicate_metrics.pair_count %></div>
+                  <div class="text-xs text-gray-500">Duplicate Pairs</div>
+                </div>
+                <div class="bg-white rounded-lg border p-4">
+                  <div class="text-2xl font-bold text-gray-900"><%= @duplicate_metrics.unique_venue_count %></div>
+                  <div class="text-xs text-gray-500">Venues Involved</div>
+                </div>
+                <div class="bg-white rounded-lg border p-4">
+                  <div class="text-2xl font-bold text-gray-900"><%= @duplicate_metrics.affected_events %></div>
+                  <div class="text-xs text-gray-500">Affected Events</div>
+                </div>
+                <div class="bg-white rounded-lg border p-4">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg font-bold text-red-600"><%= @duplicate_metrics.high_confidence_count %></span>
+                    <span class="text-gray-400">/</span>
+                    <span class="text-lg font-bold text-yellow-600"><%= @duplicate_metrics.medium_confidence_count %></span>
+                    <span class="text-gray-400">/</span>
+                    <span class="text-lg font-bold text-gray-500"><%= @duplicate_metrics.low_confidence_count %></span>
+                  </div>
+                  <div class="text-xs text-gray-500">High / Med / Low Confidence</div>
+                </div>
+              </div>
+
+              <!-- Duplicate Pairs by Confidence -->
+              <%= if length(@duplicate_metrics.duplicate_pairs) > 0 do %>
+                <div class="bg-white shadow rounded-lg overflow-hidden">
+                  <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                      <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Confidence
+                          </th>
+                          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Venue A
+                          </th>
+                          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Venue B
+                          </th>
+                          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Similarity
+                          </th>
+                          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Distance
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100">
+                        <%= for pair <- Enum.take(@duplicate_metrics.duplicate_pairs, 10) do %>
+                          <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-4 py-3 whitespace-nowrap">
+                              <.confidence_badge confidence={pair.confidence} />
+                            </td>
+                            <td class="px-4 py-3">
+                              <div class="flex flex-col">
+                                <.link
+                                  navigate={~p"/admin/venues/duplicates?venue_id=#{pair.venue_a.id}&city=#{@city.slug}"}
+                                  class="text-sm text-gray-900 hover:text-blue-600 font-medium"
+                                >
+                                  <%= pair.venue_a.name %>
+                                </.link>
+                                <span class="text-xs text-gray-500"><%= pair.event_count_a %> events</span>
+                              </div>
+                            </td>
+                            <td class="px-4 py-3">
+                              <div class="flex flex-col">
+                                <.link
+                                  navigate={~p"/admin/venues/duplicates?venue_id=#{pair.venue_b.id}&city=#{@city.slug}"}
+                                  class="text-sm text-gray-900 hover:text-blue-600 font-medium"
+                                >
+                                  <%= pair.venue_b.name %>
+                                </.link>
+                                <span class="text-xs text-gray-500"><%= pair.event_count_b %> events</span>
+                              </div>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-right">
+                              <span class="text-sm font-medium text-gray-900">
+                                <%= Float.round(pair.similarity * 100, 0) %>%
+                              </span>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-right">
+                              <span class="text-sm text-gray-500">
+                                <%= format_distance(pair.distance) %>
+                              </span>
+                            </td>
+                          </tr>
+                        <% end %>
+                      </tbody>
+                    </table>
+                  </div>
+                  <%= if length(@duplicate_metrics.duplicate_pairs) > 10 do %>
+                    <div class="px-4 py-3 border-t bg-gray-50 text-center">
+                      <.link
+                        navigate={~p"/admin/venues/duplicates?city=#{@city.slug}"}
+                        class="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        View all <%= length(@duplicate_metrics.duplicate_pairs) %> duplicate pairs &rarr;
+                      </.link>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
 
           <!-- Category Distribution (Phase 5) -->
           <div class="mb-6">
@@ -1132,6 +1262,73 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   defp format_number(num) when num >= 1_000_000, do: "#{Float.round(num / 1_000_000, 1)}M"
   defp format_number(num) when num >= 1_000, do: "#{Float.round(num / 1_000, 1)}K"
   defp format_number(num), do: to_string(num)
+
+  # Format duplicate metrics for venue stat card subtitle
+  defp format_duplicate_subtitle(%{duplicate_count: 0}), do: nil
+
+  defp format_duplicate_subtitle(%{duplicate_count: count, duplicate_groups_count: groups, severity: severity}) do
+    severity_indicator =
+      case severity do
+        :critical -> "⚠️ "
+        :warning -> "⚡ "
+        :healthy -> ""
+      end
+
+    "#{severity_indicator}#{count} potential duplicates (#{groups} groups)"
+  end
+
+  defp format_duplicate_subtitle(_), do: nil
+
+  # Duplicate severity badge component
+  defp duplicate_severity_badge(assigns) do
+    {bg_class, text_class, label} =
+      case assigns.severity do
+        :critical -> {"bg-red-100", "text-red-800", "Critical"}
+        :warning -> {"bg-yellow-100", "text-yellow-800", "Warning"}
+        :healthy -> {"bg-green-100", "text-green-800", "Healthy"}
+      end
+
+    assigns =
+      assigns
+      |> assign(:bg_class, bg_class)
+      |> assign(:text_class, text_class)
+      |> assign(:label, label)
+
+    ~H"""
+    <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{@bg_class} #{@text_class}"}>
+      <%= @label %>
+    </span>
+    """
+  end
+
+  # Confidence badge component
+  defp confidence_badge(assigns) do
+    {bg_class, text_class, label} =
+      cond do
+        assigns.confidence >= 0.8 -> {"bg-red-100", "text-red-800", "High"}
+        assigns.confidence >= 0.5 -> {"bg-yellow-100", "text-yellow-800", "Medium"}
+        true -> {"bg-gray-100", "text-gray-600", "Low"}
+      end
+
+    assigns =
+      assigns
+      |> assign(:bg_class, bg_class)
+      |> assign(:text_class, text_class)
+      |> assign(:label, label)
+      |> assign(:percentage, round(assigns.confidence * 100))
+
+    ~H"""
+    <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{@bg_class} #{@text_class}"}>
+      <%= @label %> (<%= @percentage %>%)
+    </span>
+    """
+  end
+
+  # Format distance in meters
+  defp format_distance(nil), do: "—"
+  defp format_distance(distance) when distance < 1, do: "<1m"
+  defp format_distance(distance) when distance < 1000, do: "#{round(distance)}m"
+  defp format_distance(distance), do: "#{Float.round(distance / 1000, 1)}km"
 
   # Chart stat helpers
   defp total_events_in_period(%{datasets: [%{data: data} | _]}) do
