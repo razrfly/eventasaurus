@@ -19,7 +19,8 @@ defmodule EventasaurusDiscovery.Movies.AggregatedMovieGroup do
           city: map(),
           screening_count: integer(),
           venue_count: integer(),
-          categories: list()
+          categories: list(),
+          earliest_starts_at: DateTime.t() | nil
         }
 
   defstruct [
@@ -33,7 +34,8 @@ defmodule EventasaurusDiscovery.Movies.AggregatedMovieGroup do
     :city,
     :screening_count,
     :venue_count,
-    :categories
+    :categories,
+    :earliest_starts_at
   ]
 
   @doc """
