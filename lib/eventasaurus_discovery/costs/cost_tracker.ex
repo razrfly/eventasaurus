@@ -250,7 +250,9 @@ defmodule EventasaurusDiscovery.Costs.CostTracker do
   def calculate_cost(provider, operation, units \\ 1)
 
   # Crawlbase pricing
-  def calculate_cost(:crawlbase, :javascript, units), do: Pricing.crawlbase_cost(:javascript) * units
+  def calculate_cost(:crawlbase, :javascript, units),
+    do: Pricing.crawlbase_cost(:javascript) * units
+
   def calculate_cost(:crawlbase, :normal, units), do: Pricing.crawlbase_cost(:normal) * units
   def calculate_cost(:crawlbase, _, units), do: Pricing.crawlbase_cost(:javascript) * units
 

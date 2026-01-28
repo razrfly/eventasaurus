@@ -53,24 +53,24 @@ defmodule EventasaurusDiscovery.Costs.ExternalServiceCost do
 
   schema "external_service_costs" do
     # Service identification
-    field :service_type, :string
-    field :provider, :string
-    field :operation, :string
+    field(:service_type, :string)
+    field(:provider, :string)
+    field(:operation, :string)
 
     # Cost data
-    field :cost_usd, :decimal
-    field :units, :integer, default: 1
-    field :unit_type, :string
+    field(:cost_usd, :decimal)
+    field(:units, :integer, default: 1)
+    field(:unit_type, :string)
 
     # Reference to source entity (polymorphic)
-    field :reference_type, :string
-    field :reference_id, :integer
+    field(:reference_type, :string)
+    field(:reference_id, :integer)
 
     # Flexible metadata
-    field :metadata, :map, default: %{}
+    field(:metadata, :map, default: %{})
 
     # When the cost occurred
-    field :occurred_at, :utc_datetime_usec
+    field(:occurred_at, :utc_datetime_usec)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -150,8 +150,13 @@ defmodule EventasaurusDiscovery.Costs.ExternalServiceCost do
   # Only validate unit_type inclusion when it's present (not nil)
   defp validate_unit_type_if_present(changeset, valid_types) do
     case get_field(changeset, :unit_type) do
-      nil -> changeset
-      _ -> validate_inclusion(changeset, :unit_type, valid_types, message: "must be one of: #{Enum.join(valid_types, ", ")}")
+      nil ->
+        changeset
+
+      _ ->
+        validate_inclusion(changeset, :unit_type, valid_types,
+          message: "must be one of: #{Enum.join(valid_types, ", ")}"
+        )
     end
   end
 

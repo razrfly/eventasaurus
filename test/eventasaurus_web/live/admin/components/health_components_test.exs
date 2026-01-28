@@ -236,7 +236,14 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponentsTest do
     end
 
     test "renders subtitle when provided" do
-      assigns = %{title: "Sources", value: 8, icon_type: :plug, color: :purple, subtitle: "3 healthy"}
+      assigns = %{
+        title: "Sources",
+        value: 8,
+        icon_type: :plug,
+        color: :purple,
+        subtitle: "3 healthy"
+      }
+
       html = render_component(&HealthComponents.admin_stat_card/1, assigns)
 
       assert html =~ "3 healthy"
@@ -306,7 +313,14 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponentsTest do
     end
 
     test "renders description when provided" do
-      assigns = %{label: "Event Coverage", value: 85, weight: "40%", color: :blue, description: "7-day availability"}
+      assigns = %{
+        label: "Event Coverage",
+        value: 85,
+        weight: "40%",
+        color: :blue,
+        description: "7-day availability"
+      }
+
       html = render_component(&HealthComponents.health_metric_card/1, assigns)
 
       assert html =~ "7-day availability"
@@ -387,14 +401,29 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponentsTest do
     end
 
     test "shows status indicator when show_status is true and target provided" do
-      assigns = %{label: "Test", value: 90, weight: "30%", color: :green, target: 80, show_status: true}
+      assigns = %{
+        label: "Test",
+        value: 90,
+        weight: "30%",
+        color: :green,
+        target: 80,
+        show_status: true
+      }
+
       html = render_component(&HealthComponents.health_component_bar/1, assigns)
 
       assert html =~ "✓"
     end
 
     test "renders description when provided" do
-      assigns = %{label: "Event Coverage", value: 85, weight: "40%", color: :blue, description: "7-day event availability"}
+      assigns = %{
+        label: "Event Coverage",
+        value: 85,
+        weight: "40%",
+        color: :blue,
+        description: "7-day event availability"
+      }
+
       html = render_component(&HealthComponents.health_component_bar/1, assigns)
 
       assert html =~ "7-day event availability"

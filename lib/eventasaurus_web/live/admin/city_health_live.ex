@@ -48,7 +48,8 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
       |> assign(:page_title, "City Health Dashboard")
       |> assign(:loading, true)
       |> assign(:expanded_cities, MapSet.new())
-      |> assign(:city_details, %{})  # Lazy-loaded sparklines/weekly changes
+      # Lazy-loaded sparklines/weekly changes
+      |> assign(:city_details, %{})
       |> assign(:status_filter, "all")
       |> assign(:sort_column, :event_count)
       |> assign(:sort_direction, :desc)
@@ -173,10 +174,12 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
   defp validate_sort_column(column) when is_binary(column) do
     case String.to_existing_atom(column) do
       atom when atom in @valid_sort_columns -> atom
-      _ -> :event_count  # Default fallback
+      # Default fallback
+      _ -> :event_count
     end
   rescue
-    ArgumentError -> :event_count  # Atom doesn't exist
+    # Atom doesn't exist
+    ArgumentError -> :event_count
   end
 
   defp validate_sort_column(_), do: :event_count
@@ -561,7 +564,8 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
     error
   end
 
-  defp extract_error_message(%{results: %{"error_category" => category}}) when is_binary(category) do
+  defp extract_error_message(%{results: %{"error_category" => category}})
+       when is_binary(category) do
     category |> String.replace("_", " ") |> String.capitalize()
   end
 
@@ -597,7 +601,8 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
 
   defp filter_cities(cities, status) when is_binary(status) do
     case Map.get(@valid_status_filters, status) do
-      nil -> cities  # Invalid status, return all cities
+      # Invalid status, return all cities
+      nil -> cities
       :all -> cities
       status_atom -> Enum.filter(cities, fn city -> city.health_status == status_atom end)
     end
@@ -606,15 +611,16 @@ defmodule EventasaurusWeb.Admin.CityHealthLive do
   defp filter_cities(cities, _), do: cities
 
   defp sort_cities(cities, column, direction) do
-    sorter = case column do
-      :name -> &(&1.name)
-      :health_score -> &(&1.health_score)
-      :event_count -> &(&1.event_count)
-      :weekly_change -> &(&1.weekly_change)
-      :venue_count -> &(&1.venue_count)
-      :source_count -> &(&1.source_count)
-      _ -> &(&1.event_count)
-    end
+    sorter =
+      case column do
+        :name -> & &1.name
+        :health_score -> & &1.health_score
+        :event_count -> & &1.event_count
+        :weekly_change -> & &1.weekly_change
+        :venue_count -> & &1.venue_count
+        :source_count -> & &1.source_count
+        _ -> & &1.event_count
+      end
 
     sorted = Enum.sort_by(cities, sorter)
     if direction == :desc, do: Enum.reverse(sorted), else: sorted

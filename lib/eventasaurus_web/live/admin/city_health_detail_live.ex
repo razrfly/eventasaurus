@@ -236,7 +236,9 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
 
   # Private helper to safely validate category sort column from user input
   defp validate_category_sort_column(column) when is_binary(column) do
-    column_map = Map.new(@valid_category_sort_columns, fn atom -> {Atom.to_string(atom), atom} end)
+    column_map =
+      Map.new(@valid_category_sort_columns, fn atom -> {Atom.to_string(atom), atom} end)
+
     Map.get(column_map, column, :count)
   end
 
@@ -308,7 +310,9 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
     # Preserve category sort state or initialize to count descending
     category_sort_by = Map.get(socket.assigns, :category_sort_by, :count)
     category_sort_dir = Map.get(socket.assigns, :category_sort_dir, :desc)
-    sorted_categories = sort_categories(category_distribution, category_sort_by, category_sort_dir)
+
+    sorted_categories =
+      sort_categories(category_distribution, category_sort_by, category_sort_dir)
 
     # Calculate total events for category distribution
     total_category_events = Enum.sum(Enum.map(category_distribution, & &1.count))
@@ -906,7 +910,8 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   defp parse_date_range(value) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} when int in @valid_date_ranges -> int
-      _ -> 30  # Default to 30 days for invalid input
+      # Default to 30 days for invalid input
+      _ -> 30
     end
   end
 
@@ -1274,7 +1279,11 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
   # Format duplicate metrics for venue stat card subtitle (using pair-based fields)
   defp format_duplicate_subtitle(%{pair_count: 0}), do: nil
 
-  defp format_duplicate_subtitle(%{pair_count: pair_count, unique_venue_count: unique_venue_count, severity: severity}) do
+  defp format_duplicate_subtitle(%{
+         pair_count: pair_count,
+         unique_venue_count: unique_venue_count,
+         severity: severity
+       }) do
     severity_indicator =
       case severity do
         :critical -> "⚠️ "
@@ -1485,11 +1494,16 @@ defmodule EventasaurusWeb.Admin.CityHealthDetailLive do
 
   defp sort_sources(sources, _sort_by, _sort_dir), do: sources
 
-  defp source_sort_key(source, :display_name), do: String.downcase(source.display_name || source.name || "")
+  defp source_sort_key(source, :display_name),
+    do: String.downcase(source.display_name || source.name || "")
+
   defp source_sort_key(source, :health_score), do: source.health_score || 0
   defp source_sort_key(source, :success_rate), do: source.success_rate || 0
   defp source_sort_key(source, :p95_duration), do: source.p95_duration || 0
-  defp source_sort_key(source, :last_execution), do: source.last_execution || ~U[1970-01-01 00:00:00Z]
+
+  defp source_sort_key(source, :last_execution),
+    do: source.last_execution || ~U[1970-01-01 00:00:00Z]
+
   defp source_sort_key(source, :coverage_days), do: source.coverage_days || 0
   defp source_sort_key(_source, _), do: 0
 

@@ -146,8 +146,8 @@ defmodule Mix.Tasks.Db.QueryProduction do
 
       # Must start with allowed read-only keywords
       String.starts_with?(normalized, "SELECT") or
-      String.starts_with?(normalized, "WITH") or
-      String.starts_with?(normalized, "EXPLAIN") or
+        String.starts_with?(normalized, "WITH") or
+        String.starts_with?(normalized, "EXPLAIN") or
           String.starts_with?(normalized, "SHOW") ->
         :ok
 

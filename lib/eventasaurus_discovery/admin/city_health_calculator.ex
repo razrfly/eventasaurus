@@ -34,7 +34,8 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
 
   # Analysis window
   @coverage_days 14
-  @job_activity_hours 168  # 7 days
+  # 7 days
+  @job_activity_hours 168
 
   # PHASE 1 FIX: Reduced default timeout from 60s to 10s to prevent OOM
   @default_timeout 10_000
@@ -54,28 +55,30 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
       {:error, :city_not_found}
     else
       if not city.discovery_enabled do
-        {:ok, %{
-          city_id: city_id,
-          health_score: 0,
-          health_status: :disabled,
-          components: %{
-            event_coverage: 0,
-            source_activity: 0,
-            data_quality: 0,
-            venue_health: 0
-          }
-        }}
+        {:ok,
+         %{
+           city_id: city_id,
+           health_score: 0,
+           health_status: :disabled,
+           components: %{
+             event_coverage: 0,
+             source_activity: 0,
+             data_quality: 0,
+             venue_health: 0
+           }
+         }}
       else
         components = calculate_components(city_id, opts)
         health_score = calculate_weighted_score(components)
         health_status = score_to_status(health_score)
 
-        {:ok, %{
-          city_id: city_id,
-          health_score: health_score,
-          health_status: health_status,
-          components: components
-        }}
+        {:ok,
+         %{
+           city_id: city_id,
+           health_score: health_score,
+           health_status: health_status,
+           components: components
+         }}
       end
     end
   end
@@ -359,7 +362,9 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     result = Repo.replica().one(query, timeout: 30_000)
 
     cond do
-      result == nil or result.total == 0 -> 0
+      result == nil or result.total == 0 ->
+        0
+
       true ->
         complete = result.complete || 0
         round(complete / result.total * 100)
@@ -397,7 +402,9 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
     result = Repo.replica().one(query, timeout: 30_000)
 
     cond do
-      result == nil or result.total == 0 -> 0
+      result == nil or result.total == 0 ->
+        0
+
       true ->
         complete = result.complete || 0
         round(complete / result.total * 100)
@@ -434,7 +441,11 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
 
   defp batch_source_activity(city_ids, timeout) when is_list(city_ids) do
     # Get city slugs for the ids
-    cities = Repo.replica().all(from(c in City, where: c.id in ^city_ids, select: {c.id, c.slug}), timeout: timeout)
+    cities =
+      Repo.replica().all(from(c in City, where: c.id in ^city_ids, select: {c.id, c.slug}),
+        timeout: timeout
+      )
+
     city_slugs = Map.new(cities)
     slugs = Map.values(city_slugs)
 
@@ -470,7 +481,8 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
       city_ids
       |> Enum.map(fn city_id ->
         slug = Map.get(city_slugs, city_id)
-        score = Map.get(slug_scores, slug, 100)  # Default 100 if no jobs
+        # Default 100 if no jobs
+        score = Map.get(slug_scores, slug, 100)
         {city_id, score}
       end)
       |> Map.new()
@@ -560,9 +572,9 @@ defmodule EventasaurusDiscovery.Admin.CityHealthCalculator do
   defp calculate_weighted_score(components) do
     score =
       components.event_coverage * @event_coverage_weight / 100 +
-      components.source_activity * @source_activity_weight / 100 +
-      components.data_quality * @data_quality_weight / 100 +
-      components.venue_health * @venue_health_weight / 100
+        components.source_activity * @source_activity_weight / 100 +
+        components.data_quality * @data_quality_weight / 100 +
+        components.venue_health * @venue_health_weight / 100
 
     round(score)
   end

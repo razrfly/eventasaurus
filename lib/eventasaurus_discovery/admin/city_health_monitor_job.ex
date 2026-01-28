@@ -130,9 +130,7 @@ defmodule EventasaurusDiscovery.Admin.CityHealthMonitorJob do
     end
 
     if Enum.any?(warning_cities) do
-      Logger.info(
-        "⚠️  WARNING: #{length(warning_cities)} cities below #{@warning_threshold}%"
-      )
+      Logger.info("⚠️  WARNING: #{length(warning_cities)} cities below #{@warning_threshold}%")
 
       Enum.each(warning_cities, fn %{city: city, score: score} ->
         Logger.info("  🟡 #{city.name}: #{score}% health score")
@@ -160,12 +158,21 @@ defmodule EventasaurusDiscovery.Admin.CityHealthMonitorJob do
         end),
       summary: %{
         total_cities: length(cities),
-        critical_count: length(Enum.filter(cities, fn c -> Map.get(health_scores, c.id, 0) < @critical_threshold end)),
-        warning_count: length(Enum.filter(cities, fn c ->
-          score = Map.get(health_scores, c.id, 0)
-          score >= @critical_threshold and score < @warning_threshold
-        end)),
-        healthy_count: length(Enum.filter(cities, fn c -> Map.get(health_scores, c.id, 0) >= @warning_threshold end)),
+        critical_count:
+          length(
+            Enum.filter(cities, fn c -> Map.get(health_scores, c.id, 0) < @critical_threshold end)
+          ),
+        warning_count:
+          length(
+            Enum.filter(cities, fn c ->
+              score = Map.get(health_scores, c.id, 0)
+              score >= @critical_threshold and score < @warning_threshold
+            end)
+          ),
+        healthy_count:
+          length(
+            Enum.filter(cities, fn c -> Map.get(health_scores, c.id, 0) >= @warning_threshold end)
+          ),
         average_score: calculate_average_score(cities, health_scores)
       }
     }

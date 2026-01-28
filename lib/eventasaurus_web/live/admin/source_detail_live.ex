@@ -3303,8 +3303,12 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   defp quality_score_bar_color(score) when score >= 70, do: "bg-yellow-500"
   defp quality_score_bar_color(_score), do: "bg-red-500"
 
-  defp completeness_color(percentage) when percentage >= 90, do: "text-green-600 dark:text-green-400"
-  defp completeness_color(percentage) when percentage >= 70, do: "text-yellow-600 dark:text-yellow-400"
+  defp completeness_color(percentage) when percentage >= 90,
+    do: "text-green-600 dark:text-green-400"
+
+  defp completeness_color(percentage) when percentage >= 70,
+    do: "text-yellow-600 dark:text-yellow-400"
+
   defp completeness_color(_percentage), do: "text-red-600 dark:text-red-400"
 
   defp completeness_bar_color(percentage) when percentage >= 90, do: "bg-green-500"
@@ -3321,10 +3325,17 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
     |> Enum.join(" ")
   end
 
-  defp priority_badge_color(:high), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-  defp priority_badge_color(:medium), do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-  defp priority_badge_color(:low), do: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-  defp priority_badge_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+  defp priority_badge_color(:high),
+    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+
+  defp priority_badge_color(:medium),
+    do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+
+  defp priority_badge_color(:low),
+    do: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+
+  defp priority_badge_color(_),
+    do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
 
   defp priority_icon(:high), do: "!"
   defp priority_icon(:medium), do: "•"
@@ -3332,12 +3343,23 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   defp priority_icon(_), do: "?"
 
   # Freshness Health helpers
-  defp freshness_status_color(:healthy), do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-  defp freshness_status_color(:degraded), do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-  defp freshness_status_color(:warning), do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-  defp freshness_status_color(:broken), do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-  defp freshness_status_color(:no_data), do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-  defp freshness_status_color(_), do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+  defp freshness_status_color(:healthy),
+    do: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+
+  defp freshness_status_color(:degraded),
+    do: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+
+  defp freshness_status_color(:warning),
+    do: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+
+  defp freshness_status_color(:broken),
+    do: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+
+  defp freshness_status_color(:no_data),
+    do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+
+  defp freshness_status_color(_),
+    do: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
 
   defp freshness_status_label(:healthy), do: "Healthy"
   defp freshness_status_label(:degraded), do: "Degraded"

@@ -281,8 +281,7 @@ defmodule Mix.Tasks.Db.SyncProduction do
 
       {output, _} ->
         if String.contains?(output, "does not exist") do
-          {:error,
-           "Database '#{@local_db}' does not exist. Create with: mix ecto.create"}
+          {:error, "Database '#{@local_db}' does not exist. Create with: mix ecto.create"}
         else
           {:error, "Cannot connect to #{@local_db}: #{String.slice(output, 0, 100)}"}
         end
@@ -497,7 +496,8 @@ defmodule Mix.Tasks.Db.SyncProduction do
 
         case found_line do
           nil ->
-            {:error, "DATABASE_URL not found in output. Expected line starting with 'postgresql://'"}
+            {:error,
+             "DATABASE_URL not found in output. Expected line starting with 'postgresql://'"}
 
           line ->
             url = String.trim(line)
@@ -663,13 +663,13 @@ defmodule Mix.Tasks.Db.SyncProduction do
               IO.write("\r\e[K  → Saving statistics...")
 
             String.contains?(String.downcase(line), "error") or
-            String.contains?(String.downcase(line), "fatal") or
+              String.contains?(String.downcase(line), "fatal") or
                 String.contains?(String.downcase(line), "refused") ->
               IO.write("\r\e[K")
               IO.puts("  ⚠ #{line}")
 
             String.contains?(line, "reading") or
-            String.contains?(line, "identifying") or
+              String.contains?(line, "identifying") or
                 String.contains?(line, "started") ->
               verbose_info("\r\e[K  → #{line}")
 
@@ -689,13 +689,17 @@ defmodule Mix.Tasks.Db.SyncProduction do
 
       {:timeout_stalled} ->
         Port.close(port)
-        {:error, "No progress for #{div(@stall_timeout_seconds, 60)} minutes - connection may have stalled"}
+
+        {:error,
+         "No progress for #{div(@stall_timeout_seconds, 60)} minutes - connection may have stalled"}
     end
   end
 
   defp extract_table_name(line) do
     case Regex.run(~r/table "?([^"]+)"?\.?"?([^"]+)"?/, line) do
-      [_, schema, table] -> "#{schema}.#{table}"
+      [_, schema, table] ->
+        "#{schema}.#{table}"
+
       _ ->
         case Regex.run(~r/table (\S+)/, line) do
           [_, table] -> table
@@ -705,7 +709,13 @@ defmodule Mix.Tasks.Db.SyncProduction do
   end
 
   defp monitor_dump_progress(dump_path, parent) do
-    monitor_dump_progress(dump_path, parent, System.monotonic_time(:second), 0, System.monotonic_time(:second))
+    monitor_dump_progress(
+      dump_path,
+      parent,
+      System.monotonic_time(:second),
+      0,
+      System.monotonic_time(:second)
+    )
   end
 
   defp monitor_dump_progress(dump_path, parent, start_time, last_size, last_activity_time) do
@@ -715,7 +725,13 @@ defmodule Mix.Tasks.Db.SyncProduction do
 
       :activity ->
         # Reset activity timer when we get output
-        monitor_dump_progress(dump_path, parent, start_time, last_size, System.monotonic_time(:second))
+        monitor_dump_progress(
+          dump_path,
+          parent,
+          start_time,
+          last_size,
+          System.monotonic_time(:second)
+        )
     after
       2000 ->
         now = System.monotonic_time(:second)
@@ -842,7 +858,8 @@ defmodule Mix.Tasks.Db.SyncProduction do
             :ok
 
           # If --force isn't supported (older Postgres), retry without it
-          String.contains?(output, "unrecognized option") or String.contains?(output, "invalid option") ->
+          String.contains?(output, "unrecognized option") or
+              String.contains?(output, "invalid option") ->
             drop_cmd_legacy =
               "PGPASSWORD='#{@local_password}' dropdb --if-exists -h #{@local_host} -p #{@local_port} -U #{@local_user} #{@local_db} 2>&1"
 
@@ -1261,7 +1278,10 @@ defmodule Mix.Tasks.Db.SyncProduction do
 
   defp format_size(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_size(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  defp format_size(bytes) when bytes < 1_073_741_824, do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+
+  defp format_size(bytes) when bytes < 1_073_741_824,
+    do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+
   defp format_size(bytes), do: "#{Float.round(bytes / 1_073_741_824, 2)} GB"
 
   defp format_duration(seconds) when seconds < 60, do: "#{seconds}s"

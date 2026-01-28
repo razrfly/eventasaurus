@@ -396,6 +396,7 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
   # Raw SQL queries return NaiveDateTime, but our comparison functions expect DateTime
   defp naive_to_utc_datetime(nil), do: nil
   defp naive_to_utc_datetime(%DateTime{} = dt), do: dt
+
   defp naive_to_utc_datetime(%NaiveDateTime{} = ndt) do
     DateTime.from_naive!(ndt, "Etc/UTC")
   end

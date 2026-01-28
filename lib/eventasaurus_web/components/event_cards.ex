@@ -367,12 +367,14 @@ defmodule EventasaurusWeb.Components.EventCards do
 
   # Check if event is recurring (works with both structs and maps)
   defp event_recurring?(%PublicEvent{} = event), do: PublicEvent.recurring?(event)
+
   defp event_recurring?(event) when is_map(event) do
     event_occurrence_count(event) > 1
   end
 
   # Get occurrence count (works with both structs and maps)
   defp event_occurrence_count(%PublicEvent{} = event), do: PublicEvent.occurrence_count(event)
+
   defp event_occurrence_count(event) when is_map(event) do
     case Map.get(event, :occurrences) do
       %{"dates" => dates} when is_list(dates) -> length(dates)
@@ -381,7 +383,9 @@ defmodule EventasaurusWeb.Components.EventCards do
   end
 
   # Get next occurrence date (works with both structs and maps)
-  defp event_next_occurrence_date(%PublicEvent{} = event), do: PublicEvent.next_occurrence_date(event)
+  defp event_next_occurrence_date(%PublicEvent{} = event),
+    do: PublicEvent.next_occurrence_date(event)
+
   defp event_next_occurrence_date(event) when is_map(event) do
     # For fallback maps, just use starts_at as the next date
     Map.get(event, :starts_at)
@@ -389,8 +393,10 @@ defmodule EventasaurusWeb.Components.EventCards do
 
   # Get frequency label (works with both structs and maps)
   defp event_frequency_label(%PublicEvent{} = event), do: PublicEvent.frequency_label(event)
+
   defp event_frequency_label(event) when is_map(event) do
     count = event_occurrence_count(event)
+
     cond do
       count == 0 -> nil
       count == 1 -> nil
@@ -403,7 +409,9 @@ defmodule EventasaurusWeb.Components.EventCards do
   # Get categories (works with both structs and maps)
   # Handles: struct with categories association, map with categories list,
   # map with single category (from fallback)
-  defp event_categories(%PublicEvent{categories: categories}) when is_list(categories), do: categories
+  defp event_categories(%PublicEvent{categories: categories}) when is_list(categories),
+    do: categories
+
   defp event_categories(%{categories: categories}) when is_list(categories), do: categories
   defp event_categories(%{category: category}) when not is_nil(category), do: [category]
   defp event_categories(_), do: []
@@ -413,15 +421,20 @@ defmodule EventasaurusWeb.Components.EventCards do
   defp get_time_sensitive_badge(%PublicEvent{} = event) do
     PublicEventsEnhanced.get_time_sensitive_badge(event)
   end
+
   defp get_time_sensitive_badge(event) when is_map(event) do
     # Simplified badge logic for fallback maps
     case Map.get(event, :starts_at) do
-      nil -> nil
+      nil ->
+        nil
+
       starts_at ->
         now = DateTime.utc_now()
         diff_days = DateTime.diff(starts_at, now, :day)
+
         cond do
-          diff_days < 0 -> nil  # Past event
+          # Past event
+          diff_days < 0 -> nil
           diff_days == 0 -> %{type: :last_chance, label: "Today"}
           diff_days == 1 -> %{type: :this_week, label: "Tomorrow"}
           diff_days <= 7 -> %{type: :this_week, label: "This week"}

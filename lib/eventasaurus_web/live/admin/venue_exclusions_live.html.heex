@@ -1,0 +1,222 @@
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+  <!-- Header -->
+  <div class="mb-5 sm:mb-7">
+    <.link
+      navigate="/admin/venues/duplicates"
+      class="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 mb-2 transition-colors"
+    >
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to Venue Duplicates
+    </.link>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold text-gray-900">Venue Exclusions</h1>
+        <p class="mt-1 text-sm text-gray-600">
+          False positives captured for algorithm analysis and tuning.
+        </p>
+      </div>
+      <div class="text-xs text-gray-500">
+        <span class="font-medium text-gray-700"><%= @total_count %></span> exclusions
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg p-4 sm:p-5 mb-5">
+    <form method="get" class="grid gap-4 lg:grid-cols-6">
+      <div class="lg:col-span-2">
+        <label class="block text-xs font-medium text-gray-600 mb-1">City</label>
+        <select
+          name="city"
+          class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        >
+          <option value="">All cities</option>
+          <%= for city <- @cities do %>
+            <option value={city.slug} selected={@filters[:city_slug] == city.slug}>
+              <%= city.name %>
+            </option>
+          <% end %>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Start date</label>
+        <input
+          type="date"
+          name="start_date"
+          value={@filters[:start_date] && Date.to_iso8601(DateTime.to_date(@filters[:start_date]))}
+          class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        />
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">End date</label>
+        <input
+          type="date"
+          name="end_date"
+          value={@filters[:end_date] && Date.to_iso8601(DateTime.to_date(@filters[:end_date]))}
+          class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        />
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Confidence min</label>
+        <input
+          type="number"
+          name="min_confidence"
+          step="0.01"
+          min="0"
+          max="1"
+          value={@filters[:min_confidence]}
+          class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        />
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Confidence max</label>
+        <input
+          type="number"
+          name="max_confidence"
+          step="0.01"
+          min="0"
+          max="1"
+          value={@filters[:max_confidence]}
+          class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        />
+      </div>
+
+      <div class="lg:col-span-2">
+        <label class="block text-xs font-medium text-gray-600 mb-1">Sort</label>
+        <div class="flex gap-2">
+          <select
+            name="sort_by"
+            class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="date" selected={@filters[:sort_by] == :inserted_at}>Date</option>
+            <option value="confidence" selected={@filters[:sort_by] == :confidence_score}>Confidence</option>
+            <option value="similarity" selected={@filters[:sort_by] == :similarity_score}>Similarity</option>
+            <option value="distance" selected={@filters[:sort_by] == :distance_meters}>Distance</option>
+          </select>
+          <select
+            name="sort_dir"
+            class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="desc" selected={@filters[:sort_dir] == :desc}>Desc</option>
+            <option value="asc" selected={@filters[:sort_dir] == :asc}>Asc</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="lg:col-span-2 flex items-end gap-2">
+        <button
+          type="submit"
+          class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+        >
+          Apply filters
+        </button>
+        <.link
+          navigate="/admin/venues/exclusions"
+          class="inline-flex items-center justify-center rounded-md border border-transparent px-3 py-2 text-sm text-gray-500 hover:text-gray-700"
+        >
+          Clear
+        </.link>
+      </div>
+    </form>
+  </div>
+
+  <!-- Table -->
+  <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+          <tr>
+            <th class="px-4 py-3 text-left font-medium">Venues</th>
+            <th class="px-4 py-3 text-left font-medium">City</th>
+            <th class="px-4 py-3 text-left font-medium">Metrics</th>
+            <th class="px-4 py-3 text-left font-medium">Reason</th>
+            <th class="px-4 py-3 text-left font-medium">Excluded by</th>
+            <th class="px-4 py-3 text-left font-medium">Date</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 text-gray-700">
+          <%= if @exclusions == [] do %>
+            <tr>
+              <td colspan="6" class="px-4 py-6 text-center text-sm text-gray-500">
+                No exclusions found for the selected filters.
+              </td>
+            </tr>
+          <% end %>
+
+          <%= for row <- @exclusions do %>
+            <% exclusion = row.exclusion %>
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-4 align-top">
+                <div class="font-medium text-gray-900">
+                  <%= row.venue_a.name %>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                  vs. <%= row.venue_b.name %>
+                </div>
+              </td>
+              <td class="px-4 py-4 align-top text-sm">
+                <div>
+                  <%= row.city_a && row.city_a.name || "Unknown" %>
+                </div>
+                <div class="text-xs text-gray-500">
+                  <%= row.city_b && row.city_b.name || "Unknown" %>
+                </div>
+              </td>
+              <td class="px-4 py-4 align-top text-xs text-gray-600 space-y-1">
+                <div>Confidence: <span class="font-medium text-gray-800"><%= format_decimal(exclusion.confidence_score) %></span></div>
+                <div>Similarity: <span class="font-medium text-gray-800"><%= format_decimal(exclusion.similarity_score) %></span></div>
+                <div>Distance: <span class="font-medium text-gray-800"><%= exclusion.distance_meters || "--" %></span> m</div>
+              </td>
+              <td class="px-4 py-4 align-top text-xs text-gray-600">
+                <%= exclusion.reason || "--" %>
+              </td>
+              <td class="px-4 py-4 align-top text-xs text-gray-600">
+                <%= if row.excluded_by do %>
+                  <div class="font-medium text-gray-800"><%= row.excluded_by.name || "Unknown" %></div>
+                  <div class="text-gray-500"><%= row.excluded_by.email %></div>
+                <% else %>
+                  -- 
+                <% end %>
+              </td>
+              <td class="px-4 py-4 align-top text-xs text-gray-600">
+                <%= format_datetime(exclusion.inserted_at) %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Pagination -->
+  <div class="flex items-center justify-between mt-4 text-sm text-gray-600">
+    <div>
+      Page <span class="font-medium text-gray-800"><%= @page %></span> of
+      <span class="font-medium text-gray-800"><%= @total_pages %></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <%= if @page > 1 do %>
+        <.link
+          navigate={~p"/admin/venues/exclusions?#{page_params(@filters, @page - 1)}"}
+          class="px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50"
+        >
+          Prev
+        </.link>
+      <% end %>
+      <%= if @page < @total_pages do %>
+        <.link
+          navigate={~p"/admin/venues/exclusions?#{page_params(@filters, @page + 1)}"}
+          class="px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50"
+        >
+          Next
+        </.link>
+      <% end %>
+    </div>
+  </div>
+</div>

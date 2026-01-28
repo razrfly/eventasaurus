@@ -26,11 +26,28 @@ defmodule EventasaurusApp.Venues.VenueDuplicateExclusion do
     # Optional reason for the exclusion
     field(:reason, :string)
 
+    # Algorithm metrics at time of exclusion (for analyzing false positives)
+    field(:confidence_score, :decimal)
+    field(:distance_meters, :integer)
+    field(:similarity_score, :decimal)
+
+    # Soft delete support (Phase 3)
+    field(:removed_at, :utc_datetime)
+    belongs_to(:removed_by_user, User, foreign_key: :removed_by_id)
+
     timestamps()
   end
 
   @required_fields [:venue_id_1, :venue_id_2]
-  @optional_fields [:excluded_by_user_id, :reason]
+  @optional_fields [
+    :excluded_by_user_id,
+    :reason,
+    :confidence_score,
+    :distance_meters,
+    :similarity_score,
+    :removed_at,
+    :removed_by_id
+  ]
 
   def changeset(exclusion, attrs) do
     exclusion
@@ -40,6 +57,7 @@ defmodule EventasaurusApp.Venues.VenueDuplicateExclusion do
     |> foreign_key_constraint(:venue_id_1)
     |> foreign_key_constraint(:venue_id_2)
     |> foreign_key_constraint(:excluded_by_user_id)
+    |> foreign_key_constraint(:removed_by_id)
     |> unique_constraint([:venue_id_1, :venue_id_2], name: :venue_duplicate_exclusions_pair_index)
   end
 
