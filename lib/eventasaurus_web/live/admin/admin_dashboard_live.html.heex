@@ -139,7 +139,7 @@
         </.link>
 
         <!-- Data Freshness Card -->
-        <.link navigate={~p"/admin/imports"} class="block">
+        <.link navigate={~p"/admin/discovery"} class="block">
           <div class={"bg-white shadow rounded-lg p-5 border-l-4 hover:shadow-md transition-shadow #{freshness_border_class(@tier1_stats.freshness.status)}"}>
             <div class="flex items-center justify-between">
               <div>
@@ -245,7 +245,7 @@
     <%= if stats_loaded?(@tier2_stats) do %>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <!-- 1. Total Events Card (with upcoming/past breakdown) -->
-        <.link navigate={~p"/admin/imports"} class="block">
+        <.link navigate={~p"/admin/discovery"} class="block">
           <div class="bg-white shadow rounded-lg p-5 border-l-4 border-blue-500 hover:shadow-md transition-shadow">
             <div class="flex items-center justify-between">
               <div>
@@ -513,7 +513,7 @@
       </h3>
       <div class="space-y-2">
         <.link
-          navigate={~p"/admin/imports"}
+          navigate={~p"/admin/discovery"}
           class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <div class="font-medium text-gray-900">Discovery Dashboard</div>

@@ -71,6 +71,8 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
 
   require Logger
 
+  alias EventasaurusDiscovery.Costs.{ExternalServiceCost, Pricing}
+
   @crawlbase_api_url "https://api.crawlbase.com/"
   @default_timeout 60_000
   @default_recv_timeout 60_000
@@ -214,6 +216,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
           headers: []
         }
 
+        # Record cost asynchronously
+        record_cost(mode, duration)
+
         {:ok, body, metadata}
 
       {:ok, %{"body" => body}} ->
@@ -225,6 +230,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
           mode: mode,
           headers: []
         }
+
+        # Record cost asynchronously
+        record_cost(mode, duration)
 
         {:ok, body, metadata}
 
@@ -240,6 +248,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
           mode: mode,
           headers: []
         }
+
+        # Record cost asynchronously
+        record_cost(mode, duration)
 
         {:ok, body, metadata}
 
@@ -275,6 +286,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
             headers: []
           }
 
+          # Record cost asynchronously
+          record_cost(mode, duration)
+
           {:ok, body, metadata}
         else
           {:error,
@@ -291,6 +305,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
             mode: mode,
             headers: []
           }
+
+          # Record cost asynchronously
+          record_cost(mode, duration)
 
           {:ok, response_body, metadata}
         else
@@ -361,5 +378,25 @@ defmodule EventasaurusDiscovery.Http.Adapters.Crawlbase do
     Application.get_env(:eventasaurus, :crawlbase_js_api_key) ||
       System.get_env("CRAWLBASE_JS_API_KEY") ||
       ""
+  end
+
+  # Cost tracking
+
+  defp record_cost(mode, duration_ms) do
+    operation = Atom.to_string(mode)
+    credits = Pricing.crawlbase_credits(mode)
+    cost = Pricing.crawlbase_cost(mode)
+
+    ExternalServiceCost.record_async(%{
+      service_type: "scraping",
+      provider: "crawlbase",
+      operation: operation,
+      cost_usd: Decimal.from_float(cost),
+      units: credits,
+      unit_type: "credit",
+      metadata: %{
+        duration_ms: duration_ms
+      }
+    })
   end
 end

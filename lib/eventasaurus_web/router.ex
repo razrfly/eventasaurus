@@ -37,7 +37,7 @@ defmodule EventasaurusWeb.Router do
         live "/sitemap", Admin.SitemapLive
 
         # Discovery Dashboard (dev - no auth)
-        live "/imports", Admin.DiscoveryDashboardLive
+        live "/discovery", Admin.DiscoveryDashboardLive
 
         # Discovery Stats Dashboard (dev - no auth)
         live "/discovery/stats", Admin.DiscoveryStatsLive, :index
@@ -51,7 +51,7 @@ defmodule EventasaurusWeb.Router do
         # Unified Monitoring Dashboard (Issue #3048)
         # Replaces deprecated /scraper-logs and /error-trends
         live "/monitoring", Admin.MonitoringDashboardLive
-        live "/monitoring/sources/:source_key", Admin.SourceDetailLive
+        live "/monitoring/sources/:source_slug", Admin.SourceDetailLive
 
         # Movie Matching Dashboard (Issue #3067 - Epic #3077 Phase 3)
         live "/movies", Admin.MovieMatchingLive
@@ -62,6 +62,9 @@ defmodule EventasaurusWeb.Router do
         # Geocoding Cost Dashboard (dev - no auth)
         live "/geocoding", Admin.GeocodingDashboardLive
         live "/geocoding/providers", Admin.GeocodingProviderLive, :index
+
+        # External Service Cost Dashboard (dev - no auth)
+        live "/costs", Admin.CostDashboardLive
 
         # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
 
@@ -112,10 +115,6 @@ defmodule EventasaurusWeb.Router do
 
       # Oban Web UI (creates its own live_session)
       oban_dashboard("/oban")
-
-      # Deprecated route redirects (Issue #3048 Phase 3)
-      get "/scraper-logs", Admin.RedirectController, :to_monitoring
-      get "/error-trends", Admin.RedirectController, :to_monitoring
 
       # Unsplash Integration (dev - no auth)
       get "/unsplash", Admin.UnsplashTestController, :index
@@ -193,7 +192,7 @@ defmodule EventasaurusWeb.Router do
         # Unified Monitoring Dashboard (Issue #3048)
         # Replaces deprecated /scraper-logs and /error-trends
         live "/monitoring", EventasaurusWeb.Admin.MonitoringDashboardLive
-        live "/monitoring/sources/:source_key", EventasaurusWeb.Admin.SourceDetailLive
+        live "/monitoring/sources/:source_slug", EventasaurusWeb.Admin.SourceDetailLive
 
         # Movie Matching Dashboard (Issue #3067 - Epic #3077 Phase 3)
         live "/movies", EventasaurusWeb.Admin.MovieMatchingLive
@@ -202,7 +201,7 @@ defmodule EventasaurusWeb.Router do
         live "/sitemap", EventasaurusWeb.Admin.SitemapLive
 
         # Discovery Dashboard with admin authentication
-        live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+        live "/discovery", EventasaurusWeb.Admin.DiscoveryDashboardLive
 
         # Discovery Stats Dashboard with admin authentication
         live "/discovery/stats", EventasaurusWeb.Admin.DiscoveryStatsLive, :index
@@ -219,6 +218,9 @@ defmodule EventasaurusWeb.Router do
         # Geocoding Cost Dashboard with admin authentication
         live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
         live "/geocoding/providers", EventasaurusWeb.Admin.GeocodingProviderLive, :index
+
+        # External Service Cost Dashboard with admin authentication
+        live "/costs", EventasaurusWeb.Admin.CostDashboardLive
 
         # GeocodingOperationsLive removed - VenueImages jobs migrated to R2/cached_images (Issue #2977)
 
@@ -268,10 +270,6 @@ defmodule EventasaurusWeb.Router do
     # Admin controller routes (outside live_session - these use plug-level auth only)
     scope "/admin" do
       pipe_through :oban_admin
-
-      # Deprecated route redirects (Issue #3048 Phase 3)
-      get "/scraper-logs", EventasaurusWeb.Admin.RedirectController, :to_monitoring
-      get "/error-trends", EventasaurusWeb.Admin.RedirectController, :to_monitoring
 
       # Unsplash Integration (with admin authentication)
       get "/unsplash", EventasaurusWeb.Admin.UnsplashTestController, :index

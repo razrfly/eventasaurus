@@ -914,13 +914,13 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
               View Job Executions
             </.link>
             <.link
-              navigate={~p"/admin/error-trends?source=#{@source.slug}"}
+              navigate={~p"/admin/monitoring/sources/#{@source.slug}"}
               class="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-              View Error Trends
+              View Source Details
             </.link>
           </div>
         </div>
@@ -1293,13 +1293,13 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
               View Job Executions
             </.link>
             <.link
-              navigate={~p"/admin/error-trends?source=#{@source.slug}"}
+              navigate={~p"/admin/monitoring/sources/#{@source.slug}"}
               class="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-              View Error Trends
+              View Source Details
             </.link>
           </div>
         </div>
