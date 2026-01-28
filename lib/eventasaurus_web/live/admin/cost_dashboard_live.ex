@@ -66,7 +66,8 @@ defmodule EventasaurusWeb.Admin.CostDashboardLive do
       daily_costs: [],
       budget_status: nil,
       manual_report: nil,
-      page_title: "Cost Dashboard"
+      page_title: "Cost Dashboard",
+      alert_thresholds: get_alert_thresholds()
     )
   end
 
@@ -81,12 +82,17 @@ defmodule EventasaurusWeb.Admin.CostDashboardLive do
       budget_status = CostAlerts.current_status(today)
       budget = get_monthly_budget()
 
+      # Guard against divide by zero if budget is 0
       budget_percentage =
-        case monthly_total.total_cost do
-          nil -> 0.0
-          %Decimal{} = d -> Decimal.to_float(d) / budget * 100
-          f when is_float(f) -> f / budget * 100
-          _ -> 0.0
+        if budget == 0 or budget == 0.0 do
+          0.0
+        else
+          case monthly_total.total_cost do
+            nil -> 0.0
+            %Decimal{} = d -> Decimal.to_float(d) / budget * 100
+            f when is_float(f) -> f / budget * 100
+            _ -> 0.0
+          end
         end
 
       assign(socket,
@@ -113,6 +119,11 @@ defmodule EventasaurusWeb.Admin.CostDashboardLive do
   defp get_monthly_budget do
     Application.get_env(:eventasaurus, :cost_tracking, [])
     |> Keyword.get(:monthly_budget, 200.00)
+  end
+
+  defp get_alert_thresholds do
+    Application.get_env(:eventasaurus, :cost_tracking, [])
+    |> Keyword.get(:alert_thresholds, [0.50, 0.75, 0.90, 1.0])
   end
 
   defp format_report(report) do
