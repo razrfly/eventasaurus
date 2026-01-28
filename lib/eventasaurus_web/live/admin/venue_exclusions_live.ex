@@ -44,24 +44,31 @@ defmodule EventasaurusWeb.Admin.VenueExclusionsLive do
 
   @impl true
   def handle_event("remove_exclusion", %{"venue_id_1" => id1, "venue_id_2" => id2}, socket) do
-    venue_id_1 = String.to_integer(id1)
-    venue_id_2 = String.to_integer(id2)
     user_id = socket.assigns.current_user_id
 
-    case VenueDeduplication.remove_exclusion(venue_id_1, venue_id_2, user_id: user_id) do
-      {0, _} ->
-        {:noreply, put_flash(socket, :error, "Exclusion already removed.")}
+    with {venue_id_1, ""} <- Integer.parse(id1),
+         {venue_id_2, ""} <- Integer.parse(id2),
+         true <- not is_nil(user_id) do
+      case VenueDeduplication.remove_exclusion(venue_id_1, venue_id_2, user_id: user_id) do
+        {0, _} ->
+          {:noreply, put_flash(socket, :error, "Exclusion already removed.")}
 
-      {_count, _} ->
-        {exclusions, total_count} = load_exclusions(socket.assigns.filters, socket.assigns.page)
-        total_pages = max(1, ceil_div(total_count, @page_size))
+        {_count, _} ->
+          {exclusions, total_count} =
+            load_exclusions(socket.assigns.filters, socket.assigns.page)
 
-        {:noreply,
-         socket
-         |> put_flash(:info, "Exclusion removed. Pair will be detected again.")
-         |> assign(:exclusions, exclusions)
-         |> assign(:total_count, total_count)
-         |> assign(:total_pages, total_pages)}
+          total_pages = max(1, ceil_div(total_count, @page_size))
+
+          {:noreply,
+           socket
+           |> put_flash(:info, "Exclusion removed. Pair will be detected again.")
+           |> assign(:exclusions, exclusions)
+           |> assign(:total_count, total_count)
+           |> assign(:total_pages, total_pages)}
+      end
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, "Unable to remove exclusion. Please refresh and try again.")}
     end
   end
 
