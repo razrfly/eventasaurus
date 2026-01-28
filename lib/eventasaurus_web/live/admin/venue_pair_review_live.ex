@@ -14,6 +14,7 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
 
   require Logger
 
+  alias EventasaurusApp.Images.ImageCacheService
   alias EventasaurusApp.Venues.VenueDeduplication
   alias EventasaurusApp.Repo
 
@@ -34,6 +35,7 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
       |> assign(:confidence_filter, "all")
       |> assign(:loading, true)
       |> assign(:recent_merges, [])
+      |> assign(:last_merged_venue, nil)
       |> assign(:current_user_id, get_user_id(session))
 
     {:ok, socket}
@@ -119,12 +121,17 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
   # Preload city_ref for all venues in pairs (they come from raw SQL without associations)
   # Also sorts each pair so venue_a is the "recommended" one (higher score)
   defp preload_venue_cities(pairs) do
-    # Collect all unique city_ids
+    # Collect all unique city_ids and venue_ids
     city_ids =
       pairs
       |> Enum.flat_map(fn p -> [p.venue_a.city_id, p.venue_b.city_id] end)
       |> Enum.uniq()
       |> Enum.reject(&is_nil/1)
+
+    venue_ids =
+      pairs
+      |> Enum.flat_map(fn p -> [p.venue_a.id, p.venue_b.id] end)
+      |> Enum.uniq()
 
     # Batch load cities (read-only, use replica)
     cities_map =
@@ -138,10 +145,20 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
         |> Map.new(fn city -> {city.id, city} end)
       end
 
-    # Attach cities to venues and sort so higher-scored venue is always A
+    image_counts =
+      if Enum.empty?(venue_ids) do
+        %{}
+      else
+        ImageCacheService.get_entity_image_counts("venue", venue_ids)
+      end
+
+    # Attach cities and image counts to venues and sort so higher-scored venue is always A
     Enum.map(pairs, fn pair ->
       venue_a = Map.put(pair.venue_a, :city_ref, Map.get(cities_map, pair.venue_a.city_id))
       venue_b = Map.put(pair.venue_b, :city_ref, Map.get(cities_map, pair.venue_b.city_id))
+
+      venue_a = Map.put(venue_a, :image_count, Map.get(image_counts, venue_a.id, 0))
+      venue_b = Map.put(venue_b, :image_count, Map.get(image_counts, venue_b.id, 0))
 
       score_a = calculate_venue_score(venue_a, pair.event_count_a)
       score_b = calculate_venue_score(venue_b, pair.event_count_b)
@@ -304,6 +321,7 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
             :info,
             "Merged into #{target.name}. #{audit.events_reassigned} events transferred."
           )
+          |> assign(:last_merged_venue, target)
           |> reload_and_advance()
 
         {:noreply, socket}
@@ -317,12 +335,19 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
   def handle_event("exclude", _params, socket) do
     %{current_pair: pair, current_user_id: user_id} = socket.assigns
 
+    distance_meters =
+      if is_nil(pair.distance) do
+        nil
+      else
+        round(pair.distance)
+      end
+
     # Capture algorithm metrics at time of exclusion for future algorithm improvement
     opts = [
       user_id: user_id,
       reason: "pair_review_not_duplicate",
       confidence_score: pair.confidence,
-      distance_meters: round(pair.distance),
+      distance_meters: distance_meters,
       similarity_score: pair.similarity
     ]
 
@@ -450,6 +475,18 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
         </div>
       </div>
 
+      <%= if @last_merged_venue do %>
+        <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Merged venue updated. Verify images here:
+          <.link
+            navigate={~p"/venues/#{@last_merged_venue.slug}"}
+            class="font-medium text-emerald-900 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950"
+          >
+            View merged venue
+          </.link>
+        </div>
+      <% end %>
+
       <%= if @loading do %>
         <div class="text-center py-12">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -495,21 +532,21 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
                     </div>
                   <% else %>
                     <!-- Progress bar with click for larger sets -->
-                    <div
-                      class="w-32 bg-gray-200 rounded-full h-2 cursor-pointer relative group"
-                      phx-click="jump_to"
-                      phx-value-index={round((@total_pairs - 1) / 2)}
-                      title="Click to jump to middle"
-                    >
+                    <div class="w-32 bg-gray-200 rounded-full h-2 relative group">
                       <div
                         class="bg-blue-600 h-2 rounded-full transition-all"
                         style={"width: #{(@current_index + 1) / @total_pairs * 100}%"}
                       >
                       </div>
-                      <span class="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Click for middle
-                      </span>
                     </div>
+                    <button
+                      phx-click="jump_to"
+                      phx-value-index={round((@total_pairs - 1) / 2)}
+                      class="text-xs text-blue-600 hover:text-blue-800"
+                      title="Jump to the middle pair"
+                    >
+                      Jump to Middle
+                    </button>
                   <% end %>
                 <% end %>
               </div>
@@ -708,12 +745,14 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
               <h3 class="text-sm font-medium text-gray-700 mb-3">Recent Activity</h3>
               <ul class="space-y-2 text-sm text-gray-600">
                 <%= for merge <- @recent_merges do %>
+                  <% source_name = get_in(merge.source_venue_snapshot, ["name"]) || "Unknown" %>
+                  <% target_name = merge.target_venue && merge.target_venue.name || "Unknown" %>
                   <li class="flex items-center gap-2">
                     <.icon name="hero-check-circle" class="w-4 h-4 text-green-500" />
-                    Merged "<%= merge.source_venue_name %>" → "<%= merge.target_venue_name %>"
+                    Merged "<%= source_name %>" → "<%= target_name %>"
                     <span class="text-gray-400">
                       (<%= merge.events_reassigned %> events,
-                      <%= Timex.from_now(merge.merged_at) %>)
+                      <%= Timex.from_now(merge.inserted_at) %>)
                     </span>
                   </li>
                 <% end %>
@@ -748,7 +787,17 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
         <span class="text-sm text-gray-500">ID: <%= @venue.id %></span>
       </div>
 
-      <h3 class="text-lg font-semibold text-gray-900 mb-2"><%= @venue.name %></h3>
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <h3 class="text-lg font-semibold text-gray-900"><%= @venue.name %></h3>
+        <%= if @venue.slug do %>
+          <.link
+            navigate={~p"/venues/#{@venue.slug}"}
+            class="text-xs font-medium text-blue-600 hover:text-blue-800"
+          >
+            View venue
+          </.link>
+        <% end %>
+      </div>
 
       <div class="space-y-2 text-sm text-gray-600">
         <%= if @venue.address do %>
@@ -767,7 +816,9 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
 
         <div class="flex items-center gap-2">
           <.icon name="hero-calendar" class="w-4 h-4 text-gray-400" />
-          <span><%= @event_count %> events</span>
+          <span>
+            <%= @event_count %> events • <%= Map.get(@venue, :image_count, 0) %> images
+          </span>
         </div>
 
         <%= if @venue.latitude && @venue.longitude do %>

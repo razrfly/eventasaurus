@@ -355,8 +355,9 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
         -- Exclude pairs marked as "not duplicates" (issue #3431)
         AND NOT EXISTS (
           SELECT 1 FROM venue_duplicate_exclusions e
-          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
-             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+          WHERE e.removed_at IS NULL
+            AND ((e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id))
         )
     )
     SELECT * FROM venue_pairs
@@ -679,8 +680,9 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
         -- Exclude pairs marked as "not duplicates"
         AND NOT EXISTS (
           SELECT 1 FROM venue_duplicate_exclusions e
-          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
-             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+          WHERE e.removed_at IS NULL
+            AND ((e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id))
         )
     ),
     filtered_pairs AS (
@@ -746,8 +748,9 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
              OR LOWER(v2.name) LIKE '%' || LOWER(v1.name) || '%')
         AND NOT EXISTS (
           SELECT 1 FROM venue_duplicate_exclusions e
-          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
-             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+          WHERE e.removed_at IS NULL
+            AND ((e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id))
         )
     ) as pairs
     """
@@ -822,13 +825,63 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
     from(g in EventasaurusApp.Groups.Group, where: g.venue_id == ^source_id)
     |> Repo.update_all(set: [venue_id: target_id])
 
-    # Reassign cached images
-    from(ci in EventasaurusApp.Images.CachedImage,
-      where: ci.entity_type == "venue" and ci.entity_id == ^source_id
-    )
-    |> Repo.update_all(set: [entity_id: target_id])
+    # Reassign cached images with dedupe + reindex to avoid conflicts
+    merge_cached_images(source_id, target_id)
 
     {:ok, %{events: events_count, public_events: public_events_count}}
+  end
+
+  defp merge_cached_images(source_id, target_id) do
+    target_images =
+      from(c in EventasaurusApp.Images.CachedImage,
+        where: c.entity_type == "venue" and c.entity_id == ^target_id,
+        select: %{id: c.id, image_type: c.image_type, position: c.position, original_url: c.original_url}
+      )
+      |> Repo.all()
+
+    max_positions =
+      target_images
+      |> Enum.group_by(& &1.image_type)
+      |> Map.new(fn {image_type, images} ->
+        {image_type, images |> Enum.max_by(& &1.position) |> Map.get(:position)}
+      end)
+
+    target_urls =
+      Enum.reduce(target_images, %{}, fn image, acc ->
+        Map.update(acc, image.image_type, MapSet.new([image.original_url]), fn set ->
+          MapSet.put(set, image.original_url)
+        end)
+      end)
+
+    source_images =
+      from(c in EventasaurusApp.Images.CachedImage,
+        where: c.entity_type == "venue" and c.entity_id == ^source_id,
+        order_by: [asc: c.image_type, asc: c.position]
+      )
+      |> Repo.all()
+
+    {_, _} =
+      Enum.reduce(source_images, {max_positions, target_urls}, fn image, {pos_map, url_map} ->
+        image_type = image.image_type || "primary"
+        existing_urls = Map.get(url_map, image_type, MapSet.new())
+
+        if MapSet.member?(existing_urls, image.original_url) do
+          Repo.delete(image)
+          {pos_map, url_map}
+        else
+          next_position = Map.get(pos_map, image_type, -1) + 1
+
+          from(c in EventasaurusApp.Images.CachedImage, where: c.id == ^image.id)
+          |> Repo.update_all(set: [entity_id: target_id, position: next_position])
+
+          new_pos_map = Map.put(pos_map, image_type, next_position)
+          new_url_map = Map.put(url_map, image_type, MapSet.put(existing_urls, image.original_url))
+
+          {new_pos_map, new_url_map}
+        end
+      end)
+
+    :ok
   end
 
   defp merge_provider_ids(source, target) do
@@ -914,7 +967,7 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
     {id1, id2} = VenueDuplicateExclusion.normalize_pair(venue_id_1, venue_id_2)
 
     from(e in VenueDuplicateExclusion,
-      where: e.venue_id_1 == ^id1 and e.venue_id_2 == ^id2
+      where: e.venue_id_1 == ^id1 and e.venue_id_2 == ^id2 and is_nil(e.removed_at)
     )
     |> Repo.exists?()
   end
@@ -924,7 +977,9 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   """
   def get_excluded_venue_ids(venue_id) do
     from(e in VenueDuplicateExclusion,
-      where: e.venue_id_1 == ^venue_id or e.venue_id_2 == ^venue_id,
+      where:
+        (e.venue_id_1 == ^venue_id or e.venue_id_2 == ^venue_id) and
+          is_nil(e.removed_at),
       select:
         fragment(
           "CASE WHEN ? = ? THEN ? ELSE ? END",
@@ -938,15 +993,17 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   end
 
   @doc """
-  Removes an exclusion between two venues.
+  Removes an exclusion between two venues (soft delete).
   """
-  def remove_exclusion(venue_id_1, venue_id_2) do
+  def remove_exclusion(venue_id_1, venue_id_2, opts \\ []) do
     {id1, id2} = VenueDuplicateExclusion.normalize_pair(venue_id_1, venue_id_2)
+    removed_by_id = Keyword.get(opts, :user_id)
+    removed_at = DateTime.utc_now()
 
     from(e in VenueDuplicateExclusion,
-      where: e.venue_id_1 == ^id1 and e.venue_id_2 == ^id2
+      where: e.venue_id_1 == ^id1 and e.venue_id_2 == ^id2 and is_nil(e.removed_at)
     )
-    |> Repo.delete_all()
+    |> Repo.update_all(set: [removed_at: removed_at, removed_by_id: removed_by_id])
   end
 
   @doc """
@@ -954,16 +1011,14 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
 
   Options:
   - :city_id - limit to a city (matches either venue)
-  - :start_date - DateTime lower bound (inclusive)
-  - :end_date - DateTime upper bound (inclusive)
-  - :min_confidence - minimum confidence score
-  - :max_confidence - maximum confidence score
+  - :search - venue name search (matches either venue)
   - :include_removed - include soft-deleted exclusions (default: false)
   - :sort_by - :inserted_at | :confidence_score | :similarity_score | :distance_meters
   - :sort_dir - :asc | :desc
   - :limit - max rows (default: 50)
   - :offset - offset for pagination (default: 0)
   """
+  @spec list_exclusions(opts :: Keyword.t()) :: [map()]
   def list_exclusions(opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
     offset = Keyword.get(opts, :offset, 0)
@@ -988,6 +1043,7 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   @doc """
   Counts exclusions for the same filters as `list_exclusions/1`.
   """
+  @spec count_exclusions(opts :: Keyword.t()) :: integer()
   def count_exclusions(opts \\ []) do
     exclusions_base_query(opts)
     |> select([e], count(e.id))
@@ -1000,6 +1056,7 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   Options:
   - :include_removed - include soft-deleted exclusions (default: false)
   """
+  @spec list_exclusion_cities(opts :: Keyword.t()) :: [map()]
   def list_exclusion_cities(opts \\ []) do
     include_removed = Keyword.get(opts, :include_removed, false)
 
@@ -1035,10 +1092,7 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
 
   defp exclusions_base_query(opts) do
     city_id = Keyword.get(opts, :city_id)
-    start_date = Keyword.get(opts, :start_date)
-    end_date = Keyword.get(opts, :end_date)
-    min_confidence = Keyword.get(opts, :min_confidence)
-    max_confidence = Keyword.get(opts, :max_confidence)
+    search = Keyword.get(opts, :search)
     include_removed = Keyword.get(opts, :include_removed, false)
 
     query =
@@ -1071,29 +1125,12 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
         query
       end
 
-    query =
-      if start_date do
-        from([e, v1, v2, c1, c2, u] in query, where: e.inserted_at >= ^start_date)
-      else
-        query
-      end
+    if is_binary(search) and String.trim(search) != "" do
+      term = "%#{String.trim(search)}%"
 
-    query =
-      if end_date do
-        from([e, v1, v2, c1, c2, u] in query, where: e.inserted_at <= ^end_date)
-      else
-        query
-      end
-
-    query =
-      if min_confidence do
-        from([e, v1, v2, c1, c2, u] in query, where: e.confidence_score >= ^min_confidence)
-      else
-        query
-      end
-
-    if max_confidence do
-      from([e, v1, v2, c1, c2, u] in query, where: e.confidence_score <= ^max_confidence)
+      from([e, v1, v2, c1, c2, u] in query,
+        where: ilike(v1.name, ^term) or ilike(v2.name, ^term)
+      )
     else
       query
     end
@@ -1195,8 +1232,9 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
              OR LOWER(v2.name) LIKE '%' || LOWER(v1.name) || '%')
         AND NOT EXISTS (
           SELECT 1 FROM venue_duplicate_exclusions e
-          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
-             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+          WHERE e.removed_at IS NULL
+            AND ((e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id))
         )
 
       UNION ALL
@@ -1220,8 +1258,9 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
              OR LOWER(v2.name) LIKE '%' || LOWER(v1.name) || '%')
         AND NOT EXISTS (
           SELECT 1 FROM venue_duplicate_exclusions e
-          WHERE (e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
-             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id)
+          WHERE e.removed_at IS NULL
+            AND ((e.venue_id_1 = v1.id AND e.venue_id_2 = v2.id)
+             OR (e.venue_id_1 = v2.id AND e.venue_id_2 = v1.id))
         )
     ) as pairs
     GROUP BY venue_id
