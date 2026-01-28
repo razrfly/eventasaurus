@@ -258,8 +258,13 @@ defmodule EventasaurusDiscovery.Costs.CostAlerts do
   end
 
   defp alert_level(threshold) when threshold >= 1.0, do: {:error, "🚨", "BUDGET EXCEEDED"}
-  defp alert_level(threshold) when threshold >= 0.90, do: {:warning, "⚠️", "CRITICAL - 90% of budget consumed"}
-  defp alert_level(threshold) when threshold >= 0.75, do: {:warning, "⚠️", "WARNING - 75% of budget consumed"}
+
+  defp alert_level(threshold) when threshold >= 0.90,
+    do: {:warning, "⚠️", "CRITICAL - 90% of budget consumed"}
+
+  defp alert_level(threshold) when threshold >= 0.75,
+    do: {:warning, "⚠️", "WARNING - 75% of budget consumed"}
+
   defp alert_level(_threshold), do: {:info, "📊", "INFO - 50% of budget consumed"}
 
   defp alert_recommendation(threshold) when threshold >= 1.0 do

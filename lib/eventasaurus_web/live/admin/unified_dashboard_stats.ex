@@ -34,10 +34,29 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
     # Fallback values when tasks time out or fail
     # These must match the exact shape returned by each fetch_* function
     fallbacks = %{
-      health: %{sources: %{}, avg_score: 0, sources_meeting_slo: 0, total_sources: 0, status: :error},
-      queue: %{available: 0, scheduled: 0, executing: 0, retryable: 0, discarded: 0, total_pending: 0},
+      health: %{
+        sources: %{},
+        avg_score: 0,
+        sources_meeting_slo: 0,
+        total_sources: 0,
+        status: :error
+      },
+      queue: %{
+        available: 0,
+        scheduled: 0,
+        executing: 0,
+        retryable: 0,
+        discarded: 0,
+        total_pending: 0
+      },
       alerts: %{total: 0, critical: 0, warning: 0, info: 0, severity: :ok, recent: []},
-      freshness: %{status: :unknown, sources: [], total_sources: 0, synced_today: 0, most_recent_hours_ago: nil}
+      freshness: %{
+        status: :unknown,
+        sources: [],
+        total_sources: 0,
+        synced_today: 0,
+        most_recent_hours_ago: nil
+      }
     }
 
     results =
@@ -71,11 +90,29 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
     # Fallback values when tasks time out or fail
     # These must match the exact shape returned by each fetch_* function
     fallbacks = %{
-      events: %{total_events: 0, upcoming_events: 0, past_events: 0, unique_venues: 0, unique_performers: 0},
+      events: %{
+        total_events: 0,
+        upcoming_events: 0,
+        past_events: 0,
+        unique_venues: 0,
+        unique_performers: 0
+      },
       movies: %{total_movies: 0, unmatched_blocking: 0, match_rate: 0.0, recent_matches: 0},
       images: %{total: 0, cached: 0, pending: 0, failed: 0, storage_bytes: 0},
-      geocoding: %{total_requests: 0, success_rate: 0.0, cache_hit_rate: 0.0, avg_latency_ms: 0, failed_count: 0},
-      data_quality: %{duplicate_groups: 0, total_collisions: 0, cross_source_collisions: 0, same_source_collisions: 0, collision_rate: 0.0}
+      geocoding: %{
+        total_requests: 0,
+        success_rate: 0.0,
+        cache_hit_rate: 0.0,
+        avg_latency_ms: 0,
+        failed_count: 0
+      },
+      data_quality: %{
+        duplicate_groups: 0,
+        total_collisions: 0,
+        cross_source_collisions: 0,
+        same_source_collisions: 0,
+        collision_rate: 0.0
+      }
     }
 
     results =

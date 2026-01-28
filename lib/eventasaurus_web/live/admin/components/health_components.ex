@@ -111,7 +111,7 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
     # Calculate ring circumference and offset for SVG circle
     # Circle has radius 45, circumference = 2 * pi * 45 ≈ 283
     circumference = 283
-    offset = circumference - (assigns.score / 100 * circumference)
+    offset = circumference - assigns.score / 100 * circumference
 
     assigns =
       assigns
@@ -957,10 +957,13 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   def source_health_summary(assigns) do
     total = length(assigns.sources)
     healthy = Enum.count(assigns.sources, fn s -> Map.get(s, :success_rate, 0) >= 95 end)
-    warning = Enum.count(assigns.sources, fn s ->
-      rate = Map.get(s, :success_rate, 0)
-      rate >= 80 and rate < 95
-    end)
+
+    warning =
+      Enum.count(assigns.sources, fn s ->
+        rate = Map.get(s, :success_rate, 0)
+        rate >= 80 and rate < 95
+      end)
+
     critical = Enum.count(assigns.sources, fn s -> Map.get(s, :success_rate, 0) < 80 end)
 
     assigns =
@@ -1332,9 +1335,11 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   def format_job_time(%{completed_at: completed_at}) when not is_nil(completed_at) do
     Calendar.strftime(completed_at, "%Y-%m-%d %H:%M")
   end
+
   def format_job_time(%{attempted_at: attempted_at}) when not is_nil(attempted_at) do
     Calendar.strftime(attempted_at, "%Y-%m-%d %H:%M")
   end
+
   def format_job_time(_), do: "Unknown time"
 
   @doc """
@@ -1508,11 +1513,25 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
 
   defp format_value(val), do: to_string(val)
 
-  defp badge_classes("success"), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
-  defp badge_classes("failure"), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
-  defp badge_classes("cancelled"), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800"
-  defp badge_classes("discarded"), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-  defp badge_classes(_), do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
+  defp badge_classes("success"),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+
+  defp badge_classes("failure"),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+
+  defp badge_classes("cancelled"),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800"
+
+  defp badge_classes("discarded"),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+
+  defp badge_classes(_),
+    do:
+      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
 
   defp badge_icon("success"), do: "✓"
   defp badge_icon("failure"), do: "✗"
@@ -1864,9 +1883,15 @@ defmodule EventasaurusWeb.Admin.Components.HealthComponents do
   Returns CSS class for health score badge.
   """
   @spec source_health_badge_class(number()) :: String.t()
-  def source_health_badge_class(score) when is_number(score) and score >= 95, do: "bg-green-100 text-green-800"
-  def source_health_badge_class(score) when is_number(score) and score >= 85, do: "bg-yellow-100 text-yellow-800"
-  def source_health_badge_class(score) when is_number(score) and score >= 70, do: "bg-orange-100 text-orange-800"
+  def source_health_badge_class(score) when is_number(score) and score >= 95,
+    do: "bg-green-100 text-green-800"
+
+  def source_health_badge_class(score) when is_number(score) and score >= 85,
+    do: "bg-yellow-100 text-yellow-800"
+
+  def source_health_badge_class(score) when is_number(score) and score >= 70,
+    do: "bg-orange-100 text-orange-800"
+
   def source_health_badge_class(_score), do: "bg-red-100 text-red-800"
 
   @doc """

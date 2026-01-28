@@ -90,17 +90,25 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheWarmupJob do
           # Base cache jobs run first (small delay)
           delay = index * @stagger_seconds
 
-          case CityPageCacheRefreshJob.enqueue_base(city.slug, @default_radius_km, schedule_in: delay) do
+          case CityPageCacheRefreshJob.enqueue_base(city.slug, @default_radius_km,
+                 schedule_in: delay
+               ) do
             {:ok, :duplicate} ->
               Logger.debug("[CacheWarmup] Base cache already queued for #{city.slug}")
               :duplicate
 
             {:ok, _} ->
-              Logger.debug("[CacheWarmup] Scheduled BASE cache for #{city.slug} (delay: #{delay}s)")
+              Logger.debug(
+                "[CacheWarmup] Scheduled BASE cache for #{city.slug} (delay: #{delay}s)"
+              )
+
               :ok
 
             {:error, reason} ->
-              Logger.warning("[CacheWarmup] Failed to schedule base for #{city.slug}: #{inspect(reason)}")
+              Logger.warning(
+                "[CacheWarmup] Failed to schedule base for #{city.slug}: #{inspect(reason)}"
+              )
+
               :error
           end
         end)
@@ -108,7 +116,9 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheWarmupJob do
       base_successful = Enum.count(base_scheduled, &(&1 == :ok))
       base_duplicates = Enum.count(base_scheduled, &(&1 == :duplicate))
 
-      Logger.info("[CacheWarmup] Base cache jobs: #{base_successful} scheduled, #{base_duplicates} already queued")
+      Logger.info(
+        "[CacheWarmup] Base cache jobs: #{base_successful} scheduled, #{base_duplicates} already queued"
+      )
 
       # Also enqueue per-filter cache refresh for default view (no filters)
       # This runs after base cache with additional delay
@@ -144,13 +154,14 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheWarmupJob do
       Filter cache jobs: #{successful} scheduled, #{duplicates} already queued
       """)
 
-      {:ok, %{
-        cities_warmed: city_count,
-        base_jobs_scheduled: base_successful,
-        base_duplicates: base_duplicates,
-        jobs_scheduled: successful,
-        duplicates: duplicates
-      }}
+      {:ok,
+       %{
+         cities_warmed: city_count,
+         base_jobs_scheduled: base_successful,
+         base_duplicates: base_duplicates,
+         jobs_scheduled: successful,
+         duplicates: duplicates
+       }}
     end
   end
 end

@@ -67,8 +67,10 @@ defmodule EventasaurusDiscovery.Costs.Pricing do
   # Rates vary by model size and type
   # Source: https://huggingface.co/pricing
 
-  @huggingface_input_token_cost 0.0000001  # Per input token (placeholder)
-  @huggingface_output_token_cost 0.0000002  # Per output token (placeholder)
+  # Per input token (placeholder)
+  @huggingface_input_token_cost 0.0000001
+  # Per output token (placeholder)
+  @huggingface_output_token_cost 0.0000002
 
   # Pricing verification metadata
   @pricing_verified_at ~D[2025-01-28]
@@ -220,13 +222,22 @@ defmodule EventasaurusDiscovery.Costs.Pricing do
 
   # Zyte
   def calculate_cost("zyte", "browser_html", units), do: zyte_cost(:browser_html) * units
-  def calculate_cost("zyte", "http_response_body", units), do: zyte_cost(:http_response_body) * units
+
+  def calculate_cost("zyte", "http_response_body", units),
+    do: zyte_cost(:http_response_body) * units
+
   def calculate_cost("zyte", _, units), do: zyte_cost(:browser_html) * units
 
   # Google Places
-  def calculate_cost("google_places", "text_search", units), do: GeocodingPricing.google_places_text_search_cost() * units
-  def calculate_cost("google_places", "details", units), do: GeocodingPricing.google_places_details_cost() * units
-  def calculate_cost("google_places", "combined", units), do: GeocodingPricing.google_places_cost() * units
+  def calculate_cost("google_places", "text_search", units),
+    do: GeocodingPricing.google_places_text_search_cost() * units
+
+  def calculate_cost("google_places", "details", units),
+    do: GeocodingPricing.google_places_details_cost() * units
+
+  def calculate_cost("google_places", "combined", units),
+    do: GeocodingPricing.google_places_cost() * units
+
   def calculate_cost("google_places", _, units), do: GeocodingPricing.google_places_cost() * units
 
   # Google Maps

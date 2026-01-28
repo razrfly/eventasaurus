@@ -274,7 +274,9 @@ defmodule EventasaurusDiscovery.Costs.Workers.DailyCostSummaryWorker do
 
   defp format_decimal(nil), do: "0.00"
   defp format_decimal(%Decimal{} = d), do: Decimal.round(d, 2) |> Decimal.to_string()
-  defp format_decimal(num) when is_number(num), do: :erlang.float_to_binary(num * 1.0, decimals: 2)
+
+  defp format_decimal(num) when is_number(num),
+    do: :erlang.float_to_binary(num * 1.0, decimals: 2)
 
   defp format_currency(amount) when is_number(amount) do
     :erlang.float_to_binary(amount * 1.0, decimals: 2)
@@ -283,7 +285,9 @@ defmodule EventasaurusDiscovery.Costs.Workers.DailyCostSummaryWorker do
   defp format_currency(_), do: "0.00"
 
   defp format_percentage(nil), do: "0.0%"
-  defp format_percentage(pct) when is_number(pct), do: "#{:erlang.float_to_binary(pct, decimals: 1)}%"
+
+  defp format_percentage(pct) when is_number(pct),
+    do: "#{:erlang.float_to_binary(pct, decimals: 1)}%"
 
   defp get_monthly_budget do
     Application.get_env(:eventasaurus, :cost_tracking, [])

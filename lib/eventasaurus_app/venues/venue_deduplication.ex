@@ -11,8 +11,10 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   import Ecto.Query
   require Logger
 
+  alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Repo
-  alias EventasaurusApp.Venues.{Venue, VenueMergeAudit, VenueDuplicateExclusion}
+  alias EventasaurusApp.Venues.{Venue, VenueDuplicateExclusion, VenueMergeAudit}
+  alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Locations.VenueNameMatcher
 
   @default_distance_meters 2000
@@ -64,10 +66,14 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
         |> Enum.filter(fn %{similarity_score: score, distance_meters: dist} ->
           min_required =
             cond do
-              dist && dist < 50 -> 0.30   # Close: require 30% similarity
-              dist && dist < 100 -> 0.40  # Very close: require 40%
-              dist && dist < 200 -> 0.45  # Nearby: require 45%
-              true -> min_similarity      # Distant: use param (default 0.3)
+              # Close: require 30% similarity
+              dist && dist < 50 -> 0.30
+              # Very close: require 40%
+              dist && dist < 100 -> 0.40
+              # Nearby: require 45%
+              dist && dist < 200 -> 0.45
+              # Distant: use param (default 0.3)
+              true -> min_similarity
             end
 
           score >= min_required
@@ -197,12 +203,18 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
     # Distance weight: closer venues get higher confidence boost
     distance_weight =
       cond do
-        distance < 20 -> 1.0    # Same building
-        distance < 50 -> 0.95   # Very close
-        distance < 100 -> 0.85  # Close
-        distance < 200 -> 0.70  # Nearby
-        distance < 500 -> 0.50  # In area
-        true -> 0.30            # Distant
+        # Same building
+        distance < 20 -> 1.0
+        # Very close
+        distance < 50 -> 0.95
+        # Close
+        distance < 100 -> 0.85
+        # Nearby
+        distance < 200 -> 0.70
+        # In area
+        distance < 500 -> 0.50
+        # Distant
+        true -> 0.30
       end
 
     # Base confidence from similarity, boosted by proximity
@@ -864,17 +876,33 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
 
   Creates an exclusion record that prevents them from showing up
   as potential duplicates in future searches.
+
+  Also captures algorithm metrics at time of exclusion for analyzing
+  false positives and improving the deduplication algorithm.
+
+  Options:
+  - :user_id - ID of user who made the exclusion
+  - :reason - optional text reason
+  - :confidence_score - the algorithm's confidence score when excluded
+  - :distance_meters - distance between venues when excluded
+  - :similarity_score - name similarity score when excluded
   """
   def exclude_pair(venue_id_1, venue_id_2, opts \\ []) do
     user_id = Keyword.get(opts, :user_id)
     reason = Keyword.get(opts, :reason)
+    confidence_score = Keyword.get(opts, :confidence_score)
+    distance_meters = Keyword.get(opts, :distance_meters)
+    similarity_score = Keyword.get(opts, :similarity_score)
 
     %VenueDuplicateExclusion{}
     |> VenueDuplicateExclusion.changeset(%{
       venue_id_1: venue_id_1,
       venue_id_2: venue_id_2,
       excluded_by_user_id: user_id,
-      reason: reason
+      reason: reason,
+      confidence_score: confidence_score,
+      distance_meters: distance_meters,
+      similarity_score: similarity_score
     })
     |> Repo.insert()
   end
@@ -919,6 +947,167 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
       where: e.venue_id_1 == ^id1 and e.venue_id_2 == ^id2
     )
     |> Repo.delete_all()
+  end
+
+  @doc """
+  Lists venue duplicate exclusions with optional filters.
+
+  Options:
+  - :city_id - limit to a city (matches either venue)
+  - :start_date - DateTime lower bound (inclusive)
+  - :end_date - DateTime upper bound (inclusive)
+  - :min_confidence - minimum confidence score
+  - :max_confidence - maximum confidence score
+  - :include_removed - include soft-deleted exclusions (default: false)
+  - :sort_by - :inserted_at | :confidence_score | :similarity_score | :distance_meters
+  - :sort_dir - :asc | :desc
+  - :limit - max rows (default: 50)
+  - :offset - offset for pagination (default: 0)
+  """
+  def list_exclusions(opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+    offset = Keyword.get(opts, :offset, 0)
+    sort_by = Keyword.get(opts, :sort_by, :inserted_at)
+    sort_dir = Keyword.get(opts, :sort_dir, :desc)
+
+    exclusions_base_query(opts)
+    |> order_by(^order_by_clause(sort_by, sort_dir))
+    |> limit(^limit)
+    |> offset(^offset)
+    |> select([e, v1, v2, c1, c2, u], %{
+      exclusion: e,
+      venue_a: v1,
+      venue_b: v2,
+      city_a: c1,
+      city_b: c2,
+      excluded_by: u
+    })
+    |> Repo.all()
+  end
+
+  @doc """
+  Counts exclusions for the same filters as `list_exclusions/1`.
+  """
+  def count_exclusions(opts \\ []) do
+    exclusions_base_query(opts)
+    |> select([e], count(e.id))
+    |> Repo.one()
+  end
+
+  @doc """
+  Lists cities that appear in venue duplicate exclusions.
+
+  Options:
+  - :include_removed - include soft-deleted exclusions (default: false)
+  """
+  def list_exclusion_cities(opts \\ []) do
+    include_removed = Keyword.get(opts, :include_removed, false)
+
+    base_query =
+      from(e in VenueDuplicateExclusion,
+        where: ^include_removed or is_nil(e.removed_at)
+      )
+
+    query_a =
+      from(e in base_query,
+        join: v in Venue,
+        on: v.id == e.venue_id_1,
+        join: c in City,
+        on: c.id == v.city_id,
+        select: %{id: c.id, name: c.name, slug: c.slug}
+      )
+
+    query_b =
+      from(e in base_query,
+        join: v in Venue,
+        on: v.id == e.venue_id_2,
+        join: c in City,
+        on: c.id == v.city_id,
+        select: %{id: c.id, name: c.name, slug: c.slug}
+      )
+
+    query_a
+    |> union_all(^query_b)
+    |> Repo.all()
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.sort_by(& &1.name)
+  end
+
+  defp exclusions_base_query(opts) do
+    city_id = Keyword.get(opts, :city_id)
+    start_date = Keyword.get(opts, :start_date)
+    end_date = Keyword.get(opts, :end_date)
+    min_confidence = Keyword.get(opts, :min_confidence)
+    max_confidence = Keyword.get(opts, :max_confidence)
+    include_removed = Keyword.get(opts, :include_removed, false)
+
+    query =
+      from(e in VenueDuplicateExclusion,
+        join: v1 in Venue,
+        on: v1.id == e.venue_id_1,
+        join: v2 in Venue,
+        on: v2.id == e.venue_id_2,
+        left_join: c1 in City,
+        on: c1.id == v1.city_id,
+        left_join: c2 in City,
+        on: c2.id == v2.city_id,
+        left_join: u in User,
+        on: u.id == e.excluded_by_user_id
+      )
+
+    query =
+      if include_removed do
+        query
+      else
+        from([e, v1, v2, c1, c2, u] in query, where: is_nil(e.removed_at))
+      end
+
+    query =
+      if city_id do
+        from([e, v1, v2, c1, c2, u] in query,
+          where: v1.city_id == ^city_id or v2.city_id == ^city_id
+        )
+      else
+        query
+      end
+
+    query =
+      if start_date do
+        from([e, v1, v2, c1, c2, u] in query, where: e.inserted_at >= ^start_date)
+      else
+        query
+      end
+
+    query =
+      if end_date do
+        from([e, v1, v2, c1, c2, u] in query, where: e.inserted_at <= ^end_date)
+      else
+        query
+      end
+
+    query =
+      if min_confidence do
+        from([e, v1, v2, c1, c2, u] in query, where: e.confidence_score >= ^min_confidence)
+      else
+        query
+      end
+
+    if max_confidence do
+      from([e, v1, v2, c1, c2, u] in query, where: e.confidence_score <= ^max_confidence)
+    else
+      query
+    end
+  end
+
+  defp order_by_clause(sort_by, sort_dir) do
+    dir = if sort_dir == :asc, do: :asc, else: :desc
+
+    case sort_by do
+      :confidence_score -> [{dir, :confidence_score}, {:desc, :inserted_at}]
+      :similarity_score -> [{dir, :similarity_score}, {:desc, :inserted_at}]
+      :distance_meters -> [{dir, :distance_meters}, {:desc, :inserted_at}]
+      _ -> [{dir, :inserted_at}]
+    end
   end
 
   # ===========================================================================

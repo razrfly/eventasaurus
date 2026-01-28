@@ -53,7 +53,9 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
         # If no city_id provided, look up Warsaw by name
         import Ecto.Query
 
-        JobRepo.one(from(c in City, where: c.name in ["Warszawa", "Warsaw", "Warschau"], limit: 1))
+        JobRepo.one(
+          from(c in City, where: c.name in ["Warszawa", "Warsaw", "Warschau"], limit: 1)
+        )
       end
 
     case city do

@@ -132,6 +132,7 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
         %{}
       else
         import Ecto.Query
+
         from(c in EventasaurusDiscovery.Locations.City, where: c.id in ^city_ids)
         |> Repo.replica().all()
         |> Map.new(fn city -> {city.id, city} end)
@@ -150,7 +151,13 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
         %{pair | venue_a: venue_a, venue_b: venue_b}
       else
         # Swap A and B
-        %{pair | venue_a: venue_b, venue_b: venue_a, event_count_a: pair.event_count_b, event_count_b: pair.event_count_a}
+        %{
+          pair
+          | venue_a: venue_b,
+            venue_b: venue_a,
+            event_count_a: pair.event_count_b,
+            event_count_b: pair.event_count_a
+        }
       end
     end)
   end
@@ -310,10 +317,16 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
   def handle_event("exclude", _params, socket) do
     %{current_pair: pair, current_user_id: user_id} = socket.assigns
 
-    case VenueDeduplication.exclude_pair(pair.venue_a.id, pair.venue_b.id,
-           user_id: user_id,
-           reason: "pair_review_not_duplicate"
-         ) do
+    # Capture algorithm metrics at time of exclusion for future algorithm improvement
+    opts = [
+      user_id: user_id,
+      reason: "pair_review_not_duplicate",
+      confidence_score: pair.confidence,
+      distance_meters: round(pair.distance),
+      similarity_score: pair.similarity
+    ]
+
+    case VenueDeduplication.exclude_pair(pair.venue_a.id, pair.venue_b.id, opts) do
       {:ok, _exclusion} ->
         socket =
           socket
@@ -418,9 +431,23 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
           Back to Duplicates
         </.link>
 
-        <h1 class="text-2xl font-bold text-gray-900">
-          <%= if @city, do: "#{@city.name} Duplicate Review", else: "Duplicate Review" %>
-        </h1>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h1 class="text-2xl font-bold text-gray-900">
+            <%= if @city, do: "#{@city.name} Duplicate Review", else: "Duplicate Review" %>
+          </h1>
+          <.link
+            navigate={
+              if @city do
+                ~p"/admin/venues/exclusions?city=#{@city.slug}"
+              else
+                ~p"/admin/venues/exclusions"
+              end
+            }
+            class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            View exclusions
+          </.link>
+        </div>
       </div>
 
       <%= if @loading do %>
@@ -487,7 +514,7 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
                 <% end %>
               </div>
 
-              <!-- Confidence Filter -->
+              <!-- Confidence Filter + Exclusions -->
               <div class="flex items-center gap-2">
                 <span class="text-sm text-gray-600">Filter:</span>
                 <div class="flex rounded-lg border overflow-hidden">
@@ -512,6 +539,18 @@ defmodule EventasaurusWeb.Admin.VenuePairReviewLive do
                     </button>
                   <% end %>
                 </div>
+                <.link
+                  navigate={
+                    if @city do
+                      ~p"/admin/venues/exclusions?city=#{@city.slug}"
+                    else
+                      ~p"/admin/venues/exclusions"
+                    end
+                  }
+                  class="ml-2 text-sm text-blue-600 hover:text-blue-800"
+                >
+                  Exclusions
+                </.link>
               </div>
             </div>
           </div>
