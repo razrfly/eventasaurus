@@ -5,9 +5,9 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
   This is a navigation page that:
   - Shows only cities that have ≥1 potential duplicate pair
   - Uses strict criteria: <100m distance AND (>60% similarity OR substring match)
-  - Links to city health pages for actual duplicate management
+  - Links directly to VenuePairReviewLive for pair-by-pair review workflow
 
-  Merge functionality lives on the city health page, not here.
+  Clicking a city navigates to /admin/venues/duplicates/review?city={slug}.
   """
   use EventasaurusWeb, :live_view
 
