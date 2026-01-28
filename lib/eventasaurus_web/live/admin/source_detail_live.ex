@@ -36,17 +36,17 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   require Logger
 
   @impl true
-  def mount(%{"source_key" => source_key}, _session, socket) do
+  def mount(%{"source_slug" => source_slug}, _session, socket) do
     # Validate source exists in SourceRegistry (convert underscores to hyphens for lookup)
-    registry_key = String.replace(source_key, "_", "-")
+    registry_key = String.replace(source_slug, "_", "-")
 
     case SourceRegistry.get_sync_job(registry_key) do
       {:ok, _module} ->
-        source_config = build_source_config(source_key)
+        source_config = build_source_config(source_slug)
 
         socket =
           socket
-          |> assign(:source_key, source_key)
+          |> assign(:source_slug, source_slug)
           |> assign(:source_config, source_config)
           |> assign(:page_title, "#{source_config.display_name} - Monitoring")
           |> assign(:active_tab, "overview")
@@ -75,20 +75,20 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
         # Unknown source - redirect to main dashboard
         {:ok,
          socket
-         |> put_flash(:error, "Unknown source: #{source_key}")
+         |> put_flash(:error, "Unknown source: #{source_slug}")
          |> push_navigate(to: ~p"/admin/monitoring")}
     end
   end
 
-  # Build source config dynamically from source_key
-  defp build_source_config(source_key) do
+  # Build source config dynamically from source_slug
+  defp build_source_config(source_slug) do
     display_name =
-      source_key
+      source_slug
       |> String.split("_")
       |> Enum.map(&String.capitalize/1)
       |> Enum.join(" ")
 
-    slug = String.replace(source_key, "_", "-")
+    slug = String.replace(source_slug, "_", "-")
 
     %{display_name: display_name, slug: slug}
   end
@@ -274,7 +274,7 @@ defmodule EventasaurusWeb.Admin.SourceDetailLive do
   # Fix Venue Names action - uses batch insert for efficiency
   @impl true
   def handle_event("fix_venue_names", _params, socket) do
-    source_key = socket.assigns.source_key
+    source_key = socket.assigns.source_slug
     source_slug = String.replace(source_key, "_", "-")
 
     # Find all cities that have venues from this source with potential quality issues

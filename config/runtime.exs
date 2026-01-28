@@ -232,6 +232,10 @@ config :eventasaurus, Oban,
        # Pre-populates movie database with currently playing movies in Poland
        {"0 7 * * *", EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob,
         args: %{region: "PL", pages: 10}},
+       # Daily external service cost summary at 8 AM UTC
+       # Generates cost reports, checks budget thresholds, triggers alerts
+       # See: lib/eventasaurus_discovery/costs/workers/daily_cost_summary_worker.ex
+       {"0 8 * * *", EventasaurusDiscovery.Costs.Workers.DailyCostSummaryWorker},
        # Oban job sanitizer runs every 30 minutes (Issue #3172)
        # Detects and fixes corrupted jobs: zombies, priority blockers, stuck executing
        # See: lib/eventasaurus_app/workers/oban_job_sanitizer_worker.ex

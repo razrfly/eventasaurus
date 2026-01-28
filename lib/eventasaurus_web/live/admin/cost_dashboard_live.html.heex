@@ -1,0 +1,371 @@
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <div class="mb-8">
+    <div class="mb-4">
+      <.link navigate="/admin" class="text-sm text-blue-600 hover:text-blue-800 inline-block">
+        ← Back to Admin Dashboard
+      </.link>
+    </div>
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">External Service Costs</h1>
+        <p class="mt-2 text-sm text-gray-600">
+          Monitor costs across scraping, geocoding, and ML services
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <button
+          phx-click="refresh"
+          class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          <.icon name="hero-arrow-path" class="h-4 w-4 inline mr-1" />
+          Refresh
+        </button>
+        <button
+          phx-click="generate_report"
+          class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          <.icon name="hero-document-text" class="h-4 w-4 inline mr-1" />
+          Generate Report
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <%= if @loading do %>
+    <div class="text-center py-12">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <p class="mt-4 text-gray-600">Loading cost data...</p>
+    </div>
+  <% end %>
+
+  <%= if @error do %>
+    <div class="rounded-md bg-red-50 p-4 mb-6">
+      <div class="flex">
+        <.icon name="hero-x-circle" class="h-5 w-5 text-red-400" />
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-red-800">Error loading cost data</h3>
+          <p class="mt-2 text-sm text-red-700"><%= @error %></p>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
+  <%= if @monthly_total do %>
+    <!-- Budget Status Banner -->
+    <div class={[
+      "rounded-lg p-4 mb-8",
+      budget_status_bg(@budget_percentage)
+    ]}>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center">
+          <span class={["h-6 w-6 mr-3", budget_status_text(@budget_percentage)]}>
+            <.icon name={budget_status_icon(@budget_percentage)} class="h-6 w-6" />
+          </span>
+          <div>
+            <p class={["text-sm font-medium", budget_status_text(@budget_percentage)]}>
+              <%= budget_status_label(@budget_percentage) %>
+            </p>
+            <p class={["text-xs", budget_status_subtext(@budget_percentage)]}>
+              $<%= format_decimal(@monthly_total.total_cost) %> of $<%= format_currency(@budget) %> monthly budget
+            </p>
+          </div>
+        </div>
+        <div class="text-right">
+          <p class={["text-2xl font-bold", budget_status_text(@budget_percentage)]}>
+            <%= format_percentage(@budget_percentage) %>
+          </p>
+        </div>
+      </div>
+      <!-- Progress Bar -->
+      <div class="mt-3 w-full bg-white/30 rounded-full h-2.5">
+        <div
+          class={["h-2.5 rounded-full transition-all", budget_progress_color(@budget_percentage)]}
+          style={"width: #{min(@budget_percentage, 100)}%"}
+        ></div>
+      </div>
+    </div>
+
+    <!-- Overview Stats -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-currency-dollar" class="h-6 w-6 text-green-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Month-to-Date</dt>
+                <dd class="text-2xl font-semibold text-gray-900">
+                  $<%= format_decimal(@monthly_total.total_cost) %>
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-calculator" class="h-6 w-6 text-blue-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Total Operations</dt>
+                <dd class="text-2xl font-semibold text-gray-900">
+                  <%= @monthly_total.count || 0 %>
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-chart-bar" class="h-6 w-6 text-indigo-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Avg Cost/Op</dt>
+                <dd class="text-2xl font-semibold text-gray-900">
+                  $<%= calculate_avg_cost(@monthly_total) %>
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <span class={if(@budget_status && length(@budget_status.alerts_sent) > 0, do: "text-yellow-400", else: "text-gray-400")}>
+                <.icon name="hero-bell-alert" class="h-6 w-6" />
+              </span>
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Alerts Sent</dt>
+                <dd class="text-2xl font-semibold text-gray-900">
+                  <%= if @budget_status, do: length(@budget_status.alerts_sent), else: 0 %>
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cost Breakdown Grid -->
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-2 mb-8">
+      <!-- By Service Type -->
+      <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">By Service Type</h3>
+          <p class="mt-1 text-sm text-gray-500">Cost breakdown by service category</p>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+          <%= if Enum.empty?(@by_service_type) do %>
+            <p class="text-sm text-gray-500 text-center py-4">No cost data recorded this month</p>
+          <% else %>
+            <div class="space-y-4">
+              <%= for service <- @by_service_type do %>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center">
+                    <span class={[
+                      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                      service_type_badge_class(service.service_type)
+                    ]}>
+                      <%= format_service_type(service.service_type) %>
+                    </span>
+                    <span class="ml-3 text-sm text-gray-500">
+                      <%= service.count %> ops
+                    </span>
+                  </div>
+                  <span class="text-sm font-medium text-gray-900">
+                    $<%= format_decimal(service.total_cost) %>
+                  </span>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      </div>
+
+      <!-- By Provider -->
+      <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">By Provider</h3>
+          <p class="mt-1 text-sm text-gray-500">Cost breakdown by external service provider</p>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+          <%= if Enum.empty?(@by_provider) do %>
+            <p class="text-sm text-gray-500 text-center py-4">No cost data recorded this month</p>
+          <% else %>
+            <div class="space-y-4">
+              <%= for provider <- @by_provider do %>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center">
+                    <span class={[
+                      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                      provider_badge_class(provider.provider)
+                    ]}>
+                      <%= format_provider_name(provider.provider) %>
+                    </span>
+                    <span class="ml-3 text-sm text-gray-500">
+                      <%= provider.count %> ops
+                    </span>
+                  </div>
+                  <span class="text-sm font-medium text-gray-900">
+                    $<%= format_decimal(provider.total_cost) %>
+                  </span>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Cost Drivers -->
+    <div class="bg-white shadow rounded-lg mb-8">
+      <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">Top Cost Drivers</h3>
+        <p class="mt-1 text-sm text-gray-500">Provider/operation combinations with highest costs</p>
+      </div>
+      <div class="px-4 py-5 sm:p-6">
+        <%= if Enum.empty?(@top_drivers) do %>
+          <p class="text-sm text-gray-500 text-center py-4">No cost data recorded this month</p>
+        <% else %>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead>
+                <tr>
+                  <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Rank
+                  </th>
+                  <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Provider
+                  </th>
+                  <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Operation
+                  </th>
+                  <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Operations
+                  </th>
+                  <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total Cost
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <%= for {driver, idx} <- Enum.with_index(@top_drivers, 1) do %>
+                  <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
+                      #<%= idx %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <span class={[
+                        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                        provider_badge_class(driver.provider)
+                      ]}>
+                        <%= format_provider_name(driver.provider) %>
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <%= driver.operation || "default" %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <%= driver.count %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      $<%= format_decimal(driver.total_cost) %>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        <% end %>
+      </div>
+    </div>
+
+    <!-- Daily Cost Trend -->
+    <%= if length(@daily_costs) > 0 do %>
+      <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">Daily Cost Trend</h3>
+          <p class="mt-1 text-sm text-gray-500">Cost breakdown by day this month</p>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+          <div class="space-y-2">
+            <%= for day <- @daily_costs do %>
+              <div class="flex items-center gap-4">
+                <span class="text-sm text-gray-500 w-24">
+                  <%= Calendar.strftime(day.date, "%b %d") %>
+                </span>
+                <div class="flex-1 bg-gray-100 rounded-full h-4">
+                  <div
+                    class="bg-indigo-500 h-4 rounded-full"
+                    style={"width: #{calculate_bar_width(day.total_cost, @daily_costs)}%"}
+                  ></div>
+                </div>
+                <span class="text-sm font-medium text-gray-900 w-20 text-right">
+                  $<%= format_decimal(day.total_cost) %>
+                </span>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- Alert Thresholds Info -->
+    <div class="bg-white shadow rounded-lg mb-8">
+      <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">Alert Configuration</h3>
+        <p class="mt-1 text-sm text-gray-500">Budget thresholds that trigger alerts</p>
+      </div>
+      <div class="px-4 py-5 sm:p-6">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <%= for threshold <- [0.5, 0.75, 0.9, 1.0] do %>
+            <div class={[
+              "p-4 rounded-lg border-2",
+              threshold_card_class(threshold, @budget_status)
+            ]}>
+              <p class="text-2xl font-bold text-center">
+                <%= Float.round(threshold * 100, 0) |> trunc() %>%
+              </p>
+              <p class="text-xs text-center text-gray-500 mt-1">
+                <%= threshold_label(threshold) %>
+              </p>
+              <%= if @budget_status && threshold in @budget_status.alerts_sent do %>
+                <p class="text-xs text-center text-green-600 mt-2">
+                  ✓ Sent
+                </p>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Report Section -->
+    <%= if @manual_report do %>
+      <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">Generated Report</h3>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+          <pre class="bg-gray-50 p-4 rounded-md text-xs text-gray-700 overflow-x-auto"><%= @manual_report %></pre>
+        </div>
+      </div>
+    <% end %>
+  <% end %>
+</div>

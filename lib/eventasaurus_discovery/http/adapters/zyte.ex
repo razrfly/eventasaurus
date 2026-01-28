@@ -64,6 +64,8 @@ defmodule EventasaurusDiscovery.Http.Adapters.Zyte do
 
   require Logger
 
+  alias EventasaurusDiscovery.Costs.{ExternalServiceCost, Pricing}
+
   @zyte_api_url "https://api.zyte.com/v1/extract"
   @default_timeout 60_000
   @default_recv_timeout 60_000
@@ -198,6 +200,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.Zyte do
           headers: []
         }
 
+        # Record cost asynchronously
+        record_cost(:browser_html, duration)
+
         {:ok, html, metadata}
 
       {:ok, %{"httpResponseBody" => body_base64}} ->
@@ -211,6 +216,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.Zyte do
               mode: :http_response_body,
               headers: []
             }
+
+            # Record cost asynchronously
+            record_cost(:http_response_body, duration)
 
             {:ok, decoded_body, metadata}
 
@@ -243,6 +251,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.Zyte do
               headers: []
             }
 
+            # Record cost asynchronously
+            record_cost(:browser_html, duration)
+
             {:ok, html, metadata}
 
           Map.has_key?(response, "httpResponseBody") ->
@@ -257,6 +268,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.Zyte do
                   mode: :http_response_body,
                   headers: []
                 }
+
+                # Record cost asynchronously
+                record_cost(:http_response_body, duration)
 
                 {:ok, decoded, metadata}
 
@@ -316,5 +330,24 @@ defmodule EventasaurusDiscovery.Http.Adapters.Zyte do
     Application.get_env(:eventasaurus, :zyte_api_key) ||
       System.get_env("ZYTE_API_KEY") ||
       ""
+  end
+
+  # Cost tracking
+
+  defp record_cost(mode, duration_ms) do
+    operation = Atom.to_string(mode)
+    cost = Pricing.zyte_cost(mode)
+
+    ExternalServiceCost.record_async(%{
+      service_type: "scraping",
+      provider: "zyte",
+      operation: operation,
+      cost_usd: Decimal.from_float(cost),
+      units: 1,
+      unit_type: "request",
+      metadata: %{
+        duration_ms: duration_ms
+      }
+    })
   end
 end
