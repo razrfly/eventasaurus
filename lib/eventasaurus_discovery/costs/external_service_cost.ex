@@ -94,7 +94,7 @@ defmodule EventasaurusDiscovery.Costs.ExternalServiceCost do
     ])
     |> validate_required([:service_type, :provider, :cost_usd])
     |> validate_inclusion(:service_type, @service_types)
-    |> validate_inclusion(:unit_type, @unit_types, message: "must be one of: #{Enum.join(@unit_types, ", ")}")
+    |> validate_unit_type_if_present(@unit_types)
     |> validate_number(:cost_usd, greater_than_or_equal_to: 0)
     |> validate_number(:units, greater_than: 0)
     |> put_occurred_at_if_missing()
@@ -146,6 +146,14 @@ defmodule EventasaurusDiscovery.Costs.ExternalServiceCost do
   end
 
   # Private functions
+
+  # Only validate unit_type inclusion when it's present (not nil)
+  defp validate_unit_type_if_present(changeset, valid_types) do
+    case get_field(changeset, :unit_type) do
+      nil -> changeset
+      _ -> validate_inclusion(changeset, :unit_type, valid_types, message: "must be one of: #{Enum.join(valid_types, ", ")}")
+    end
+  end
 
   defp put_occurred_at_if_missing(changeset) do
     case get_field(changeset, :occurred_at) do

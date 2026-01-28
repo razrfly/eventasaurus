@@ -26,6 +26,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GoogleMaps do
 
   require Logger
 
+  alias EventasaurusDiscovery.Costs.ExternalServiceCost
+  alias EventasaurusDiscovery.Geocoding.Pricing
+
   @impl true
   def name, do: "google_maps"
 
@@ -38,10 +41,13 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GoogleMaps do
       {:error, :api_key_missing}
     else
       Logger.debug("🌐 Google Maps request: #{address}")
+      start_time = System.monotonic_time(:millisecond)
 
       # Use the geocoder library with GoogleMaps provider
       case Geocoder.call(address, provider: Geocoder.Providers.GoogleMaps, key: api_key) do
         {:ok, coordinates} ->
+          duration_ms = System.monotonic_time(:millisecond) - start_time
+          record_cost("geocode", duration_ms)
           extract_result(coordinates)
 
         {:error, reason} ->
@@ -109,5 +115,22 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GoogleMaps do
     System.get_env("GOOGLE_MAPS_API_KEY") ||
       Application.get_env(:geocoder, Geocoder.Providers.GoogleMaps, [])
       |> Keyword.get(:api_key)
+  end
+
+  # Cost tracking for external service monitoring (Issue #3443)
+  defp record_cost(operation, duration_ms) do
+    cost = Pricing.google_maps_cost()
+
+    ExternalServiceCost.record_async(%{
+      service_type: "geocoding",
+      provider: "google_maps",
+      operation: operation,
+      cost_usd: Decimal.from_float(cost),
+      units: 1,
+      unit_type: "request",
+      metadata: %{
+        duration_ms: duration_ms
+      }
+    })
   end
 end

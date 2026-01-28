@@ -39,6 +39,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
   require Logger
 
+  alias EventasaurusDiscovery.Costs.ExternalServiceCost
+  alias EventasaurusDiscovery.Geocoding.Pricing
+
   @impl EventasaurusDiscovery.Geocoding.MultiProvider
   def name, do: "google_places"
 
@@ -90,6 +93,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
   # Step 1: Text Search API
   defp text_search(address, api_key) do
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+    start_time = System.monotonic_time(:millisecond)
 
     params = [
       query: address,
@@ -98,6 +102,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
     case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        duration_ms = System.monotonic_time(:millisecond) - start_time
+        record_cost("text_search", duration_ms)
         parse_text_search_response(body)
 
       {:ok, %HTTPoison.Response{status_code: 429}} ->
@@ -154,6 +160,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
   # Step 2: Place Details API
   defp place_details(place_id, api_key) do
     url = "https://maps.googleapis.com/maps/api/place/details/json"
+    start_time = System.monotonic_time(:millisecond)
 
     params = [
       place_id: place_id,
@@ -163,6 +170,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
     case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        duration_ms = System.monotonic_time(:millisecond) - start_time
+        record_cost("details", duration_ms)
         parse_place_details_response(body, place_id)
 
       {:ok, %HTTPoison.Response{status_code: 429}} ->
@@ -297,6 +306,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
   defp fetch_place_photos(place_id, api_key) do
     # First get photo references from Place Details
     url = "https://maps.googleapis.com/maps/api/place/details/json"
+    start_time = System.monotonic_time(:millisecond)
 
     params = [
       place_id: place_id,
@@ -306,6 +316,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
     case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        duration_ms = System.monotonic_time(:millisecond) - start_time
+        record_cost("details_photos", duration_ms)
         parse_photos_response(body, api_key)
 
       {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
@@ -408,5 +420,28 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
   defp get_api_key do
     System.get_env("GOOGLE_MAPS_API_KEY")
+  end
+
+  # Cost tracking for external service monitoring (Issue #3443)
+  defp record_cost(operation, duration_ms) do
+    cost =
+      case operation do
+        "text_search" -> Pricing.google_places_text_search_cost()
+        "details" -> Pricing.google_places_details_cost()
+        "details_photos" -> Pricing.google_places_details_cost()
+        _ -> 0.0
+      end
+
+    ExternalServiceCost.record_async(%{
+      service_type: "geocoding",
+      provider: "google_places",
+      operation: operation,
+      cost_usd: Decimal.from_float(cost),
+      units: 1,
+      unit_type: "request",
+      metadata: %{
+        duration_ms: duration_ms
+      }
+    })
   end
 end

@@ -120,6 +120,8 @@ defmodule Eventasaurus.Application do
       EventasaurusWeb.Cache.EventPageCache,
       # Start Dashboard Stats Cache for admin dashboard performance
       {Cachex, name: :dashboard_stats},
+      # Start Cost Alerts tracker for budget monitoring (Issue #3443)
+      EventasaurusDiscovery.Costs.CostAlerts,
       # Start City Gallery Cache for Unsplash fallback image lookups
       EventasaurusApp.Cache.CityGalleryCache,
       # Start City Fallback Image Cache for pre-computed fallback images
