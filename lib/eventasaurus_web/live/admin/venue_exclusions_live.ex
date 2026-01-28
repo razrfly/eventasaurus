@@ -7,25 +7,19 @@ defmodule EventasaurusWeb.Admin.VenueExclusionsLive do
   alias EventasaurusApp.Venues.VenueDeduplication
 
   @page_size 50
-  @sort_keys %{
-    "date" => :inserted_at,
-    "confidence" => :confidence_score,
-    "similarity" => :similarity_score,
-    "distance" => :distance_meters
-  }
-
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     {:ok,
      socket
      |> assign(:page_title, "Venue Exclusions")
-     |> assign(:loading, true)
-     |> assign(:cities, [])
-     |> assign(:filters, %{})
-     |> assign(:exclusions, [])
-     |> assign(:total_count, 0)
-     |> assign(:page, 1)
-     |> assign(:total_pages, 1)}
+      |> assign(:loading, true)
+      |> assign(:cities, [])
+      |> assign(:filters, %{})
+      |> assign(:exclusions, [])
+      |> assign(:total_count, 0)
+      |> assign(:page, 1)
+      |> assign(:total_pages, 1)
+      |> assign(:current_user_id, get_user_id(session))}
   end
 
   @impl true
@@ -48,15 +42,33 @@ defmodule EventasaurusWeb.Admin.VenueExclusionsLive do
      |> assign(:loading, false)}
   end
 
+  @impl true
+  def handle_event("remove_exclusion", %{"venue_id_1" => id1, "venue_id_2" => id2}, socket) do
+    venue_id_1 = String.to_integer(id1)
+    venue_id_2 = String.to_integer(id2)
+    user_id = socket.assigns.current_user_id
+
+    case VenueDeduplication.remove_exclusion(venue_id_1, venue_id_2, user_id: user_id) do
+      {0, _} ->
+        {:noreply, put_flash(socket, :error, "Exclusion already removed.")}
+
+      {_count, _} ->
+        {exclusions, total_count} = load_exclusions(socket.assigns.filters, socket.assigns.page)
+        total_pages = max(1, ceil_div(total_count, @page_size))
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Exclusion removed. Pair will be detected again.")
+         |> assign(:exclusions, exclusions)
+         |> assign(:total_count, total_count)
+         |> assign(:total_pages, total_pages)}
+    end
+  end
+
   defp load_exclusions(filters, page) do
     opts = [
       city_id: filters[:city_id],
-      start_date: filters[:start_date],
-      end_date: filters[:end_date],
-      min_confidence: filters[:min_confidence],
-      max_confidence: filters[:max_confidence],
-      sort_by: filters[:sort_by],
-      sort_dir: filters[:sort_dir],
+      search: filters[:search],
       limit: @page_size,
       offset: (page - 1) * @page_size
     ]
@@ -70,35 +82,14 @@ defmodule EventasaurusWeb.Admin.VenueExclusionsLive do
   defp parse_filters(params, city_map) do
     city_slug = Map.get(params, "city")
     city_id = if city_slug, do: Map.get(city_map, city_slug)
-
-    min_confidence = parse_float_param(Map.get(params, "min_confidence"))
-    max_confidence = parse_float_param(Map.get(params, "max_confidence"))
-
-    sort_by =
-      params
-      |> Map.get("sort_by", "date")
-      |> then(fn value -> Map.get(@sort_keys, value, :inserted_at) end)
-
-    sort_dir =
-      case Map.get(params, "sort_dir", "desc") do
-        "asc" -> :asc
-        _ -> :desc
-      end
-
-    start_date = parse_date_start(Map.get(params, "start_date"))
-    end_date = parse_date_end(Map.get(params, "end_date"))
+    search = Map.get(params, "search")
 
     page = parse_page(Map.get(params, "page"))
 
     filters = %{
       city_slug: city_slug,
       city_id: city_id,
-      start_date: start_date,
-      end_date: end_date,
-      min_confidence: min_confidence,
-      max_confidence: max_confidence,
-      sort_by: sort_by,
-      sort_dir: sort_dir
+      search: search
     }
 
     {filters, page}
@@ -110,37 +101,6 @@ defmodule EventasaurusWeb.Admin.VenueExclusionsLive do
     case Integer.parse(value) do
       {page, _} when page > 0 -> page
       _ -> 1
-    end
-  end
-
-  defp parse_float_param(nil), do: nil
-
-  defp parse_float_param(value) do
-    case Float.parse(value) do
-      {float, _} -> float
-      _ -> nil
-    end
-  end
-
-  defp parse_date_start(nil), do: nil
-
-  defp parse_date_start(value) do
-    with {:ok, date} <- Date.from_iso8601(value),
-         {:ok, datetime} <- DateTime.new(date, ~T[00:00:00], "Etc/UTC") do
-      datetime
-    else
-      _ -> nil
-    end
-  end
-
-  defp parse_date_end(nil), do: nil
-
-  defp parse_date_end(value) do
-    with {:ok, date} <- Date.from_iso8601(value),
-         {:ok, datetime} <- DateTime.new(date, ~T[23:59:59], "Etc/UTC") do
-      datetime
-    else
-      _ -> nil
     end
   end
 
@@ -171,37 +131,20 @@ defmodule EventasaurusWeb.Admin.VenueExclusionsLive do
 
   defp format_decimal(_), do: "--"
 
+  defp get_user_id(session) do
+    case session do
+      %{"current_user_id" => id} -> id
+      _ -> nil
+    end
+  end
+
   defp page_params(filters, page) do
     params = [
       {"page", page},
       {"city", filters[:city_slug]},
-      {"start_date", date_param(filters[:start_date])},
-      {"end_date", date_param(filters[:end_date])},
-      {"min_confidence", filters[:min_confidence]},
-      {"max_confidence", filters[:max_confidence]},
-      {"sort_by", sort_key(filters[:sort_by])},
-      {"sort_dir", if(filters[:sort_dir] == :asc, do: "asc", else: "desc")}
+      {"search", filters[:search]}
     ]
 
     Enum.reject(params, fn {_key, value} -> is_nil(value) or value == "" end)
   end
-
-  defp sort_key(:confidence_score), do: "confidence"
-  defp sort_key(:similarity_score), do: "similarity"
-  defp sort_key(:distance_meters), do: "distance"
-  defp sort_key(_), do: "date"
-
-  defp date_param(%DateTime{} = datetime) do
-    datetime
-    |> DateTime.to_date()
-    |> Date.to_iso8601()
-  end
-
-  defp date_param(%NaiveDateTime{} = datetime) do
-    datetime
-    |> NaiveDateTime.to_date()
-    |> Date.to_iso8601()
-  end
-
-  defp date_param(_), do: nil
 end

@@ -41,80 +41,23 @@
         </select>
       </div>
 
-      <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">Start date</label>
+      <div class="lg:col-span-3">
+        <label class="block text-xs font-medium text-gray-600 mb-1">Search venue</label>
         <input
-          type="date"
-          name="start_date"
-          value={@filters[:start_date] && Date.to_iso8601(DateTime.to_date(@filters[:start_date]))}
+          type="text"
+          name="search"
+          value={@filters[:search]}
+          placeholder="Type a venue name..."
           class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
         />
       </div>
 
-      <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">End date</label>
-        <input
-          type="date"
-          name="end_date"
-          value={@filters[:end_date] && Date.to_iso8601(DateTime.to_date(@filters[:end_date]))}
-          class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-
-      <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">Confidence min</label>
-        <input
-          type="number"
-          name="min_confidence"
-          step="0.01"
-          min="0"
-          max="1"
-          value={@filters[:min_confidence]}
-          class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-
-      <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">Confidence max</label>
-        <input
-          type="number"
-          name="max_confidence"
-          step="0.01"
-          min="0"
-          max="1"
-          value={@filters[:max_confidence]}
-          class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-
-      <div class="lg:col-span-2">
-        <label class="block text-xs font-medium text-gray-600 mb-1">Sort</label>
-        <div class="flex gap-2">
-          <select
-            name="sort_by"
-            class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-          >
-            <option value="date" selected={@filters[:sort_by] == :inserted_at}>Date</option>
-            <option value="confidence" selected={@filters[:sort_by] == :confidence_score}>Confidence</option>
-            <option value="similarity" selected={@filters[:sort_by] == :similarity_score}>Similarity</option>
-            <option value="distance" selected={@filters[:sort_by] == :distance_meters}>Distance</option>
-          </select>
-          <select
-            name="sort_dir"
-            class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-          >
-            <option value="desc" selected={@filters[:sort_dir] == :desc}>Desc</option>
-            <option value="asc" selected={@filters[:sort_dir] == :asc}>Asc</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="lg:col-span-2 flex items-end gap-2">
+      <div class="lg:col-span-1 flex items-end gap-2">
         <button
           type="submit"
           class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
         >
-          Apply filters
+          Apply
         </button>
         <.link
           navigate="/admin/venues/exclusions"
@@ -138,12 +81,13 @@
             <th class="px-4 py-3 text-left font-medium">Reason</th>
             <th class="px-4 py-3 text-left font-medium">Excluded by</th>
             <th class="px-4 py-3 text-left font-medium">Date</th>
+            <th class="px-4 py-3 text-left font-medium">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 text-gray-700">
           <%= if @exclusions == [] do %>
             <tr>
-              <td colspan="6" class="px-4 py-6 text-center text-sm text-gray-500">
+              <td colspan="7" class="px-4 py-6 text-center text-sm text-gray-500">
                 No exclusions found for the selected filters.
               </td>
             </tr>
@@ -186,6 +130,17 @@
               </td>
               <td class="px-4 py-4 align-top text-xs text-gray-600">
                 <%= format_datetime(exclusion.inserted_at) %>
+              </td>
+              <td class="px-4 py-4 align-top text-xs text-gray-600">
+                <button
+                  phx-click="remove_exclusion"
+                  phx-value-venue_id_1={exclusion.venue_id_1}
+                  phx-value-venue_id_2={exclusion.venue_id_2}
+                  class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  data-confirm="Remove this exclusion? The pair will appear again in duplicate detection."
+                >
+                  Remove
+                </button>
               </td>
             </tr>
           <% end %>
