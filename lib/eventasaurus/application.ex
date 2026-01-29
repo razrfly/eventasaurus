@@ -141,6 +141,9 @@ defmodule Eventasaurus.Application do
         # Initialize venue source cache after repo is started
         EventasaurusApp.Venues.VenueSourceCache.init()
 
+        # Initialize category mappings ETS cache if database-backed mappings are enabled
+        initialize_category_mappings_cache()
+
         # Attach Oban telemetry handler for job-level failure tracking
         attach_oban_telemetry()
 
@@ -181,6 +184,25 @@ defmodule Eventasaurus.Application do
 
     # Note: The legacy scraper-specific telemetry handler was removed in Issue #3048 Phase 3
     # All job execution logging is now handled by ObanTelemetry and MetricsTracker
+  end
+
+  # Initialize category mappings ETS cache if database-backed mappings are enabled
+  # This loads all active mappings from the DB into ETS for sub-millisecond lookups
+  defp initialize_category_mappings_cache do
+    if Application.get_env(:eventasaurus, :discovery)[:use_db_mappings] do
+      Logger.info("[CategoryMappings] Initializing ETS cache from database...")
+
+      try do
+        count = EventasaurusDiscovery.Categories.CategoryMappings.init_cache()
+        Logger.info("[CategoryMappings] ETS cache initialized with #{count} mappings")
+      rescue
+        e ->
+          Logger.error("[CategoryMappings] Failed to initialize cache: #{inspect(e)}")
+          Logger.warning("[CategoryMappings] Falling back to YAML file mappings")
+      end
+    else
+      Logger.debug("[CategoryMappings] Using YAML file mappings (use_db_mappings=false)")
+    end
   end
 
   # Schedule city page cache warmup on startup (Issue #3347 Phase 4)

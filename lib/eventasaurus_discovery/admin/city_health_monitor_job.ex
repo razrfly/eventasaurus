@@ -17,7 +17,8 @@ defmodule EventasaurusDiscovery.Admin.CityHealthMonitorJob do
 
   The job is scheduled via Oban cron in config/config.exs:
 
-      config :eventasaurus_discovery, Oban,
+      # NOTE: Uses :eventasaurus namespace (NOT :eventasaurus_discovery)
+      config :eventasaurus, Oban,
         crontab: [
           {"0 * * * *", EventasaurusDiscovery.Admin.CityHealthMonitorJob}
         ]

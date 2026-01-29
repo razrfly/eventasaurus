@@ -85,6 +85,7 @@ defmodule EventasaurusWeb.Router do
         live "/categories/list", Admin.CategoryIndexLive, :index
         live "/categories/hierarchy", Admin.CategoryHierarchyLive, :index
         live "/categories/insights", Admin.CategoryInsightsLive, :index
+        live "/categories/mappings", Admin.CategoryMappingsLive, :index
         live "/categories/new", Admin.CategoryFormLive, :new
         live "/categories/:id/edit", Admin.CategoryFormLive, :edit
 
@@ -242,6 +243,7 @@ defmodule EventasaurusWeb.Router do
         live "/categories/list", EventasaurusWeb.Admin.CategoryIndexLive, :index
         live "/categories/hierarchy", EventasaurusWeb.Admin.CategoryHierarchyLive, :index
         live "/categories/insights", EventasaurusWeb.Admin.CategoryInsightsLive, :index
+        live "/categories/mappings", EventasaurusWeb.Admin.CategoryMappingsLive, :index
         live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
         live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
 
