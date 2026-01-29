@@ -950,6 +950,71 @@ lib/eventasaurus_discovery/sources/my_source/
 - **External IDs must follow format**: `{source}_{type}_{id}_{date}`
 - **All jobs must integrate MetricsTracker** for monitoring
 
+## ML Framework (Phase 0 - Issue #3213)
+
+Machine learning framework for intelligent event categorization using zero-shot classification.
+
+### Dependencies
+
+```elixir
+# mix.exs
+{:bumblebee, "~> 0.6"},
+{:nx, "~> 0.9"},
+{:exla, "~> 0.9"}
+```
+
+### Configuration
+
+```elixir
+# config/config.exs
+config :nx, default_backend: EXLA.Backend
+```
+
+### Model
+
+**Phase 0 (Current)**: `facebook/bart-large-mnli`
+- **Task**: Zero-shot classification (English NLI)
+- **Size**: ~1.6GB download (cached in `~/.cache/bumblebee`)
+- **Memory**: ~2-4GB RAM during inference
+
+**Future (Phase 1+)**: `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`
+- Requires custom Bumblebee architecture config (not auto-detected)
+- Multilingual support for Polish, German, etc.
+
+### Verify Installation (IEx)
+
+```elixir
+# Load model and tokenizer (uses facebook/bart-large-mnli for now)
+# Note: mDeBERTa model requires custom architecture config - using BART for Phase 0
+{:ok, model} = Bumblebee.load_model({:hf, "facebook/bart-large-mnli"})
+{:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, "facebook/bart-large-mnli"})
+
+# Create zero-shot classification serving
+# Note: labels is the 3rd positional argument, NOT a keyword option
+labels = ["concert", "theatre", "sports", "comedy"]
+serving = Bumblebee.Text.zero_shot_classification(model, tokenizer, labels)
+
+# Run classification
+Nx.Serving.run(serving, "Live jazz performance at the Blue Note")
+# => %{predictions: [%{label: "concert", score: 0.952...}, ...]}
+```
+
+### Production Strategy
+
+- **Development**: Local CPU inference via EXLA
+- **Production**: HuggingFace Inference API (Phase 3)
+- **Environment Variable**: `HUGGINGFACE_API_TOKEN` (for production)
+
+### Implementation Status
+
+- [x] Phase 0: Dependencies and verification (this)
+- [ ] Phase 1: Category classifier integration
+- [ ] Phase 2: Validation and comparison
+- [ ] Phase 3: Production backend (HuggingFace API)
+- [ ] Phase 4: Expand use cases
+
+See GitHub Issue #3213 for full implementation plan.
+
 ## Graphite Workflow (User)
 
 **NOTE: These commands are for the USER to run, not Claude Code.**
