@@ -27,6 +27,7 @@ reviews:
     - "lib/**/*.ex"
     - "lib/**/*.heex"
     - "test/**/*.exs"
+    - "priv/repo/migrations/**/*.exs"
     - "!**/*.lock"
     - "!**/deps/**"
     - "!**/node_modules/**"
