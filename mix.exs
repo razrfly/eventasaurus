@@ -177,9 +177,10 @@ defmodule Eventasaurus.MixProject do
       # ML Framework - Phase 0 (Issue #3213)
       # Zero-shot classification for event categorization
       # Model: MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
-      {:bumblebee, "~> 0.6"},
-      {:nx, "~> 0.9"},
-      {:exla, "~> 0.9"}
+      # DEV ONLY: Production uses HuggingFace Inference API (Phase 3+)
+      {:bumblebee, "~> 0.6", only: :dev},
+      {:nx, "~> 0.9", only: :dev},
+      {:exla, "~> 0.9", only: :dev}
     ]
   end
 

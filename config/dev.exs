@@ -3,6 +3,11 @@ import Config
 # Set environment
 config :eventasaurus, :environment, :dev
 
+# Configure Nx to use EXLA backend for ML operations (Issue #3213)
+# EXLA provides optimized CPU/GPU tensor operations for Bumblebee models
+# DEV ONLY: Production will use HuggingFace Inference API (Phase 3+)
+config :nx, default_backend: EXLA.Backend
+
 # =============================================================================
 # Database Configuration Toggle
 # =============================================================================

@@ -77,10 +77,6 @@ config :phoenix_live_view, :debug_heex_annotations, true
 # Configure time zone database
 config :elixir, :time_zone_database, TimeZoneInfo.TimeZoneDatabase
 
-# Configure Nx to use EXLA backend for ML operations (Issue #3213)
-# EXLA provides optimized CPU/GPU tensor operations for Bumblebee models
-config :nx, default_backend: EXLA.Backend
-
 # Configure Hammer for rate limiting
 config :hammer,
   backend: {

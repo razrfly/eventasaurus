@@ -46,3 +46,13 @@ erl_crash.dump
 
 # Generated sitemaps - regenerated daily in production
 /priv/static/sitemaps/
+
+# Database dumps - NEVER send to production (contains sensitive data)
+/priv/dumps/
+
+# Private licensed templates (reference material only)
+/priv/tailwind-plus-radiant/
+
+# MCP server caches and local tooling
+/.playwright-mcp/
+/.taskmaster/
