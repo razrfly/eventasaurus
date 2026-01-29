@@ -38,7 +38,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapping do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @type mapping_type :: :direct | :pattern
+  @type mapping_type :: String.t()
 
   @mapping_types ~w(direct pattern)
 
@@ -103,6 +103,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapping do
     |> validate_required([:source, :external_term, :mapping_type, :category_slug])
     |> validate_inclusion(:mapping_type, @mapping_types)
     |> normalize_external_term()
+    |> validate_pattern_syntax()
     |> unique_constraint([:source, :external_term, :mapping_type],
       name: :category_mappings_source_term_type_unique
     )

@@ -104,9 +104,13 @@ defmodule EventasaurusDiscovery.Categories.CategoryMappings do
   end
 
   defp get_from_cache(key) do
-    case :ets.lookup(@ets_table, key) do
-      [{^key, data}] -> data
-      [] -> %{direct: %{}, patterns: []}
+    if :ets.whereis(@ets_table) == :undefined do
+      %{direct: %{}, patterns: []}
+    else
+      case :ets.lookup(@ets_table, key) do
+        [{^key, data}] -> data
+        [] -> %{direct: %{}, patterns: []}
+      end
     end
   end
 
@@ -139,8 +143,15 @@ defmodule EventasaurusDiscovery.Categories.CategoryMappings do
         pattern_mappings
         |> Enum.map(fn m ->
           case Regex.compile(m.external_term, "i") do
-            {:ok, regex} -> {regex, m.category_slug}
-            {:error, _} -> nil
+            {:ok, regex} ->
+              {regex, m.category_slug}
+
+            {:error, reason} ->
+              Logger.warning(
+                "[CategoryMappings] Invalid regex pattern '#{m.external_term}' for source '#{source}': #{inspect(reason)}"
+              )
+
+              nil
           end
         end)
         |> Enum.reject(&is_nil/1)

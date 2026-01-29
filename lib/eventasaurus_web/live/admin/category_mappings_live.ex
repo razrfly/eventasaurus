@@ -235,6 +235,7 @@ defmodule EventasaurusWeb.Admin.CategoryMappingsLive do
   Returns whether database-backed mappings are enabled.
   """
   def db_mappings_enabled? do
-    Application.get_env(:eventasaurus, :discovery)[:use_db_mappings] || false
+    discovery_config = Application.get_env(:eventasaurus, :discovery, [])
+    Keyword.get(discovery_config, :use_db_mappings, false)
   end
 end

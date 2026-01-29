@@ -70,19 +70,19 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
       IO.puts("#{IO.ANSI.yellow()}🔍 DRY RUN MODE - No changes will be made#{IO.ANSI.reset()}\n")
     end
 
-    # Clear existing mappings if requested
-    if clear_all? and not dry_run? do
-      IO.puts("#{IO.ANSI.red()}🗑️  Clearing ALL existing mappings...#{IO.ANSI.reset()}")
-      clear_all_mappings()
-      IO.puts("")
-    end
-
-    # Load YAML files
+    # Load YAML files first to validate before any destructive operations
     yaml_files = load_yaml_files(source_filter)
 
     if Enum.empty?(yaml_files) do
       IO.puts("#{IO.ANSI.yellow()}⚠️  No YAML files found#{IO.ANSI.reset()}")
       System.halt(1)
+    end
+
+    # Clear existing mappings if requested (only after validating YAML files exist)
+    if clear_all? and not dry_run? do
+      IO.puts("#{IO.ANSI.red()}🗑️  Clearing ALL existing mappings...#{IO.ANSI.reset()}")
+      clear_all_mappings()
+      IO.puts("")
     end
 
     # Process each file

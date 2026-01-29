@@ -189,7 +189,9 @@ defmodule Eventasaurus.Application do
   # Initialize category mappings ETS cache if database-backed mappings are enabled
   # This loads all active mappings from the DB into ETS for sub-millisecond lookups
   defp initialize_category_mappings_cache do
-    if Application.get_env(:eventasaurus, :discovery)[:use_db_mappings] do
+    discovery_config = Application.get_env(:eventasaurus, :discovery, [])
+
+    if Keyword.get(discovery_config, :use_db_mappings, false) do
       Logger.info("[CategoryMappings] Initializing ETS cache from database...")
 
       try do

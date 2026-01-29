@@ -69,7 +69,8 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
   Returns whether database-backed mappings are enabled.
   """
   def use_db_mappings? do
-    Application.get_env(:eventasaurus, :discovery)[:use_db_mappings] || false
+    discovery_config = Application.get_env(:eventasaurus, :discovery, [])
+    Keyword.get(discovery_config, :use_db_mappings, false)
   end
 
   # ============================================================================
