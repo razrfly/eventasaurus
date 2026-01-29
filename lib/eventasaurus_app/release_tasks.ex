@@ -6,6 +6,12 @@ defmodule EventasaurusApp.ReleaseTasks do
 
   ## Usage
 
+      # Migrate YAML category mappings to database
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.migrate_yaml_mappings()"
+
+      # Dry run - show what would be migrated
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.migrate_yaml_mappings(true)"
+
       # Enqueue timezone jobs for cities missing timezone
       bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.enqueue_timezone_jobs()"
 
@@ -24,6 +30,233 @@ defmodule EventasaurusApp.ReleaseTasks do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
+
+  @doc """
+  Migrate category mappings from YAML files to the database.
+
+  This reads all YAML files from `priv/category_mappings/` and imports
+  them into the `category_mappings` table. Clears all existing mappings
+  before importing to ensure clean state.
+
+  ## Usage
+
+      # Clear and re-import all YAML mappings
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.migrate_yaml_mappings()"
+
+      # Dry run - show what would be imported
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.migrate_yaml_mappings(true)"
+  """
+  def migrate_yaml_mappings(dry_run \\ false) do
+    start_app()
+
+    alias EventasaurusDiscovery.Categories.CategoryMappings
+    alias EventasaurusDiscovery.Categories.CategoryMapping
+
+    IO.puts("\n📦 YAML to Database Migration")
+    IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+    if dry_run do
+      IO.puts("🔍 DRY RUN MODE - No changes will be made\n")
+    end
+
+    # Load YAML files
+    yaml_files = load_yaml_files()
+
+    if Enum.empty?(yaml_files) do
+      IO.puts("⚠️  No YAML files found")
+      {:error, :no_yaml_files}
+    else
+      IO.puts("Found #{length(yaml_files)} YAML files to process\n")
+
+      unless dry_run do
+        # Clear all existing mappings
+        IO.puts("🗑️  Clearing ALL existing mappings...")
+        {count, _} = Repo.delete_all(CategoryMapping)
+        IO.puts("   Cleared #{count} total mappings\n")
+      end
+
+      # Process each file
+      results =
+        Enum.map(yaml_files, fn {source, file_path} ->
+          process_yaml_file(source, file_path, dry_run)
+        end)
+
+      # Print summary
+      print_migration_summary(results, dry_run)
+
+      # Refresh ETS cache after migration
+      unless dry_run do
+        IO.puts("🔄 Refreshing ETS cache...")
+        CategoryMappings.refresh_cache()
+        IO.puts("✅ ETS cache refreshed\n")
+      end
+
+      :ok
+    end
+  end
+
+  defp load_yaml_files do
+    priv_dir = :code.priv_dir(:eventasaurus)
+    config_path = Path.join(priv_dir, "category_mappings")
+
+    if File.dir?(config_path) do
+      config_path
+      |> File.ls!()
+      |> Enum.filter(&String.ends_with?(&1, ".yml"))
+      |> Enum.map(fn file ->
+        source_key =
+          case file do
+            "_defaults.yml" -> "_defaults"
+            other -> Path.basename(other, ".yml")
+          end
+
+        {source_key, Path.join(config_path, file)}
+      end)
+      |> Enum.sort_by(fn {source, _} ->
+        # Process _defaults first
+        if source == "_defaults", do: "", else: source
+      end)
+    else
+      []
+    end
+  end
+
+  defp process_yaml_file(source, file_path, dry_run) do
+    alias EventasaurusDiscovery.Categories.CategoryMappings
+
+    IO.puts("📁 Processing: #{source}")
+    IO.puts("   File: #{file_path}")
+
+    case YamlElixir.read_from_file(file_path) do
+      {:ok, %{"mappings" => mappings} = data} ->
+        patterns = data["patterns"] || []
+
+        # Build mapping attributes
+        direct_attrs = build_yaml_direct_attrs(source, mappings)
+        pattern_attrs = build_yaml_pattern_attrs(source, patterns)
+        all_attrs = direct_attrs ++ pattern_attrs
+
+        result =
+          if dry_run do
+            %{
+              source: source,
+              direct: length(direct_attrs),
+              patterns: length(pattern_attrs),
+              status: :dry_run
+            }
+          else
+            {:ok, import_result} = CategoryMappings.import_mappings(all_attrs)
+
+            %{
+              source: source,
+              direct: length(direct_attrs),
+              patterns: length(pattern_attrs),
+              imported: import_result.inserted,
+              errors: import_result.errors,
+              status: if(Enum.empty?(import_result.errors), do: :success, else: :partial)
+            }
+          end
+
+        status_icon =
+          case result.status do
+            :dry_run -> "📋"
+            :success -> "✅"
+            :partial -> "⚠️"
+          end
+
+        imported_msg = if result[:imported], do: ", Imported: #{result.imported}", else: ""
+
+        IO.puts("   #{status_icon} Direct: #{result.direct}, Patterns: #{result.patterns}#{imported_msg}\n")
+
+        result
+
+      {:ok, _} ->
+        IO.puts("   ❌ Invalid YAML structure (missing 'mappings' key)\n")
+        %{source: source, status: :error, error: "Invalid YAML structure"}
+
+      {:error, reason} ->
+        IO.puts("   ❌ Failed to read: #{inspect(reason)}\n")
+        %{source: source, status: :error, error: reason}
+    end
+  end
+
+  defp build_yaml_direct_attrs(source, mappings) when is_map(mappings) do
+    Enum.map(mappings, fn {term, category_slug} ->
+      %{
+        source: source,
+        external_term: String.downcase(to_string(term)),
+        mapping_type: "direct",
+        category_slug: to_string(category_slug),
+        priority: 0,
+        is_active: true,
+        metadata: %{imported_from: "yaml", imported_at: DateTime.utc_now() |> DateTime.to_iso8601()}
+      }
+    end)
+  end
+
+  defp build_yaml_direct_attrs(_source, _), do: []
+
+  defp build_yaml_pattern_attrs(source, patterns) when is_list(patterns) do
+    patterns
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {pattern, index} ->
+      match_pattern = pattern["match"]
+      categories = pattern["categories"] || []
+
+      # Higher index = lower priority (first patterns in file are higher priority)
+      priority = 100 - index
+
+      Enum.map(categories, fn category_slug ->
+        %{
+          source: source,
+          external_term: match_pattern,
+          mapping_type: "pattern",
+          category_slug: to_string(category_slug),
+          priority: priority,
+          is_active: true,
+          metadata: %{imported_from: "yaml", imported_at: DateTime.utc_now() |> DateTime.to_iso8601()}
+        }
+      end)
+    end)
+  end
+
+  defp build_yaml_pattern_attrs(_source, _), do: []
+
+  defp print_migration_summary(results, dry_run) do
+    IO.puts("📊 Summary")
+    IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+    successful = Enum.filter(results, &(&1.status in [:success, :dry_run]))
+    partial = Enum.filter(results, &(&1.status == :partial))
+    errors = Enum.filter(results, &(&1.status == :error))
+
+    total_direct = Enum.map(successful ++ partial, & &1.direct) |> Enum.sum()
+    total_patterns = Enum.map(successful ++ partial, & &1.patterns) |> Enum.sum()
+
+    IO.puts("  Sources processed: #{length(results)}")
+    IO.puts("  Successful: #{length(successful)}")
+
+    if not Enum.empty?(partial) do
+      IO.puts("  Partial (with errors): #{length(partial)}")
+    end
+
+    if not Enum.empty?(errors) do
+      IO.puts("  Failed: #{length(errors)}")
+    end
+
+    IO.puts("")
+    IO.puts("  Total mappings: #{total_direct + total_patterns}")
+    IO.puts("    Direct: #{total_direct}")
+    IO.puts("    Patterns: #{total_patterns}")
+
+    if dry_run do
+      IO.puts("\nRun without dry_run to import these mappings")
+    else
+      IO.puts("\n✅ Migration complete!")
+    end
+
+    IO.puts("")
+  end
 
   @doc """
   Enqueue Oban jobs to populate timezone for cities.

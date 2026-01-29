@@ -725,6 +725,12 @@ if config_env() == :prod do
       "cinema-city" => 48
     }
 
+  # Category mappings configuration
+  # Use database-backed mappings with ETS caching (migrated from YAML)
+  # See: EventasaurusApp.ReleaseTasks.migrate_yaml_mappings/0
+  config :eventasaurus, :discovery,
+    use_db_mappings: true
+
   # Stripe configuration is now handled globally above (lines 25-27)
   # Sentry configuration is now handled globally above (lines 29-47)
 end
