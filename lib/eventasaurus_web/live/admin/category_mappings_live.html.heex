@@ -1,0 +1,337 @@
+<div class="container mx-auto px-4 py-8">
+  <div class="flex justify-between items-center mb-6">
+    <div>
+      <h1 class="text-3xl font-bold">Category Mappings</h1>
+      <p class="mt-1 text-sm text-gray-500">
+        Manage source-to-category mappings for event classification
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <button
+        phx-click="refresh_cache"
+        class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+      >
+        Refresh Cache
+      </button>
+      <button
+        phx-click="new_mapping"
+        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        New Mapping
+      </button>
+    </div>
+  </div>
+
+  <!-- DB Mappings Status -->
+  <div class={"mb-4 p-3 rounded-lg text-sm " <> if(db_mappings_enabled?(), do: "bg-green-50 text-green-800", else: "bg-yellow-50 text-yellow-800")}>
+    <%= if db_mappings_enabled?() do %>
+      <span class="font-medium">Database mappings enabled</span> - Lookups use ETS cache for sub-millisecond performance
+    <% else %>
+      <span class="font-medium">Using YAML files</span> - Set <code class="bg-yellow-100 px-1 rounded">USE_DB_MAPPINGS=true</code> in config to enable database mappings
+    <% end %>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="mb-6 border-b border-gray-200">
+    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+      <.link
+        navigate={~p"/admin/categories"}
+        class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        Dashboard
+      </.link>
+      <.link
+        navigate={~p"/admin/categories/list"}
+        class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        All Categories
+      </.link>
+      <.link
+        navigate={~p"/admin/categories/hierarchy"}
+        class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        Hierarchy
+      </.link>
+      <.link
+        navigate={~p"/admin/categories/insights"}
+        class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        Insights
+      </.link>
+      <.link
+        navigate={~p"/admin/categories/mappings"}
+        class="border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        Mappings
+      </.link>
+    </nav>
+  </div>
+
+  <!-- Stats Overview -->
+  <div class="mb-6 grid grid-cols-4 gap-4">
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-2xl font-bold text-gray-900"><%= @stats.total %></div>
+      <div class="text-sm text-gray-500">Total Mappings</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-2xl font-bold text-blue-600"><%= @stats.total_direct %></div>
+      <div class="text-sm text-gray-500">Direct Mappings</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-2xl font-bold text-purple-600"><%= @stats.total_patterns %></div>
+      <div class="text-sm text-gray-500">Pattern Mappings</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-2xl font-bold text-gray-600"><%= map_size(@stats.by_source) %></div>
+      <div class="text-sm text-gray-500">Sources</div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="mb-6 flex gap-4 flex-wrap">
+    <form phx-change="filter_source" class="w-48">
+      <select name="source" class="w-full px-3 py-2 border rounded">
+        <option value="">All Sources</option>
+        <%= for source <- @sources do %>
+          <option value={source} selected={@selected_source == source}><%= source %></option>
+        <% end %>
+      </select>
+    </form>
+
+    <form phx-change="filter_type" class="w-40">
+      <select name="type" class="w-full px-3 py-2 border rounded">
+        <option value="">All Types</option>
+        <option value="direct" selected={@mapping_type_filter == "direct"}>Direct</option>
+        <option value="pattern" selected={@mapping_type_filter == "pattern"}>Pattern</option>
+      </select>
+    </form>
+
+    <form phx-submit="search" phx-change="search" class="flex-1">
+      <input
+        type="text"
+        name="search"
+        value={@search_query}
+        placeholder="Search by term or category..."
+        class="w-full px-4 py-2 border rounded"
+      />
+    </form>
+
+    <button
+      phx-click="toggle_inactive"
+      class={"px-4 py-2 rounded border " <> if(@show_inactive, do: "bg-gray-200", else: "bg-white")}
+    >
+      <%= if @show_inactive, do: "Hide", else: "Show" %> Inactive
+    </button>
+  </div>
+
+  <!-- Edit/Create Modal -->
+  <%= if @editing_mapping do %>
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <h2 class="text-xl font-bold mb-4">
+          <%= if @editing_mapping.id, do: "Edit Mapping", else: "New Mapping" %>
+        </h2>
+
+        <.form
+          :let={_f}
+          for={@changeset}
+          phx-submit={if @editing_mapping.id, do: "save", else: "create"}
+          class="space-y-4"
+        >
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Source</label>
+            <input
+              type="text"
+              name="category_mapping[source]"
+              value={Ecto.Changeset.get_field(@changeset, :source)}
+              class="mt-1 w-full px-3 py-2 border rounded"
+              placeholder="_defaults, bandsintown, karnet..."
+            />
+            <%= if @changeset.errors[:source] do %>
+              <p class="mt-1 text-sm text-red-600">
+                <%= elem(hd(@changeset.errors[:source]), 0) %>
+              </p>
+            <% end %>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">External Term</label>
+            <input
+              type="text"
+              name="category_mapping[external_term]"
+              value={Ecto.Changeset.get_field(@changeset, :external_term)}
+              class="mt-1 w-full px-3 py-2 border rounded"
+              placeholder="rock, jazz, koncerty..."
+            />
+            <%= if @changeset.errors[:external_term] do %>
+              <p class="mt-1 text-sm text-red-600">
+                <%= elem(hd(@changeset.errors[:external_term]), 0) %>
+              </p>
+            <% end %>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Mapping Type</label>
+            <select name="category_mapping[mapping_type]" class="mt-1 w-full px-3 py-2 border rounded">
+              <option value="direct" selected={Ecto.Changeset.get_field(@changeset, :mapping_type) == "direct"}>
+                Direct (exact match)
+              </option>
+              <option value="pattern" selected={Ecto.Changeset.get_field(@changeset, :mapping_type) == "pattern"}>
+                Pattern (regex)
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Category Slug</label>
+            <input
+              type="text"
+              name="category_mapping[category_slug]"
+              value={Ecto.Changeset.get_field(@changeset, :category_slug)}
+              class="mt-1 w-full px-3 py-2 border rounded"
+              placeholder="concerts, theatre, sports..."
+            />
+            <%= if @changeset.errors[:category_slug] do %>
+              <p class="mt-1 text-sm text-red-600">
+                <%= elem(hd(@changeset.errors[:category_slug]), 0) %>
+              </p>
+            <% end %>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Priority</label>
+            <input
+              type="number"
+              name="category_mapping[priority]"
+              value={Ecto.Changeset.get_field(@changeset, :priority) || 0}
+              class="mt-1 w-full px-3 py-2 border rounded"
+            />
+            <p class="mt-1 text-xs text-gray-500">Higher priority patterns are checked first</p>
+          </div>
+
+          <div class="flex items-center">
+            <input
+              type="checkbox"
+              name="category_mapping[is_active]"
+              value="true"
+              checked={Ecto.Changeset.get_field(@changeset, :is_active) != false}
+              class="h-4 w-4 text-blue-600 border-gray-300 rounded"
+            />
+            <label class="ml-2 text-sm text-gray-700">Active</label>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-4">
+            <button
+              type="button"
+              phx-click="cancel_edit"
+              class="px-4 py-2 border rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              <%= if @editing_mapping.id, do: "Save", else: "Create" %>
+            </button>
+          </div>
+        </.form>
+      </div>
+    </div>
+  <% end %>
+
+  <!-- Mappings Table -->
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">External Term</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <%= for mapping <- @mappings do %>
+          <tr class={unless mapping.is_active, do: "opacity-50 bg-gray-50"}>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class={"px-2 py-1 text-xs rounded " <> if(mapping.source == "_defaults", do: "bg-gray-100 text-gray-600", else: "bg-blue-100 text-blue-800")}>
+                <%= mapping.source %>
+              </span>
+            </td>
+            <td class="px-6 py-4">
+              <%= if mapping.mapping_type == "pattern" do %>
+                <code class="text-sm bg-purple-50 px-2 py-1 rounded text-purple-700">/<%= mapping.external_term %>/</code>
+              <% else %>
+                <span class="text-sm font-medium"><%= mapping.external_term %></span>
+              <% end %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class={"px-2 py-1 text-xs rounded " <> if(mapping.mapping_type == "direct", do: "bg-green-100 text-green-800", else: "bg-purple-100 text-purple-800")}>
+                <%= mapping.mapping_type %>
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class="text-sm text-gray-900"><%= mapping.category_slug %></span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <%= mapping.priority %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class={
+                "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
+                if mapping.is_active,
+                  do: "bg-green-100 text-green-800",
+                  else: "bg-red-100 text-red-800"
+              }>
+                <%= if mapping.is_active, do: "Active", else: "Inactive" %>
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <div class="flex gap-2">
+                <button
+                  phx-click="edit"
+                  phx-value-id={mapping.id}
+                  class="text-blue-600 hover:text-blue-900"
+                >
+                  Edit
+                </button>
+                <button
+                  phx-click="toggle_active"
+                  phx-value-id={mapping.id}
+                  class="text-yellow-600 hover:text-yellow-900"
+                >
+                  <%= if mapping.is_active, do: "Deactivate", else: "Activate" %>
+                </button>
+                <button
+                  phx-click="delete"
+                  phx-value-id={mapping.id}
+                  data-confirm="Are you sure you want to delete this mapping?"
+                  class="text-red-600 hover:text-red-900"
+                >
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+
+    <%= if @mappings == [] do %>
+      <div class="text-center py-8 text-gray-500">
+        No mappings found.
+        <%= if @search_query != "" or @selected_source != nil or @mapping_type_filter != nil do %>
+          Try adjusting your filters.
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="mt-4 text-sm text-gray-500">
+    Showing <%= length(@mappings) %> mappings
+  </div>
+</div>

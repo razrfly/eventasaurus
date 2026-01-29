@@ -1,12 +1,26 @@
 defmodule EventasaurusDiscovery.Categories.CategoryMapper do
   @moduledoc """
-  Loads and manages category mappings from YAML configuration files.
-  Provides mapping from source-specific categories to internal category system.
+  Maps source-specific categories to internal category system.
+
+  Supports two backends:
+  - YAML files (legacy, default)
+  - Database with ETS caching (new, via USE_DB_MAPPINGS=true)
+
+  ## Configuration
+
+      # Enable database-backed mappings (in config.exs or runtime.exs)
+      # NOTE: Uses :eventasaurus namespace (NOT :eventasaurus_discovery)
+      config :eventasaurus, :discovery,
+        use_db_mappings: true
+
+  The database backend provides sub-millisecond lookups via ETS caching
+  and allows dynamic mapping updates without redeployment.
   """
 
   require Logger
   import Ecto.Query, warn: false
   alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Categories.CategoryMappings
 
   @defaults_file "_defaults.yml"
 
@@ -27,12 +41,13 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
       when is_list(source_categories) do
     source_string = to_string(source)
 
-    # Load mappings (in production, we'd cache this)
-    mappings = load_all_mappings()
-
-    # Get source-specific mappings, fallback to defaults
-    source_mappings = Map.get(mappings, source_string, %{})
-    defaults_mappings = Map.get(mappings, "defaults", %{})
+    # Choose backend based on config
+    {source_mappings, defaults_mappings} =
+      if use_db_mappings?() do
+        load_from_db(source_string)
+      else
+        load_from_yaml(source_string)
+      end
 
     # Map each source category
     mapped_categories =
@@ -50,9 +65,51 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
 
   def map_categories(_source, _source_categories, _category_lookup), do: []
 
-  # Private functions
+  @doc """
+  Returns whether database-backed mappings are enabled.
+  """
+  def use_db_mappings? do
+    Application.get_env(:eventasaurus, :discovery)[:use_db_mappings] || false
+  end
 
-  defp load_all_mappings do
+  # ============================================================================
+  # Database Backend (ETS-cached)
+  # ============================================================================
+
+  defp load_from_db(source_string) do
+    cached = CategoryMappings.get_cached_mappings(source_string)
+
+    source_mappings = %{
+      "direct" => cached.source.direct,
+      "patterns" => cached.source.patterns
+    }
+
+    defaults_mappings = %{
+      "direct" => cached.defaults.direct,
+      "patterns" => cached.defaults.patterns
+    }
+
+    {source_mappings, defaults_mappings}
+  end
+
+  # ============================================================================
+  # YAML Backend (legacy)
+  # ============================================================================
+
+  defp load_from_yaml(source_string) do
+    mappings = load_all_mappings_from_yaml()
+
+    source_mappings = Map.get(mappings, source_string, %{})
+    defaults_mappings = Map.get(mappings, "defaults", %{})
+
+    {source_mappings, defaults_mappings}
+  end
+
+  # ============================================================================
+  # YAML Loading Functions
+  # ============================================================================
+
+  defp load_all_mappings_from_yaml do
     # Use priv directory for production compatibility
     priv_dir = :code.priv_dir(:eventasaurus)
     config_path = Path.join(priv_dir, "category_mappings")
@@ -173,18 +230,38 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
     patterns = Map.get(mappings, "patterns", [])
 
     patterns
-    |> Enum.flat_map(fn %{"match" => pattern, "categories" => categories} ->
-      if matches_pattern?(normalized_category, pattern) do
-        categories
-        |> Enum.map(fn cat -> Map.get(category_lookup, cat) end)
-        |> Enum.filter(&(&1 != nil))
-        |> Enum.filter(fn {_id, active} -> active end)
-        |> Enum.map(fn {id, _active} -> {id, false} end)
-      else
-        []
-      end
+    |> Enum.flat_map(fn pattern_entry ->
+      try_match_pattern(normalized_category, pattern_entry, category_lookup)
     end)
   end
+
+  # Handle DB backend: {compiled_regex, category_slug} tuples
+  defp try_match_pattern(normalized_category, {%Regex{} = regex, category_slug}, category_lookup) do
+    if Regex.match?(regex, normalized_category) do
+      case Map.get(category_lookup, category_slug) do
+        {id, true} -> [{id, false}]
+        _ -> []
+      end
+    else
+      []
+    end
+  end
+
+  # Handle YAML backend: %{"match" => pattern, "categories" => [...]} maps
+  defp try_match_pattern(normalized_category, %{"match" => pattern, "categories" => categories}, category_lookup) do
+    if matches_pattern?(normalized_category, pattern) do
+      categories
+      |> Enum.map(fn cat -> Map.get(category_lookup, cat) end)
+      |> Enum.filter(&(&1 != nil))
+      |> Enum.filter(fn {_id, active} -> active end)
+      |> Enum.map(fn {id, _active} -> {id, false} end)
+    else
+      []
+    end
+  end
+
+  # Fallback for unexpected pattern formats
+  defp try_match_pattern(_normalized_category, _pattern_entry, _category_lookup), do: []
 
   defp matches_pattern?(text, pattern) do
     # Try compiling as a regex first (for patterns like "comedy|stand.?up")
@@ -206,6 +283,10 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
         end
     end
   end
+
+  # ============================================================================
+  # Shared Logic (used by both backends)
+  # ============================================================================
 
   defp mark_primary_category([]), do: []
 

@@ -30,6 +30,34 @@ You MAY use read-only git commands if needed:
 - `git log` - View history
 - `git show` - View specific commits
 
+## ⚠️ CRITICAL: APPLICATION CONFIG NAMESPACE
+
+**NEVER use `:eventasaurus_discovery` as an application config namespace.**
+
+`eventasaurus_discovery` is a **module namespace**, NOT a separate OTP application. Using `config :eventasaurus_discovery, ...` or `Application.get_env(:eventasaurus_discovery, ...)` will cause:
+
+```
+warning: You have configured application :eventasaurus_discovery but the application is not available
+```
+
+### Correct Pattern
+
+Always use `:eventasaurus` with nested keys:
+
+```elixir
+# ✅ CORRECT
+config :eventasaurus, :discovery,
+  use_db_mappings: true,
+  movie_lookup: [providers: [:tmdb, :omdb]]
+
+# In code:
+Application.get_env(:eventasaurus, :discovery)[:use_db_mappings]
+
+# ❌ WRONG - DO NOT USE
+config :eventasaurus_discovery, use_db_mappings: true
+Application.get_env(:eventasaurus_discovery, :use_db_mappings)
+```
+
 ## Project Overview
 
 Eventasaurus is an Elixir/Phoenix application that aggregates events from multiple sources using a scraper-based architecture. The project uses:

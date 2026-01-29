@@ -388,9 +388,12 @@ defmodule Mix.Tasks.Audit.MovieMatching do
     IO.puts("  TMDB:  #{tmdb_status}")
 
     # Check OMDb
+    # NOTE: Uses :eventasaurus namespace (NOT :eventasaurus_discovery)
+    discovery_config = Application.get_env(:eventasaurus, :discovery) || []
+
     omdb_key =
       System.get_env("OMDB_API_KEY") ||
-        Application.get_env(:eventasaurus_discovery, :omdb_api_key)
+        discovery_config[:omdb_api_key]
 
     omdb_status =
       if omdb_key && omdb_key != "",
@@ -402,7 +405,7 @@ defmodule Mix.Tasks.Audit.MovieMatching do
     # Check Zyte (for IMDB fallback)
     zyte_key =
       System.get_env("ZYTE_API_KEY") ||
-        Application.get_env(:eventasaurus_discovery, :zyte_api_key)
+        discovery_config[:zyte_api_key]
 
     zyte_status =
       if zyte_key && zyte_key != "",

@@ -43,11 +43,14 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
 
   Providers and thresholds can be configured in config.exs:
 
-      config :eventasaurus_discovery, :movie_lookup,
-        providers: [:tmdb, :omdb, :imdb],
-        confidence_threshold: 0.7,
-        review_threshold: 0.5,
-        cache_ttl: :timer.hours(24)
+      # NOTE: Uses :eventasaurus namespace (NOT :eventasaurus_discovery)
+      config :eventasaurus, :discovery,
+        movie_lookup: [
+          providers: [:tmdb, :omdb, :imdb],
+          confidence_threshold: 0.7,
+          review_threshold: 0.5,
+          cache_ttl: :timer.hours(24)
+        ]
 
   ## Providers
 
@@ -545,27 +548,32 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
   end
 
   # Configuration helpers
+  # NOTE: Uses :eventasaurus namespace (NOT :eventasaurus_discovery)
+
+  defp get_movie_lookup_config do
+    Application.get_env(:eventasaurus, :discovery)[:movie_lookup] || []
+  end
 
   defp get_providers(opts) do
     Keyword.get(opts, :providers) ||
-      Application.get_env(:eventasaurus_discovery, :movie_lookup, [])[:providers] ||
+      get_movie_lookup_config()[:providers] ||
       @default_providers
   end
 
   defp get_confidence_threshold(opts) do
     Keyword.get(opts, :confidence_threshold) ||
-      Application.get_env(:eventasaurus_discovery, :movie_lookup, [])[:confidence_threshold] ||
+      get_movie_lookup_config()[:confidence_threshold] ||
       @default_confidence_threshold
   end
 
   defp get_review_threshold(opts) do
     Keyword.get(opts, :review_threshold) ||
-      Application.get_env(:eventasaurus_discovery, :movie_lookup, [])[:review_threshold] ||
+      get_movie_lookup_config()[:review_threshold] ||
       @default_review_threshold
   end
 
   defp get_cache_ttl do
-    Application.get_env(:eventasaurus_discovery, :movie_lookup, [])[:cache_ttl] ||
+    get_movie_lookup_config()[:cache_ttl] ||
       @default_cache_ttl
   end
 
