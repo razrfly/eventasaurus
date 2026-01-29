@@ -23,12 +23,8 @@
   </div>
 
   <!-- DB Mappings Status -->
-  <div class={"mb-4 p-3 rounded-lg text-sm " <> if(db_mappings_enabled?(), do: "bg-green-50 text-green-800", else: "bg-yellow-50 text-yellow-800")}>
-    <%= if db_mappings_enabled?() do %>
-      <span class="font-medium">Database mappings enabled</span> - Lookups use ETS cache for sub-millisecond performance
-    <% else %>
-      <span class="font-medium">Using YAML files</span> - Set <code class="bg-yellow-100 px-1 rounded">USE_DB_MAPPINGS=true</code> in config to enable database mappings
-    <% end %>
+  <div class="mb-4 p-3 rounded-lg text-sm bg-green-50 text-green-800">
+    <span class="font-medium">Database mappings enabled</span> - Lookups use ETS cache for sub-millisecond performance
   </div>
 
   <!-- Tab Navigation -->

@@ -12,15 +12,12 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
       mix benchmark.category_mapper
       mix benchmark.category_mapper --iterations 100
       mix benchmark.category_mapper --save
-      mix benchmark.category_mapper --mode db    # Force DB+ETS backend
-      mix benchmark.category_mapper --mode yaml  # Force YAML backend
 
   ## Options
 
       --iterations N   Number of iterations for timing (default: 50)
       --save           Save results to .taskmaster/baselines/ for comparison
       --verbose        Show detailed output
-      --mode MODE      Force backend: yaml or db (default: auto from config)
   """
 
   use Mix.Task
@@ -35,29 +32,25 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
   def run(args) do
     {opts, _, _} =
       OptionParser.parse(args,
-        switches: [iterations: :integer, save: :boolean, verbose: :boolean, mode: :string],
-        aliases: [i: :iterations, s: :save, v: :verbose, m: :mode]
+        switches: [iterations: :integer, save: :boolean, verbose: :boolean],
+        aliases: [i: :iterations, s: :save, v: :verbose]
       )
 
     iterations = Keyword.get(opts, :iterations, 50)
     save? = Keyword.get(opts, :save, false)
     verbose? = Keyword.get(opts, :verbose, false)
-    mode = parse_mode(Keyword.get(opts, :mode))
 
     # Start application for DB access
     Mix.Task.run("app.start")
 
-    # Apply mode override if specified
-    original_config = apply_mode_override(mode)
-
     IO.puts("\n#{IO.ANSI.cyan()}📊 Category Mapper Benchmark#{IO.ANSI.reset()}")
     IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print_mode_info(mode)
+    IO.puts("  Backend: #{IO.ANSI.bright()}DB+ETS#{IO.ANSI.reset()}")
     IO.puts("")
 
-    # 1. Count mappings based on mode
-    mapping_stats = count_mappings(mode)
-    print_mapping_stats(mapping_stats, mode)
+    # 1. Count mappings from database
+    mapping_stats = count_db_mappings()
+    print_mapping_stats(mapping_stats)
 
     # 2. Build category lookup
     category_lookup = build_category_lookup()
@@ -75,123 +68,20 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
     print_other_rate(other_rate)
 
     # 5. Summary
-    summary = build_summary(mapping_stats, timing_results, other_rate, mode)
+    summary = build_summary(mapping_stats, timing_results, other_rate)
     print_summary(summary)
 
     # 6. Optionally save results
     if save? do
-      save_baseline(summary, mode)
+      save_baseline(summary)
     end
-
-    # Restore original config
-    restore_mode_override(original_config)
 
     :ok
   end
 
   # ============================================================================
-  # Mode Handling
+  # Database Mapping Stats
   # ============================================================================
-
-  defp parse_mode(nil), do: :auto
-  defp parse_mode("yaml"), do: :yaml
-  defp parse_mode("db"), do: :db
-  defp parse_mode(other) do
-    IO.puts("#{IO.ANSI.yellow()}⚠️  Unknown mode '#{other}', using auto#{IO.ANSI.reset()}")
-    :auto
-  end
-
-  defp apply_mode_override(:auto), do: nil
-
-  defp apply_mode_override(:yaml) do
-    current_config = Application.get_env(:eventasaurus, :discovery, [])
-    original = Keyword.get(current_config, :use_db_mappings, false)
-    Application.put_env(:eventasaurus, :discovery, Keyword.put(current_config, :use_db_mappings, false))
-    original
-  end
-
-  defp apply_mode_override(:db) do
-    current_config = Application.get_env(:eventasaurus, :discovery, [])
-    original = Keyword.get(current_config, :use_db_mappings, false)
-    Application.put_env(:eventasaurus, :discovery, Keyword.put(current_config, :use_db_mappings, true))
-
-    # Ensure ETS cache is warmed up for DB mode
-    CategoryMappings.refresh_cache()
-
-    original
-  end
-
-  defp restore_mode_override(nil), do: :ok
-
-  defp restore_mode_override(original_value) do
-    current_config = Application.get_env(:eventasaurus, :discovery, [])
-    Application.put_env(:eventasaurus, :discovery, Keyword.put(current_config, :use_db_mappings, original_value))
-    :ok
-  end
-
-  defp print_mode_info(:auto) do
-    current = if CategoryMapper.use_db_mappings?(), do: "db", else: "yaml"
-    IO.puts("  Mode: #{IO.ANSI.bright()}auto#{IO.ANSI.reset()} (using #{current} from config)")
-  end
-
-  defp print_mode_info(:yaml) do
-    IO.puts("  Mode: #{IO.ANSI.bright()}yaml#{IO.ANSI.reset()} (forced)")
-  end
-
-  defp print_mode_info(:db) do
-    IO.puts("  Mode: #{IO.ANSI.bright()}db#{IO.ANSI.reset()} (forced, ETS-cached)")
-  end
-
-  defp effective_mode(:auto) do
-    if CategoryMapper.use_db_mappings?(), do: "db", else: "yaml"
-  end
-
-  defp effective_mode(:yaml), do: "yaml"
-  defp effective_mode(:db), do: "db"
-
-  defp count_mappings(mode) do
-    case effective_mode(mode) do
-      "yaml" -> count_yaml_mappings()
-      "db" -> count_db_mappings()
-    end
-  end
-
-  defp count_yaml_mappings do
-    priv_dir = :code.priv_dir(:eventasaurus)
-    config_path = Path.join(priv_dir, "category_mappings")
-
-    if File.dir?(config_path) do
-      config_path
-      |> File.ls!()
-      |> Enum.filter(&String.ends_with?(&1, ".yml"))
-      |> Enum.reduce(%{total_direct: 0, total_patterns: 0, by_source: %{}}, fn file, acc ->
-        file_path = Path.join(config_path, file)
-        source_name = Path.basename(file, ".yml")
-
-        case YamlElixir.read_from_file(file_path) do
-          {:ok, %{"mappings" => mappings} = data} ->
-            direct_count = if is_map(mappings), do: map_size(mappings), else: 0
-            pattern_count = length(data["patterns"] || [])
-
-            %{
-              acc
-              | total_direct: acc.total_direct + direct_count,
-                total_patterns: acc.total_patterns + pattern_count,
-                by_source:
-                  Map.put(acc.by_source, source_name, %{
-                    direct: direct_count,
-                    patterns: pattern_count
-                  })
-            }
-
-          _ ->
-            acc
-        end
-      end)
-    else
-      %{total_direct: 0, total_patterns: 0, by_source: %{}}
-    end
-  end
 
   defp count_db_mappings do
     stats = CategoryMappings.get_stats()
@@ -203,9 +93,8 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
     }
   end
 
-  defp print_mapping_stats(stats, mode) do
-    backend_label = if effective_mode(mode) == "yaml", do: "YAML", else: "DB+ETS"
-    IO.puts("#{IO.ANSI.bright()}📁 #{backend_label} Mapping Counts#{IO.ANSI.reset()}")
+  defp print_mapping_stats(stats) do
+    IO.puts("#{IO.ANSI.bright()}📁 DB+ETS Mapping Counts#{IO.ANSI.reset()}")
     IO.puts("───────────────────────────────────────────────────────────")
 
     stats.by_source
@@ -389,10 +278,10 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
     IO.puts("")
   end
 
-  defp build_summary(mapping_stats, timing_results, other_rate, mode) do
+  defp build_summary(mapping_stats, timing_results, other_rate) do
     %{
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
-      version: effective_mode(mode),
+      version: "db",
       mappings: %{
         total_direct: mapping_stats.total_direct,
         total_patterns: mapping_stats.total_patterns,
@@ -421,13 +310,12 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
     IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
   end
 
-  defp save_baseline(summary, mode) do
+  defp save_baseline(summary) do
     baselines_dir = Path.join([File.cwd!(), ".taskmaster", "baselines"])
     File.mkdir_p!(baselines_dir)
 
-    version = effective_mode(mode)
     date_str = Date.utc_today() |> Date.to_iso8601(:basic)
-    filename = "category_mapper_#{version}_#{date_str}.json"
+    filename = "category_mapper_db_#{date_str}.json"
     filepath = Path.join(baselines_dir, filename)
 
     json = Jason.encode!(summary, pretty: true)

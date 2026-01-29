@@ -1,10 +1,9 @@
 defmodule Mix.Tasks.Mappings.Validate do
   @moduledoc """
-  Validates that YAML and DB mapping backends produce identical results.
+  Validates that database category mappings are working correctly.
 
-  This task runs the same category lookups through both backends and
-  reports any mismatches. Use this to ensure 100% parity before enabling
-  the DB backend in production.
+  This task tests the category mapper with sample event data to ensure
+  mappings are producing expected results from the database.
 
   ## Usage
 
@@ -16,8 +15,7 @@ defmodule Mix.Tasks.Mappings.Validate do
 
       --limit N        Number of events to sample (default: 1000)
       --source NAME    Only test specific source
-      --verbose        Show detailed mismatch output
-      --sample FILE    Use sample file instead of database
+      --verbose        Show detailed output
   """
 
   use Mix.Task
@@ -28,13 +26,13 @@ defmodule Mix.Tasks.Mappings.Validate do
   alias EventasaurusDiscovery.Categories.CategoryMapper
   alias EventasaurusDiscovery.Categories.CategoryMappings
 
-  @shortdoc "Validate YAML and DB mapping parity"
+  @shortdoc "Validate category mappings are working"
 
   @impl Mix.Task
   def run(args) do
     {opts, _, _} =
       OptionParser.parse(args,
-        switches: [limit: :integer, source: :string, verbose: :boolean, sample: :string],
+        switches: [limit: :integer, source: :string, verbose: :boolean],
         aliases: [l: :limit, s: :source, v: :verbose]
       )
 
@@ -45,39 +43,50 @@ defmodule Mix.Tasks.Mappings.Validate do
     # Start application
     Mix.Task.run("app.start")
 
-    IO.puts("\n#{IO.ANSI.cyan()}🔍 Category Mapping Parity Validation#{IO.ANSI.reset()}")
+    IO.puts("\n#{IO.ANSI.cyan()}🔍 Category Mapping Validation#{IO.ANSI.reset()}")
     IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 
     # Build category lookup (shared by both backends)
     category_lookup = build_category_lookup()
     IO.puts("  Categories loaded: #{map_size(category_lookup)}")
 
-    # Ensure ETS cache is warmed for DB backend
-    IO.puts("  Warming ETS cache...")
-    CategoryMappings.refresh_cache()
+    # Check ETS cache status
+    IO.puts("  Checking ETS cache...")
+    stats = CategoryMappings.get_stats()
+    total_mappings = stats.total_direct + stats.total_patterns
+    IO.puts("  ETS cache: #{total_mappings} mappings (#{stats.total_direct} direct, #{stats.total_patterns} patterns)")
+
+    if total_mappings == 0 do
+      IO.puts("\n#{IO.ANSI.red()}❌ ERROR: ETS cache is empty!#{IO.ANSI.reset()}")
+      IO.puts("Run: EventasaurusDiscovery.Categories.CategoryMappings.refresh_cache()")
+      exit({:shutdown, 1})
+    end
 
     # Get test cases
     test_cases = get_test_cases(limit, source_filter)
     IO.puts("  Test cases: #{length(test_cases)}\n")
 
-    if test_cases == [] do
-      IO.puts("#{IO.ANSI.yellow()}⚠️  No test cases found. Run with real event data.#{IO.ANSI.reset()}\n")
-      :ok
-    else
-      # Run validation
-      results = validate_parity(test_cases, category_lookup, verbose?)
-
-      # Print results
-      print_results(results)
-
-      # Exit with error code if mismatches
-      if results.mismatches > 0 do
-        IO.puts("#{IO.ANSI.red()}❌ PARITY CHECK FAILED#{IO.ANSI.reset()}\n")
-        exit({:shutdown, 1})
+    test_cases =
+      if test_cases == [] do
+        IO.puts("#{IO.ANSI.yellow()}⚠️  No test cases found. Using synthetic test data.#{IO.ANSI.reset()}\n")
+        get_synthetic_test_cases(limit, source_filter)
       else
-        IO.puts("#{IO.ANSI.green()}✅ PARITY CHECK PASSED#{IO.ANSI.reset()}\n")
-        :ok
+        test_cases
       end
+
+    # Run validation
+    results = validate_mappings(test_cases, category_lookup, verbose?)
+
+    # Print results
+    print_results(results)
+
+    # Exit with error code if too many failures
+    if results.failure_rate > 50.0 do
+      IO.puts("#{IO.ANSI.red()}❌ VALIDATION FAILED: High failure rate#{IO.ANSI.reset()}\n")
+      exit({:shutdown, 1})
+    else
+      IO.puts("#{IO.ANSI.green()}✅ VALIDATION PASSED#{IO.ANSI.reset()}\n")
+      :ok
     end
   end
 
@@ -149,96 +158,62 @@ defmodule Mix.Tasks.Mappings.Validate do
     Enum.take(cases, limit)
   end
 
-  defp validate_parity(test_cases, category_lookup, verbose?) do
-    {matches, mismatches_list} =
+  defp validate_mappings(test_cases, category_lookup, verbose?) do
+    {successes, failures_list} =
       test_cases
-      |> Enum.reduce({0, []}, fn %{source: source, categories: cats}, {match_count, mismatches} ->
-        # Get YAML result
-        yaml_result = run_with_backend(:yaml, source, cats, category_lookup)
+      |> Enum.reduce({0, []}, fn %{source: source, categories: cats}, {success_count, failures} ->
+        result = CategoryMapper.map_categories(source, cats, category_lookup)
 
-        # Get DB result
-        db_result = run_with_backend(:db, source, cats, category_lookup)
-
-        # Compare (normalize order for comparison)
-        yaml_ids = yaml_result |> Enum.map(&elem(&1, 0)) |> Enum.sort()
-        db_ids = db_result |> Enum.map(&elem(&1, 0)) |> Enum.sort()
-
-        if yaml_ids == db_ids do
-          {match_count + 1, mismatches}
-        else
-          mismatch = %{
-            source: source,
-            categories: cats,
-            yaml_result: yaml_ids,
-            db_result: db_ids
-          }
-
+        if result != [] do
           if verbose? do
-            IO.puts("#{IO.ANSI.yellow()}MISMATCH:#{IO.ANSI.reset()}")
-            IO.puts("  Source: #{source}")
-            IO.puts("  Input: #{inspect(cats)}")
-            IO.puts("  YAML: #{inspect(yaml_ids)}")
-            IO.puts("  DB:   #{inspect(db_ids)}")
+            category_ids = Enum.map(result, &elem(&1, 0))
+            IO.puts("#{IO.ANSI.green()}✓#{IO.ANSI.reset()} #{source}: #{inspect(cats)} → #{inspect(category_ids)}")
           end
 
-          {match_count, [mismatch | mismatches]}
+          {success_count + 1, failures}
+        else
+          failure = %{source: source, categories: cats}
+
+          if verbose? do
+            IO.puts("#{IO.ANSI.yellow()}○#{IO.ANSI.reset()} #{source}: #{inspect(cats)} → (no mapping)")
+          end
+
+          {success_count, [failure | failures]}
         end
       end)
 
+    total = length(test_cases)
+
     %{
-      total: length(test_cases),
-      matches: matches,
-      mismatches: length(mismatches_list),
-      mismatches_list: Enum.reverse(mismatches_list),
-      parity_percent: if(length(test_cases) > 0, do: matches / length(test_cases) * 100, else: 100.0)
+      total: total,
+      successes: successes,
+      failures: length(failures_list),
+      failures_list: Enum.reverse(failures_list),
+      success_rate: if(total > 0, do: successes / total * 100, else: 100.0),
+      failure_rate: if(total > 0, do: length(failures_list) / total * 100, else: 0.0)
     }
   end
 
-  defp run_with_backend(backend, source, categories, category_lookup) do
-    # Save current config
-    current_config = Application.get_env(:eventasaurus, :discovery, [])
-    original = Keyword.get(current_config, :use_db_mappings, false)
-
-    # Set backend
-    case backend do
-      :yaml ->
-        Application.put_env(:eventasaurus, :discovery, Keyword.put(current_config, :use_db_mappings, false))
-
-      :db ->
-        Application.put_env(:eventasaurus, :discovery, Keyword.put(current_config, :use_db_mappings, true))
-    end
-
-    # Run mapping
-    result = CategoryMapper.map_categories(source, categories, category_lookup)
-
-    # Restore config
-    restored_config = Application.get_env(:eventasaurus, :discovery, [])
-    Application.put_env(:eventasaurus, :discovery, Keyword.put(restored_config, :use_db_mappings, original))
-
-    result
-  end
-
   defp print_results(results) do
-    IO.puts("#{IO.ANSI.bright()}📊 Validation Results#{IO.ANSI.reset()}")
+    IO.puts("\n#{IO.ANSI.bright()}📊 Validation Results#{IO.ANSI.reset()}")
     IO.puts("───────────────────────────────────────────────────────────")
     IO.puts("  Total test cases: #{results.total}")
-    IO.puts("  Matches:          #{results.matches}")
-    IO.puts("  Mismatches:       #{results.mismatches}")
-    IO.puts("  Parity:           #{:erlang.float_to_binary(results.parity_percent, decimals: 2)}%")
+    IO.puts("  Mapped:           #{results.successes}")
+    IO.puts("  Unmapped:         #{results.failures}")
+    IO.puts("  Success rate:     #{:erlang.float_to_binary(results.success_rate, decimals: 2)}%")
     IO.puts("───────────────────────────────────────────────────────────\n")
 
-    if results.mismatches > 0 && results.mismatches <= 10 do
-      IO.puts("#{IO.ANSI.yellow()}Mismatched cases (first 10):#{IO.ANSI.reset()}")
+    if results.failures > 0 && results.failures <= 20 do
+      IO.puts("#{IO.ANSI.yellow()}Unmapped categories (first 20):#{IO.ANSI.reset()}")
 
-      results.mismatches_list
-      |> Enum.take(10)
-      |> Enum.each(fn m ->
-        IO.puts("  #{m.source}: #{inspect(m.categories)}")
-        IO.puts("    YAML: #{inspect(m.yaml_result)}")
-        IO.puts("    DB:   #{inspect(m.db_result)}")
+      results.failures_list
+      |> Enum.take(20)
+      |> Enum.each(fn f ->
+        IO.puts("  #{f.source}: #{inspect(f.categories)}")
       end)
 
-      IO.puts("")
+      IO.puts("\nNote: Some unmapped categories are expected (source-specific terms)")
+      IO.puts("      Add mappings via /admin/category-mappings if needed\n")
     end
   end
 end
