@@ -104,15 +104,15 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
   defp apply_mode_override(:auto), do: nil
 
   defp apply_mode_override(:yaml) do
-    original = Application.get_env(:eventasaurus, :discovery)[:use_db_mappings] || false
-    current_config = Application.get_env(:eventasaurus, :discovery) || []
+    current_config = Application.get_env(:eventasaurus, :discovery, [])
+    original = Keyword.get(current_config, :use_db_mappings, false)
     Application.put_env(:eventasaurus, :discovery, Keyword.put(current_config, :use_db_mappings, false))
     original
   end
 
   defp apply_mode_override(:db) do
-    original = Application.get_env(:eventasaurus, :discovery)[:use_db_mappings] || false
-    current_config = Application.get_env(:eventasaurus, :discovery) || []
+    current_config = Application.get_env(:eventasaurus, :discovery, [])
+    original = Keyword.get(current_config, :use_db_mappings, false)
     Application.put_env(:eventasaurus, :discovery, Keyword.put(current_config, :use_db_mappings, true))
 
     # Ensure ETS cache is warmed up for DB mode
@@ -124,7 +124,7 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
   defp restore_mode_override(nil), do: :ok
 
   defp restore_mode_override(original_value) do
-    current_config = Application.get_env(:eventasaurus, :discovery) || []
+    current_config = Application.get_env(:eventasaurus, :discovery, [])
     Application.put_env(:eventasaurus, :discovery, Keyword.put(current_config, :use_db_mappings, original_value))
     :ok
   end

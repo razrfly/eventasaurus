@@ -551,7 +551,8 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
   # NOTE: Uses :eventasaurus namespace (NOT :eventasaurus_discovery)
 
   defp get_movie_lookup_config do
-    Application.get_env(:eventasaurus, :discovery)[:movie_lookup] || []
+    discovery_config = Application.get_env(:eventasaurus, :discovery, [])
+    Keyword.get(discovery_config, :movie_lookup, [])
   end
 
   defp get_providers(opts) do

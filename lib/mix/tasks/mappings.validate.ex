@@ -196,8 +196,8 @@ defmodule Mix.Tasks.Mappings.Validate do
 
   defp run_with_backend(backend, source, categories, category_lookup) do
     # Save current config
-    original = Application.get_env(:eventasaurus, :discovery)[:use_db_mappings] || false
-    current_config = Application.get_env(:eventasaurus, :discovery) || []
+    current_config = Application.get_env(:eventasaurus, :discovery, [])
+    original = Keyword.get(current_config, :use_db_mappings, false)
 
     # Set backend
     case backend do
@@ -212,7 +212,7 @@ defmodule Mix.Tasks.Mappings.Validate do
     result = CategoryMapper.map_categories(source, categories, category_lookup)
 
     # Restore config
-    restored_config = Application.get_env(:eventasaurus, :discovery) || []
+    restored_config = Application.get_env(:eventasaurus, :discovery, [])
     Application.put_env(:eventasaurus, :discovery, Keyword.put(restored_config, :use_db_mappings, original))
 
     result
