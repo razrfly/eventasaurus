@@ -151,14 +151,15 @@ config :eventasaurus,
   ]
 
 # Category mappings configuration
-# Controls whether to use database-backed mappings (with ETS caching)
-# or legacy YAML files for category mapping
 # NOTE: Uses :eventasaurus namespace (NOT :eventasaurus_discovery) because
 # eventasaurus_discovery is a module namespace, not a separate OTP application.
-config :eventasaurus, :discovery,
-  # Set to true to use database-backed mappings with ETS caching
-  # Default is false (use YAML files) for backward compatibility
-  use_db_mappings: false
+#
+# As of Phase 2.3 (Issue #3469), category mappings are exclusively stored in
+# the database with ETS caching. YAML files have been archived to
+# priv/category_mappings_archived/
+#
+# Mappings can be managed via the admin UI at /admin/category-mappings
+config :eventasaurus, :discovery, []
 
 # Unsplash image refresh configuration
 # Controls how often to refresh Unsplash images for cities and countries

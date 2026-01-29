@@ -186,24 +186,19 @@ defmodule Eventasaurus.Application do
     # All job execution logging is now handled by ObanTelemetry and MetricsTracker
   end
 
-  # Initialize category mappings ETS cache if database-backed mappings are enabled
+  # Initialize category mappings ETS cache from database
   # This loads all active mappings from the DB into ETS for sub-millisecond lookups
   defp initialize_category_mappings_cache do
-    discovery_config = Application.get_env(:eventasaurus, :discovery, [])
+    Logger.info("[CategoryMappings] Initializing ETS cache from database...")
 
-    if Keyword.get(discovery_config, :use_db_mappings, false) do
-      Logger.info("[CategoryMappings] Initializing ETS cache from database...")
-
-      try do
-        count = EventasaurusDiscovery.Categories.CategoryMappings.init_cache()
-        Logger.info("[CategoryMappings] ETS cache initialized with #{count} mappings")
-      rescue
-        e ->
-          Logger.error("[CategoryMappings] Failed to initialize cache: #{inspect(e)}")
-          Logger.warning("[CategoryMappings] Falling back to YAML file mappings")
-      end
-    else
-      Logger.debug("[CategoryMappings] Using YAML file mappings (use_db_mappings=false)")
+    try do
+      count = EventasaurusDiscovery.Categories.CategoryMappings.init_cache()
+      Logger.info("[CategoryMappings] ETS cache initialized with #{count} mappings")
+    rescue
+      e ->
+        Logger.error("[CategoryMappings] Failed to initialize cache: #{inspect(e)}")
+        # Note: YAML fallback removed in Phase 2.3 (Issue #3469)
+        # If this fails in production, check database connectivity and category_mappings table
     end
   end
 

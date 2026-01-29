@@ -46,16 +46,16 @@ Always use `:eventasaurus` with nested keys:
 
 ```elixir
 # ✅ CORRECT
-config :eventasaurus, :discovery,
-  use_db_mappings: true,
-  movie_lookup: [providers: [:tmdb, :omdb]]
+config :eventasaurus, :venue_matching,
+  proximity_threshold_meters: 1000,
+  fuzzy_name_threshold: 0.6
 
 # In code:
-Application.get_env(:eventasaurus, :discovery)[:use_db_mappings]
+Application.get_env(:eventasaurus, :venue_matching)[:proximity_threshold_meters]
 
 # ❌ WRONG - DO NOT USE
-config :eventasaurus_discovery, use_db_mappings: true
-Application.get_env(:eventasaurus_discovery, :use_db_mappings)
+config :eventasaurus_discovery, proximity_threshold_meters: 1000
+Application.get_env(:eventasaurus_discovery, :proximity_threshold_meters)
 ```
 
 ## Project Overview

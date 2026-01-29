@@ -32,28 +32,34 @@ defmodule EventasaurusApp.ReleaseTasks do
   alias EventasaurusDiscovery.Locations.City
 
   @doc """
-  Migrate category mappings from YAML files to the database.
+  Re-import category mappings from archived YAML files to the database.
 
-  This reads all YAML files from `priv/category_mappings/` and imports
-  them into the `category_mappings` table. Clears all existing mappings
-  before importing to ensure clean state.
+  NOTE: As of Phase 2.3 (Issue #3469), YAML files have been archived to
+  `priv/category_mappings_archived/`. The database is now the authoritative
+  source for category mappings. This task is for emergency recovery only.
+
+  For normal operations, use the admin UI at `/admin/category-mappings`.
 
   ## Usage
 
-      # Clear and re-import all YAML mappings
+      # Clear and re-import all archived YAML mappings (EMERGENCY RECOVERY)
       bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.migrate_yaml_mappings()"
 
       # Dry run - show what would be imported
       bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.migrate_yaml_mappings(true)"
   """
+  @spec migrate_yaml_mappings(boolean()) :: :ok | {:error, :no_yaml_files}
   def migrate_yaml_mappings(dry_run \\ false) do
     start_app()
 
     alias EventasaurusDiscovery.Categories.CategoryMappings
     alias EventasaurusDiscovery.Categories.CategoryMapping
 
-    IO.puts("\n📦 YAML to Database Migration")
+    IO.puts("\n📦 YAML to Database Migration (from archived files)")
     IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+    IO.puts("⚠️  Note: YAML files are archived. Database is the authoritative source.")
+    IO.puts("   Use /admin/category-mappings for normal operations.\n")
 
     if dry_run do
       IO.puts("🔍 DRY RUN MODE - No changes will be made\n")
@@ -97,7 +103,8 @@ defmodule EventasaurusApp.ReleaseTasks do
 
   defp load_yaml_files do
     priv_dir = :code.priv_dir(:eventasaurus)
-    config_path = Path.join(priv_dir, "category_mappings")
+    # Read from archived YAML files (archived in Phase 2.3, Issue #3469)
+    config_path = Path.join(priv_dir, "category_mappings_archived")
 
     if File.dir?(config_path) do
       config_path
@@ -145,6 +152,7 @@ defmodule EventasaurusApp.ReleaseTasks do
               status: :dry_run
             }
           else
+            # import_mappings/1 always returns {:ok, results} - errors are collected in the errors list
             {:ok, import_result} = CategoryMappings.import_mappings(all_attrs)
 
             %{

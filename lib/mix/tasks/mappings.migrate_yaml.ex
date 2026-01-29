@@ -1,16 +1,19 @@
 defmodule Mix.Tasks.Mappings.MigrateYaml do
   @moduledoc """
-  Migrates category mappings from YAML files to the database.
+  Re-imports category mappings from archived YAML files to the database.
 
-  This task reads all YAML files from `priv/category_mappings/` and imports
-  them into the `category_mappings` table.
+  NOTE: As of Phase 2.3 (Issue #3469), YAML files have been archived to
+  `priv/category_mappings_archived/`. The database is now the authoritative
+  source for category mappings. This task is for emergency recovery only.
+
+  For normal operations, use the admin UI at `/admin/category-mappings`.
 
   ## Usage
 
       # Dry run - show what would be imported
       mix mappings.migrate_yaml --dry-run
 
-      # Import all YAML files
+      # Import all archived YAML files
       mix mappings.migrate_yaml
 
       # Import a specific source only
@@ -19,7 +22,7 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
       # Clear existing mappings for a source before importing
       mix mappings.migrate_yaml --source bandsintown --clear
 
-      # Clear ALL mappings and re-import everything
+      # Clear ALL mappings and re-import everything (EMERGENCY RECOVERY)
       mix mappings.migrate_yaml --clear-all
 
   ## Options
@@ -36,7 +39,7 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
 
   alias EventasaurusDiscovery.Categories.CategoryMappings
 
-  @shortdoc "Migrate category mappings from YAML to database"
+  @shortdoc "Re-import category mappings from archived YAML files (emergency recovery)"
 
   @defaults_file "_defaults.yml"
 
@@ -63,8 +66,11 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
     # Start application for DB access
     Mix.Task.run("app.start")
 
-    IO.puts("\n#{IO.ANSI.cyan()}📦 YAML to Database Migration#{IO.ANSI.reset()}")
+    IO.puts("\n#{IO.ANSI.cyan()}📦 YAML to Database Migration (from archived files)#{IO.ANSI.reset()}")
     IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+    IO.puts("#{IO.ANSI.yellow()}⚠️  Note: YAML files are archived. Database is the authoritative source.#{IO.ANSI.reset()}")
+    IO.puts("#{IO.ANSI.yellow()}   Use /admin/category-mappings for normal operations.#{IO.ANSI.reset()}\n")
 
     if dry_run? do
       IO.puts("#{IO.ANSI.yellow()}🔍 DRY RUN MODE - No changes will be made#{IO.ANSI.reset()}\n")
@@ -101,7 +107,8 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
 
   defp load_yaml_files(source_filter) do
     priv_dir = :code.priv_dir(:eventasaurus)
-    config_path = Path.join(priv_dir, "category_mappings")
+    # Read from archived YAML files (archived in Phase 2.3, Issue #3469)
+    config_path = Path.join(priv_dir, "category_mappings_archived")
 
     if File.dir?(config_path) do
       config_path
