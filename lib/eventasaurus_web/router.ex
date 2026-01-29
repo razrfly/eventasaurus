@@ -89,6 +89,10 @@ defmodule EventasaurusWeb.Router do
         live "/categories/new", Admin.CategoryFormLive, :new
         live "/categories/:id/edit", Admin.CategoryFormLive, :edit
 
+        # ML Backtests (Issue #3473 - Phase 2.4 ML Backtesting Framework) (dev - no auth)
+        live "/ml/backtests", Admin.MlBacktestsLive, :index
+        live "/ml/backtests/:id", Admin.MlBacktestsLive, :show
+
         # Source Management (dev - no auth)
         live "/sources", Admin.SourceIndexLive, :index
         live "/sources/new", Admin.SourceFormLive, :new
@@ -246,6 +250,10 @@ defmodule EventasaurusWeb.Router do
         live "/categories/mappings", EventasaurusWeb.Admin.CategoryMappingsLive, :index
         live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
         live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
+
+        # ML Backtests (Issue #3473 - Phase 2.4 ML Backtesting Framework)
+        live "/ml/backtests", EventasaurusWeb.Admin.MlBacktestsLive, :index
+        live "/ml/backtests/:id", EventasaurusWeb.Admin.MlBacktestsLive, :show
 
         # Source Management
         live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index

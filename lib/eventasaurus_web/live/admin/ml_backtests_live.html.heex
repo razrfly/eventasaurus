@@ -1,0 +1,337 @@
+<div class="container mx-auto px-4 py-8">
+  <%= if @selected_run do %>
+    <!-- Detail View -->
+    <div class="mb-6">
+      <button
+        phx-click="back_to_list"
+        class="flex items-center text-blue-600 hover:text-blue-800"
+      >
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to All Runs
+      </button>
+    </div>
+
+    <div class="flex justify-between items-center mb-6">
+      <div>
+        <h1 class="text-3xl font-bold"><%= @selected_run.name %></h1>
+        <p class="mt-1 text-sm text-gray-500">
+          Run #<%= @selected_run.id %> • <%= format_datetime(@selected_run.inserted_at) %>
+        </p>
+      </div>
+      <span class={"px-3 py-1 rounded-full text-sm font-medium " <> status_color(@selected_run.status)}>
+        <%= @selected_run.status %>
+      </span>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-2xl font-bold text-blue-600"><%= format_accuracy(@selected_run.accuracy) %></div>
+        <div class="text-sm text-gray-500">Accuracy</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-2xl font-bold text-green-600"><%= format_accuracy(@selected_run.precision_macro) %></div>
+        <div class="text-sm text-gray-500">Precision (Macro)</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-2xl font-bold text-purple-600"><%= format_accuracy(@selected_run.recall_macro) %></div>
+        <div class="text-sm text-gray-500">Recall (Macro)</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-2xl font-bold text-orange-600"><%= format_f1(@selected_run.f1_macro) %></div>
+        <div class="text-sm text-gray-500">F1 Score (Macro)</div>
+      </div>
+    </div>
+
+    <!-- Run Configuration -->
+    <div class="mb-8 bg-white rounded-lg shadow p-4">
+      <h2 class="text-lg font-semibold mb-3">Configuration</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div>
+          <span class="text-gray-500">Model:</span>
+          <span class="ml-2 font-mono text-xs"><%= @selected_run.model_name %></span>
+        </div>
+        <div>
+          <span class="text-gray-500">Sample Size:</span>
+          <span class="ml-2 font-medium"><%= @selected_run.sample_size %></span>
+        </div>
+        <div>
+          <span class="text-gray-500">Threshold:</span>
+          <span class="ml-2 font-medium"><%= @selected_run.threshold %></span>
+        </div>
+        <div>
+          <span class="text-gray-500">Source Filter:</span>
+          <span class="ml-2 font-medium"><%= @selected_run.source_filter || "All" %></span>
+        </div>
+      </div>
+      <%= if @selected_run.error_message do %>
+        <div class="mt-4 p-3 bg-red-50 rounded text-red-700 text-sm">
+          <strong>Error:</strong> <%= @selected_run.error_message %>
+        </div>
+      <% end %>
+    </div>
+
+    <!-- Confusion Matrix -->
+    <%= if @confusion_matrix && map_size(@confusion_matrix) > 0 do %>
+      <div class="mb-8 bg-white rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-3">Confusion Matrix</h2>
+        <div class="overflow-x-auto">
+          <% categories = confusion_matrix_categories(@confusion_matrix) %>
+          <% max_count = @confusion_matrix |> Map.values() |> Enum.max(fn -> 0 end) %>
+          <table class="min-w-full text-xs">
+            <thead>
+              <tr>
+                <th class="px-2 py-1 text-left font-medium text-gray-500">Expected ↓ / Predicted →</th>
+                <%= for cat <- categories do %>
+                  <th class="px-2 py-1 text-center font-medium text-gray-700 max-w-[80px] truncate" title={cat}>
+                    <%= String.slice(cat, 0..7) %>
+                  </th>
+                <% end %>
+              </tr>
+            </thead>
+            <tbody>
+              <%= for expected <- categories do %>
+                <tr>
+                  <td class="px-2 py-1 font-medium text-gray-700 max-w-[100px] truncate" title={expected}>
+                    <%= expected %>
+                  </td>
+                  <%= for predicted <- categories do %>
+                    <% count = matrix_cell_value(@confusion_matrix, expected, predicted) %>
+                    <% is_diagonal = diagonal_cell?(expected, predicted) %>
+                    <td class={"px-2 py-1 text-center " <> matrix_cell_color(count, max_count) <> if(is_diagonal, do: " ring-2 ring-green-500", else: "")}>
+                      <%= if count > 0, do: count, else: "-" %>
+                    </td>
+                  <% end %>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-2 text-xs text-gray-500">
+          Diagonal cells (highlighted) show correct predictions. Higher numbers indicate more samples.
+        </p>
+      </div>
+    <% end %>
+
+    <!-- Results Table -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-4 py-3 border-b flex justify-between items-center">
+        <h2 class="text-lg font-semibold">Results</h2>
+        <button
+          phx-click="toggle_incorrect"
+          class={"px-3 py-1 rounded text-sm " <> if(@filter_incorrect, do: "bg-red-100 text-red-700", else: "bg-gray-100 text-gray-700")}
+        >
+          <%= if @filter_incorrect, do: "Showing Incorrect Only", else: "Show All" %>
+        </button>
+      </div>
+
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">External Term</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expected</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Predicted</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
+            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Correct</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <%= for result <- @results do %>
+            <% {color, icon} = correct_indicator(result.is_correct) %>
+            <tr class={unless result.is_correct, do: "bg-red-50"}>
+              <td class="px-4 py-3 whitespace-nowrap">
+                <span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">
+                  <%= result.source %>
+                </span>
+              </td>
+              <td class="px-4 py-3 text-sm max-w-[200px] truncate" title={result.external_term}>
+                <%= result.external_term %>
+              </td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                <%= result.expected_category_slug %>
+              </td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm">
+                <%= result.predicted_category_slug || "-" %>
+              </td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                <%= format_score(result.prediction_score) %>
+              </td>
+              <td class={"px-4 py-3 whitespace-nowrap text-center text-lg " <> color}>
+                <%= icon %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+
+      <%= if @results == [] do %>
+        <div class="text-center py-8 text-gray-500">
+          <%= if @filter_incorrect do %>
+            All predictions were correct!
+          <% else %>
+            No results found.
+          <% end %>
+        </div>
+      <% end %>
+
+      <%= if length(@results) >= @results_limit do %>
+        <div class="px-4 py-3 border-t text-center">
+          <button
+            phx-click="load_more"
+            class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+          >
+            Load More
+          </button>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="mt-4 text-sm text-gray-500">
+      Showing <%= length(@results) %> results
+    </div>
+  <% else %>
+    <!-- List View -->
+    <div class="flex justify-between items-center mb-6">
+      <div>
+        <h1 class="text-3xl font-bold">ML Backtests</h1>
+        <p class="mt-1 text-sm text-gray-500">
+          Category classification model validation runs
+        </p>
+      </div>
+      <div class="text-sm text-gray-500">
+        Run <code class="bg-gray-100 px-2 py-1 rounded">mix ml.backtest --name "test"</code> to create new backtests
+      </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="mb-6 border-b border-gray-200">
+      <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+        <.link
+          navigate={~p"/admin/categories"}
+          class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        >
+          Dashboard
+        </.link>
+        <.link
+          navigate={~p"/admin/categories/list"}
+          class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        >
+          All Categories
+        </.link>
+        <.link
+          navigate={~p"/admin/categories/hierarchy"}
+          class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        >
+          Hierarchy
+        </.link>
+        <.link
+          navigate={~p"/admin/categories/insights"}
+          class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        >
+          Insights
+        </.link>
+        <.link
+          navigate={~p"/admin/categories/mappings"}
+          class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        >
+          Mappings
+        </.link>
+        <.link
+          navigate={~p"/admin/ml/backtests"}
+          class="border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        >
+          ML Backtests
+        </.link>
+      </nav>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="mb-6 p-4 rounded-lg bg-blue-50 text-blue-800">
+      <h3 class="font-medium">ML Category Classification Validation</h3>
+      <p class="mt-1 text-sm">
+        Backtests compare ML predictions against existing database mappings to validate model accuracy before production integration.
+        Run backtests via CLI: <code class="bg-blue-100 px-1 rounded">mix ml.backtest --name "my_test" --sample-size 200</code>
+      </p>
+    </div>
+
+    <!-- Runs Table -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Samples</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Accuracy</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">F1 Score</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <%= for run <- @runs do %>
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                #<%= run.id %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="text-sm font-medium text-gray-900"><%= run.name %></span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class={"px-2 py-1 text-xs rounded-full font-medium " <> status_color(run.status)}>
+                  <%= run.status %>
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <%= run.sample_size %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class={"text-sm font-medium " <> if(run.accuracy && run.accuracy >= 0.9, do: "text-green-600", else: if(run.accuracy && run.accuracy >= 0.7, do: "text-yellow-600", else: "text-gray-600"))}>
+                  <%= format_accuracy(run.accuracy) %>
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <%= format_f1(run.f1_macro) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <%= format_datetime(run.inserted_at) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <button
+                  phx-click="view_run"
+                  phx-value-id={run.id}
+                  class="text-blue-600 hover:text-blue-900"
+                >
+                  View Details
+                </button>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+
+      <%= if @runs == [] do %>
+        <div class="text-center py-12 text-gray-500">
+          <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <h3 class="mt-2 text-sm font-medium text-gray-900">No backtest runs yet</h3>
+          <p class="mt-1 text-sm text-gray-500">
+            Run your first backtest using the CLI
+          </p>
+          <div class="mt-4">
+            <code class="bg-gray-100 px-3 py-2 rounded text-sm">mix ml.backtest --name "baseline" --sample-size 100</code>
+          </div>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="mt-4 text-sm text-gray-500">
+      Showing <%= length(@runs) %> runs
+    </div>
+  <% end %>
+</div>
