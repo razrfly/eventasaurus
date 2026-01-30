@@ -123,22 +123,9 @@ defmodule EventasaurusDiscovery.Sources.Waw4free.Client do
     end
   end
 
-  defp ensure_utf8(binary) when is_binary(binary) do
-    # Ensure the binary is valid UTF-8
-    # If it's not, try to fix it
-    case :unicode.characters_to_binary(binary, :utf8, :utf8) do
-      {:error, _, _} ->
-        # Try latin1 to utf8 conversion (common for Polish content)
-        case :unicode.characters_to_binary(binary, :latin1, :utf8) do
-          result when is_binary(result) -> result
-          _ -> binary
-        end
-
-      result when is_binary(result) ->
-        result
-
-      _ ->
-        binary
-    end
+  defp ensure_utf8(body) when is_binary(body) do
+    EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8_with_logging(body, "Waw4free HTTP response")
   end
+
+  defp ensure_utf8(body), do: body
 end

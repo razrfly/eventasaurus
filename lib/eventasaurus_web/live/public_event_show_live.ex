@@ -262,7 +262,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                 "[PublicEventShowLive] Auto-opening Plan with Friends modal via URL param"
               )
 
-              assign(socket, :show_plan_with_friends_modal, true)
+              # Use shared helper to initialize all modal state
+              initialize_plan_modal_state(socket)
             else
               socket
             end
@@ -274,6 +275,81 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp maybe_auto_open_modal(socket, _url), do: socket
+
+  # Shared helper to initialize all modal state for Plan with Friends
+  # Used by both the open_plan_modal event handler and maybe_auto_open_modal
+  defp initialize_plan_modal_state(socket) do
+    user = get_authenticated_user(socket)
+    event = socket.assigns.event
+
+    # Detect event type for flexible planning
+    is_movie = is_movie_screening?(event)
+    is_venue = !is_nil(event.venue) && is_nil(get_movie_data(event))
+
+    # Detect if single occurrence (only one showtime/date)
+    occurrence_count = PublicEvent.occurrence_count(event)
+    is_single_occurrence = occurrence_count == 1
+
+    # Detect entry context based on event type and user selection
+    selected_occurrence = socket.assigns.selected_occurrence
+
+    entry_context =
+      cond do
+        is_single_occurrence ->
+          :single_occurrence
+
+        is_movie && !is_nil(selected_occurrence) ->
+          :specific_showtime
+
+        is_movie ->
+          :generic_movie
+
+        true ->
+          :standard_event
+      end
+
+    # Fetch date availability counts based on event type
+    date_availability = fetch_date_availability(event, is_movie, is_venue)
+
+    # Fetch time period availability for data-driven time filter
+    time_period_availability = fetch_time_period_availability(event, is_movie)
+
+    # Adaptive Modal Behavior
+    # - Single-occurrence events → Skip directly to Quick Plan
+    # - Multi-showtime events → Show mode selection
+    initial_planning_mode =
+      if is_single_occurrence do
+        :quick
+      else
+        :selection
+      end
+
+    # Get city from venue for venue scope indicator
+    city =
+      if event.venue && event.venue.city_id do
+        EventasaurusApp.Repo.get(EventasaurusDiscovery.Locations.City, event.venue.city_id)
+      else
+        nil
+      end
+
+    socket
+    |> assign(:show_plan_with_friends_modal, true)
+    |> assign(:modal_organizer, user)
+    |> assign(:is_movie_event, is_movie)
+    |> assign(:is_venue_event, is_venue)
+    |> assign(:entry_context, entry_context)
+    |> assign(:is_single_occurrence, is_single_occurrence)
+    |> assign(:planning_mode, initial_planning_mode)
+    |> assign(:date_availability, date_availability)
+    |> assign(:time_period_availability, time_period_availability)
+    # Store original unfiltered counts for restoration when filters are cleared
+    |> assign(:original_date_availability, date_availability)
+    |> assign(:original_time_period_availability, time_period_availability)
+    # Venue scope toggle (default to single venue when accessed from specific event page)
+    |> assign(:include_all_venues, false)
+    # City for venue scope indicator
+    |> assign(:city, city)
+  end
 
   defp fetch_event(socket, slug) do
     language = socket.assigns.language
@@ -579,80 +655,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
          |> redirect(to: ~p"/events/#{socket.assigns.existing_plan.private_event.slug}")}
 
       true ->
-        # Get authenticated user for the modal
-        user = get_authenticated_user(socket)
-
-        # Detect event type for flexible planning
-        event = socket.assigns.event
-        is_movie = is_movie_screening?(event)
-        is_venue = !is_nil(event.venue) && is_nil(get_movie_data(event))
-
-        # Phase 2: Context Detection System
-        # Detect if single occurrence (only one showtime/date)
-        occurrence_count = PublicEvent.occurrence_count(event)
-        is_single_occurrence = occurrence_count == 1
-
-        # Detect entry context based on event type and user selection
-        selected_occurrence = socket.assigns.selected_occurrence
-
-        entry_context =
-          cond do
-            is_single_occurrence ->
-              :single_occurrence
-
-            is_movie && !is_nil(selected_occurrence) ->
-              :specific_showtime
-
-            is_movie ->
-              :generic_movie
-
-            true ->
-              :standard_event
-          end
-
-        # Fetch date availability counts based on event type
-        date_availability = fetch_date_availability(event, is_movie, is_venue)
-
-        # Fetch time period availability for data-driven time filter
-        time_period_availability = fetch_time_period_availability(event, is_movie)
-
-        # Phase 3: Adaptive Modal Behavior
-        # - Single-occurrence events → Skip directly to Quick Plan
-        # - Multi-showtime events → Show mode selection
-        initial_planning_mode =
-          if is_single_occurrence do
-            :quick
-          else
-            :selection
-          end
-
-        # Get city from venue for venue scope indicator
-        # Venue has city_id but city association may not be preloaded, so load it
-        city =
-          if event.venue && event.venue.city_id do
-            EventasaurusApp.Repo.get(EventasaurusDiscovery.Locations.City, event.venue.city_id)
-          else
-            nil
-          end
-
-        {:noreply,
-         socket
-         |> assign(:show_plan_with_friends_modal, true)
-         |> assign(:modal_organizer, user)
-         |> assign(:is_movie_event, is_movie)
-         |> assign(:is_venue_event, is_venue)
-         |> assign(:entry_context, entry_context)
-         |> assign(:is_single_occurrence, is_single_occurrence)
-         |> assign(:planning_mode, initial_planning_mode)
-         |> assign(:date_availability, date_availability)
-         |> assign(:time_period_availability, time_period_availability)
-         # Store original unfiltered counts for restoration when filters are cleared
-         |> assign(:original_date_availability, date_availability)
-         |> assign(:original_time_period_availability, time_period_availability)
-         # Venue scope toggle (default to single venue when accessed from specific event page)
-         |> assign(:include_all_venues, false)
-         # City for venue scope indicator
-         |> assign(:city, city)}
+        # Use shared helper to initialize all modal state
+        {:noreply, initialize_plan_modal_state(socket)}
     end
   end
 

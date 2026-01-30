@@ -151,7 +151,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Client do
          ) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         Logger.debug("✅ Fetched page (#{byte_size(body)} bytes) via plain HTTP")
-        {:ok, body}
+        {:ok, ensure_utf8(body)}
 
       {:ok, %HTTPoison.Response{status_code: 404}} ->
         Logger.warning("⚠️ Event not found (404): #{url}")
@@ -235,4 +235,10 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Client do
       {:error, :max_retries_exceeded}
     end
   end
+
+  defp ensure_utf8(body) when is_binary(body) do
+    EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8_with_logging(body, "Kupbilecik HTTP response")
+  end
+
+  defp ensure_utf8(body), do: body
 end
