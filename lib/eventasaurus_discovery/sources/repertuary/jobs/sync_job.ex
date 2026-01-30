@@ -178,7 +178,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob do
 
     case HTTPoison.get(showtimes_url, headers, timeout: Config.timeout()) do
       {:ok, %{status_code: 200, body: html}} ->
-        case MovieListExtractor.extract(html) do
+        case MovieListExtractor.extract(ensure_utf8(html)) do
           {:ok, movies} ->
             Logger.info("✅ Found #{length(movies)} movies")
             {:ok, movies}
@@ -236,4 +236,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob do
     {:ok, source} = SourceStore.get_or_create_source(source_config())
     source.id
   end
+
+  defp ensure_utf8(body) when is_binary(body) do
+    EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8_with_logging(body, "Repertuary SyncJob HTTP response")
+  end
+
+  defp ensure_utf8(body), do: body
 end

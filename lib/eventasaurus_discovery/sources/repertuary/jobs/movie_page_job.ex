@@ -157,7 +157,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
     case HTTPoison.get(movie_url, headers, timeout: Config.timeout()) do
       {:ok, %{status_code: 200, headers: response_headers, body: html}} ->
         cookies = extract_cookies(response_headers)
-        csrf_token = extract_csrf_token(html)
+        csrf_token = extract_csrf_token(ensure_utf8(html))
 
         Logger.debug(
           "✅ Session established (CSRF token: #{String.slice(csrf_token || "none", 0..9)}...)"
@@ -283,7 +283,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
         case HTTPoison.get(movie_url, get_headers, timeout: Config.timeout()) do
           {:ok, %{status_code: 200, body: html}} ->
             # Extract showtimes using MoviePageExtractor
-            case MoviePageExtractor.extract(html, movie_slug, movie_title) do
+            case MoviePageExtractor.extract(ensure_utf8(html), movie_slug, movie_title) do
               {:ok, showtimes} ->
                 {:ok, showtimes}
 
@@ -453,4 +453,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
     jitter = :rand.uniform(1000)
     Process.sleep(base_delay + jitter)
   end
+
+  defp ensure_utf8(body) when is_binary(body) do
+    EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8_with_logging(body, "Repertuary MoviePageJob HTTP response")
+  end
+
+  defp ensure_utf8(body), do: body
 end

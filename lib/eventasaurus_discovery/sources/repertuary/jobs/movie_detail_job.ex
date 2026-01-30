@@ -78,7 +78,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
     result =
       case HTTPoison.get(url, headers, timeout: Config.timeout()) do
         {:ok, %{status_code: 200, body: html}} ->
-          process_movie_html(html, movie_slug, source_id, city, job)
+          process_movie_html(ensure_utf8(html), movie_slug, source_id, city, job)
 
         {:ok, %{status_code: 404}} ->
           Logger.warning("⚠️ Movie page not found: #{movie_slug}")
@@ -289,4 +289,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
       Map.put(metadata, "matched_by_provider", provider)
     end
   end
+
+  defp ensure_utf8(body) when is_binary(body) do
+    EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8_with_logging(body, "Repertuary MovieDetailJob HTTP response")
+  end
+
+  defp ensure_utf8(body), do: body
 end

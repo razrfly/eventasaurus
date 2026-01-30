@@ -134,7 +134,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.DayPageJob do
 
         case HTTPoison.get(showtimes_url, get_headers, timeout: Config.timeout()) do
           {:ok, %{status_code: 200, body: html}} ->
-            {:ok, html}
+            {:ok, ensure_utf8(html)}
 
           {:ok, %{status_code: status}} ->
             {:error, "HTTP #{status} fetching showtimes"}
@@ -275,4 +275,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.DayPageJob do
   defp rate_limit_delay do
     Process.sleep(Config.rate_limit() * 1000)
   end
+
+  defp ensure_utf8(body) when is_binary(body) do
+    EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8_with_logging(body, "Repertuary DayPageJob HTTP response")
+  end
+
+  defp ensure_utf8(body), do: body
 end
