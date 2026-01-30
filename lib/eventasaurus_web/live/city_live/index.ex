@@ -890,8 +890,8 @@ defmodule EventasaurusWeb.CityLive.Index do
         if CityPageFilters.can_use_base_cache?(filters) do
           # Date-only filters can use base cache with in-memory filtering
           case CityPageCache.get_base_events(city.slug, radius_km) do
-            {:ok, base_data} ->
-              # Base cache hit - filter in-memory for instant response
+            {:ok, base_data} when base_data.events != [] ->
+              # Base cache hit with data - filter in-memory for instant response
               page_opts = [page: filters[:page] || 1, page_size: filters[:page_size] || 30]
               result = CityPageFilters.filter_base_events(base_data, filters, page_opts)
 
@@ -904,6 +904,15 @@ defmodule EventasaurusWeb.CityLive.Index do
               )
 
               {result.events, result.total_count, result.all_events_count, date_counts, :base_hit}
+
+            {:ok, %{events: []} = _empty_cache} ->
+              # Issue #3490: Cache hit but EMPTY - verify against MV before returning empty
+              # This catches stale caches that were populated when no events existed
+              Logger.warning(
+                "[CityPage] BASE Cache STALE-EMPTY for #{city.slug} - verifying against MV fallback"
+              )
+
+              fetch_from_fallback(city, filters)
 
             {:miss, nil} ->
               # No base cache yet - fall back to per-filter cache
@@ -992,7 +1001,7 @@ defmodule EventasaurusWeb.CityLive.Index do
 
     # Try to get events from per-filter cache (stale-while-revalidate pattern)
     case CityPageCache.get_aggregated_events(city.slug, radius_km, cache_opts) do
-      {:ok, cached} ->
+      {:ok, cached} when cached.events != [] ->
         # Issue #3373: Use base cache for date counts to ensure consistency
         # If base cache is not available, fall back to separate date counts cache
         date_counts = get_date_counts_consistently(city.slug, radius_km, date_range_count_filters)
@@ -1002,6 +1011,26 @@ defmodule EventasaurusWeb.CityLive.Index do
         )
 
         {cached.events, cached.total_count, cached.all_events_count, date_counts, :hit}
+
+      {:ok, %{events: []} = _empty_cache} ->
+        # Issue #3490: Cache hit but EMPTY - verify against MV for date-only filters
+        if CityPageFilters.can_use_base_cache?(filters) do
+          Logger.warning(
+            "[CityPage] Filter Cache STALE-EMPTY for #{city.slug} - verifying against MV fallback"
+          )
+
+          fetch_from_fallback(city, filters)
+        else
+          # Category/search filters can't use MV fallback - return empty with warning
+          Logger.warning(
+            "[CityPage] Filter Cache STALE-EMPTY for #{city.slug} with category/search filters - returning empty"
+          )
+
+          date_counts =
+            get_date_counts_consistently(city.slug, radius_km, date_range_count_filters)
+
+          {[], 0, 0, date_counts, :stale_empty}
+        end
 
       {:miss, nil} ->
         # Issue #3373: Use materialized view fallback instead of showing empty results
@@ -1036,25 +1065,34 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp get_date_counts_consistently(city_slug, radius_km, date_range_count_filters) do
     # Try base cache first (same data source as base cache path)
     case CityPageCache.get_base_events(city_slug, radius_km) do
-      {:ok, base_data} ->
+      {:ok, base_data} when base_data.events != [] ->
         CityPageFilters.calculate_date_range_counts(base_data)
+
+      {:ok, %{events: []}} ->
+        # Issue #3490: Cache hit but EMPTY - try MV fallback for date counts
+        get_date_counts_from_fallback(city_slug, radius_km, date_range_count_filters)
 
       {:miss, nil} ->
         # Base cache not available - try materialized view fallback
-        case CityEventsFallback.get_date_counts(city_slug) do
-          {:ok, counts} ->
-            counts
+        get_date_counts_from_fallback(city_slug, radius_km, date_range_count_filters)
+    end
+  end
 
-          {:error, _reason} ->
-            # Last resort: use separate cache (may be slightly stale)
-            CityPageCache.get_date_range_counts(
-              city_slug,
-              radius_km,
-              fn ->
-                PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
-              end
-            )
-        end
+  # Helper for getting date counts from fallback sources
+  defp get_date_counts_from_fallback(city_slug, radius_km, date_range_count_filters) do
+    case CityEventsFallback.get_date_counts(city_slug) do
+      {:ok, counts} ->
+        counts
+
+      {:error, _reason} ->
+        # Last resort: use separate cache (may be slightly stale)
+        CityPageCache.get_date_range_counts(
+          city_slug,
+          radius_km,
+          fn ->
+            PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+          end
+        )
     end
   end
 

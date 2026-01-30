@@ -30,26 +30,13 @@ defmodule EventasaurusWeb.Admin.MlBacktestsLive do
 
     case CategoryBacktester.get_run(run_id) do
       {:ok, run} ->
-        results =
-          case CategoryBacktester.get_results(run.id,
-                 only_incorrect: socket.assigns.filter_incorrect,
-                 limit: socket.assigns.results_limit
-               ) do
-            {:ok, results} -> results
-            {:error, reason} ->
-              require Logger
-              Logger.error("[MlBacktestsLive] Failed to get results: #{inspect(reason)}")
-              []
-          end
+        {:ok, results} =
+          CategoryBacktester.get_results(run.id,
+            only_incorrect: socket.assigns.filter_incorrect,
+            limit: socket.assigns.results_limit
+          )
 
-        matrix =
-          case CategoryBacktester.confusion_matrix(run.id) do
-            {:ok, matrix} -> matrix
-            {:error, reason} ->
-              require Logger
-              Logger.error("[MlBacktestsLive] Failed to get confusion matrix: #{inspect(reason)}")
-              nil
-          end
+        {:ok, matrix} = CategoryBacktester.confusion_matrix(run.id)
 
         socket =
           socket
@@ -94,14 +81,11 @@ defmodule EventasaurusWeb.Admin.MlBacktestsLive do
     filter_incorrect = !socket.assigns.filter_incorrect
 
     if socket.assigns.selected_run do
-      results =
-        case CategoryBacktester.get_results(socket.assigns.selected_run.id,
-               only_incorrect: filter_incorrect,
-               limit: socket.assigns.results_limit
-             ) do
-          {:ok, results} -> results
-          {:error, _reason} -> socket.assigns.results
-        end
+      {:ok, results} =
+        CategoryBacktester.get_results(socket.assigns.selected_run.id,
+          only_incorrect: filter_incorrect,
+          limit: socket.assigns.results_limit
+        )
 
       {:noreply,
        socket
@@ -117,14 +101,11 @@ defmodule EventasaurusWeb.Admin.MlBacktestsLive do
     new_limit = socket.assigns.results_limit + 50
 
     if socket.assigns.selected_run do
-      results =
-        case CategoryBacktester.get_results(socket.assigns.selected_run.id,
-               only_incorrect: socket.assigns.filter_incorrect,
-               limit: new_limit
-             ) do
-          {:ok, results} -> results
-          {:error, _reason} -> socket.assigns.results
-        end
+      {:ok, results} =
+        CategoryBacktester.get_results(socket.assigns.selected_run.id,
+          only_incorrect: socket.assigns.filter_incorrect,
+          limit: new_limit
+        )
 
       {:noreply,
        socket

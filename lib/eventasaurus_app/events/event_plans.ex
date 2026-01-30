@@ -207,8 +207,9 @@ defmodule EventasaurusApp.Events.EventPlans do
 
   # Get movie image data with TMDB attribution and rich context
   # Returns {cover_image_url, external_image_data, rich_external_data}
-  defp get_movie_image_data(nil, sources), do: {get_image_from_sources(sources), nil, nil}
-  defp get_movie_image_data([], sources), do: {get_image_from_sources(sources), nil, nil}
+  # Note: rich_external_data defaults to %{} (not nil) to satisfy database NOT NULL constraint
+  defp get_movie_image_data(nil, sources), do: {get_image_from_sources(sources), nil, %{}}
+  defp get_movie_image_data([], sources), do: {get_image_from_sources(sources), nil, %{}}
 
   defp get_movie_image_data([movie | _], sources) do
     # Use movie poster if available, otherwise fall back to sources

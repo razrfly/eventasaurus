@@ -178,35 +178,25 @@ defmodule Mix.Tasks.Ml.Backtest do
         IO.puts("\n#{IO.ANSI.bright()}Results#{IO.ANSI.reset()}")
         IO.puts("───────────────────────────────────────────────────────────")
 
-        case CategoryBacktester.get_results(run.id,
-               only_incorrect: only_incorrect,
-               limit: limit
-             ) do
-          {:ok, results} ->
-            if Enum.empty?(results) do
-              if only_incorrect do
-                IO.puts("#{IO.ANSI.green()}✓ All predictions were correct!#{IO.ANSI.reset()}")
-              else
-                IO.puts("No results found.")
-              end
-            else
-              print_results_table(results)
-              IO.puts("\nShowing #{length(results)} results (limit: #{limit})")
+        {:ok, results} =
+          CategoryBacktester.get_results(run.id,
+            only_incorrect: only_incorrect,
+            limit: limit
+          )
 
-              if only_incorrect do
-                IO.puts("#{IO.ANSI.yellow()}Filtered to incorrect predictions only#{IO.ANSI.reset()}")
-              end
-            end
+        if Enum.empty?(results) do
+          if only_incorrect do
+            IO.puts("#{IO.ANSI.green()}✓ All predictions were correct!#{IO.ANSI.reset()}")
+          else
+            IO.puts("No results found.")
+          end
+        else
+          print_results_table(results)
+          IO.puts("\nShowing #{length(results)} results (limit: #{limit})")
 
-          {:error, reason} ->
-            IO.puts("""
-
-            #{IO.ANSI.red()}Failed to get results#{IO.ANSI.reset()}
-
-            Error: #{inspect(reason)}
-            """)
-
-            System.halt(1)
+          if only_incorrect do
+            IO.puts("#{IO.ANSI.yellow()}Filtered to incorrect predictions only#{IO.ANSI.reset()}")
+          end
         end
 
       {:error, :not_found} ->

@@ -36,9 +36,19 @@ end
 IO.puts("\n🌱 Seeding locations...")
 Code.eval_file("priv/repo/seeds/reference_data/locations.exs")
 
+# Seed alternate names for cities (e.g., Warsaw <-> Warszawa)
+# This MUST run after locations.exs but before scrapers run
+IO.puts("\n🌱 Seeding city alternate names...")
+Code.eval_file("priv/repo/seeds/reference_data/city_alternate_names.exs")
+
 # Seed categories for public events
 IO.puts("\n🌱 Seeding categories...")
 Code.eval_file("priv/repo/seeds/reference_data/categories.exs")
+
+# Seed category mappings from archived YAML files
+# Must run AFTER categories since mappings reference category slugs
+IO.puts("\n🌱 Seeding category mappings...")
+Code.eval_file("priv/repo/seeds/reference_data/category_mappings.exs")
 
 # Seed sources for event scraping
 IO.puts("\n🌱 Seeding sources...")

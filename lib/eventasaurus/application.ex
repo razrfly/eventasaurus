@@ -144,6 +144,10 @@ defmodule Eventasaurus.Application do
         # Initialize category mappings ETS cache if database-backed mappings are enabled
         initialize_category_mappings_cache()
 
+        # Layer 1 self-healing: Ensure materialized view is populated (Issue #3493)
+        # This runs synchronously to guarantee data is available before accepting traffic
+        ensure_materialized_view_populated()
+
         # Attach Oban telemetry handler for job-level failure tracking
         attach_oban_telemetry()
 
@@ -212,6 +216,24 @@ defmodule Eventasaurus.Application do
       EventasaurusWeb.Jobs.CityPageCacheWarmupJob.enqueue(delay: 60)
     else
       Logger.debug("[CacheWarmup] Skipping cache warmup in #{env} environment")
+    end
+  end
+
+  # Layer 1 self-healing: Ensure city_events_mv is populated on startup (Issue #3493)
+  # This prevents the "no events found" bug on fresh deploys or after database resets
+  defp ensure_materialized_view_populated do
+    alias EventasaurusWeb.Cache.CityEventsMvInitializer
+
+    case CityEventsMvInitializer.ensure_populated() do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "[Application] MV initialization failed: #{inspect(reason)} - Layer 2 fallback will handle requests"
+        )
+
+        :ok
     end
   end
 end

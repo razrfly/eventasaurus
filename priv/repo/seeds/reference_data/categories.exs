@@ -140,5 +140,5 @@ end)
 
 IO.puts("\n✅ Categories seeded successfully!")
 
-# Note: Category mappings are now managed via YAML files in priv/category_mappings/
-# See: ticketmaster.yml, karnet.yml, bandsintown.yml, and _defaults.yml
+# Note: Category mappings are seeded from priv/category_mappings_archived/
+# See: category_mappings.exs for the seed logic
