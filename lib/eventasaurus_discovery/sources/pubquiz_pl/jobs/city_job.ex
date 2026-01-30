@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.Jobs.CityJob do
   @moduledoc """
   Processes a single Polish city from PubQuiz.pl.
 
@@ -11,7 +11,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
 
   require Logger
 
-  alias EventasaurusDiscovery.Sources.Pubquiz.{
+  alias EventasaurusDiscovery.Sources.PubquizPl.{
     Client,
     VenueExtractor,
     Jobs.VenueDetailJob

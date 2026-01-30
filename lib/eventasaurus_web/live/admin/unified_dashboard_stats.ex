@@ -1019,7 +1019,7 @@ defmodule EventasaurusWeb.Admin.UnifiedDashboardStats do
   def format_source_name("tmdb"), do: "TMDB"
   def format_source_name("google_places"), do: "Google Places"
   def format_source_name("karnet"), do: "Karnet"
-  def format_source_name("pubquiz"), do: "Pubquiz"
+  def format_source_name("pubquiz-pl"), do: "PubQuiz.pl"
   def format_source_name("question_one"), do: "Question One"
   def format_source_name("ticketmaster"), do: "Ticketmaster"
   def format_source_name("waw4_free"), do: "Waw4 Free"

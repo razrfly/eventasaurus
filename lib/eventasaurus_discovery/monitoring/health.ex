@@ -694,7 +694,7 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
         "resident_advisor",
         "inquizition",
         "waw4free",
-        "pubquiz",
+        "pubquiz-pl",
         "repertuary"
       ])
 
@@ -919,7 +919,7 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
   # Accepts both canonical hyphenated slugs and legacy underscore format:
   #   "cinema-city" -> "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%"
   #   "cinema_city" -> "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%"
-  #   "pubquiz" -> "EventasaurusDiscovery.Sources.Pubquiz.Jobs.%"
+  #   "pubquiz-pl" -> "EventasaurusDiscovery.Sources.PubquizPl.Jobs.%"
   defp get_source_pattern(source) when is_binary(source) do
     alias EventasaurusDiscovery.Sources.Source
 

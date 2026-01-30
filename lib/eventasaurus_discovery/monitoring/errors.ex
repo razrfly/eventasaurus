@@ -163,7 +163,7 @@ defmodule EventasaurusDiscovery.Monitoring.Errors do
 
   # Dynamically generate worker pattern from source name
   # e.g., "cinema_city" -> "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%"
-  #       "pubquiz" -> "EventasaurusDiscovery.Sources.Pubquiz.Jobs.%"
+  #       "pubquiz-pl" -> "EventasaurusDiscovery.Sources.PubquizPl.Jobs.%"
   defp get_source_pattern(source) when is_binary(source) do
     # Convert snake_case source name to PascalCase module name
     module_name =

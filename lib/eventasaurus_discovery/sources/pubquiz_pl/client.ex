@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.Client do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.Client do
   @moduledoc """
   HTTP client for PubQuiz.pl website.
 
@@ -8,7 +8,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Client do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.Pubquiz.Config
+  alias EventasaurusDiscovery.Sources.PubquizPl.Config
 
   @doc """
   Fetches the main index page containing city list.

@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.CityExtractor do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.CityExtractor do
   @moduledoc """
   Extracts city URLs from PubQuiz.pl index page.
 

@@ -372,6 +372,37 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
     end
   end
 
+  @doc """
+  Read-only peek at base events cache without triggering refresh behavior.
+
+  Unlike `get_base_events/2`, this function:
+  - Does NOT enqueue refresh jobs on cache miss
+  - Does NOT enqueue refresh jobs on stale cache
+  - Does NOT log cache hits/misses to telemetry
+
+  Use this for admin dashboards and health checks where you want to inspect
+  the cache state without mutating it.
+
+  Returns:
+    - `{:ok, %{events: [...], cached_at: ..., ...}}` - Cache hit (fresh or stale)
+    - `{:miss, nil}` - Cache miss (no value in cache)
+  """
+  @spec peek_base_events(String.t(), integer()) :: {:ok, map()} | {:miss, nil}
+  def peek_base_events(city_slug, radius_km) do
+    cache_key = base_cache_key(city_slug, radius_km)
+
+    case Cachex.get(@cache_name, cache_key) do
+      {:ok, nil} ->
+        {:miss, nil}
+
+      {:ok, cached_value} ->
+        {:ok, cached_value}
+
+      {:error, _reason} ->
+        {:miss, nil}
+    end
+  end
+
   # Enqueue base cache refresh with logging for observability
   defp enqueue_base_refresh(city_slug, radius_km) do
     case CityPageCacheRefreshJob.enqueue_base(city_slug, radius_km) do

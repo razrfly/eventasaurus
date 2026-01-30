@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.DedupHandler do
   @moduledoc """
   Deduplication handler for PubQuiz recurring trivia events.
 

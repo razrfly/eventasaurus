@@ -31,7 +31,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     "repertuary" => EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob,
     "cinema-city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
     "sortiraparis" => EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob,
-    "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
+    "pubquiz-pl" => EventasaurusDiscovery.Sources.PubquizPl.Jobs.SyncJob,
     "question-one" => EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob,
     "geeks-who-drink" => EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob,
     "quizmeisters" => EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob,

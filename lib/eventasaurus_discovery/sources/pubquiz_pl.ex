@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz do
+defmodule EventasaurusDiscovery.Sources.PubquizPl do
   @moduledoc """
   PubQuiz.pl API integration for recurring trivia event discovery.
 
@@ -23,7 +23,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz do
   - Karnet (60)
   """
 
-  alias EventasaurusDiscovery.Sources.Pubquiz.DedupHandler
+  alias EventasaurusDiscovery.Sources.PubquizPl.DedupHandler
 
   @doc """
   Process a PubQuiz event through deduplication.

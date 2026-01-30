@@ -12,7 +12,7 @@ defmodule Mix.Tasks.Pubquiz.Test do
   use Mix.Task
   require Logger
 
-  alias EventasaurusDiscovery.Sources.Pubquiz.{
+  alias EventasaurusDiscovery.Sources.PubquizPl.{
     Client,
     Config,
     CityExtractor,

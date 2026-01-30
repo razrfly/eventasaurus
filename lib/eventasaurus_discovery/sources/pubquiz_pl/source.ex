@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.Source do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.Source do
   @moduledoc """
   PubQuiz.pl source configuration for the unified discovery system.
 
@@ -31,7 +31,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Source do
   letting VenueProcessor handle city creation through geocoding is optimal.
   """
 
-  alias EventasaurusDiscovery.Sources.Pubquiz.{
+  alias EventasaurusDiscovery.Sources.PubquizPl.{
     Config,
     Jobs.SyncJob,
     Jobs.VenueDetailJob
