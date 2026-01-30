@@ -17,7 +17,7 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   alias EventasaurusDiscovery.Admin.DiscoveryConfigManager
   alias EventasaurusWeb.Cache.CityPageCache
   alias EventasaurusWeb.Cache.CityEventsMvInitializer
-  alias EventasaurusApp.JobRepo
+  alias EventasaurusApp.Repo
 
   @type socket :: Phoenix.LiveView.Socket.t()
 
@@ -33,6 +33,7 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
       |> assign(:selected_city_slug, nil)
       |> assign(:mv_status, nil)
       |> assign(:mv_refreshing, false)
+      |> assign(:mv_refresh_start_time, nil)
       |> assign(:flash_message, nil)
       |> assign(:health_report, nil)
       |> assign(:health_loading, false)
@@ -43,32 +44,19 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
 
   @impl true
   def handle_event("refresh_mv", _params, socket) do
-    socket = assign(socket, :mv_refreshing, true)
-
-    # Run synchronously so we can show the result
+    # Run asynchronously so we don't block the LiveView process
     start_time = System.monotonic_time(:millisecond)
-    result = CityEventsMvInitializer.refresh_view()
-    duration_ms = System.monotonic_time(:millisecond) - start_time
+    lv_pid = self()
+
+    Task.start(fn ->
+      result = CityEventsMvInitializer.refresh_view()
+      send(lv_pid, {:mv_refresh_result, result, start_time})
+    end)
 
     socket =
-      case result do
-        {:ok, row_count} ->
-          Logger.info(
-            "[CacheDashboard] MV refreshed manually in #{duration_ms}ms - #{row_count} rows"
-          )
-
-          socket
-          |> assign(:mv_refreshing, false)
-          |> assign(:flash_message, {:info, "Materialized view refreshed: #{row_count} rows in #{duration_ms}ms"})
-          |> load_mv_status()
-
-        {:error, reason} ->
-          Logger.error("[CacheDashboard] MV refresh failed: #{inspect(reason)}")
-
-          socket
-          |> assign(:mv_refreshing, false)
-          |> assign(:flash_message, {:error, "MV refresh failed: #{inspect(reason)}"})
-      end
+      socket
+      |> assign(:mv_refreshing, true)
+      |> assign(:mv_refresh_start_time, start_time)
 
     {:noreply, socket}
   end
@@ -149,6 +137,35 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
     {:noreply, assign(socket, :flash_message, nil)}
   end
 
+  @impl true
+  def handle_info({:mv_refresh_result, result, start_time}, socket) do
+    duration_ms = System.monotonic_time(:millisecond) - start_time
+
+    socket =
+      case result do
+        {:ok, row_count} ->
+          Logger.info(
+            "[CacheDashboard] MV refreshed manually in #{duration_ms}ms - #{row_count} rows"
+          )
+
+          socket
+          |> assign(:mv_refreshing, false)
+          |> assign(:mv_refresh_start_time, nil)
+          |> assign(:flash_message, {:info, "Materialized view refreshed: #{row_count} rows in #{duration_ms}ms"})
+          |> load_mv_status()
+
+        {:error, reason} ->
+          Logger.error("[CacheDashboard] MV refresh failed: #{inspect(reason)}")
+
+          socket
+          |> assign(:mv_refreshing, false)
+          |> assign(:mv_refresh_start_time, nil)
+          |> assign(:flash_message, {:error, "MV refresh failed: #{inspect(reason)}"})
+      end
+
+    {:noreply, socket}
+  end
+
   defp load_mv_status(socket) do
     case CityEventsMvInitializer.get_row_count() do
       {:ok, count} ->
@@ -162,28 +179,29 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
     end
   end
 
-  # Get count from Cachex cache for a city
+  # Get count from Cachex cache for a city (read-only peek, no refresh triggers)
   defp get_cache_count(city_slug) do
-    # Try to get base events from cache
-    case CityPageCache.get_base_events(city_slug, 50) do
+    # Use peek_base_events to avoid triggering refresh jobs on miss/stale
+    case CityPageCache.peek_base_events(city_slug, 50) do
       {:ok, %{events: events}} when is_list(events) -> length(events)
-      _ -> nil
+      {:ok, _} -> nil
+      {:miss, nil} -> nil
     end
   end
 
-  # Get count from materialized view for a city
+  # Get count from materialized view for a city (read-only, uses replica)
   defp get_mv_count(city_slug) do
     query = """
     SELECT COUNT(*) FROM city_events_mv WHERE city_slug = $1
     """
 
-    case JobRepo.query(query, [city_slug], timeout: :timer.seconds(10)) do
+    case Repo.replica().query(query, [city_slug], timeout: :timer.seconds(10)) do
       {:ok, %{rows: [[count]]}} -> count
       _ -> nil
     end
   end
 
-  # Get count from direct database query for a city (bypasses MV)
+  # Get count from direct database query for a city (bypasses MV, read-only, uses replica)
   defp get_direct_count(city_slug) do
     query = """
     SELECT COUNT(DISTINCT pe.id)
@@ -194,7 +212,7 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
       AND pe.starts_at >= NOW()
     """
 
-    case JobRepo.query(query, [city_slug], timeout: :timer.seconds(10)) do
+    case Repo.replica().query(query, [city_slug], timeout: :timer.seconds(10)) do
       {:ok, %{rows: [[count]]}} -> count
       _ -> nil
     end

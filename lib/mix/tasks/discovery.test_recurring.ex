@@ -71,7 +71,7 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
     "question-one",
     "inquizition",
     "speed-quizzing",
-    "pubquiz",
+    "pubquiz-pl",
     "quizmeisters",
     "geeks-who-drink"
   ]
@@ -411,7 +411,7 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
       "question-one" => EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob,
       "inquizition" => EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob,
       "speed-quizzing" => EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob,
-      "pubquiz" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
+      "pubquiz-pl" => EventasaurusDiscovery.Sources.PubquizPl.Jobs.SyncJob,
       "quizmeisters" => EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob,
       "geeks-who-drink" => EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob
     }

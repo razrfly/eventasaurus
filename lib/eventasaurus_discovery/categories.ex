@@ -6,6 +6,7 @@ defmodule EventasaurusDiscovery.Categories do
   import Ecto.Query, warn: false
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Categories.{Category, PublicEventCategory}
+  alias EventasaurusDiscovery.PublicEvents.PublicEvent
 
   @doc """
   Lists only active categories for display.
@@ -239,6 +240,19 @@ defmodule EventasaurusDiscovery.Categories do
         conflict_target: [:event_id, :category_id],
         returning: true
       )
+      # Update denormalized category_id on the public_event when primary is set
+      |> then(fn multi ->
+        if primary_id do
+          Multi.update_all(
+            multi,
+            :update_event_category,
+            from(pe in PublicEvent, where: pe.id == ^event_id),
+            set: [category_id: primary_id, updated_at: now]
+          )
+        else
+          multi
+        end
+      end)
 
     case Repo.transaction(multi) do
       {:ok, %{upsert: result}} ->

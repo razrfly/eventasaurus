@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.DetailExtractor do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.DetailExtractor do
   @moduledoc """
   Extracts detailed information from PubQuiz.pl venue pages.
 

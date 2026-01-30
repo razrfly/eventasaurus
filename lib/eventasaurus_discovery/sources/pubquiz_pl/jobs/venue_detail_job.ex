@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.Jobs.VenueDetailJob do
   @moduledoc """
   Processes a single PubQuiz venue, creating venue and recurring event records.
 
@@ -17,10 +17,10 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
   alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
-  alias EventasaurusDiscovery.Sources.Pubquiz
+  alias EventasaurusDiscovery.Sources.PubquizPl
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
-  alias EventasaurusDiscovery.Sources.Pubquiz.{
+  alias EventasaurusDiscovery.Sources.PubquizPl.{
     Client,
     DetailExtractor,
     Transformer
@@ -198,7 +198,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
     # Convert string keys to atom keys for dedup handler
     event_with_atom_keys = atomize_event_data(event_data)
 
-    case Pubquiz.deduplicate_event(event_with_atom_keys, source) do
+    case PubquizPl.deduplicate_event(event_with_atom_keys, source) do
       {:unique, _} ->
         {:ok, :unique}
 

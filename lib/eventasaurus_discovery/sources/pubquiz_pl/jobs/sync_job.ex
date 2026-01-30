@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.Jobs.SyncJob do
   @moduledoc """
   Main orchestrator for PubQuiz.pl scraping.
 
@@ -17,7 +17,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
   alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Metrics.MetricsTracker
-  alias EventasaurusDiscovery.Sources.Pubquiz.{Client, CityExtractor, Jobs.CityJob}
+  alias EventasaurusDiscovery.Sources.PubquizPl.{Client, CityExtractor, Jobs.CityJob}
 
   # BaseJob callbacks - not used for country-level orchestration
   @impl EventasaurusDiscovery.Sources.BaseJob
@@ -38,8 +38,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
   Source configuration for BaseJob.
   """
   def source_config do
-    alias EventasaurusDiscovery.Sources.Pubquiz.Source, as: PubquizSource
-    alias EventasaurusDiscovery.Sources.Pubquiz.Config
+    alias EventasaurusDiscovery.Sources.PubquizPl.Source, as: PubquizSource
+    alias EventasaurusDiscovery.Sources.PubquizPl.Config
 
     %{
       name: PubquizSource.name(),
@@ -128,8 +128,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
   end
 
   defp get_or_create_pubquiz_source do
-    alias EventasaurusDiscovery.Sources.Pubquiz.Source, as: PubquizSource
-    alias EventasaurusDiscovery.Sources.Pubquiz.Config
+    alias EventasaurusDiscovery.Sources.PubquizPl.Source, as: PubquizSource
+    alias EventasaurusDiscovery.Sources.PubquizPl.Config
 
     case JobRepo.get_by(Source, slug: PubquizSource.key()) do
       nil ->

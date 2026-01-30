@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.Config do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.Config do
   @moduledoc """
   Configuration for PubQuiz.pl scraper.
 

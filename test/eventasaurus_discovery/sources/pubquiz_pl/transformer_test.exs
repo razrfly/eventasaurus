@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.TransformerTest do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.TransformerTest do
   @moduledoc """
   Tests for PubQuiz transformer.
 
@@ -7,7 +7,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.TransformerTest do
 
   use ExUnit.Case, async: true
 
-  alias EventasaurusDiscovery.Sources.Pubquiz.Transformer
+  alias EventasaurusDiscovery.Sources.PubquizPl.Transformer
 
   describe "build_title/1" do
     test "cleans up venue name and creates standardized title" do

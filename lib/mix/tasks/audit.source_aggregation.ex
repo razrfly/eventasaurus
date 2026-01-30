@@ -43,7 +43,7 @@ defmodule Mix.Tasks.Audit.SourceAggregation do
     "speed-quizzing" => EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob,
     "question-one" => EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob,
     "geeks_who_drink" => EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob,
-    "pubquiz" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
+    "pubquiz-pl" => EventasaurusDiscovery.Sources.PubquizPl.Jobs.SyncJob,
     "cinema_city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
     "repertuary" => EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob,
     "week_pl" => EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob,

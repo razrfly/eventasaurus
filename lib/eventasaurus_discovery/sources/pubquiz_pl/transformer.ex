@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Pubquiz.Transformer do
+defmodule EventasaurusDiscovery.Sources.PubquizPl.Transformer do
   @moduledoc """
   Transforms PubQuiz venue data into PublicEvent schema with recurrence rules.
 
