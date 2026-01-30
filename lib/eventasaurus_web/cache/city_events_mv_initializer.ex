@@ -1,31 +1,28 @@
 defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
   @moduledoc """
-  Layer 1 of the self-healing cache strategy: Startup Initialization.
+  Startup Initialization: Always refreshes the materialized view on boot.
 
-  Ensures the `city_events_mv` materialized view is populated on application startup,
+  Ensures the `city_events_mv` materialized view has fresh data on application startup,
   before the application accepts traffic. This prevents the "no events found" bug
-  that can occur when deploying to fresh infrastructure or after database migrations.
+  that can occur when deploying to fresh infrastructure or after database sync.
 
-  ## Problem Addressed (Issue #3490)
+  ## Problem Addressed (Issue #3501)
 
-  Without this initializer, a fresh deploy can result in:
-  1. Materialized view empty (never refreshed)
-  2. Cache empty (no data yet)
-  3. User visits city page → sees "No events found"
-  4. Async MV refresh job eventually runs (1+ minute delay)
+  The previous approach (Issue #3493) only checked if the MV had ANY rows:
+  - If `COUNT(*) > 0`, it skipped refresh
+  - But the MV could have data for Warsaw while Kraków had zero rows
+  - Result: Kraków users see "No events found" despite events existing
 
   ## Solution
 
-  On application startup (after Repo is available, before Endpoint accepts traffic):
-  1. Check if `city_events_mv` has 0 rows
-  2. If empty, refresh the view synchronously (blocking)
-  3. Only then allow the application to proceed and accept traffic
+  Always refresh the MV on startup, regardless of current row count. This guarantees
+  fresh data for ALL cities, not just "some data exists somewhere".
 
   ## Performance
 
-  - Normal startup (MV populated): ~10ms check
-  - Cold-start (MV empty): ~1-5 seconds for refresh
-  - Trade-off: Slightly slower deploys vs guaranteed data availability
+  - Startup time: ~2-5 seconds for MV refresh
+  - Trade-off: Slightly slower deploys vs guaranteed fresh data for all cities
+  - Acceptable because deploys are infrequent and the alternative is user-facing bugs
 
   ## Usage
 
@@ -33,14 +30,13 @@ defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
 
       case Supervisor.start_link(children, opts) do
         {:ok, pid} ->
-          # Initialize MV before accepting traffic
           ensure_materialized_view_populated()
           {:ok, pid}
         error -> error
       end
 
-  See: https://github.com/anthropics/eventasaurus/issues/3493 (RFC)
-  See: https://github.com/anthropics/eventasaurus/issues/3490 (Bug report)
+  See: https://github.com/razrfly/eventasaurus/issues/3501
+  See: https://github.com/razrfly/eventasaurus/issues/3490 (Original bug report)
   """
 
   require Logger
@@ -48,53 +44,36 @@ defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
   alias EventasaurusApp.JobRepo
 
   @doc """
-  Ensures the materialized view is populated on startup.
+  Refreshes the materialized view on startup.
 
-  Checks if `city_events_mv` has 0 rows. If empty, performs a synchronous
-  refresh before returning. This blocks the application startup until
-  the MV is ready.
+  Always performs a synchronous refresh before returning. This blocks the
+  application startup until the MV has fresh data for ALL cities.
+
+  ## Why Always Refresh?
+
+  The previous approach checked `COUNT(*) > 0` and skipped refresh if any rows existed.
+  This was flawed because the MV could have data for some cities but not others.
+  Always refreshing guarantees fresh data for every city.
 
   ## Returns
 
-    * `:ok` - MV is populated (either was already, or just refreshed)
-    * `{:error, reason}` - Failed to check or refresh MV
+    * `:ok` - MV refreshed successfully
+    * `{:error, reason}` - Failed to refresh MV
 
   Errors are logged but not propagated to avoid preventing app startup
-  when database issues occur. In that case, Layer 2 (cache-aware fallback)
-  will handle requests gracefully.
+  when database issues occur. The hourly cron job will retry the refresh.
   """
   @spec ensure_populated() :: :ok | {:error, term()}
   def ensure_populated do
-    Logger.info("[CityEventsMvInitializer] Checking materialized view status...")
+    Logger.info("[CityEventsMvInitializer] Refreshing materialized view on startup...")
     start_time = System.monotonic_time(:millisecond)
 
-    case get_row_count() do
-      {:ok, 0} ->
-        Logger.warning("[CityEventsMvInitializer] MV is EMPTY - refreshing synchronously...")
-        refresh_result = refresh_view()
-        duration_ms = System.monotonic_time(:millisecond) - start_time
-
-        case refresh_result do
-          {:ok, row_count} ->
-            Logger.info(
-              "[CityEventsMvInitializer] MV refreshed in #{duration_ms}ms - #{row_count} rows populated"
-            )
-
-            :ok
-
-          {:error, reason} ->
-            Logger.error(
-              "[CityEventsMvInitializer] MV refresh FAILED after #{duration_ms}ms: #{inspect(reason)} - Layer 2 fallback will handle requests"
-            )
-
-            {:error, reason}
-        end
-
+    case refresh_view() do
       {:ok, row_count} ->
         duration_ms = System.monotonic_time(:millisecond) - start_time
 
         Logger.info(
-          "[CityEventsMvInitializer] MV already populated (#{row_count} rows) - checked in #{duration_ms}ms"
+          "[CityEventsMvInitializer] MV refreshed in #{duration_ms}ms - #{row_count} rows"
         )
 
         :ok
@@ -112,7 +91,7 @@ defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
         duration_ms = System.monotonic_time(:millisecond) - start_time
 
         Logger.error(
-          "[CityEventsMvInitializer] Failed to check MV status (#{duration_ms}ms): #{inspect(reason)}"
+          "[CityEventsMvInitializer] MV refresh FAILED after #{duration_ms}ms: #{inspect(reason)}"
         )
 
         {:error, reason}
@@ -148,7 +127,7 @@ defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
   Uses REFRESH MATERIALIZED VIEW CONCURRENTLY which:
   - Does not block reads during refresh
   - Requires the unique index on event_id
-  - Takes ~1-5 seconds for typical data volumes
+  - Takes ~2-5 seconds for typical data volumes
   """
   @spec refresh_view() :: {:ok, non_neg_integer()} | {:error, term()}
   def refresh_view do
@@ -163,6 +142,9 @@ defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
           {:ok, count} -> {:ok, count}
           {:error, _} -> {:ok, 0}
         end
+
+      {:error, %Postgrex.Error{postgres: %{code: :undefined_table}}} ->
+        {:error, :view_not_found}
 
       {:error, reason} ->
         {:error, reason}
