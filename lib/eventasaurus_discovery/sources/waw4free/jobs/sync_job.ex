@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
+defmodule EventasaurusDiscovery.Sources.Waw4free.Jobs.SyncJob do
   @moduledoc """
   Unified Oban job for syncing Waw4Free Warsaw free events.
 
@@ -25,14 +25,14 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
-  alias EventasaurusDiscovery.Sources.Waw4Free.{
+  alias EventasaurusDiscovery.Sources.Waw4free.{
     Config,
     Client,
     IndexExtractor
   }
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
-  alias EventasaurusDiscovery.Sources.Waw4Free.Jobs.EventDetailJob
+  alias EventasaurusDiscovery.Sources.Waw4free.Jobs.EventDetailJob
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
@@ -77,7 +77,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
         end
 
         Logger.info("""
-        🎉 Starting Waw4Free Warsaw sync
+        🎉 Starting Waw4free Warsaw sync
         City: #{city.name}, #{city.country.name}
         Limit: #{limit} events
         Categories: #{length(Config.categories())}
@@ -91,7 +91,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
         case result do
           {:ok, stats} ->
             Logger.info("""
-            ✅ Waw4Free sync job completed
+            ✅ Waw4free sync job completed
             Categories scraped: #{stats.categories_scraped}
             Events discovered: #{stats.events_discovered}
             Fresh events: #{stats.fresh_events}
@@ -111,14 +111,14 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
   @impl EventasaurusDiscovery.Sources.BaseJob
   def fetch_events(_city, _limit, _options) do
     # Not used - we use two-stage scraping (SyncJob + EventDetailJob)
-    Logger.warning("⚠️ fetch_events not used for Waw4Free (uses two-stage scraping)")
+    Logger.warning("⚠️ fetch_events not used for Waw4free (uses two-stage scraping)")
     {:ok, []}
   end
 
   @impl EventasaurusDiscovery.Sources.BaseJob
   def transform_events(_raw_events) do
     # Not used - transformation happens in EventDetailJob
-    Logger.warning("⚠️ transform_events not used for Waw4Free (handled in EventDetailJob)")
+    Logger.warning("⚠️ transform_events not used for Waw4free (handled in EventDetailJob)")
     []
   end
 
@@ -260,11 +260,11 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
 
   def source_config do
     %{
-      name: "Waw4Free",
+      name: "Waw4free",
       slug: "waw4free",
       website_url: "https://waw4free.pl",
       priority: 35,
-      domains: ["culture", "free-events"],
+      domains: ["cultural", "general"],
       aggregate_on_index: false,
       aggregation_type: nil,
       config: %{

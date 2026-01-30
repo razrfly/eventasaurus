@@ -70,13 +70,13 @@ config :eventasaurus_discovery, waw4free_max_pages: 1
 
 ```elixir
 # Start sync job
-{:ok, job} = EventasaurusDiscovery.Sources.Waw4Free.sync()
+{:ok, job} = EventasaurusDiscovery.Sources.Waw4free.sync()
 
 # Check configuration
-EventasaurusDiscovery.Sources.Waw4Free.validate()
+EventasaurusDiscovery.Sources.Waw4free.validate()
 
 # Check if enabled
-EventasaurusDiscovery.Sources.Waw4Free.enabled?()
+EventasaurusDiscovery.Sources.Waw4free.enabled?()
 ```
 
 ## Next Steps

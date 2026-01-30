@@ -1170,8 +1170,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       String.contains?(sync_worker, "SpeedQuizzing.Jobs.SyncJob") ->
         "EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.EventDetailJob"
 
-      String.contains?(sync_worker, "Waw4Free.Jobs.SyncJob") ->
-        "EventasaurusDiscovery.Sources.Waw4Free.Jobs.EventDetailJob"
+      String.contains?(sync_worker, "Waw4free.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.Waw4free.Jobs.EventDetailJob"
 
       true ->
         # Fallback to sync worker if no mapping found

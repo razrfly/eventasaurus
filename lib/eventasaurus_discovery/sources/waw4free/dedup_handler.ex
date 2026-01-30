@@ -1,6 +1,6 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.DedupHandler do
+defmodule EventasaurusDiscovery.Sources.Waw4free.DedupHandler do
   @moduledoc """
-  Deduplication handler for Waw4Free events.
+  Deduplication handler for Waw4free events.
 
   Phase 1 PLACEHOLDER: Basic structure only.
   Phase 4 TODO: Implement deduplication logic.

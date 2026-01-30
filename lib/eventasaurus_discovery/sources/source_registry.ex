@@ -37,7 +37,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     "quizmeisters" => EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob,
     "inquizition" => EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob,
     "speed-quizzing" => EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob,
-    "waw4free" => EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob,
+    "waw4free" => EventasaurusDiscovery.Sources.Waw4free.Jobs.SyncJob,
     "week_pl" => EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob,
     "kupbilecik" => EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob
   }

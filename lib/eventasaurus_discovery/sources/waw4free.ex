@@ -1,6 +1,6 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free do
+defmodule EventasaurusDiscovery.Sources.Waw4free do
   @moduledoc """
-  Waw4Free Warsaw scraper for free events in Warsaw, Poland.
+  Waw4free Warsaw scraper for free events in Warsaw, Poland.
 
   This is a lower-priority, localized scraper that focuses exclusively
   on FREE events in Warsaw (Warszawa).
@@ -20,7 +20,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free do
   - Lower priority than international sources
   """
 
-  alias EventasaurusDiscovery.Sources.Waw4Free.{
+  alias EventasaurusDiscovery.Sources.Waw4free.{
     Source,
     Jobs.SyncJob,
     DedupHandler
@@ -29,7 +29,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free do
   alias EventasaurusDiscovery.Sources.SourceStore
 
   @doc """
-  Start a sync job to fetch events from Waw4Free.
+  Start a sync job to fetch events from Waw4free.
 
   Options:
   - `:max_pages` - Maximum number of category pages to fetch (default: 1, no pagination)

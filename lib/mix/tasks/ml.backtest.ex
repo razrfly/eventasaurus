@@ -205,6 +205,8 @@ defmodule Mix.Tasks.Ml.Backtest do
 
             Error: #{inspect(reason)}
             """)
+
+            System.halt(1)
         end
 
       {:error, :not_found} ->
@@ -215,6 +217,8 @@ defmodule Mix.Tasks.Ml.Backtest do
         Run a backtest first with:
           mix ml.backtest --name "test_name"
         """)
+
+        System.halt(1)
     end
   end
 

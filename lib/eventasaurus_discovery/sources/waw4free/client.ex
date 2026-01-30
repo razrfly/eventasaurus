@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.Client do
+defmodule EventasaurusDiscovery.Sources.Waw4free.Client do
   @moduledoc """
   HTTP client for fetching content from waw4free.pl website.
 
@@ -10,7 +10,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Client do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.Waw4Free.Config
+  alias EventasaurusDiscovery.Sources.Waw4free.Config
 
   @doc """
   Fetch HTML content from a given URL with rate limiting and retries.

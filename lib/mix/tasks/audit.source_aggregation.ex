@@ -50,7 +50,7 @@ defmodule Mix.Tasks.Audit.SourceAggregation do
     "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Config,
     "ticketmaster" => EventasaurusDiscovery.Sources.Ticketmaster.Config,
     "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
-    "waw4free" => EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob,
+    "waw4free" => EventasaurusDiscovery.Sources.Waw4free.Jobs.SyncJob,
     "resident-advisor" => EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob,
     "sortiraparis" => EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob
   }
