@@ -961,7 +961,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
-  defp maybe_cache_multiple_images(event_source, "week-pl", raw_data) do
+  defp maybe_cache_multiple_images(event_source, "week_pl", raw_data) do
     alias EventasaurusDiscovery.Sources.WeekPl.Transformer, as: WeekPlTransformer
 
     # Week.pl stores restaurant data with imageFiles array
@@ -977,7 +977,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       EventImageCaching.cache_event_images(
         image_specs,
         event_source.id,
-        "week-pl",
+        "week_pl",
         raw_data
       )
     else

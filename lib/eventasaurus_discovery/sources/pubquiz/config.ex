@@ -21,7 +21,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Config do
   def source_config do
     EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
       name: "PubQuiz.pl",
-      slug: "pubquiz",
+      slug: "pubquiz-pl",
       priority: 50,
       rate_limit: @rate_limit_seconds,
       timeout: @timeout_ms,
