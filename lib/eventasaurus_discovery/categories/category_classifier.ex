@@ -224,8 +224,15 @@ defmodule EventasaurusDiscovery.Categories.CategoryClassifier do
   @spec threshold() :: float()
   def threshold do
     case System.get_env("ML_CATEGORY_THRESHOLD") do
-      nil -> @default_threshold
-      val -> String.to_float(val)
+      nil ->
+        @default_threshold
+
+      val ->
+        case Float.parse(String.trim(val)) do
+          {float, ""} -> float
+          {float, _remainder} -> float
+          :error -> @default_threshold
+        end
     end
   end
 
