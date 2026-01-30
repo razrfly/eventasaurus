@@ -71,6 +71,9 @@ defmodule EventasaurusWeb.Router do
         # Image Cache Dashboard (dev - no auth)
         live "/images", Admin.ImageCacheDashboardLive
 
+        # Cache Management Dashboard (Issue #3493 - Layer 3 Self-Healing) (dev - no auth)
+        live "/cache", Admin.CacheDashboardLive
+
         # Venue Duplicate Management (dev - no auth)
         live "/venues/duplicates", Admin.VenueDuplicatesLive
         live "/venues/duplicates/review", Admin.VenuePairReviewLive
@@ -232,6 +235,9 @@ defmodule EventasaurusWeb.Router do
 
         # Image Cache Dashboard with admin authentication
         live "/images", EventasaurusWeb.Admin.ImageCacheDashboardLive
+
+        # Cache Management Dashboard (Issue #3493 - Layer 3 Self-Healing)
+        live "/cache", EventasaurusWeb.Admin.CacheDashboardLive
 
         # Venue Duplicate Management with admin authentication
         live "/venues/duplicates", EventasaurusWeb.Admin.VenueDuplicatesLive
