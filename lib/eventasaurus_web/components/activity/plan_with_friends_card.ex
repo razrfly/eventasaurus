@@ -78,6 +78,7 @@ defmodule EventasaurusWeb.Components.Activity.PlanWithFriendsCard do
 
           <button
             id="plan-with-friends-btn"
+            data-test-id="plan-with-friends-button"
             phx-hook="AuthProtectedAction"
             data-auth-event="open_plan_modal"
             data-auth-redirect="/auth/login"

@@ -256,16 +256,30 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
         case Map.get(params, "open_modal") do
           "open_plan_modal" ->
-            # User is authenticated and wants to open Plan with Friends modal
-            if socket.assigns[:auth_user] do
-              Logger.info(
-                "[PublicEventShowLive] Auto-opening Plan with Friends modal via URL param"
-              )
+            # Match the behavior of handle_event("open_plan_modal") for consistency
+            cond do
+              !socket.assigns[:auth_user] ->
+                # Not authenticated - just return socket
+                # Auth will be handled on next direct interaction
+                socket
 
-              # Use shared helper to initialize all modal state
-              initialize_plan_modal_state(socket)
-            else
-              socket
+              socket.assigns[:existing_plan] ->
+                # User already has a plan for this event - redirect to it
+                Logger.info(
+                  "[PublicEventShowLive] User has existing plan, redirecting via URL param"
+                )
+
+                push_navigate(socket,
+                  to: ~p"/events/#{socket.assigns.existing_plan.private_event.slug}"
+                )
+
+              true ->
+                # Authenticated and no existing plan - open the modal
+                Logger.info(
+                  "[PublicEventShowLive] Auto-opening Plan with Friends modal via URL param"
+                )
+
+                initialize_plan_modal_state(socket)
             end
 
           _ ->
@@ -276,8 +290,22 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp maybe_auto_open_modal(socket, _url), do: socket
 
-  # Shared helper to initialize all modal state for Plan with Friends
-  # Used by both the open_plan_modal event handler and maybe_auto_open_modal
+  # Initializes all socket assigns required for the Plan with Friends modal.
+  #
+  # This shared helper is used by both:
+  # - `handle_event("open_plan_modal", ...)` - user clicks the button directly
+  # - `maybe_auto_open_modal/2` - URL param `?open_modal=open_plan_modal` triggers auto-open
+  #
+  # The helper computes and assigns:
+  # - `:show_plan_with_friends_modal` - visibility flag
+  # - `:modal_organizer` - authenticated user
+  # - `:is_movie_event` / `:is_venue_event` - event type detection
+  # - `:entry_context` - determines modal flow (:single_occurrence, :specific_showtime, etc.)
+  # - `:planning_mode` - initial mode (:quick for single occurrence, :selection otherwise)
+  # - `:date_availability` / `:time_period_availability` - data for filters
+  # - `:include_all_venues` - venue scope toggle (defaults to false)
+  # - `:city` - city for venue scope indicator
+  @spec initialize_plan_modal_state(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp initialize_plan_modal_state(socket) do
     user = get_authenticated_user(socket)
     event = socket.assigns.event

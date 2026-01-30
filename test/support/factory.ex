@@ -769,6 +769,10 @@ defmodule EventasaurusApp.Factory do
 
   @doc """
   Factory for PublicEvent schema (events from discovery sources)
+
+  Note: Due to database constraints, public events require at least one source record.
+  Use `complete_public_event_factory` to create a public event with its source in a
+  single transaction, or manually insert the source immediately after.
   """
   def public_event_factory do
     alias EventasaurusDiscovery.PublicEvents.PublicEvent
@@ -784,6 +788,105 @@ defmodule EventasaurusApp.Factory do
       title_translations: %{},
       occurrences: %{}
     }
+  end
+
+  @doc """
+  Creates a complete PublicEvent with its required source record.
+
+  This helper handles the database constraint that requires public events
+  to have at least one source record. Use this instead of `insert(:public_event)`
+  when you need to create a public event in tests.
+
+  NOTE: This is NOT a factory - call it directly: `create_complete_public_event()`
+
+  Returns the public event (not the source).
+  """
+  def create_complete_public_event do
+    alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource}
+    alias EventasaurusApp.Repo
+    alias Ecto.Multi
+
+    # Use a sequence for uniqueness
+    seq = System.unique_integer([:positive])
+
+    # Create country with valid ISO code (US, GB, PL are standard test codes)
+    # Use get_or_insert to avoid unique constraint violations
+    country =
+      case Repo.get_by(Country, code: "US") do
+        nil ->
+          %Country{}
+          |> Country.changeset(%{name: "United States", code: "US", slug: "united-states"})
+          |> Repo.insert!()
+
+        existing ->
+          existing
+      end
+
+    # Create city with unique slug
+    city =
+      %City{}
+      |> City.changeset(%{
+        name: "Test City #{seq}",
+        slug: "test-city-#{seq}",
+        country_id: country.id
+      })
+      |> Repo.insert!()
+
+    # Create venue with unique slug and unique coordinates
+    # Vary coordinates to avoid duplicate venue detection
+    venue =
+      %Venue{}
+      |> Venue.changeset(%{
+        name: "Test Venue #{seq}",
+        slug: "test-venue-#{seq}",
+        address: "#{seq} Test Street",
+        city_id: city.id,
+        # Add small variance to coordinates based on seq to avoid duplicate detection
+        latitude: 37.7749 + seq * 0.001,
+        longitude: -122.4194 + seq * 0.001,
+        venue_type: "venue"
+      })
+      |> Repo.insert!()
+
+    # Create source type first
+    source = insert(:public_event_source_type)
+
+    # Build the public event
+    title = "Public Event #{seq}"
+    starts_at = DateTime.utc_now() |> DateTime.add(7, :day)
+    ends_at = DateTime.add(starts_at, 2, :hour)
+
+    # Use Multi to insert event and source in same transaction
+    multi =
+      Multi.new()
+      |> Multi.insert(:event, fn _changes ->
+        %PublicEvent{}
+        |> PublicEvent.changeset(%{
+          title: title,
+          starts_at: starts_at,
+          ends_at: ends_at,
+          venue_id: venue.id,
+          title_translations: %{},
+          occurrences: %{}
+        })
+      end)
+      |> Multi.insert(:source, fn %{event: event} ->
+        %PublicEventSource{}
+        |> PublicEventSource.changeset(%{
+          event_id: event.id,
+          source_id: source.id,
+          source_url: Faker.Internet.url(),
+          external_id: "external_#{seq}_#{System.unique_integer([:positive])}",
+          last_seen_at: DateTime.utc_now(),
+          metadata: %{},
+          description_translations: %{}
+        })
+      end)
+
+    case Repo.transaction(multi) do
+      {:ok, %{event: event}} -> event
+      {:error, _step, changeset, _changes} -> raise "Failed to create complete public event: #{inspect(changeset.errors)}"
+    end
   end
 
   @doc """
