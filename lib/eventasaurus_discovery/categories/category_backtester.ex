@@ -229,8 +229,10 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
         run.results
         |> Enum.group_by(& &1.source)
         |> Enum.map(fn {source, results} ->
+          total = length(results)
           correct = Enum.count(results, & &1.is_correct)
-          {source, %{total: length(results), correct: correct, accuracy: correct / length(results)}}
+          accuracy = if total > 0, do: correct / total, else: 0.0
+          {source, %{total: total, correct: correct, accuracy: accuracy}}
         end)
         |> Map.new()
 
@@ -350,7 +352,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
     end_time = System.monotonic_time(:millisecond)
     time_ms = end_time - start_time
 
-    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:microsecond)
 
     CategoryBacktestResult.from_prediction(run_id, mapping, prediction, time_ms)
     |> Map.put(:inserted_at, now)
