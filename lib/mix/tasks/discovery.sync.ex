@@ -64,7 +64,7 @@ defmodule Mix.Tasks.Discovery.Sync do
     "cinema-city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
     "repertuary" => EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob,
     "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
-    "waw4free" => EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob,
+    "waw4free" => EventasaurusDiscovery.Sources.Waw4free.Jobs.SyncJob,
     "kupbilecik" => EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob
   }
 

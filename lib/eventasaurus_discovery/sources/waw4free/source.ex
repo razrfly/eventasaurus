@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.Source do
+defmodule EventasaurusDiscovery.Sources.Waw4free.Source do
   @moduledoc """
   Waw4Free source configuration for the unified discovery system.
 
@@ -6,13 +6,13 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Source do
   All events on this source are FREE events for Warsaw, Poland.
   """
 
-  alias EventasaurusDiscovery.Sources.Waw4Free.{
+  alias EventasaurusDiscovery.Sources.Waw4free.{
     Config,
     Jobs.SyncJob,
     Jobs.EventDetailJob
   }
 
-  def name, do: "Waw4Free"
+  def name, do: "Waw4free"
 
   def key, do: "waw4free"
 
@@ -80,7 +80,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Source do
   def validate_config do
     with :ok <- validate_url_accessibility(),
          :ok <- validate_job_modules() do
-      {:ok, "Waw4Free source configuration valid"}
+      {:ok, "Waw4free source configuration valid"}
     end
   end
 
@@ -91,10 +91,10 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Source do
         :ok
 
       {:ok, %{status_code: status}} ->
-        {:error, "Waw4Free website returned status #{status}"}
+        {:error, "Waw4free website returned status #{status}"}
 
       {:error, reason} ->
-        {:error, "Cannot reach Waw4Free website: #{inspect(reason)}"}
+        {:error, "Cannot reach Waw4free website: #{inspect(reason)}"}
     end
   end
 

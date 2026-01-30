@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.CategoryMappingTest do
+defmodule EventasaurusDiscovery.Sources.Waw4free.CategoryMappingTest do
   use EventasaurusApp.DataCase
   alias EventasaurusDiscovery.Categories.CategoryMapper
   alias EventasaurusDiscovery.Categories.Category

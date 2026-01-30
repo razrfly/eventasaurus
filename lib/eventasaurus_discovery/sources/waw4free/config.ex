@@ -1,6 +1,6 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.Config do
+defmodule EventasaurusDiscovery.Sources.Waw4free.Config do
   @moduledoc """
-  Configuration for Waw4Free Warsaw free events scraper.
+  Configuration for Waw4free Warsaw free events scraper.
 
   Scrapes events from https://waw4free.pl/ - a comprehensive free events
   portal for Warsaw (Warszawa), Poland featuring concerts, workshops,
@@ -26,7 +26,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Config do
   @impl EventasaurusDiscovery.Sources.SourceConfig
   def source_config do
     EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
-      name: "Waw4Free",
+      name: "Waw4free",
       slug: "waw4free",
       # Local source priority (similar to Karnet at 70, but slightly lower as it's more niche)
       priority: 35,

@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.DetailExtractor do
+defmodule EventasaurusDiscovery.Sources.Waw4free.DetailExtractor do
   @moduledoc """
   Extracts event details from waw4free.pl event detail pages.
 
@@ -13,7 +13,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.DetailExtractor do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.Waw4Free.Config
+  alias EventasaurusDiscovery.Sources.Waw4free.Config
   alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
 
   @doc """

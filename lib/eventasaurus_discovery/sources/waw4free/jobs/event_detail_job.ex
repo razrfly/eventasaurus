@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.EventDetailJob do
+defmodule EventasaurusDiscovery.Sources.Waw4free.Jobs.EventDetailJob do
   @moduledoc """
   Oban job for processing individual Waw4Free event details.
 
@@ -25,7 +25,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.EventDetailJob do
   alias EventasaurusApp.JobRepo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
-  alias EventasaurusDiscovery.Sources.Waw4Free.{Config, Client, DetailExtractor, Transformer}
+  alias EventasaurusDiscovery.Sources.Waw4free.{Config, Client, DetailExtractor, Transformer}
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
@@ -43,7 +43,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.EventDetailJob do
     # CRITICAL: Mark event as seen BEFORE processing
     EventProcessor.mark_event_as_seen(external_id, source_id)
 
-    Logger.info("🎉 Processing Waw4Free event: #{url} (External ID: #{external_id})")
+    Logger.info("🎉 Processing Waw4free event: #{url} (External ID: #{external_id})")
 
     # Get source from database
     source = JobRepo.get!(Source, source_id)

@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.IndexExtractor do
+defmodule EventasaurusDiscovery.Sources.Waw4free.IndexExtractor do
   @moduledoc """
   Extracts event listings from waw4free.pl category pages.
 
@@ -13,7 +13,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.IndexExtractor do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.Waw4Free.Config
+  alias EventasaurusDiscovery.Sources.Waw4free.Config
 
   @doc """
   Extract events from category page HTML.

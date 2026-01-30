@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Waw4Free.Transformer do
+defmodule EventasaurusDiscovery.Sources.Waw4free.Transformer do
   @moduledoc """
   Transforms Waw4Free event data into the unified format expected by the Processor.
 
