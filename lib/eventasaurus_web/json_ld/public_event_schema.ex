@@ -360,9 +360,9 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   defp generate_fallback_description(event) do
     parts = []
 
-    # Add performers if available
+    # Add performers if available (guard against NotLoaded association)
     parts =
-      if event.performers && event.performers != [] do
+      if has_loaded_performers?(event) do
         performer_names = Enum.map(event.performers, & &1.name)
         performer_text = format_list(performer_names)
         parts ++ [performer_text]
@@ -406,7 +406,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
     # Construct the description
     # Check if we have performers (first element will be a string from format_list)
-    has_performers = event.performers && event.performers != []
+    has_performers = has_loaded_performers?(event)
 
     case {has_performers, parts} do
       {true, [performers, event_type | venue_info]} ->
@@ -636,9 +636,14 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     end
   end
 
+  # Check if performers association is loaded and non-empty
+  defp has_loaded_performers?(event) do
+    Ecto.assoc_loaded?(event.performers) && event.performers != []
+  end
+
   # Add performer information
   defp add_performers(schema, event) do
-    if event.performers && event.performers != [] do
+    if has_loaded_performers?(event) do
       performers =
         event.performers
         |> Enum.map(fn performer ->
