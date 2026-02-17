@@ -28,10 +28,6 @@ struct VenueScreenings: Codable, Identifiable {
     let eventSlug: String
     let upcomingCount: Int
     let showtimes: [Showtime]
-
-    var indexedShowtimes: [IndexedShowtime] {
-        showtimes.enumerated().map { IndexedShowtime(index: $0.offset, showtime: $0.element, venueSlug: eventSlug) }
-    }
 }
 
 struct ScreeningVenue: Codable {
@@ -47,9 +43,3 @@ struct Showtime: Codable {
     let isUpcoming: Bool
 }
 
-struct IndexedShowtime: Identifiable {
-    var id: String { "\(venueSlug)-\(index)" }
-    let index: Int
-    let showtime: Showtime
-    let venueSlug: String
-}

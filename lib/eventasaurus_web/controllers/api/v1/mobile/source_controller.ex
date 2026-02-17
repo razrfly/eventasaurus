@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
   alias EventasaurusDiscovery.Sources.SourceStore
   alias EventasaurusDiscovery.PublicEventsEnhanced
 
+  @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, %{"slug" => slug} = params) do
     case SourceStore.get_source_by_slug(slug) do
       nil ->
@@ -28,7 +29,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
   defp maybe_add_city(opts, %{"city_id" => city_id}) when is_binary(city_id) do
     case Integer.parse(city_id) do
       {id, ""} -> Keyword.put(opts, :city_id, id)
-      :error -> opts
+      _ -> opts
     end
   end
 

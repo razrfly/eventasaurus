@@ -75,13 +75,14 @@ struct SourceDetailView: View {
     }
 
     private func loadSource() async {
-        defer { isLoading = false }
         do {
             response = try await APIClient.shared.fetchSourceDetail(slug: slug, cityId: cityId)
+            isLoading = false
         } catch is CancellationError {
             return
         } catch {
             self.error = error
+            isLoading = false
         }
     }
 }
