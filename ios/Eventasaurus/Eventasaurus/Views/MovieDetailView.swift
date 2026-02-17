@@ -205,6 +205,7 @@ struct MovieDetailView: View {
 
     private static let isoDateFormatter: DateFormatter = {
         let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
@@ -221,13 +222,14 @@ struct MovieDetailView: View {
     }
 
     private func loadMovie() async {
-        defer { isLoading = false }
         do {
             response = try await APIClient.shared.fetchMovieDetail(slug: slug, cityId: cityId)
+            isLoading = false
         } catch is CancellationError {
             return
         } catch {
             self.error = error
+            isLoading = false
         }
     }
 }

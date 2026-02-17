@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
   import Ecto.Query
 
+  @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, %{"slug" => slug} = params) do
     case MovieStore.get_movie_by_slug(slug) do
       nil ->
@@ -152,7 +153,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     end
   end
 
-  defp parse_time_string(_), do: {:ok, ~T[20:00:00]}
+  defp parse_time_string(nil), do: {:ok, ~T[20:00:00]}
+  defp parse_time_string(_), do: {:error, :invalid_time}
 
   defp serialize_movie(movie) do
     genres =

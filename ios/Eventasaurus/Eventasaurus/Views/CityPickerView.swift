@@ -75,8 +75,10 @@ struct CityPickerView: View {
             }
             .searchable(text: $searchText, prompt: "Search cities...")
             .task(id: searchText) {
-                try? await Task.sleep(for: .milliseconds(300))
-                guard !Task.isCancelled else { return }
+                if !searchText.isEmpty {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                }
                 await loadCities()
             }
         }
