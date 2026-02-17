@@ -45,7 +45,8 @@ defmodule EventasaurusApp.Factory do
           "Europe/London",
           "Asia/Tokyo"
         ]),
-      default_currency: Enum.random(["USD", "EUR", "GBP", "CAD"])
+      default_currency: Enum.random(["USD", "EUR", "GBP", "CAD"]),
+      family_name: EventasaurusApp.Families.random_family_name()
     }
   end
 
