@@ -10,10 +10,10 @@ struct ContentView: View {
         Group {
             if !clerk.isLoaded {
                 ProgressView("Loading...")
-            } else if let user = clerk.user {
-                signedInView(user: user)
+            } else if clerk.user != nil {
+                mainTabView
             } else {
-                signedOutView()
+                signedOutView
             }
         }
         .sheet(isPresented: $showAuth) {
@@ -21,29 +21,26 @@ struct ContentView: View {
         }
     }
 
-    private func signedInView(user: User) -> some View {
-        VStack(spacing: 24) {
-            UserButton()
-
-            Text("Welcome, \(user.firstName ?? "User")!")
-                .font(.title)
-
-            if let email = user.primaryEmailAddress?.emailAddress {
-                Text(email)
-                    .foregroundStyle(.secondary)
-            }
-
-            Button("Sign Out", role: .destructive) {
-                Task {
-                    try? await clerk.auth.signOut()
+    private var mainTabView: some View {
+        TabView {
+            DiscoverView()
+                .tabItem {
+                    Label("Discover", systemImage: "magnifyingglass")
                 }
-            }
-            .buttonStyle(.bordered)
+
+            MyEventsView()
+                .tabItem {
+                    Label("My Events", systemImage: "calendar")
+                }
+
+            ProfileView()
+                .tabItem {
+                    Label("Profile", systemImage: "person")
+                }
         }
-        .padding()
     }
 
-    private func signedOutView() -> some View {
+    private var signedOutView: some View {
         VStack(spacing: 20) {
             Image(systemName: "calendar.badge.clock")
                 .font(.system(size: 60))

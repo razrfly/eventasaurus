@@ -1002,6 +1002,16 @@ defmodule EventasaurusWeb.Router do
     post "/sentry-test", SentryTestController, :test_production_error
   end
 
+  # Mobile API routes for iOS app (require authentication, return JSON)
+  scope "/api/v1/mobile", EventasaurusWeb.Api.V1.Mobile do
+    pipe_through [:api, :api_authenticated]
+
+    get "/events/nearby", EventController, :nearby
+    get "/events/attending", EventController, :attending
+    get "/events/:slug", EventController, :show
+    get "/profile", ProfileController, :show
+  end
+
   # Admin API routes for discovery/stats
   scope "/api/admin", EventasaurusWeb.Admin, as: :admin_api do
     pipe_through [:secure_api, :api_authenticated]
