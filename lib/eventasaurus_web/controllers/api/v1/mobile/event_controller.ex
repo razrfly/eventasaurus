@@ -3,21 +3,44 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.PublicEvents
-  alias EventasaurusApp.Events
+  alias EventasaurusDiscovery.Categories
+  alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
+  alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
+  alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
+  alias EventasaurusApp.{Events, Repo}
+  alias EventasaurusWeb.Live.Helpers.EventFilters
 
   @default_radius_km 50
   @default_per_page 20
   @max_per_page 100
+
+  @valid_sort_fields ~w(starts_at title popularity relevance)
+  @valid_sort_orders ~w(asc desc)
 
   @doc """
   GET /api/v1/mobile/events/nearby?lat=X&lng=Y&radius=Z
 
   Returns public events near the given coordinates.
   Radius is in meters (default: 50000 = 50km).
+
+  Events are aggregated: movies showing at multiple venues are stacked into
+  a single entry (matching web behavior). The `type` field distinguishes:
+    - "public" — single public event
+    - "movie_group" — aggregated movie screenings
+    - "event_group" — aggregated source events (e.g. pub quizzes)
+    - "container_group" — festival/conference grouping
+
+  Optional filters:
+    - categories: comma-separated category IDs
+    - city_id: use city coordinates instead of lat/lng
+    - search: text search query
+    - date_range: today, tomorrow, this_weekend, next_7_days, etc.
+    - sort_by: starts_at, title, popularity, relevance
+    - sort_order: asc, desc
   """
   def nearby(conn, params) do
-    with {:ok, lat} <- parse_float(params["lat"], "lat"),
-         {:ok, lng} <- parse_float(params["lng"], "lng") do
+    with {:ok, lat, lng} <- resolve_coordinates(params) do
       radius_km =
         case parse_float(params["radius"], "radius") do
           {:ok, meters} -> meters / 1000
@@ -27,18 +50,27 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       page = parse_int(params["page"], 1)
       per_page = min(parse_int(params["per_page"], @default_per_page), @max_per_page)
 
-      events =
-        PublicEventsEnhanced.list_events(
+      opts =
+        [
           center_lat: lat,
           center_lng: lng,
           radius_km: radius_km,
           page: page,
           page_size: per_page,
           language: "en"
-        )
+        ]
+        |> maybe_add_categories(params)
+        |> maybe_add_search(params)
+        |> maybe_add_date_range(params)
+        |> maybe_add_sort(params)
+
+      # Fetch raw events then aggregate (same pipeline the web uses).
+      # Note: aggregate_events uses is_map_key guards, so opts must be a map.
+      raw_events = PublicEventsEnhanced.list_events(opts)
+      items = PublicEventsEnhanced.aggregate_events(raw_events, %{ignore_city_in_aggregation: true})
 
       json(conn, %{
-        events: Enum.map(events, &serialize_public_event/1),
+        events: Enum.map(items, &serialize_item/1),
         meta: %{page: page, per_page: per_page}
       })
     else
@@ -47,6 +79,19 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         |> put_status(:bad_request)
         |> json(%{error: "invalid_params", message: "#{field}: #{message}"})
     end
+  end
+
+  @doc """
+  GET /api/v1/mobile/categories
+
+  Returns active event categories.
+  """
+  def categories(conn, _params) do
+    cats = Categories.list_active_categories(locale: "en")
+
+    json(conn, %{
+      categories: Enum.map(cats, &serialize_category/1)
+    })
   end
 
   @doc """
@@ -92,6 +137,149 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     end
   end
 
+  # --- Coordinate resolution ---
+
+  defp resolve_coordinates(%{"city_id" => city_id} = _params) when is_binary(city_id) do
+    case Integer.parse(city_id) do
+      {id, _} ->
+        case Repo.get(City, id) do
+          %City{latitude: lat, longitude: lng} when not is_nil(lat) and not is_nil(lng) ->
+            {:ok, Decimal.to_float(lat), Decimal.to_float(lng)}
+
+          _ ->
+            {:error, "city_id", "city not found"}
+        end
+
+      :error ->
+        {:error, "city_id", "must be an integer"}
+    end
+  end
+
+  defp resolve_coordinates(params) do
+    with {:ok, lat} <- parse_float(params["lat"], "lat"),
+         {:ok, lng} <- parse_float(params["lng"], "lng") do
+      {:ok, lat, lng}
+    end
+  end
+
+  # --- Filter builders ---
+
+  defp maybe_add_categories(opts, %{"categories" => categories}) when is_binary(categories) do
+    ids =
+      categories
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+      |> Enum.flat_map(fn s ->
+        case Integer.parse(s) do
+          {id, _} -> [id]
+          :error -> []
+        end
+      end)
+
+    case ids do
+      [] -> opts
+      ids -> Keyword.put(opts, :categories, ids)
+    end
+  end
+
+  defp maybe_add_categories(opts, _params), do: opts
+
+  defp maybe_add_search(opts, %{"search" => search}) when is_binary(search) and search != "" do
+    Keyword.put(opts, :search, search)
+  end
+
+  defp maybe_add_search(opts, _params), do: opts
+
+  defp maybe_add_date_range(opts, %{"date_range" => range}) when is_binary(range) do
+    case EventFilters.parse_quick_range(range) do
+      {:ok, :all} ->
+        opts
+
+      {:ok, range_atom} ->
+        {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range_atom)
+
+        opts
+        |> Keyword.put(:start_date, start_date)
+        |> Keyword.put(:end_date, end_date)
+
+      :error ->
+        opts
+    end
+  end
+
+  defp maybe_add_date_range(opts, _params), do: opts
+
+  defp maybe_add_sort(opts, params) do
+    opts =
+      case params["sort_by"] do
+        sort when sort in @valid_sort_fields ->
+          Keyword.put(opts, :sort_by, String.to_existing_atom(sort))
+
+        _ ->
+          opts
+      end
+
+    case params["sort_order"] do
+      order when order in @valid_sort_orders ->
+        Keyword.put(opts, :sort_order, String.to_existing_atom(order))
+
+      _ ->
+        opts
+    end
+  end
+
+  # --- Serialization (polymorphic: handles all item types from aggregate_events) ---
+
+  defp serialize_item(%AggregatedMovieGroup{} = group) do
+    %{
+      slug: group.movie_slug,
+      title: AggregatedMovieGroup.title(group),
+      starts_at: group.earliest_starts_at,
+      ends_at: nil,
+      cover_image_url: group.movie_backdrop_url || group.movie_poster_url,
+      type: "movie_group",
+      venue: nil,
+      screening_count: group.screening_count,
+      venue_count: group.venue_count,
+      subtitle: AggregatedMovieGroup.description(group)
+    }
+  end
+
+  defp serialize_item(%AggregatedEventGroup{} = group) do
+    %{
+      slug: group.source_slug,
+      title: AggregatedEventGroup.title(group),
+      starts_at: nil,
+      ends_at: nil,
+      cover_image_url: group.cover_image_url,
+      type: "event_group",
+      venue: nil,
+      event_count: group.event_count,
+      venue_count: group.venue_count,
+      subtitle: AggregatedEventGroup.description(group)
+    }
+  end
+
+  defp serialize_item(%AggregatedContainerGroup{} = group) do
+    %{
+      slug: group.container_slug,
+      title: AggregatedContainerGroup.title(group),
+      starts_at: group.start_date,
+      ends_at: group.end_date,
+      cover_image_url: group.cover_image_url,
+      type: "container_group",
+      venue: nil,
+      event_count: group.event_count,
+      venue_count: length(group.venue_ids || []),
+      subtitle: AggregatedContainerGroup.description(group),
+      container_type: to_string(group.container_type)
+    }
+  end
+
+  defp serialize_item(event) do
+    serialize_public_event(event)
+  end
+
   # --- Private helpers ---
 
   defp find_event_by_slug(slug) do
@@ -103,6 +291,16 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
           nil -> :not_found
         end
     end
+  end
+
+  defp serialize_category(cat) do
+    %{
+      id: cat.id,
+      name: cat.name,
+      slug: cat.slug,
+      icon: cat.icon,
+      color: cat.color
+    }
   end
 
   defp serialize_public_event(event) do

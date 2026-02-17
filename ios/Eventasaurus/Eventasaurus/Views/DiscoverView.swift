@@ -8,40 +8,204 @@ struct DiscoverView: View {
     @State private var lastLat: Double?
     @State private var lastLng: Double?
 
+    // Category filtering
+    @State private var categories: [Category] = []
+    @State private var selectedCategories: Set<Int> = []
+
+    // City selection
+    @State private var selectedCity: City?
+    @State private var showCityPicker = false
+
+    // Search
+    @State private var searchText = ""
+
+    // Date filtering
+    @State private var selectedDateRange: String?
+
+    // Sort options
+    @State private var sortBy: String = "starts_at"
+    @State private var sortOrder: String = "asc"
+
+    private static let dateRanges: [(label: String, value: String?)] = [
+        ("All", nil),
+        ("Today", "today"),
+        ("Tomorrow", "tomorrow"),
+        ("This Weekend", "this_weekend"),
+        ("Next 7 Days", "next_7_days"),
+    ]
+
+    private static let cityKey = "selectedCityId"
+    private static let cityNameKey = "selectedCityName"
+
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading {
-                    ProgressView("Finding events nearby...")
-                } else if let error {
-                    ContentUnavailableView {
-                        Label("Something went wrong", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error.localizedDescription)
-                    } actions: {
-                        Button("Try Again") { Task { await requestLocationAndLoad() } }
+            VStack(spacing: 0) {
+                // Filter chips — always visible, outside the scrollable event list
+                filterChips
+
+                // Event content
+                Group {
+                    if isLoading && events.isEmpty {
+                        Spacer()
+                        ProgressView("Finding events nearby...")
+                        Spacer()
+                    } else if let error, events.isEmpty {
+                        ContentUnavailableView {
+                            Label("Something went wrong", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(error.localizedDescription)
+                        } actions: {
+                            Button("Try Again") { Task { await requestLocationAndLoad() } }
+                        }
+                    } else if events.isEmpty && !isLoading {
+                        ContentUnavailableView {
+                            Label("No Events Found", systemImage: "calendar.badge.exclamationmark")
+                        } description: {
+                            Text("No events match your filters. Try adjusting your search criteria.")
+                        } actions: {
+                            if hasActiveFilters {
+                                Button("Clear Filters") {
+                                    clearFilters()
+                                    Task { await loadEvents() }
+                                }
+                            }
+                        }
+                    } else {
+                        eventList
                     }
-                } else if events.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Events Nearby", systemImage: "calendar.badge.exclamationmark")
-                    } description: {
-                        Text("No events found near your location. Try a wider search area.")
-                    }
-                } else {
-                    eventList
                 }
+                .frame(maxHeight: .infinity)
             }
             .navigationTitle("Discover")
-            .task { await requestLocationAndLoad() }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showCityPicker = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: selectedCity != nil ? "building.2" : "location.fill")
+                            Text(selectedCity?.name ?? "Nearby")
+                                .lineLimit(1)
+                        }
+                        .font(.subheadline)
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    sortMenu
+                }
+            }
+            .searchable(text: $searchText, prompt: "Search events...")
+            .onSubmit(of: .search) {
+                Task { await loadEvents() }
+            }
+            .onChange(of: searchText) {
+                if searchText.isEmpty {
+                    Task { await loadEvents() }
+                }
+            }
+            .sheet(isPresented: $showCityPicker) {
+                CityPickerView(selectedCity: selectedCity) { city in
+                    selectedCity = city
+                    persistCitySelection(city)
+                    Task { await loadEvents() }
+                }
+            }
+            .task {
+                restoreCitySelection()
+                await loadCategories()
+                await requestLocationAndLoad()
+            }
             .refreshable { await requestLocationAndLoad() }
         }
     }
+
+    // MARK: - Sort Menu
+
+    private var sortMenu: some View {
+        Menu {
+            Section("Sort By") {
+                sortOption("Date", value: "starts_at")
+                sortOption("Title", value: "title")
+                sortOption("Popularity", value: "popularity")
+                sortOption("Relevance", value: "relevance")
+            }
+            Section("Order") {
+                Button {
+                    sortOrder = "asc"
+                    Task { await loadEvents() }
+                } label: {
+                    Label("Ascending", systemImage: sortOrder == "asc" ? "checkmark" : "")
+                }
+                Button {
+                    sortOrder = "desc"
+                    Task { await loadEvents() }
+                } label: {
+                    Label("Descending", systemImage: sortOrder == "desc" ? "checkmark" : "")
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.subheadline)
+        }
+    }
+
+    private func sortOption(_ label: String, value: String) -> some View {
+        Button {
+            sortBy = value
+            Task { await loadEvents() }
+        } label: {
+            Label(label, systemImage: sortBy == value ? "checkmark" : "")
+        }
+    }
+
+    // MARK: - Filter Chips (pinned above event list, full-width for horizontal scroll)
+
+    private var filterChips: some View {
+        VStack(spacing: 8) {
+            // Category chips
+            if !categories.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(categories) { cat in
+                            CategoryChip(
+                                category: cat,
+                                isSelected: selectedCategories.contains(cat.id)
+                            ) {
+                                toggleCategory(cat.id)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+
+            // Date range chips
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Self.dateRanges, id: \.label) { range in
+                        DateChip(
+                            label: range.label,
+                            isSelected: selectedDateRange == range.value
+                        ) {
+                            selectedDateRange = range.value
+                            Task { await loadEvents() }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Event List
 
     private var eventList: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 ForEach(events) { event in
-                    NavigationLink(value: event.slug) {
+                    NavigationLink(value: event.destination(cityId: selectedCity?.id)) {
                         EventCardView(event: event)
                     }
                     .buttonStyle(.plain)
@@ -49,16 +213,44 @@ struct DiscoverView: View {
             }
             .padding()
         }
-        .navigationDestination(for: String.self) { slug in
-            EventDetailView(slug: slug)
+        .navigationDestination(for: EventDestination.self) { destination in
+            switch destination {
+            case .event(let slug):
+                EventDetailView(slug: slug)
+            case .movieGroup(let slug, let cityId):
+                MovieDetailView(slug: slug, cityId: cityId)
+            case .eventGroup(let slug, let cityId):
+                SourceDetailView(slug: slug, cityId: cityId)
+            case .containerGroup(let slug):
+                ContainerDetailView(slug: slug)
+            }
+        }
+    }
+
+    // MARK: - Data Loading
+
+    private func loadCategories() async {
+        do {
+            categories = try await APIClient.shared.fetchCategories()
+        } catch {
+            // Non-critical; continue without categories
         }
     }
 
     private func requestLocationAndLoad() async {
-        isLoading = true
+        // If a city is selected, skip GPS
+        if selectedCity != nil {
+            await loadEvents()
+            return
+        }
+
+        if isLoading && events.isEmpty {
+            // Already loading initial
+        } else {
+            isLoading = true
+        }
         error = nil
 
-        // Use cached location or wait for a new fix
         let loc = locationManager.location != nil
             ? locationManager.location
             : await locationManager.getLocation(timeout: 10)
@@ -74,21 +266,122 @@ struct DiscoverView: View {
     }
 
     private func loadEvents() async {
-        guard let lat = lastLat, let lng = lastLng else {
-            await requestLocationAndLoad()
-            return
+        // Need either city or GPS coords
+        if selectedCity == nil {
+            guard lastLat != nil, lastLng != nil else {
+                await requestLocationAndLoad()
+                return
+            }
         }
 
         isLoading = true
         error = nil
 
         do {
-            events = try await APIClient.shared.fetchNearbyEvents(lat: lat, lng: lng)
+            events = try await APIClient.shared.fetchNearbyEvents(
+                lat: selectedCity == nil ? lastLat : nil,
+                lng: selectedCity == nil ? lastLng : nil,
+                cityId: selectedCity?.id,
+                categoryIds: Array(selectedCategories),
+                search: searchText.isEmpty ? nil : searchText,
+                dateRange: selectedDateRange,
+                sortBy: sortBy == "starts_at" ? nil : sortBy,
+                sortOrder: sortOrder == "asc" ? nil : sortOrder
+            )
         } catch {
             self.error = error
         }
 
         isLoading = false
+    }
+
+    // MARK: - Filter Helpers
+
+    private var hasActiveFilters: Bool {
+        !selectedCategories.isEmpty || selectedDateRange != nil || !searchText.isEmpty
+    }
+
+    private func clearFilters() {
+        selectedCategories.removeAll()
+        selectedDateRange = nil
+        searchText = ""
+        sortBy = "starts_at"
+        sortOrder = "asc"
+    }
+
+    private func toggleCategory(_ id: Int) {
+        if selectedCategories.contains(id) {
+            selectedCategories.remove(id)
+        } else {
+            selectedCategories.insert(id)
+        }
+        Task { await loadEvents() }
+    }
+
+    // MARK: - City Persistence
+
+    private func persistCitySelection(_ city: City?) {
+        if let city {
+            UserDefaults.standard.set(city.id, forKey: Self.cityKey)
+            UserDefaults.standard.set(city.name, forKey: Self.cityNameKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.cityKey)
+            UserDefaults.standard.removeObject(forKey: Self.cityNameKey)
+        }
+    }
+
+    private func restoreCitySelection() {
+        let cityId = UserDefaults.standard.integer(forKey: Self.cityKey)
+        if cityId > 0, let name = UserDefaults.standard.string(forKey: Self.cityNameKey) {
+            selectedCity = City(id: cityId, name: name, slug: "", latitude: nil, longitude: nil, timezone: nil, country: nil)
+        }
+    }
+}
+
+// MARK: - Chip Views
+
+struct CategoryChip: View {
+    let category: Category
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon = category.icon {
+                    Text(icon)
+                }
+                Text(category.name)
+                    .font(.caption)
+                    .fontWeight(.medium)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.accentColor : Color(.systemGray6))
+            .foregroundStyle(isSelected ? .white : .primary)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct DateChip: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.caption)
+                .fontWeight(.medium)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isSelected ? Color.accentColor : Color(.systemGray6))
+                .foregroundStyle(isSelected ? .white : .primary)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

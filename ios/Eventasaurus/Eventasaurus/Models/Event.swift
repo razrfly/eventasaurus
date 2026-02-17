@@ -19,12 +19,24 @@ struct Event: Codable, Identifiable {
     let type: String
     let venue: Venue?
 
+    // Aggregated group fields
+    let screeningCount: Int?
+    let eventCount: Int?
+    let venueCount: Int?
+    let subtitle: String?
+    let containerType: String?
+
     // Detail-only fields
     let description: String?
     let attendeeCount: Int?
     let isAttending: Bool?
     let categories: [String]?
     let status: String?
+
+    /// Whether this item is an aggregated group (movie stack, event group, etc.)
+    var isGroup: Bool {
+        type == "movie_group" || type == "event_group" || type == "container_group"
+    }
 }
 
 struct Venue: Codable {

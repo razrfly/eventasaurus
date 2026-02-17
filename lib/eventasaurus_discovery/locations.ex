@@ -167,6 +167,33 @@ defmodule EventasaurusDiscovery.Locations do
   end
 
   @doc """
+  Search cities by name using ILIKE on name and alternate_names.
+
+  ## Options
+    * `:limit` - Maximum number of cities to return (default: 20)
+
+  ## Examples
+
+      iex> Locations.search_cities("krak")
+      [%City{name: "Krakow", ...}]
+  """
+  def search_cities(query, opts \\ []) when is_binary(query) do
+    limit = Keyword.get(opts, :limit, 20)
+    pattern = "%#{query}%"
+
+    from(c in City,
+      where:
+        ilike(c.name, ^pattern) or
+          fragment("EXISTS (SELECT 1 FROM unnest(?) AS alt WHERE alt ILIKE ?)", c.alternate_names, ^pattern),
+      where: not is_nil(c.latitude) and not is_nil(c.longitude),
+      order_by: [asc: c.name],
+      limit: ^limit,
+      preload: [:country]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   List all cities with coordinates.
 
   ## Options

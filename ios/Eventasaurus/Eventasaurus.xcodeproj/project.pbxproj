@@ -23,6 +23,16 @@
 		D577F3F99A409AC4E9EBC795 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29DB2240AAF684CE1A11E249 /* LocationManager.swift */; };
 		DBCCCB04C953FC3B590FB802 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A60E8B52121B630D8E34C9 /* APIClient.swift */; };
 		FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86142150038F49A64DEA51BF /* EventasaurusApp.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* Category.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* Category.swift */; };
+		C3D4E5F6A7B8C9D0E1F2A3B4 /* City.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* City.swift */; };
+		E5F6A7B8C9D0E1F2A3B4C5D6 /* CityPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* CityPickerView.swift */; };
+		AA11BB22CC33DD44EE55FF01 /* EventDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF02 /* EventDestination.swift */; };
+		AA11BB22CC33DD44EE55FF03 /* MovieDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF04 /* MovieDetail.swift */; };
+		AA11BB22CC33DD44EE55FF05 /* SourceDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF06 /* SourceDetail.swift */; };
+		AA11BB22CC33DD44EE55FF07 /* ContainerDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF08 /* ContainerDetail.swift */; };
+		AA11BB22CC33DD44EE55FF09 /* MovieDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF0A /* MovieDetailView.swift */; };
+		AA11BB22CC33DD44EE55FF0B /* SourceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF0C /* SourceDetailView.swift */; };
+		AA11BB22CC33DD44EE55FF0D /* ContainerDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF0E /* ContainerDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,6 +62,16 @@
 		DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
 		F355DFAD17AF195B641426EC /* MyEventsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyEventsView.swift; sourceTree = "<group>"; };
 		FD46770CC3F41864DFC21903 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* Category.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Category.swift; sourceTree = "<group>"; };
+		D4E5F6A7B8C9D0E1F2A3B4C5 /* City.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = City.swift; sourceTree = "<group>"; };
+		F6A7B8C9D0E1F2A3B4C5D6E7 /* CityPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityPickerView.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF02 /* EventDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDestination.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF04 /* MovieDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieDetail.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF06 /* SourceDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDetail.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF08 /* ContainerDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContainerDetail.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF0A /* MovieDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieDetailView.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF0C /* SourceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDetailView.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF0E /* ContainerDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContainerDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,7 +107,13 @@
 		3EDCE817A6B8F3304A7DC46F /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* Category.swift */,
+				D4E5F6A7B8C9D0E1F2A3B4C5 /* City.swift */,
+				AA11BB22CC33DD44EE55FF08 /* ContainerDetail.swift */,
 				1D910507C20A4079D0F6753F /* Event.swift */,
+				AA11BB22CC33DD44EE55FF02 /* EventDestination.swift */,
+				AA11BB22CC33DD44EE55FF04 /* MovieDetail.swift */,
+				AA11BB22CC33DD44EE55FF06 /* SourceDetail.swift */,
 				21BAC9E54F63FED667138C7D /* UserProfile.swift */,
 			);
 			path = Models;
@@ -136,11 +162,15 @@
 		E586B0DE55D592CB4360C162 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				F6A7B8C9D0E1F2A3B4C5D6E7 /* CityPickerView.swift */,
+				AA11BB22CC33DD44EE55FF0E /* ContainerDetailView.swift */,
 				74DE54496EE549F58B31CC75 /* DiscoverView.swift */,
 				6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */,
 				DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */,
+				AA11BB22CC33DD44EE55FF0A /* MovieDetailView.swift */,
 				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
 				09081158264711B776E3A8C3 /* ProfileView.swift */,
+				AA11BB22CC33DD44EE55FF0C /* SourceDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -237,15 +267,25 @@
 			buildActionMask = 2147483647;
 			files = (
 				DBCCCB04C953FC3B590FB802 /* APIClient.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* Category.swift in Sources */,
+				C3D4E5F6A7B8C9D0E1F2A3B4 /* City.swift in Sources */,
+				E5F6A7B8C9D0E1F2A3B4C5D6 /* CityPickerView.swift in Sources */,
+				AA11BB22CC33DD44EE55FF07 /* ContainerDetail.swift in Sources */,
+				AA11BB22CC33DD44EE55FF0D /* ContainerDetailView.swift in Sources */,
 				69C72F0A0750335F65C8C746 /* ContentView.swift in Sources */,
 				66BE87A517CC95E227F35C2B /* DiscoverView.swift in Sources */,
 				9106DB341AD8FFD52AC815F1 /* Event.swift in Sources */,
 				552B3CC5F35CE02F411AA93E /* EventCardView.swift in Sources */,
+				AA11BB22CC33DD44EE55FF01 /* EventDestination.swift in Sources */,
 				D4FDFE920221381C961396FC /* EventDetailView.swift in Sources */,
 				FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */,
 				D577F3F99A409AC4E9EBC795 /* LocationManager.swift in Sources */,
+				AA11BB22CC33DD44EE55FF03 /* MovieDetail.swift in Sources */,
+				AA11BB22CC33DD44EE55FF09 /* MovieDetailView.swift in Sources */,
 				BF9ACEB5D68ECF001460E162 /* MyEventsView.swift in Sources */,
 				19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */,
+				AA11BB22CC33DD44EE55FF05 /* SourceDetail.swift in Sources */,
+				AA11BB22CC33DD44EE55FF0B /* SourceDetailView.swift in Sources */,
 				7F9F9F532434DCF96269280B /* UserProfile.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
