@@ -132,13 +132,13 @@ defmodule EventasaurusApp.Accounts do
     end
   end
 
-  # Assign a random family name if one wasn't provided
+  # Assign a random family name if one wasn't provided (or was nil/empty)
   defp maybe_assign_family_name(attrs) do
-    has_family_name =
-      Map.has_key?(attrs, :family_name) ||
-        Map.has_key?(attrs, "family_name")
+    family_name =
+      Map.get(attrs, :family_name) ||
+        Map.get(attrs, "family_name")
 
-    if has_family_name do
+    if is_binary(family_name) and family_name != "" do
       attrs
     else
       Map.put(attrs, :family_name, Families.random_family_name())
