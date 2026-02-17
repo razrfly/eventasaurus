@@ -112,3 +112,34 @@ scripts/clerk-migration/node_modules/
 
 # Licensed/commercial UI kits (cannot be committed due to license restrictions)
 /assets/vendor/catalyst-ui-kit/
+
+# ============================================================
+# Xcode / iOS
+# ============================================================
+
+# Xcode user-specific data
+*.xcuserdata/
+xcuserdata/
+
+# Xcode build artifacts
+DerivedData/
+build/
+
+# Xcode workspace settings (local to each developer)
+*.xcworkspace/xcuserdata/
+
+# Generated Xcode project (regenerated via xcodegen)
+ios/Eventasaurus/Eventasaurus.xcodeproj
+
+# Swift Package Manager resolved dependencies
+.build/
+ios/Eventasaurus/.swiftpm/
+
+# iOS build artifacts
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
