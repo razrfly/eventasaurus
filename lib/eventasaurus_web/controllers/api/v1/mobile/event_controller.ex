@@ -58,9 +58,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     user = conn.assigns.user
 
     events =
-      Events.list_events_with_participation(user)
-      |> Enum.filter(&upcoming?/1)
-      |> Enum.sort_by(& &1.start_at, DateTime)
+      Events.list_events_with_participation(user,
+        upcoming: true,
+        order_by: [asc: :start_at],
+        limit: 50
+      )
 
     json(conn, %{
       events: Enum.map(events, &serialize_user_event/1),
@@ -161,16 +163,6 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       lng: venue.longitude
     }
   end
-
-  defp upcoming?(%{start_at: nil}), do: true
-  defp upcoming?(%{start_at: start_at}), do: DateTime.compare(start_at, DateTime.utc_now()) == :gt
-  defp upcoming?(%{ends_at: nil} = e), do: upcoming_by_start(e)
-  defp upcoming?(%{ends_at: ends_at}), do: DateTime.compare(ends_at, DateTime.utc_now()) == :gt
-
-  defp upcoming_by_start(%{start_at: nil}), do: true
-
-  defp upcoming_by_start(%{start_at: start_at}),
-    do: DateTime.compare(start_at, DateTime.utc_now()) == :gt
 
   defp parse_float(nil, field), do: {:error, field, "is required"}
   defp parse_float(val, field) when is_binary(val) do

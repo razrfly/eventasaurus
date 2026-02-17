@@ -1004,7 +1004,7 @@ defmodule EventasaurusWeb.Router do
 
   # Mobile API routes for iOS app (require authentication, return JSON)
   scope "/api/v1/mobile", EventasaurusWeb.Api.V1.Mobile do
-    pipe_through [:api, :api_authenticated]
+    pipe_through [:secure_api, :api_authenticated]
 
     get "/events/nearby", EventController, :nearby
     get "/events/attending", EventController, :attending

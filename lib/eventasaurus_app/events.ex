@@ -1255,6 +1255,34 @@ defmodule EventasaurusApp.Events do
       )
 
     query = apply_soft_delete_filter(query, opts)
+
+    query =
+      if opts[:upcoming] do
+        now = DateTime.utc_now()
+
+        from(e in query,
+          where:
+            (not is_nil(e.ends_at) and e.ends_at > ^now) or
+              (is_nil(e.ends_at) and (is_nil(e.start_at) or e.start_at > ^now))
+        )
+      else
+        query
+      end
+
+    query =
+      if opts[:order_by] do
+        from(e in query, order_by: ^opts[:order_by])
+      else
+        query
+      end
+
+    query =
+      if opts[:limit] do
+        from(e in query, limit: ^opts[:limit])
+      else
+        query
+      end
+
     Repo.all(query)
   end
 
