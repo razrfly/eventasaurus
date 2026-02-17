@@ -104,11 +104,13 @@ struct ContainerDetailView: View {
     }
 
     private func loadContainer() async {
+        defer { isLoading = false }
         do {
             response = try await APIClient.shared.fetchContainerDetail(slug: slug)
+        } catch is CancellationError {
+            return
         } catch {
             self.error = error
         }
-        isLoading = false
     }
 }

@@ -74,10 +74,11 @@ struct CityPickerView: View {
                 }
             }
             .searchable(text: $searchText, prompt: "Search cities...")
-            .onChange(of: searchText) {
-                Task { await loadCities() }
+            .task(id: searchText) {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                await loadCities()
             }
-            .task { await loadCities() }
         }
     }
 
@@ -88,7 +89,10 @@ struct CityPickerView: View {
         do {
             let query = searchText.count >= 2 ? searchText : nil
             cities = try await APIClient.shared.searchCities(query: query)
+        } catch is CancellationError {
+            return
         } catch {
+            print("[CityPickerView] Failed to load cities: \(error)")
             cities = []
         }
     }

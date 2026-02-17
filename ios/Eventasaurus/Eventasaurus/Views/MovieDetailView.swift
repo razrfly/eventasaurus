@@ -173,7 +173,7 @@ struct MovieDetailView: View {
                         .foregroundStyle(.secondary)
 
                     FlowLayout(spacing: 6) {
-                        ForEach(times) { showtime in
+                        ForEach(Array(times.enumerated()), id: \.offset) { _, showtime in
                             showtimePill(showtime)
                         }
                     }
@@ -203,21 +203,32 @@ struct MovieDetailView: View {
         )
     }
 
+    private static let isoDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static let displayDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE, MMM d"
+        return f
+    }()
+
     private func formatDateHeader(_ isoDate: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let date = formatter.date(from: isoDate) else { return isoDate }
-        formatter.dateFormat = "EEEE, MMM d"
-        return formatter.string(from: date)
+        guard let date = Self.isoDateFormatter.date(from: isoDate) else { return isoDate }
+        return Self.displayDateFormatter.string(from: date)
     }
 
     private func loadMovie() async {
+        defer { isLoading = false }
         do {
             response = try await APIClient.shared.fetchMovieDetail(slug: slug, cityId: cityId)
+        } catch is CancellationError {
+            return
         } catch {
             self.error = error
         }
-        isLoading = false
     }
 }
 

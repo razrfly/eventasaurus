@@ -36,6 +36,7 @@ struct DiscoverView: View {
 
     private static let cityKey = "selectedCityId"
     private static let cityNameKey = "selectedCityName"
+    private static let citySlugKey = "selectedCitySlug"
 
     var body: some View {
         NavigationStack {
@@ -324,16 +325,19 @@ struct DiscoverView: View {
         if let city {
             UserDefaults.standard.set(city.id, forKey: Self.cityKey)
             UserDefaults.standard.set(city.name, forKey: Self.cityNameKey)
+            UserDefaults.standard.set(city.slug, forKey: Self.citySlugKey)
         } else {
             UserDefaults.standard.removeObject(forKey: Self.cityKey)
             UserDefaults.standard.removeObject(forKey: Self.cityNameKey)
+            UserDefaults.standard.removeObject(forKey: Self.citySlugKey)
         }
     }
 
     private func restoreCitySelection() {
         let cityId = UserDefaults.standard.integer(forKey: Self.cityKey)
         if cityId > 0, let name = UserDefaults.standard.string(forKey: Self.cityNameKey) {
-            selectedCity = City(id: cityId, name: name, slug: "", latitude: nil, longitude: nil, timezone: nil, country: nil)
+            let slug = UserDefaults.standard.string(forKey: Self.citySlugKey) ?? ""
+            selectedCity = City(id: cityId, name: name, slug: slug, latitude: nil, longitude: nil, timezone: nil, country: nil)
         }
     }
 }
