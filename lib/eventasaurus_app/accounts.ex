@@ -7,6 +7,7 @@ defmodule EventasaurusApp.Accounts do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Accounts.UserPreferences
+  alias EventasaurusApp.Families
 
   @doc """
   Returns the list of users.
@@ -96,7 +97,10 @@ defmodule EventasaurusApp.Accounts do
   """
   @spec create_user(map()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
   def create_user(attrs \\ %{}) do
-    attrs = maybe_generate_username(attrs)
+    attrs =
+      attrs
+      |> maybe_generate_username()
+      |> maybe_assign_family_name()
 
     case do_create_user(attrs) do
       {:ok, user} ->
@@ -125,6 +129,19 @@ defmodule EventasaurusApp.Accounts do
       # Generate base username from attrs (name or email based)
       username = User.generate_username(attrs)
       Map.put(attrs, :username, username)
+    end
+  end
+
+  # Assign a random family name if one wasn't provided
+  defp maybe_assign_family_name(attrs) do
+    has_family_name =
+      Map.has_key?(attrs, :family_name) ||
+        Map.has_key?(attrs, "family_name")
+
+    if has_family_name do
+      attrs
+    else
+      Map.put(attrs, :family_name, Families.random_family_name())
     end
   end
 
