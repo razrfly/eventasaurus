@@ -405,7 +405,7 @@ defmodule Mix.Tasks.Db.SyncProduction do
 
   defp do_start_proxy do
     # Start fly proxy in background
-    proxy_cmd = "fly proxy #{@proxy_port}:5432 #{@fly_mpg_host} -o #{@fly_org}"
+    proxy_cmd = "fly proxy #{@proxy_port}:5432 #{@fly_mpg_host} -a #{@fly_app} -o #{@fly_org}"
     verbose_info("  → Running: #{proxy_cmd}")
 
     port =
