@@ -1009,7 +1009,12 @@ defmodule EventasaurusWeb.Router do
     get "/events/nearby", EventController, :nearby
     get "/events/attending", EventController, :attending
     get "/events/:slug", EventController, :show
+    get "/categories", EventController, :categories
+    get "/cities", CityController, :search
     get "/profile", ProfileController, :show
+    get "/movies/:slug", MovieController, :show
+    get "/sources/:slug", SourceController, :show
+    get "/containers/:slug", ContainerController, :show
   end
 
   # Admin API routes for discovery/stats

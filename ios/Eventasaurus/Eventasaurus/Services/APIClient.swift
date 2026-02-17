@@ -23,16 +23,68 @@ final class APIClient {
         self.decoder = decoder
     }
 
-    func fetchNearbyEvents(lat: Double, lng: Double, radius: Double = 50000) async throws -> [Event] {
+    func fetchNearbyEvents(
+        lat: Double? = nil,
+        lng: Double? = nil,
+        radius: Double = 50000,
+        cityId: Int? = nil,
+        categoryIds: [Int] = [],
+        search: String? = nil,
+        dateRange: String? = nil,
+        sortBy: String? = nil,
+        sortOrder: String? = nil
+    ) async throws -> [Event] {
         var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/mobile/events/nearby"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [
-            URLQueryItem(name: "lat", value: String(lat)),
-            URLQueryItem(name: "lng", value: String(lng)),
-            URLQueryItem(name: "radius", value: String(radius))
-        ]
+        var queryItems: [URLQueryItem] = []
+
+        if let cityId {
+            queryItems.append(URLQueryItem(name: "city_id", value: String(cityId)))
+        } else if let lat, let lng {
+            queryItems.append(URLQueryItem(name: "lat", value: String(lat)))
+            queryItems.append(URLQueryItem(name: "lng", value: String(lng)))
+            queryItems.append(URLQueryItem(name: "radius", value: String(radius)))
+        }
+
+        if !categoryIds.isEmpty {
+            queryItems.append(URLQueryItem(name: "categories", value: categoryIds.map(String.init).joined(separator: ",")))
+        }
+
+        if let search, !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
+        }
+
+        if let dateRange {
+            queryItems.append(URLQueryItem(name: "date_range", value: dateRange))
+        }
+
+        if let sortBy {
+            queryItems.append(URLQueryItem(name: "sort_by", value: sortBy))
+        }
+
+        if let sortOrder {
+            queryItems.append(URLQueryItem(name: "sort_order", value: sortOrder))
+        }
+
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
         guard let url = components.url else { throw APIError.invalidURL }
         let response: EventsResponse = try await request(url: url)
         return response.events
+    }
+
+    func fetchCategories() async throws -> [Category] {
+        let url = baseURL.appendingPathComponent("api/v1/mobile/categories")
+        let response: CategoriesResponse = try await request(url: url)
+        return response.categories
+    }
+
+    func searchCities(query: String? = nil) async throws -> [City] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/mobile/cities"), resolvingAgainstBaseURL: false)!
+        if let query, !query.isEmpty {
+            components.queryItems = [URLQueryItem(name: "q", value: query)]
+        }
+        guard let url = components.url else { throw APIError.invalidURL }
+        let response: CitiesResponse = try await request(url: url)
+        return response.cities
     }
 
     func fetchAttendingEvents() async throws -> [Event] {
@@ -51,6 +103,29 @@ final class APIClient {
         let url = baseURL.appendingPathComponent("api/v1/mobile/profile")
         let response: ProfileResponse = try await request(url: url)
         return response.user
+    }
+
+    func fetchMovieDetail(slug: String, cityId: Int? = nil) async throws -> MovieDetailResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/mobile/movies/\(slug)"), resolvingAgainstBaseURL: false)!
+        if let cityId {
+            components.queryItems = [URLQueryItem(name: "city_id", value: String(cityId))]
+        }
+        guard let url = components.url else { throw APIError.invalidURL }
+        return try await request(url: url)
+    }
+
+    func fetchSourceDetail(slug: String, cityId: Int? = nil) async throws -> SourceDetailResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/mobile/sources/\(slug)"), resolvingAgainstBaseURL: false)!
+        if let cityId {
+            components.queryItems = [URLQueryItem(name: "city_id", value: String(cityId))]
+        }
+        guard let url = components.url else { throw APIError.invalidURL }
+        return try await request(url: url)
+    }
+
+    func fetchContainerDetail(slug: String) async throws -> ContainerDetailResponse {
+        let url = baseURL.appendingPathComponent("api/v1/mobile/containers/\(slug)")
+        return try await request(url: url)
     }
 
     private func request<T: Decodable>(url: URL) async throws -> T {
