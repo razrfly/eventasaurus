@@ -128,8 +128,8 @@ build/
 # Xcode workspace settings (local to each developer)
 *.xcworkspace/xcuserdata/
 
-# Generated Xcode project (regenerated via xcodegen)
-ios/Eventasaurus/Eventasaurus.xcodeproj
+# Xcode project user schemes (local to each developer)
+ios/Eventasaurus/Eventasaurus.xcodeproj/xcuserdata/
 
 # Swift Package Manager resolved dependencies
 .build/

@@ -1,0 +1,536 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09081158264711B776E3A8C3 /* ProfileView.swift */; };
+		552B3CC5F35CE02F411AA93E /* EventCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */; };
+		5C580EADCCF30341DB670FE3 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6F09B4234829F37AACF41EEE /* Preview Assets.xcassets */; };
+		66BE87A517CC95E227F35C2B /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DE54496EE549F58B31CC75 /* DiscoverView.swift */; };
+		69C72F0A0750335F65C8C746 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09DFBC648289C22C04815EF7 /* ContentView.swift */; };
+		7F4AC7E3A47220B8AE287256 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 61EE545E7E5FBF16E8D39BFA /* ClerkKit */; };
+		7F9F9F532434DCF96269280B /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21BAC9E54F63FED667138C7D /* UserProfile.swift */; };
+		8F31D989A9596509100AE73C /* EventasaurusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7576DF85798AE37B54DF03A /* EventasaurusTests.swift */; };
+		9106DB341AD8FFD52AC815F1 /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D910507C20A4079D0F6753F /* Event.swift */; };
+		992511E67143076D6E4D1C3A /* ClerkKitUI in Frameworks */ = {isa = PBXBuildFile; productRef = C5195A7386D584083DFE61AB /* ClerkKitUI */; };
+		B5098781655A7037090FA6E4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FD46770CC3F41864DFC21903 /* Assets.xcassets */; };
+		BF9ACEB5D68ECF001460E162 /* MyEventsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F355DFAD17AF195B641426EC /* MyEventsView.swift */; };
+		D4FDFE920221381C961396FC /* EventDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */; };
+		D577F3F99A409AC4E9EBC795 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29DB2240AAF684CE1A11E249 /* LocationManager.swift */; };
+		DBCCCB04C953FC3B590FB802 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A60E8B52121B630D8E34C9 /* APIClient.swift */; };
+		FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86142150038F49A64DEA51BF /* EventasaurusApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		608F42A4481D9B0739F6F9D9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FAC9355CC61CD071B0AA4B9A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 94C47041FD1F4FC717E18D36;
+			remoteInfo = Eventasaurus;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		09081158264711B776E3A8C3 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		09DFBC648289C22C04815EF7 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1D910507C20A4079D0F6753F /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
+		21BAC9E54F63FED667138C7D /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		29DB2240AAF684CE1A11E249 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		4067D79830D923AC5F89BE18 /* EventasaurusTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = EventasaurusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		43A60E8B52121B630D8E34C9 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		67A1ECA61FCC5D45BBDD14B0 /* Eventasaurus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Eventasaurus.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCardView.swift; sourceTree = "<group>"; };
+		6F09B4234829F37AACF41EEE /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		74DE54496EE549F58B31CC75 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
+		86142150038F49A64DEA51BF /* EventasaurusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventasaurusApp.swift; sourceTree = "<group>"; };
+		A7576DF85798AE37B54DF03A /* EventasaurusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventasaurusTests.swift; sourceTree = "<group>"; };
+		DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
+		F355DFAD17AF195B641426EC /* MyEventsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyEventsView.swift; sourceTree = "<group>"; };
+		FD46770CC3F41864DFC21903 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		72E6612B34DDED6B631CD635 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7F4AC7E3A47220B8AE287256 /* ClerkKit in Frameworks */,
+				992511E67143076D6E4D1C3A /* ClerkKitUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		06709B139B873FDC0CCA13E2 = {
+			isa = PBXGroup;
+			children = (
+				41EF37521798A59996F83B10 /* Eventasaurus */,
+				81D6B4EB5B945C8708817DFE /* EventasaurusTests */,
+				C9D0682FE16D02E5B1363C78 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		39E2E9980538AA714649F161 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				6F09B4234829F37AACF41EEE /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		3EDCE817A6B8F3304A7DC46F /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				1D910507C20A4079D0F6753F /* Event.swift */,
+				21BAC9E54F63FED667138C7D /* UserProfile.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		41EF37521798A59996F83B10 /* Eventasaurus */ = {
+			isa = PBXGroup;
+			children = (
+				FD46770CC3F41864DFC21903 /* Assets.xcassets */,
+				09DFBC648289C22C04815EF7 /* ContentView.swift */,
+				86142150038F49A64DEA51BF /* EventasaurusApp.swift */,
+				3EDCE817A6B8F3304A7DC46F /* Models */,
+				39E2E9980538AA714649F161 /* Preview Content */,
+				52A989D87F318C9730693A38 /* Services */,
+				E586B0DE55D592CB4360C162 /* Views */,
+			);
+			path = Eventasaurus;
+			sourceTree = "<group>";
+		};
+		52A989D87F318C9730693A38 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				43A60E8B52121B630D8E34C9 /* APIClient.swift */,
+				29DB2240AAF684CE1A11E249 /* LocationManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		81D6B4EB5B945C8708817DFE /* EventasaurusTests */ = {
+			isa = PBXGroup;
+			children = (
+				A7576DF85798AE37B54DF03A /* EventasaurusTests.swift */,
+			);
+			path = EventasaurusTests;
+			sourceTree = "<group>";
+		};
+		C9D0682FE16D02E5B1363C78 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				67A1ECA61FCC5D45BBDD14B0 /* Eventasaurus.app */,
+				4067D79830D923AC5F89BE18 /* EventasaurusTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E586B0DE55D592CB4360C162 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				74DE54496EE549F58B31CC75 /* DiscoverView.swift */,
+				6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */,
+				DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */,
+				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
+				09081158264711B776E3A8C3 /* ProfileView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		94C47041FD1F4FC717E18D36 /* Eventasaurus */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 62C6B789B4DCC954AC379F39 /* Build configuration list for PBXNativeTarget "Eventasaurus" */;
+			buildPhases = (
+				4E4DF31DE954567A5C7FEA8A /* Sources */,
+				959AE15A1F080A039DC7D004 /* Resources */,
+				72E6612B34DDED6B631CD635 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Eventasaurus;
+			packageProductDependencies = (
+				61EE545E7E5FBF16E8D39BFA /* ClerkKit */,
+				C5195A7386D584083DFE61AB /* ClerkKitUI */,
+			);
+			productName = Eventasaurus;
+			productReference = 67A1ECA61FCC5D45BBDD14B0 /* Eventasaurus.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C80960E054E0C5A09CD7273E /* EventasaurusTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F2F99FDEAFAAF37BA8AF86C3 /* Build configuration list for PBXNativeTarget "EventasaurusTests" */;
+			buildPhases = (
+				52420381B79C2E158131AE8D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D1D8AB739CB47403DCAEA667 /* PBXTargetDependency */,
+			);
+			name = EventasaurusTests;
+			packageProductDependencies = (
+			);
+			productName = EventasaurusTests;
+			productReference = 4067D79830D923AC5F89BE18 /* EventasaurusTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		FAC9355CC61CD071B0AA4B9A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = B0F2EFC18055E67DD0D64693 /* Build configuration list for PBXProject "Eventasaurus" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 06709B139B873FDC0CCA13E2;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E8677D2B3D6ED1B9ADDCC0EA /* XCRemoteSwiftPackageReference "clerk-ios" */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				94C47041FD1F4FC717E18D36 /* Eventasaurus */,
+				C80960E054E0C5A09CD7273E /* EventasaurusTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		959AE15A1F080A039DC7D004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B5098781655A7037090FA6E4 /* Assets.xcassets in Resources */,
+				5C580EADCCF30341DB670FE3 /* Preview Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4E4DF31DE954567A5C7FEA8A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DBCCCB04C953FC3B590FB802 /* APIClient.swift in Sources */,
+				69C72F0A0750335F65C8C746 /* ContentView.swift in Sources */,
+				66BE87A517CC95E227F35C2B /* DiscoverView.swift in Sources */,
+				9106DB341AD8FFD52AC815F1 /* Event.swift in Sources */,
+				552B3CC5F35CE02F411AA93E /* EventCardView.swift in Sources */,
+				D4FDFE920221381C961396FC /* EventDetailView.swift in Sources */,
+				FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */,
+				D577F3F99A409AC4E9EBC795 /* LocationManager.swift in Sources */,
+				BF9ACEB5D68ECF001460E162 /* MyEventsView.swift in Sources */,
+				19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */,
+				7F9F9F532434DCF96269280B /* UserProfile.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		52420381B79C2E158131AE8D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8F31D989A9596509100AE73C /* EventasaurusTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D1D8AB739CB47403DCAEA667 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 94C47041FD1F4FC717E18D36 /* Eventasaurus */;
+			targetProxy = 608F42A4481D9B0739F6F9D9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		4D1BE2B0ED1D711703CB6881 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		84732BA3DEAB5A63BF67AE7C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.eventasaurus.EventasaurusTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Eventasaurus.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Eventasaurus";
+			};
+			name = Release;
+		};
+		98955252896E11D3D144C01D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.eventasaurus.EventasaurusTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Eventasaurus.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Eventasaurus";
+			};
+			name = Debug;
+		};
+		B25D9C8DDEF76A1B3C526BBD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DB2E122B92ED83853DF424C8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Eventasaurus/Preview Content\"";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Eventasaurus uses your location to find events near you.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.eventasaurus.ios;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FADCBF524AFF21015830ABEA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Eventasaurus/Preview Content\"";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Eventasaurus uses your location to find events near you.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.eventasaurus.ios;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		62C6B789B4DCC954AC379F39 /* Build configuration list for PBXNativeTarget "Eventasaurus" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DB2E122B92ED83853DF424C8 /* Debug */,
+				FADCBF524AFF21015830ABEA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B0F2EFC18055E67DD0D64693 /* Build configuration list for PBXProject "Eventasaurus" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B25D9C8DDEF76A1B3C526BBD /* Debug */,
+				4D1BE2B0ED1D711703CB6881 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F2F99FDEAFAAF37BA8AF86C3 /* Build configuration list for PBXNativeTarget "EventasaurusTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				98955252896E11D3D144C01D /* Debug */,
+				84732BA3DEAB5A63BF67AE7C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E8677D2B3D6ED1B9ADDCC0EA /* XCRemoteSwiftPackageReference "clerk-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/clerk/clerk-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		61EE545E7E5FBF16E8D39BFA /* ClerkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E8677D2B3D6ED1B9ADDCC0EA /* XCRemoteSwiftPackageReference "clerk-ios" */;
+			productName = ClerkKit;
+		};
+		C5195A7386D584083DFE61AB /* ClerkKitUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E8677D2B3D6ED1B9ADDCC0EA /* XCRemoteSwiftPackageReference "clerk-ios" */;
+			productName = ClerkKitUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = FAC9355CC61CD071B0AA4B9A /* Project object */;
+}
