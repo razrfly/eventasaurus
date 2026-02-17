@@ -9,7 +9,13 @@ final class APIClient {
     private let session = URLSession.shared
     private let decoder: JSONDecoder
 
-    init(baseURL: URL = URL(string: "http://localhost:4000")!) {
+    #if DEBUG
+    static let defaultBaseURL = URL(string: "http://localhost:4000")!
+    #else
+    static let defaultBaseURL = URL(string: "https://eventasaur.us")!
+    #endif
+
+    init(baseURL: URL = defaultBaseURL) {
         self.baseURL = baseURL
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase

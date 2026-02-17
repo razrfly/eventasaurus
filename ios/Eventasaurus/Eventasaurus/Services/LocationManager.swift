@@ -34,6 +34,7 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
         }
 
         // Poll for location with timeout (checking every 250ms)
+        var locationRequested = false
         let attempts = Int(timeout / 0.25)
         for _ in 0..<attempts {
             try? await Task.sleep(for: .milliseconds(250))
@@ -43,9 +44,10 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
                 return nil
             }
 
-            // Request location once authorized (if not already requested)
-            if location == nil &&
+            // Request location once after authorization (single request to avoid queuing duplicates)
+            if !locationRequested && location == nil &&
                 (authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways) {
+                locationRequested = true
                 requestLocation()
             }
 
