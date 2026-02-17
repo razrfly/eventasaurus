@@ -46,9 +46,6 @@ cover/
 # Environment variables
 .env
 
-# Deployment configuration (may contain secrets)
-fly.toml
-
 # Cookie files (can contain session/auth tokens)
 cookies.txt
 *.cookiejar
