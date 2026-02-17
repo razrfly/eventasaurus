@@ -79,19 +79,20 @@ struct EventCardView: View {
 
     @ViewBuilder
     private var groupBadge: some View {
-        let (icon, label) = groupBadgeContent
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-            Text(label)
+        if let (icon, label) = groupBadgeContent {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                Text(label)
+            }
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
         }
-        .font(.caption2.weight(.semibold))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
     }
 
-    private var groupBadgeContent: (String, String) {
+    private var groupBadgeContent: (String, String)? {
         switch event.type {
         case "movie_group":
             let count = event.screeningCount ?? 0
@@ -103,7 +104,7 @@ struct EventCardView: View {
             let label = event.containerType ?? "festival"
             return ("sparkles", label.capitalized)
         default:
-            return ("calendar", "")
+            return nil
         }
     }
 }

@@ -179,7 +179,13 @@ defmodule EventasaurusDiscovery.Locations do
   """
   def search_cities(query, opts \\ []) when is_binary(query) do
     limit = Keyword.get(opts, :limit, 20)
-    pattern = "%#{query}%"
+    sanitized =
+      query
+      |> String.replace("\\", "\\\\")
+      |> String.replace("%", "\\%")
+      |> String.replace("_", "\\_")
+
+    pattern = "%#{sanitized}%"
 
     from(c in City,
       where:

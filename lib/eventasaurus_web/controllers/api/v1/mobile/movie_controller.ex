@@ -17,14 +17,15 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
       movie ->
         city_id = parse_int(params["city_id"])
+        now = DateTime.utc_now()
         screenings = fetch_screenings(movie.id, city_id)
-        venues = build_venue_groups(screenings)
+        venues = build_venue_groups(screenings, now)
 
         total_showtimes = Enum.reduce(venues, 0, fn v, acc -> acc + length(v.showtimes) end)
 
         json(conn, %{
           movie: serialize_movie(movie),
-          venues: Enum.map(venues, &serialize_venue_group/1),
+          venues: Enum.map(venues, &serialize_venue_group(&1, now)),
           meta: %{
             total_venues: length(venues),
             total_showtimes: total_showtimes
@@ -51,9 +52,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
   # Group events by venue and extract showtimes from occurrences JSONB.
   # Returns both upcoming and recent past, matching the web behavior.
-  defp build_venue_groups(screenings) do
-    now = DateTime.utc_now()
-
+  defp build_venue_groups(screenings, now) do
     screenings
     |> Enum.group_by(& &1.venue.id)
     |> Enum.map(fn {_venue_id, events} ->
@@ -79,9 +78,16 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     end)
   end
 
-  # Extract all occurrences from a single event's JSONB data
+  # Extract all occurrences from a single event's JSONB data.
+  # Note: Venue association is :city_ref (not :city), so we resolve timezone
+  # directly from venue.city_ref rather than using TimezoneUtils.get_event_timezone
+  # which pattern-matches on the :city key.
   defp extract_occurrences(event) do
-    timezone = TimezoneUtils.get_event_timezone(event)
+    timezone =
+      case event.venue do
+        %{city_ref: %{timezone: tz}} when is_binary(tz) and tz != "" -> tz
+        _ -> TimezoneUtils.default_timezone()
+      end
 
     case get_in(event.occurrences || %{}, ["dates"]) do
       dates when is_list(dates) ->
@@ -113,9 +119,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     end
   end
 
-  defp serialize_venue_group(group) do
-    now = DateTime.utc_now()
-
+  defp serialize_venue_group(group, now) do
     %{
       venue: %{name: group.venue.name, address: group.venue.address},
       event_slug: group.event_slug,
@@ -140,11 +144,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
              {minute, ""} <- Integer.parse(minute_str) do
           Time.new(hour, minute, 0)
         else
-          _ -> {:ok, ~T[20:00:00]}
+          _ -> {:error, :invalid_time}
         end
 
       _ ->
-        {:ok, ~T[20:00:00]}
+        {:error, :invalid_time}
     end
   end
 

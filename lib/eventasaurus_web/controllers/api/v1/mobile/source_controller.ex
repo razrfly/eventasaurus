@@ -27,7 +27,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
 
   defp maybe_add_city(opts, %{"city_id" => city_id}) when is_binary(city_id) do
     case Integer.parse(city_id) do
-      {id, _} -> Keyword.put(opts, :city_id, id)
+      {id, ""} -> Keyword.put(opts, :city_id, id)
       :error -> opts
     end
   end
