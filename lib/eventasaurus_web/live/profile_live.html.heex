@@ -15,7 +15,8 @@
                 <h1 class="text-3xl font-bold text-gray-900 mb-1">
                   <%= display_name(@profile_user) %>
                 </h1>
-                <p class="text-lg text-gray-600 mb-3">@<%= User.username_slug(@profile_user) %></p>
+                <p class="text-lg text-gray-600 mb-1">@<%= User.username_slug(@profile_user) %></p>
+                <p class="text-sm text-gray-500 mb-3">Family: <%= @profile_user.family_name %></p>
 
                 <!-- Join Date -->
                 <div class="flex items-center text-sm text-gray-500 mb-4">

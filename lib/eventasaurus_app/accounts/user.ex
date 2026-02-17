@@ -284,6 +284,7 @@ defmodule EventasaurusApp.Accounts.User do
   import Ecto.Changeset
 
   alias EventasaurusApp.Accounts.User.Username
+  alias EventasaurusApp.Families
 
   schema "users" do
     field(:email, :string)
@@ -291,6 +292,7 @@ defmodule EventasaurusApp.Accounts.User do
 
     # Profile fields
     field(:username, :string)
+    field(:family_name, :string)
     field(:bio, :string)
     field(:website_url, :string)
     field(:profile_public, :boolean, default: true)
@@ -348,6 +350,7 @@ defmodule EventasaurusApp.Accounts.User do
       :email,
       :name,
       :username,
+      :family_name,
       :bio,
       :website_url,
       :profile_public,
@@ -365,6 +368,7 @@ defmodule EventasaurusApp.Accounts.User do
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> validate_length(:email, max: 160)
     |> validate_username()
+    |> validate_inclusion(:family_name, Families.list_family_names())
     |> validate_bio()
     |> validate_website_url()
     |> validate_social_handles()
