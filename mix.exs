@@ -194,7 +194,7 @@ defmodule Eventasaurus.MixProject do
     [
       setup: ["deps.get", "assets.setup", "assets.build"],
       test: ["test"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      "assets.setup": ["cmd --cd assets npm install", "tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["tailwind eventasaurus", "esbuild eventasaurus"],
       "assets.deploy": [
         "tailwind eventasaurus --minify",
