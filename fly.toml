@@ -1,0 +1,39 @@
+# fly.toml app configuration file generated for eventasaurus on 2025-06-05T12:33:37+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'eventasaurus'
+primary_region = 'fra'
+kill_signal = 'SIGTERM'
+
+[build]
+
+[deploy]
+  # Run migrations using direct database connection (bypasses PgBouncer)
+  # Migrations require advisory locks which don't work through PgBouncer in transaction mode
+  release_command = '/bin/sh -c "DATABASE_URL=$DATABASE_DIRECT_URL /app/bin/migrate"'
+  # Using 'rolling' strategy for zero-downtime deployments
+  strategy = 'rolling'
+
+[env]
+  PHX_HOST = 'eventasaurus.fly.dev'
+  PORT = '8080'
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 1000
+    soft_limit = 1000
+
+[[vm]]
+  # Increased to 2GB for Oban job processing headroom
+  memory = '2gb'
+  cpu_kind = 'shared'
+  cpus = 1
