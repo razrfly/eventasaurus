@@ -38,6 +38,8 @@ struct DiscoverView: View {
     private static let cityKey = "selectedCityId"
     private static let cityNameKey = "selectedCityName"
     private static let citySlugKey = "selectedCitySlug"
+    private static let cityCountryKey = "selectedCityCountry"
+    private static let cityCountryCodeKey = "selectedCityCountryCode"
 
     var body: some View {
         NavigationStack {
@@ -107,7 +109,11 @@ struct DiscoverView: View {
                 }
             }
             .sheet(isPresented: $showCityPicker) {
-                CityPickerView(selectedCity: selectedCity, resolvedCity: resolvedCity) { city in
+                CityPickerView(
+                    selectedCity: selectedCity,
+                    resolvedCity: resolvedCity,
+                    locationDenied: locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted
+                ) { city in
                     selectedCity = city
                     persistCitySelection(city)
                     Task { await loadEvents() }
@@ -260,13 +266,13 @@ struct DiscoverView: View {
         if let loc {
             lastLat = loc.coordinate.latitude
             lastLng = loc.coordinate.longitude
-            // Fire-and-forget: resolve GPS to a city name for display
-            let lat = loc.coordinate.latitude
-            let lng = loc.coordinate.longitude
-            Task {
-                resolvedCity = try? await APIClient.shared.resolveCity(lat: lat, lng: lng)
-            }
             await loadEvents()
+            // Resolve GPS to a city name for display (structured, cancellable)
+            if resolvedCity == nil {
+                resolvedCity = try? await APIClient.shared.resolveCity(
+                    lat: loc.coordinate.latitude, lng: loc.coordinate.longitude
+                )
+            }
         } else {
             isLoading = false
             error = LocationError.unavailable
@@ -333,10 +339,14 @@ struct DiscoverView: View {
             UserDefaults.standard.set(city.id, forKey: Self.cityKey)
             UserDefaults.standard.set(city.name, forKey: Self.cityNameKey)
             UserDefaults.standard.set(city.slug, forKey: Self.citySlugKey)
+            UserDefaults.standard.set(city.country, forKey: Self.cityCountryKey)
+            UserDefaults.standard.set(city.countryCode, forKey: Self.cityCountryCodeKey)
         } else {
             UserDefaults.standard.removeObject(forKey: Self.cityKey)
             UserDefaults.standard.removeObject(forKey: Self.cityNameKey)
             UserDefaults.standard.removeObject(forKey: Self.citySlugKey)
+            UserDefaults.standard.removeObject(forKey: Self.cityCountryKey)
+            UserDefaults.standard.removeObject(forKey: Self.cityCountryCodeKey)
         }
     }
 
@@ -344,7 +354,9 @@ struct DiscoverView: View {
         let cityId = UserDefaults.standard.integer(forKey: Self.cityKey)
         if cityId > 0, let name = UserDefaults.standard.string(forKey: Self.cityNameKey) {
             let slug = UserDefaults.standard.string(forKey: Self.citySlugKey) ?? ""
-            selectedCity = City(id: cityId, name: name, slug: slug, latitude: nil, longitude: nil, timezone: nil, country: nil, countryCode: nil, eventCount: nil)
+            let country = UserDefaults.standard.string(forKey: Self.cityCountryKey)
+            let countryCode = UserDefaults.standard.string(forKey: Self.cityCountryCodeKey)
+            selectedCity = City(id: cityId, name: name, slug: slug, latitude: nil, longitude: nil, timezone: nil, country: country, countryCode: countryCode, eventCount: nil)
         }
     }
 }

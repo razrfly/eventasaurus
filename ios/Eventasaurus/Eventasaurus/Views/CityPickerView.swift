@@ -5,6 +5,11 @@ struct CityPickerView: View {
     private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.eventasaurus", category: "CityPickerView")
     private static let recentCitiesKey = "recentCities"
     private static let maxRecentCities = 5
+    private static let eventCountFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f
+    }()
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -12,9 +17,11 @@ struct CityPickerView: View {
     @State private var searchResults: [City] = []
     @State private var recentCities: [City] = []
     @State private var isLoading = false
+    @State private var popularCitiesLoaded = false
 
     let selectedCity: City?
     let resolvedCity: City?
+    let locationDenied: Bool
     let onSelect: (City?) -> Void
 
     var body: some View {
@@ -50,31 +57,68 @@ struct CityPickerView: View {
         }
     }
 
-    // MARK: - Browse Content (empty / short search)
+    // MARK: - Client-side filtering for 1-char search
+
+    private var filteredPopularCities: [City] {
+        guard searchText.count == 1 else { return popularCities }
+        return popularCities.filter { $0.name.localizedStandardContains(searchText) }
+    }
+
+    private var filteredRecentCities: [City] {
+        guard searchText.count == 1 else { return recentCities }
+        return recentCities.filter { $0.name.localizedStandardContains(searchText) }
+    }
+
+    // MARK: - Browse Content (empty / 1-char search)
 
     @ViewBuilder
     private var browseContent: some View {
         // Current Location section
         Section {
-            Button {
-                onSelect(nil)
-                dismiss()
-            } label: {
+            if locationDenied {
                 HStack {
-                    Image(systemName: "location.fill")
-                        .foregroundStyle(.blue)
+                    Image(systemName: "location.slash.fill")
+                        .foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Use My Location")
-                        if let resolved = resolvedCity {
-                            Text(citySubtitle(resolved))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        Text("Location Unavailable")
+                        Button("Enable in Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
                         }
+                        .font(.caption)
                     }
                     Spacer()
-                    if selectedCity == nil {
-                        Image(systemName: "checkmark")
+                }
+            } else {
+                Button {
+                    onSelect(nil)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: "location.fill")
                             .foregroundStyle(.blue)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Use My Location")
+                            if let resolved = resolvedCity {
+                                Text(citySubtitle(resolved))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                HStack(spacing: 4) {
+                                    ProgressView()
+                                        .controlSize(.mini)
+                                    Text("Detecting location...")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        Spacer()
+                        if selectedCity == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.blue)
+                        }
                     }
                 }
             }
@@ -82,25 +126,39 @@ struct CityPickerView: View {
 
         // Popular Cities section
         Section("Popular Cities") {
-            if popularCities.isEmpty {
+            if !popularCitiesLoaded {
                 HStack {
                     Spacer()
                     ProgressView()
                     Spacer()
                 }
+            } else if popularCities.isEmpty {
+                Text("No popular cities available")
+                    .foregroundStyle(.secondary)
+            } else if filteredPopularCities.isEmpty {
+                Text("No matches")
+                    .foregroundStyle(.secondary)
             } else {
-                ForEach(popularCities) { city in
+                ForEach(filteredPopularCities) { city in
                     cityRow(city, showEventCount: true)
                 }
             }
         }
 
         // Recently Selected section
-        if !recentCities.isEmpty {
-            Section("Recently Selected") {
-                ForEach(recentCities) { city in
+        if !filteredRecentCities.isEmpty {
+            Section {
+                ForEach(filteredRecentCities) { city in
                     cityRow(city, showEventCount: false)
                 }
+                if searchText.isEmpty {
+                    Button("Clear Recent", role: .destructive) {
+                        clearRecentCities()
+                    }
+                    .font(.subheadline)
+                }
+            } header: {
+                Text("Recently Selected")
             }
         }
     }
@@ -124,7 +182,7 @@ struct CityPickerView: View {
 
             ForEach(sortedKeys, id: \.self) { country in
                 Section(country) {
-                    ForEach(grouped[country]!) { city in
+                    ForEach(grouped[country] ?? []) { city in
                         cityRow(city, showEventCount: false)
                     }
                 }
@@ -171,9 +229,7 @@ struct CityPickerView: View {
     }
 
     private func formatEventCount(_ count: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        let formatted = formatter.string(from: NSNumber(value: count)) ?? "\(count)"
+        let formatted = Self.eventCountFormatter.string(from: NSNumber(value: count)) ?? "\(count)"
         return "\(formatted) \(count == 1 ? "event" : "events")"
     }
 
@@ -191,6 +247,7 @@ struct CityPickerView: View {
         } catch {
             Self.logger.error("Failed to load popular cities: \(error, privacy: .public)")
         }
+        popularCitiesLoaded = true
     }
 
     private func performSearch() async {
@@ -223,10 +280,18 @@ struct CityPickerView: View {
             recents = Array(recents.prefix(Self.maxRecentCities))
         }
         recentCities = recents
+        persistRecentCities(recents)
+    }
 
+    private func clearRecentCities() {
+        recentCities = []
+        UserDefaults.standard.removeObject(forKey: Self.recentCitiesKey)
+    }
+
+    private func persistRecentCities(_ cities: [City]) {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
-        if let data = try? encoder.encode(recents) {
+        if let data = try? encoder.encode(cities) {
             UserDefaults.standard.set(data, forKey: Self.recentCitiesKey)
         }
     }

@@ -18,6 +18,7 @@ defmodule EventasaurusDiscovery.CityStats do
     * `:min_events` - Minimum number of events required (default: 10)
     * `:limit` - Maximum number of cities to return (default: 12)
   """
+  @spec list_top_cities_by_events(keyword()) :: [map()]
   def list_top_cities_by_events(opts \\ []) do
     min_events = Keyword.get(opts, :min_events, 10)
     limit = Keyword.get(opts, :limit, 12)
