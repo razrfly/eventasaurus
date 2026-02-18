@@ -15,6 +15,7 @@ struct DiscoverView: View {
     // City selection
     @State private var selectedCity: City?
     @State private var resolvedCity: City?
+    @State private var locationResolved = false
     @State private var showCityPicker = false
 
     // Search
@@ -26,6 +27,11 @@ struct DiscoverView: View {
     // Sort options
     @State private var sortBy: String = "starts_at"
     @State private var sortOrder: String = "asc"
+
+    // Pagination
+    @State private var currentPage = 1
+    @State private var totalCount = 0
+    @State private var isLoadingMore = false
 
     private static let dateRanges: [(label: String, value: String?)] = [
         ("All", nil),
@@ -112,7 +118,8 @@ struct DiscoverView: View {
                 CityPickerView(
                     selectedCity: selectedCity,
                     resolvedCity: resolvedCity,
-                    locationDenied: locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted
+                    locationDenied: locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted,
+                    locationResolved: locationResolved
                 ) { city in
                     selectedCity = city
                     persistCitySelection(city)
@@ -209,6 +216,10 @@ struct DiscoverView: View {
 
     // MARK: - Event List
 
+    private var hasMorePages: Bool {
+        events.count < totalCount
+    }
+
     private var eventList: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
@@ -217,6 +228,16 @@ struct DiscoverView: View {
                         EventCardView(event: event)
                     }
                     .buttonStyle(.plain)
+                    .onAppear {
+                        if event.id == events.last?.id, hasMorePages, !isLoadingMore {
+                            Task { await loadMoreEvents() }
+                        }
+                    }
+                }
+
+                if isLoadingMore {
+                    ProgressView()
+                        .padding()
                 }
             }
             .padding()
@@ -268,11 +289,11 @@ struct DiscoverView: View {
             lastLng = loc.coordinate.longitude
             await loadEvents()
             // Resolve GPS to a city name for display (structured, cancellable)
-            if resolvedCity == nil {
-                resolvedCity = try? await APIClient.shared.resolveCity(
-                    lat: loc.coordinate.latitude, lng: loc.coordinate.longitude
-                )
-            }
+            locationResolved = false
+            resolvedCity = try? await APIClient.shared.resolveCity(
+                lat: loc.coordinate.latitude, lng: loc.coordinate.longitude
+            )
+            locationResolved = true
         } else {
             isLoading = false
             error = LocationError.unavailable
@@ -288,11 +309,12 @@ struct DiscoverView: View {
             }
         }
 
+        currentPage = 1
         isLoading = true
         error = nil
 
         do {
-            events = try await APIClient.shared.fetchNearbyEvents(
+            let response = try await APIClient.shared.fetchNearbyEvents(
                 lat: selectedCity == nil ? lastLat : nil,
                 lng: selectedCity == nil ? lastLng : nil,
                 cityId: selectedCity?.id,
@@ -300,13 +322,42 @@ struct DiscoverView: View {
                 search: searchText.isEmpty ? nil : searchText,
                 dateRange: selectedDateRange,
                 sortBy: sortBy == "starts_at" ? nil : sortBy,
-                sortOrder: sortOrder == "asc" ? nil : sortOrder
+                sortOrder: sortOrder == "asc" ? nil : sortOrder,
+                page: 1
             )
+            events = response.events
+            totalCount = response.meta.totalCount ?? response.meta.total ?? response.events.count
         } catch {
             self.error = error
         }
 
         isLoading = false
+    }
+
+    private func loadMoreEvents() async {
+        let nextPage = currentPage + 1
+        isLoadingMore = true
+
+        do {
+            let response = try await APIClient.shared.fetchNearbyEvents(
+                lat: selectedCity == nil ? lastLat : nil,
+                lng: selectedCity == nil ? lastLng : nil,
+                cityId: selectedCity?.id,
+                categoryIds: Array(selectedCategories),
+                search: searchText.isEmpty ? nil : searchText,
+                dateRange: selectedDateRange,
+                sortBy: sortBy == "starts_at" ? nil : sortBy,
+                sortOrder: sortOrder == "asc" ? nil : sortOrder,
+                page: nextPage
+            )
+            events.append(contentsOf: response.events)
+            currentPage = nextPage
+            totalCount = response.meta.totalCount ?? response.meta.total ?? totalCount
+        } catch {
+            // Silently fail load-more; user can scroll again to retry
+        }
+
+        isLoadingMore = false
     }
 
     // MARK: - Filter Helpers
