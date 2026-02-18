@@ -64,14 +64,21 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         |> maybe_add_date_range(params)
         |> maybe_add_sort(params)
 
-      # Fetch raw events then aggregate (same pipeline the web uses).
-      # Note: aggregate_events uses is_map_key guards, so opts must be a map.
-      raw_events = PublicEventsEnhanced.list_events(opts)
-      items = PublicEventsEnhanced.aggregate_events(raw_events, %{ignore_city_in_aggregation: true})
+      # Fetch up to 500 events, aggregate, then paginate in-memory
+      # (matches the web pipeline — without this, DB pagination fetches only
+      # 20 events, leaving almost nothing to aggregate).
+      opts_for_aggregation =
+        opts
+        |> Keyword.put(:aggregate, true)
+        |> Keyword.put(:ignore_city_in_aggregation, true)
+        |> Map.new()
+
+      {items, total_count, _all_count} =
+        PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
 
       json(conn, %{
         events: Enum.map(items, &serialize_item/1),
-        meta: %{page: page, per_page: per_page}
+        meta: %{page: page, per_page: per_page, total_count: total_count}
       })
     else
       {:error, field, message} ->

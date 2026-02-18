@@ -22,6 +22,7 @@ struct CityPickerView: View {
     let selectedCity: City?
     let resolvedCity: City?
     let locationDenied: Bool
+    let locationResolved: Bool
     let onSelect: (City?) -> Void
 
     var body: some View {
@@ -104,7 +105,7 @@ struct CityPickerView: View {
                                 Text(citySubtitle(resolved))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                            } else {
+                            } else if !locationResolved {
                                 HStack(spacing: 4) {
                                     ProgressView()
                                         .controlSize(.mini)

@@ -32,8 +32,10 @@ final class APIClient {
         search: String? = nil,
         dateRange: String? = nil,
         sortBy: String? = nil,
-        sortOrder: String? = nil
-    ) async throws -> [Event] {
+        sortOrder: String? = nil,
+        page: Int = 1,
+        perPage: Int = 20
+    ) async throws -> EventsResponse {
         var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/mobile/events/nearby"), resolvingAgainstBaseURL: false)!
         var queryItems: [URLQueryItem] = []
 
@@ -65,10 +67,12 @@ final class APIClient {
             queryItems.append(URLQueryItem(name: "sort_order", value: sortOrder))
         }
 
+        queryItems.append(URLQueryItem(name: "page", value: String(page)))
+        queryItems.append(URLQueryItem(name: "per_page", value: String(perPage)))
+
         components.queryItems = queryItems.isEmpty ? nil : queryItems
         guard let url = components.url else { throw APIError.invalidURL }
-        let response: EventsResponse = try await request(url: url)
-        return response.events
+        return try await request(url: url)
     }
 
     func fetchCategories() async throws -> [Category] {

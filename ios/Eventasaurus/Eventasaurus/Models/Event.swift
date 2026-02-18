@@ -50,4 +50,5 @@ struct Meta: Codable {
     let page: Int?
     let perPage: Int?
     let total: Int?
+    let totalCount: Int?
 }
