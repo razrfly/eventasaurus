@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09081158264711B776E3A8C3 /* ProfileView.swift */; };
 		552B3CC5F35CE02F411AA93E /* EventCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */; };
+		CA41E7A845D6139B3A1DB9B4 /* CachedImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FA4DEDFAA5B8C1FD22C7A75 /* CachedImage.swift */; };
 		5C580EADCCF30341DB670FE3 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6F09B4234829F37AACF41EEE /* Preview Assets.xcassets */; };
 		66BE87A517CC95E227F35C2B /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DE54496EE549F58B31CC75 /* DiscoverView.swift */; };
 		69C72F0A0750335F65C8C746 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09DFBC648289C22C04815EF7 /* ContentView.swift */; };
@@ -55,6 +56,7 @@
 		43A60E8B52121B630D8E34C9 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		67A1ECA61FCC5D45BBDD14B0 /* Eventasaurus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Eventasaurus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCardView.swift; sourceTree = "<group>"; };
+		7FA4DEDFAA5B8C1FD22C7A75 /* CachedImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedImage.swift; sourceTree = "<group>"; };
 		6F09B4234829F37AACF41EEE /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		74DE54496EE549F58B31CC75 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		86142150038F49A64DEA51BF /* EventasaurusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventasaurusApp.swift; sourceTree = "<group>"; };
@@ -166,6 +168,7 @@
 				AA11BB22CC33DD44EE55FF0E /* ContainerDetailView.swift */,
 				74DE54496EE549F58B31CC75 /* DiscoverView.swift */,
 				6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */,
+				7FA4DEDFAA5B8C1FD22C7A75 /* CachedImage.swift */,
 				DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */,
 				AA11BB22CC33DD44EE55FF0A /* MovieDetailView.swift */,
 				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
@@ -276,6 +279,7 @@
 				66BE87A517CC95E227F35C2B /* DiscoverView.swift in Sources */,
 				9106DB341AD8FFD52AC815F1 /* Event.swift in Sources */,
 				552B3CC5F35CE02F411AA93E /* EventCardView.swift in Sources */,
+				CA41E7A845D6139B3A1DB9B4 /* CachedImage.swift in Sources */,
 				AA11BB22CC33DD44EE55FF01 /* EventDestination.swift in Sources */,
 				D4FDFE920221381C961396FC /* EventDetailView.swift in Sources */,
 				FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */,

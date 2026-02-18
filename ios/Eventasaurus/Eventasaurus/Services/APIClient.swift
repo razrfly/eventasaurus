@@ -70,7 +70,7 @@ final class APIClient {
         queryItems.append(URLQueryItem(name: "page", value: String(page)))
         queryItems.append(URLQueryItem(name: "per_page", value: String(perPage)))
 
-        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        components.queryItems = queryItems
         guard let url = components.url else { throw APIError.invalidURL }
         return try await request(url: url)
     }

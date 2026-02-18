@@ -28,20 +28,13 @@ struct ContainerDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // Cover image
-                if let imageUrl = data.container.coverImageUrl, let url = URL(string: imageUrl) {
-                    Color.clear
-                        .frame(height: 220)
-                        .overlay {
-                            AsyncImage(url: url) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Rectangle()
-                                    .fill(.quaternary)
-                            }
-                        }
-                        .clipped()
+                if data.container.coverImageUrl != nil {
+                    CachedImage(
+                        url: data.container.coverImageUrl.flatMap { URL(string: $0) },
+                        height: 220,
+                        cornerRadius: 0,
+                        placeholderIcon: "sparkles"
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 12) {

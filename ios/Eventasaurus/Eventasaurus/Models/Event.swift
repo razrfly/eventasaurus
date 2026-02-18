@@ -49,6 +49,13 @@ struct Venue: Codable {
 struct Meta: Codable {
     let page: Int?
     let perPage: Int?
+    /// From attending endpoint
     let total: Int?
+    /// From nearby endpoint
     let totalCount: Int?
+
+    /// Resolved total from whichever endpoint provided it
+    var resolvedTotal: Int? {
+        totalCount ?? total
+    }
 }
