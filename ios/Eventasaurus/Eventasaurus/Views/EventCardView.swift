@@ -25,7 +25,7 @@ struct EventCardView: View {
                     // Group badge or time badge (top-right)
                     if event.isGroup {
                         groupBadge
-                    } else if let badge = event.timeBadge {
+                    } else if let badge = timeBadgeText {
                         timeBadge(badge)
                     }
                 }
@@ -67,7 +67,7 @@ struct EventCardView: View {
 
     // MARK: - Category Badge
 
-    private func categoryBadge(_ category: EventCategory) -> some View {
+    private func categoryBadge(_ category: Category) -> some View {
         HStack(spacing: 3) {
             if let icon = category.icon {
                 Text(icon)
@@ -78,20 +78,9 @@ struct EventCardView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(categoryColor(category.color).opacity(0.9))
+        .background(category.resolvedColor.opacity(0.9))
         .foregroundStyle(.white)
         .clipShape(Capsule())
-    }
-
-    private func categoryColor(_ hex: String?) -> Color {
-        guard let hex else { return .blue }
-        let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard cleaned.count == 6, let rgb = UInt64(cleaned, radix: 16) else { return .blue }
-        return Color(
-            red: Double((rgb >> 16) & 0xFF) / 255,
-            green: Double((rgb >> 8) & 0xFF) / 255,
-            blue: Double(rgb & 0xFF) / 255
-        )
     }
 
     // MARK: - Time Badge
@@ -104,6 +93,18 @@ struct EventCardView: View {
             .background(.green.opacity(0.9))
             .foregroundStyle(.white)
             .clipShape(Capsule())
+    }
+
+    // MARK: - Time Badge Text (view-level concern, not model)
+
+    private var timeBadgeText: String? {
+        guard let startsAt = event.startsAt, !event.isGroup else { return nil }
+        let interval = startsAt.timeIntervalSince(Date())
+        if interval < 0 { return nil }
+        if interval < 3600 { return "Starting soon" }
+        if Calendar.current.isDateInToday(startsAt) { return "Today" }
+        if Calendar.current.isDateInTomorrow(startsAt) { return "Tomorrow" }
+        return nil
     }
 
     // MARK: - Group Badge

@@ -85,7 +85,7 @@ extension Event {
             categories = richCategories
         } else if let stringCategories = try? container.decodeIfPresent([String].self, forKey: .categories) {
             categories = stringCategories.map {
-                Category(id: nil, name: $0, slug: $0.lowercased().replacingOccurrences(of: " ", with: "-"), icon: nil, color: nil)
+                Category(numericId: nil, name: $0, slug: $0.slugified(), icon: nil, color: nil)
             }
         } else {
             categories = nil

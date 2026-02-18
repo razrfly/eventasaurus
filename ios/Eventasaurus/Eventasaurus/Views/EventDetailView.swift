@@ -89,7 +89,7 @@ struct EventDetailView: View {
                                 .font(.caption)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
-                                .background(.tint.opacity(0.1))
+                                .background(category.resolvedColor.opacity(0.1))
                                 .clipShape(Capsule())
                             }
                         }

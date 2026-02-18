@@ -140,6 +140,18 @@ struct DiscoverView: View {
                 await requestLocationAndLoad()
             }
             .refreshable { await requestLocationAndLoad() }
+            .navigationDestination(for: EventDestination.self) { destination in
+                switch destination {
+                case .event(let slug):
+                    EventDetailView(slug: slug)
+                case .movieGroup(let slug, let cityId):
+                    MovieDetailView(slug: slug, cityId: cityId)
+                case .eventGroup(let slug, let cityId):
+                    SourceDetailView(slug: slug, cityId: cityId)
+                case .containerGroup(let slug):
+                    ContainerDetailView(slug: slug)
+                }
+            }
         }
     }
 
@@ -158,13 +170,21 @@ struct DiscoverView: View {
                     sortOrder = "asc"
                     Task { await loadEvents() }
                 } label: {
-                    Label("Ascending", systemImage: sortOrder == "asc" ? "checkmark" : "")
+                    if sortOrder == "asc" {
+                        Label("Ascending", systemImage: "checkmark")
+                    } else {
+                        Text("Ascending")
+                    }
                 }
                 Button {
                     sortOrder = "desc"
                     Task { await loadEvents() }
                 } label: {
-                    Label("Descending", systemImage: sortOrder == "desc" ? "checkmark" : "")
+                    if sortOrder == "desc" {
+                        Label("Descending", systemImage: "checkmark")
+                    } else {
+                        Text("Descending")
+                    }
                 }
             }
         } label: {
@@ -178,7 +198,11 @@ struct DiscoverView: View {
             sortBy = value
             Task { await loadEvents() }
         } label: {
-            Label(label, systemImage: sortBy == value ? "checkmark" : "")
+            if sortBy == value {
+                Label(label, systemImage: "checkmark")
+            } else {
+                Text(label)
+            }
         }
     }
 
@@ -191,11 +215,13 @@ struct DiscoverView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(categories) { cat in
-                            CategoryChip(
-                                category: cat,
-                                isSelected: selectedCategories.contains(cat.id)
-                            ) {
-                                toggleCategory(cat.id)
+                            if let catId = cat.numericId {
+                                CategoryChip(
+                                    category: cat,
+                                    isSelected: selectedCategories.contains(catId)
+                                ) {
+                                    toggleCategory(catId)
+                                }
                             }
                         }
                     }
@@ -271,18 +297,6 @@ struct DiscoverView: View {
                 }
             }
             .padding()
-        }
-        .navigationDestination(for: EventDestination.self) { destination in
-            switch destination {
-            case .event(let slug):
-                EventDetailView(slug: slug)
-            case .movieGroup(let slug, let cityId):
-                MovieDetailView(slug: slug, cityId: cityId)
-            case .eventGroup(let slug, let cityId):
-                SourceDetailView(slug: slug, cityId: cityId)
-            case .containerGroup(let slug):
-                ContainerDetailView(slug: slug)
-            }
         }
     }
 
@@ -375,6 +389,8 @@ struct DiscoverView: View {
             }
         } catch {
             self.error = error
+            dateRangeCounts = [:]
+            allEventsCount = 0
         }
 
         isLoading = false

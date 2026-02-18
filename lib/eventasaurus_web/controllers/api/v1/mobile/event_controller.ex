@@ -79,7 +79,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
 
       # Compute date range counts for filter chips (efficient SQL COUNTs)
-      date_range_counts = compute_date_range_counts(lat, lng, radius_km, city_id, params)
+      date_range_counts = compute_date_range_counts(lat, lng, radius_km, params)
 
       json(conn, %{
         events: Enum.map(items, &serialize_item/1),
@@ -159,25 +159,31 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   @date_ranges ~w(today tomorrow this_weekend next_7_days next_30_days this_month next_month)a
 
-  defp compute_date_range_counts(lat, lng, radius_km, _city_id, params) do
+  defp compute_date_range_counts(lat, lng, radius_km, params) do
     # Build base filters matching the current search/category context (but NOT date range)
     base_opts =
       [center_lat: lat, center_lng: lng, radius_km: radius_km]
       |> maybe_add_categories(params)
       |> maybe_add_search(params)
 
-    Map.new(@date_ranges, fn range ->
-      {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range)
+    @date_ranges
+    |> Task.async_stream(
+      fn range ->
+        {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range)
 
-      count =
-        base_opts
-        |> Keyword.put(:start_date, start_date)
-        |> Keyword.put(:end_date, end_date)
-        |> Map.new()
-        |> PublicEventsEnhanced.count_events()
+        count =
+          base_opts
+          |> Keyword.put(:start_date, start_date)
+          |> Keyword.put(:end_date, end_date)
+          |> Map.new()
+          |> PublicEventsEnhanced.count_events()
 
-      {Atom.to_string(range), count}
-    end)
+        {Atom.to_string(range), count}
+      end,
+      max_concurrency: length(@date_ranges),
+      timeout: 10_000
+    )
+    |> Enum.reduce(%{}, fn {:ok, {key, count}}, acc -> Map.put(acc, key, count) end)
   end
 
   # --- Coordinate resolution ---
@@ -365,8 +371,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   defp serialize_public_event_detail(event) do
     serialize_public_event(event)
     |> Map.merge(%{
-      description: event.display_description,
-      categories: Enum.map(event.categories || [], & &1.name)
+      description: event.display_description
     })
   end
 
