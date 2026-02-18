@@ -30,12 +30,66 @@ struct Event: Codable, Identifiable {
     let description: String?
     let attendeeCount: Int?
     let isAttending: Bool?
-    let categories: [String]?
     let status: String?
+
+    // Categories — API returns rich objects for list endpoints, strings for detail
+    let categories: [Category]?
 
     /// Whether this item is an aggregated group (movie stack, event group, etc.)
     var isGroup: Bool {
         type == "movie_group" || type == "event_group" || type == "container_group"
+    }
+
+    /// Primary category (first in the list)
+    var primaryCategory: Category? {
+        categories?.first
+    }
+
+    /// Whether this event is upcoming (starts in the future)
+    var isUpcoming: Bool {
+        guard let startsAt else { return false }
+        return startsAt > Date()
+    }
+}
+
+// MARK: - Custom Decoder (handles categories as [Category] or [String])
+
+extension Event {
+    enum CodingKeys: String, CodingKey {
+        case slug, title, startsAt, endsAt, coverImageUrl, type, venue
+        case screeningCount, eventCount, venueCount, subtitle, containerType
+        case description, attendeeCount, isAttending, status, categories
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        slug = try container.decode(String.self, forKey: .slug)
+        title = try container.decode(String.self, forKey: .title)
+        startsAt = try container.decodeIfPresent(Date.self, forKey: .startsAt)
+        endsAt = try container.decodeIfPresent(Date.self, forKey: .endsAt)
+        coverImageUrl = try container.decodeIfPresent(String.self, forKey: .coverImageUrl)
+        type = try container.decode(String.self, forKey: .type)
+        venue = try container.decodeIfPresent(Venue.self, forKey: .venue)
+        screeningCount = try container.decodeIfPresent(Int.self, forKey: .screeningCount)
+        eventCount = try container.decodeIfPresent(Int.self, forKey: .eventCount)
+        venueCount = try container.decodeIfPresent(Int.self, forKey: .venueCount)
+        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        containerType = try container.decodeIfPresent(String.self, forKey: .containerType)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        attendeeCount = try container.decodeIfPresent(Int.self, forKey: .attendeeCount)
+        isAttending = try container.decodeIfPresent(Bool.self, forKey: .isAttending)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+
+        // Handle categories as either [Category] (rich objects) or [String] (detail endpoint)
+        if let richCategories = try? container.decodeIfPresent([Category].self, forKey: .categories) {
+            categories = richCategories
+        } else if let stringCategories = try? container.decodeIfPresent([String].self, forKey: .categories) {
+            categories = stringCategories.map {
+                Category(id: nil, name: $0, slug: $0.lowercased().replacingOccurrences(of: " ", with: "-"), icon: nil, color: nil)
+            }
+        } else {
+            categories = nil
+        }
     }
 }
 
@@ -53,6 +107,10 @@ struct Meta: Codable {
     let total: Int?
     /// From nearby endpoint
     let totalCount: Int?
+    /// Total events across all date ranges
+    let allEventsCount: Int?
+    /// Per-date-range event counts for filter chips
+    let dateRangeCounts: [String: Int]?
 
     /// Resolved total from whichever endpoint provided it
     var resolvedTotal: Int? {

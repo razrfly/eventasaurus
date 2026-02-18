@@ -78,13 +78,19 @@ struct EventDetailView: View {
                     // Categories
                     if let categories = event.categories, !categories.isEmpty {
                         HStack {
-                            ForEach(categories, id: \.self) { category in
-                                Text(category)
-                                    .font(.caption)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 4)
-                                    .background(.tint.opacity(0.1))
-                                    .clipShape(Capsule())
+                            ForEach(categories, id: \.slug) { category in
+                                HStack(spacing: 3) {
+                                    if let icon = category.icon {
+                                        Text(icon)
+                                            .font(.caption2)
+                                    }
+                                    Text(category.name)
+                                }
+                                .font(.caption)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(.tint.opacity(0.1))
+                                .clipShape(Capsule())
                             }
                         }
                     }

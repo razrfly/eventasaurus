@@ -5,19 +5,31 @@ struct EventCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Cover image
-            ZStack(alignment: .topTrailing) {
+            // Cover image with badges
+            ZStack(alignment: .topLeading) {
                 CachedImage(
                     url: event.coverImageUrl.flatMap { URL(string: $0) },
                     height: 160,
                     placeholderIcon: event.isGroup ? "square.stack" : "calendar"
                 )
 
-                // Badge for aggregated groups
-                if event.isGroup {
-                    groupBadge
-                        .padding(8)
+                // Badge overlay
+                HStack {
+                    // Category badge (top-left)
+                    if let category = event.primaryCategory, !event.isGroup {
+                        categoryBadge(category)
+                    }
+
+                    Spacer()
+
+                    // Group badge or time badge (top-right)
+                    if event.isGroup {
+                        groupBadge
+                    } else if let badge = event.timeBadge {
+                        timeBadge(badge)
+                    }
                 }
+                .padding(8)
             }
 
             // Title
@@ -52,6 +64,49 @@ struct EventCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
     }
+
+    // MARK: - Category Badge
+
+    private func categoryBadge(_ category: EventCategory) -> some View {
+        HStack(spacing: 3) {
+            if let icon = category.icon {
+                Text(icon)
+                    .font(.caption2)
+            }
+            Text(category.name)
+                .font(.caption2.weight(.semibold))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(categoryColor(category.color).opacity(0.9))
+        .foregroundStyle(.white)
+        .clipShape(Capsule())
+    }
+
+    private func categoryColor(_ hex: String?) -> Color {
+        guard let hex else { return .blue }
+        let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard cleaned.count == 6, let rgb = UInt64(cleaned, radix: 16) else { return .blue }
+        return Color(
+            red: Double((rgb >> 16) & 0xFF) / 255,
+            green: Double((rgb >> 8) & 0xFF) / 255,
+            blue: Double(rgb & 0xFF) / 255
+        )
+    }
+
+    // MARK: - Time Badge
+
+    private func timeBadge(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.green.opacity(0.9))
+            .foregroundStyle(.white)
+            .clipShape(Capsule())
+    }
+
+    // MARK: - Group Badge
 
     @ViewBuilder
     private var groupBadge: some View {

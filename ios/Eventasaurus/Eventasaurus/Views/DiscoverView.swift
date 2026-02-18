@@ -34,12 +34,19 @@ struct DiscoverView: View {
     @State private var isLoadingMore = false
     @State private var loadGeneration = 0
 
+    // Date range counts from API
+    @State private var dateRangeCounts: [String: Int] = [:]
+    @State private var allEventsCount: Int = 0
+
     private static let dateRanges: [(label: String, value: String?)] = [
-        ("All", nil),
+        ("All Events", nil),
         ("Today", "today"),
         ("Tomorrow", "tomorrow"),
         ("This Weekend", "this_weekend"),
         ("Next 7 Days", "next_7_days"),
+        ("Next 30 Days", "next_30_days"),
+        ("This Month", "this_month"),
+        ("Next Month", "next_month"),
     ]
 
     private static let cityKey = "selectedCityId"
@@ -202,6 +209,7 @@ struct DiscoverView: View {
                     ForEach(Self.dateRanges, id: \.label) { range in
                         DateChip(
                             label: range.label,
+                            count: countForDateRange(range.value),
                             isSelected: selectedDateRange == range.value
                         ) {
                             selectedDateRange = range.value
@@ -215,6 +223,16 @@ struct DiscoverView: View {
         .padding(.vertical, 8)
     }
 
+    /// Get the count for a given date range value
+    private func countForDateRange(_ value: String?) -> Int? {
+        if let value {
+            return dateRangeCounts[value]
+        } else {
+            // "All Events" — use allEventsCount or totalCount
+            return allEventsCount > 0 ? allEventsCount : (totalCount > 0 ? totalCount : nil)
+        }
+    }
+
     // MARK: - Event List
 
     private var hasMorePages: Bool {
@@ -224,6 +242,17 @@ struct DiscoverView: View {
     private var eventList: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
+                // Pagination info
+                if totalCount > 0 {
+                    HStack {
+                        Text(paginationText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 4)
+                }
+
                 ForEach(events) { event in
                     NavigationLink(value: event.destination(cityId: selectedCity?.id)) {
                         EventCardView(event: event)
@@ -255,6 +284,11 @@ struct DiscoverView: View {
                 ContainerDetailView(slug: slug)
             }
         }
+    }
+
+    private var paginationText: String {
+        let showing = min(events.count, totalCount)
+        return "Showing \(showing) of \(totalCount) events"
     }
 
     // MARK: - Data Loading
@@ -331,6 +365,14 @@ struct DiscoverView: View {
             events = response.events
             assert(response.meta.resolvedTotal != nil, "Backend meta missing both total_count and total")
             totalCount = response.meta.resolvedTotal ?? response.events.count
+
+            // Update date range counts from API
+            if let counts = response.meta.dateRangeCounts {
+                dateRangeCounts = counts
+            }
+            if let allCount = response.meta.allEventsCount {
+                allEventsCount = allCount
+            }
         } catch {
             self.error = error
         }
@@ -450,19 +492,31 @@ struct CategoryChip: View {
 
 struct DateChip: View {
     let label: String
+    var count: Int? = nil
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(.caption)
-                .fontWeight(.medium)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor : Color(.systemGray6))
-                .foregroundStyle(isSelected ? .white : .primary)
-                .clipShape(Capsule())
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(.caption)
+                    .fontWeight(.medium)
+
+                if let count {
+                    Text("\(count)")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(isSelected ? Color.white.opacity(0.3) : Color(.systemGray4))
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.accentColor : Color(.systemGray6))
+            .foregroundStyle(isSelected ? .white : .primary)
+            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
     }
