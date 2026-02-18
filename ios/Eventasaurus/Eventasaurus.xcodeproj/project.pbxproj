@@ -34,6 +34,12 @@
 		AA11BB22CC33DD44EE55FF09 /* MovieDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF0A /* MovieDetailView.swift */; };
 		AA11BB22CC33DD44EE55FF0B /* SourceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF0C /* SourceDetailView.swift */; };
 		AA11BB22CC33DD44EE55FF0D /* ContainerDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF0E /* ContainerDetailView.swift */; };
+		BB11CC22DD33EE44FF550001 /* VenueMapCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550002 /* VenueMapCard.swift */; };
+		BB11CC22DD33EE44FF550003 /* ExternalLinkButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550004 /* ExternalLinkButton.swift */; };
+		BB11CC22DD33EE44FF550005 /* SourceAttributionSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550006 /* SourceAttributionSection.swift */; };
+		BB11CC22DD33EE44FF550007 /* NearbyEventsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550008 /* NearbyEventsSection.swift */; };
+		BB11CC22DD33EE44FF550009 /* CastCarousel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF55000A /* CastCarousel.swift */; };
+		BB11CC22DD33EE44FF55000B /* RatingPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF55000C /* RatingPill.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +80,12 @@
 		AA11BB22CC33DD44EE55FF0A /* MovieDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieDetailView.swift; sourceTree = "<group>"; };
 		AA11BB22CC33DD44EE55FF0C /* SourceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDetailView.swift; sourceTree = "<group>"; };
 		AA11BB22CC33DD44EE55FF0E /* ContainerDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContainerDetailView.swift; sourceTree = "<group>"; };
+		BB11CC22DD33EE44FF550002 /* VenueMapCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueMapCard.swift; sourceTree = "<group>"; };
+		BB11CC22DD33EE44FF550004 /* ExternalLinkButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalLinkButton.swift; sourceTree = "<group>"; };
+		BB11CC22DD33EE44FF550006 /* SourceAttributionSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceAttributionSection.swift; sourceTree = "<group>"; };
+		BB11CC22DD33EE44FF550008 /* NearbyEventsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyEventsSection.swift; sourceTree = "<group>"; };
+		BB11CC22DD33EE44FF55000A /* CastCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CastCarousel.swift; sourceTree = "<group>"; };
+		BB11CC22DD33EE44FF55000C /* RatingPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingPill.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -164,16 +176,22 @@
 		E586B0DE55D592CB4360C162 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				7FA4DEDFAA5B8C1FD22C7A75 /* CachedImage.swift */,
+				BB11CC22DD33EE44FF55000A /* CastCarousel.swift */,
 				F6A7B8C9D0E1F2A3B4C5D6E7 /* CityPickerView.swift */,
 				AA11BB22CC33DD44EE55FF0E /* ContainerDetailView.swift */,
 				74DE54496EE549F58B31CC75 /* DiscoverView.swift */,
 				6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */,
-				7FA4DEDFAA5B8C1FD22C7A75 /* CachedImage.swift */,
 				DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */,
+				BB11CC22DD33EE44FF550004 /* ExternalLinkButton.swift */,
 				AA11BB22CC33DD44EE55FF0A /* MovieDetailView.swift */,
 				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
+				BB11CC22DD33EE44FF550008 /* NearbyEventsSection.swift */,
 				09081158264711B776E3A8C3 /* ProfileView.swift */,
+				BB11CC22DD33EE44FF55000C /* RatingPill.swift */,
+				BB11CC22DD33EE44FF550006 /* SourceAttributionSection.swift */,
 				AA11BB22CC33DD44EE55FF0C /* SourceDetailView.swift */,
+				BB11CC22DD33EE44FF550002 /* VenueMapCard.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -290,6 +308,12 @@
 				19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* SourceDetail.swift in Sources */,
 				AA11BB22CC33DD44EE55FF0B /* SourceDetailView.swift in Sources */,
+				BB11CC22DD33EE44FF550001 /* VenueMapCard.swift in Sources */,
+				BB11CC22DD33EE44FF550003 /* ExternalLinkButton.swift in Sources */,
+				BB11CC22DD33EE44FF550005 /* SourceAttributionSection.swift in Sources */,
+				BB11CC22DD33EE44FF550007 /* NearbyEventsSection.swift in Sources */,
+				BB11CC22DD33EE44FF550009 /* CastCarousel.swift in Sources */,
+				BB11CC22DD33EE44FF55000B /* RatingPill.swift in Sources */,
 				7F9F9F532434DCF96269280B /* UserProfile.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

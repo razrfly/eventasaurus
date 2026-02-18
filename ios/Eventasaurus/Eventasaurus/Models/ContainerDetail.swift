@@ -13,4 +13,6 @@ struct ContainerInfo: Codable {
     let startDate: Date?
     let endDate: Date?
     let coverImageUrl: String?
+    let sourceUrl: String?
+    let eventCount: Int?
 }

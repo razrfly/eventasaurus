@@ -39,7 +39,7 @@ struct MovieDetailView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    // Title + year
+                    // Title + year + rating
                     HStack(alignment: .firstTextBaseline) {
                         Text(data.movie.title)
                             .font(.title2.bold())
@@ -50,6 +50,19 @@ struct MovieDetailView: View {
                                 .font(.title3)
                                 .foregroundStyle(.secondary)
                         }
+
+                        Spacer()
+
+                        if let rating = data.movie.voteAverage {
+                            RatingPill(rating: rating)
+                        }
+                    }
+
+                    // Tagline
+                    if let tagline = data.movie.tagline {
+                        Text(tagline)
+                            .font(.subheadline.italic())
+                            .foregroundStyle(.secondary)
                     }
 
                     // Runtime + genres
@@ -71,6 +84,11 @@ struct MovieDetailView: View {
                     if let overview = data.movie.overview, !overview.isEmpty {
                         Text(overview)
                             .font(.body)
+                    }
+
+                    // Cast
+                    if let cast = data.movie.cast, !cast.isEmpty {
+                        CastCarousel(cast: cast)
                     }
 
                     Divider()

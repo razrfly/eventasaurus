@@ -20,6 +20,16 @@ struct MovieInfo: Codable {
     let releaseDate: String?
     let runtime: Int?
     let genres: [String]
+    let voteAverage: Double?
+    let tagline: String?
+    let cast: [CastMember]?
+}
+
+struct CastMember: Codable, Identifiable {
+    var id: String { name + (character ?? "") }
+    let name: String
+    let character: String?
+    let profileUrl: String?
 }
 
 struct VenueScreenings: Codable, Identifiable {
@@ -33,6 +43,8 @@ struct VenueScreenings: Codable, Identifiable {
 struct ScreeningVenue: Codable {
     let name: String
     let address: String?
+    let lat: Double?
+    let lng: Double?
 }
 
 struct Showtime: Codable {

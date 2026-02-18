@@ -41,10 +41,24 @@ struct SourceDetailView: View {
                         .frame(width: 48)
                     }
 
-                    Text(data.source.name)
-                        .font(.title2.bold())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(data.source.name)
+                            .font(.title2.bold())
+
+                        if let count = data.source.eventCount {
+                            Text("\(count) event\(count == 1 ? "" : "s")")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .padding(.horizontal)
+
+                // Website link
+                if let websiteUrl = data.source.websiteUrl, let url = URL(string: websiteUrl) {
+                    ExternalLinkButton(title: "Visit Website", url: url, icon: "globe")
+                        .padding(.horizontal)
+                }
 
                 Divider()
                     .padding(.horizontal)
