@@ -1581,15 +1581,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       page = max(opts[:page] || 1, 1)
       page_size = min(opts[:page_size] || @default_limit, @max_limit)
 
-      # Fetch window sized to requested page (cap at @max_limit)
-      # IMPORTANT: For accurate aggregation, we need to fetch enough events to ensure
-      # all aggregatable sources are represented. The previous 5x/2x multiplier was too
-      # aggressive and caused aggregation counts to be wrong (e.g., showing "1 event"
-      # when a source has 100+ events). See issue #2929.
-      #
-      # For page 1, always use @max_limit to ensure all aggregatable sources appear.
-      # For subsequent pages, use smaller multiplier since aggregation cards are stable.
-      fetch_size = if page == 1, do: @max_limit, else: min(@max_limit, page * page_size * 3)
+      # Always fetch @max_limit raw events so aggregation output is consistent
+      # across pages (variable fetch windows cause items to shift between pages).
 
       # Build fetch opts without DB pagination
       # Handle both Keyword lists and Maps by converting to Map
@@ -1597,7 +1590,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         opts
         |> Map.new()
         |> Map.drop([:page, :offset, :limit])
-        |> Map.put(:page_size, fetch_size)
+        |> Map.put(:page_size, @max_limit)
         # Extract browsing_city_id from viewing_city for Unsplash fallback
         |> then(fn opts_map ->
           case opts_map[:viewing_city] do
