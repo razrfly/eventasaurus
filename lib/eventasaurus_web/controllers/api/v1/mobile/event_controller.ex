@@ -12,6 +12,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias Eventasaurus.CDN
 
+  require Logger
+
   @default_radius_km 50
   @default_per_page 20
   @max_per_page 100
@@ -166,6 +168,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       |> maybe_add_categories(params)
       |> maybe_add_search(params)
 
+    defaults = Map.new(@date_ranges, &{Atom.to_string(&1), 0})
+
     @date_ranges
     |> Task.async_stream(
       fn range ->
@@ -181,11 +185,16 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         {Atom.to_string(range), count}
       end,
       max_concurrency: length(@date_ranges),
-      timeout: 10_000
+      timeout: 10_000,
+      on_timeout: :kill_task
     )
-    |> Enum.reduce(%{}, fn
-      {:ok, {key, count}}, acc -> Map.put(acc, key, count)
-      {:exit, _reason}, acc -> acc
+    |> Enum.reduce(defaults, fn
+      {:ok, {key, count}}, acc ->
+        Map.put(acc, key, count)
+
+      {:exit, reason}, acc ->
+        Logger.error("Date range count task failed: #{inspect(reason)}")
+        acc
     end)
   end
 
