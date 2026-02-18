@@ -6,18 +6,37 @@ struct CategoriesResponse: Codable {
 
 struct Category: Codable, Identifiable, Hashable {
     /// Present when fetched from /categories endpoint, absent when embedded in events
-    let id: Int?
+    let numericId: Int?
     let name: String
     let slug: String
     let icon: String?
     let color: String?
 
-    /// Use slug as stable identity when id is absent (embedded category)
-    var stableId: String { slug }
+    /// Stable identity using slug — works for both fetched and embedded categories
+    var id: String { slug }
+
+    enum CodingKeys: String, CodingKey {
+        case numericId = "id"
+        case name, slug, icon, color
+    }
 
     /// Resolved SwiftUI color from hex string, falls back to .blue
     var resolvedColor: Color {
         Color(hex: color) ?? .blue
+    }
+}
+
+// MARK: - Slugification
+
+extension String {
+    /// Convert a display name to a URL-safe slug: strip diacritics, remove punctuation,
+    /// collapse whitespace, lowercase, and join with hyphens.
+    func slugified() -> String {
+        self.folding(options: .diacriticInsensitive, locale: .current)
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: "-")
+            .lowercased()
     }
 }
 
