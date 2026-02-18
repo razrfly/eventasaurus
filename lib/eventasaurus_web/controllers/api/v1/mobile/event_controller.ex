@@ -183,7 +183,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       max_concurrency: length(@date_ranges),
       timeout: 10_000
     )
-    |> Enum.reduce(%{}, fn {:ok, {key, count}}, acc -> Map.put(acc, key, count) end)
+    |> Enum.reduce(%{}, fn
+      {:ok, {key, count}}, acc -> Map.put(acc, key, count)
+      {:exit, _reason}, acc -> acc
+    end)
   end
 
   # --- Coordinate resolution ---
