@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusApp.{Events, Repo}
   alias EventasaurusWeb.Live.Helpers.EventFilters
+  alias EventasaurusWeb.Helpers.SourceAttribution
   alias Eventasaurus.CDN
 
   require Logger
@@ -348,7 +349,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   defp find_event_by_slug(slug) do
     case PublicEvents.get_by_slug(slug) do
-      %{} = event -> {:public, event}
+      %{} = event ->
+        # Preload sources (with their source assoc) for ticket URL and attribution
+        event = Repo.preload(event, sources: [:source])
+        {:public, event}
+
       nil ->
         case Events.get_event_by_slug(slug) do
           %{} = event -> {:user, event}
@@ -381,9 +386,15 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   end
 
   defp serialize_public_event_detail(event) do
+    nearby_events =
+      PublicEvents.get_nearby_activities_with_fallback(event, display_count: 4, language: "en")
+
     serialize_public_event(event)
     |> Map.merge(%{
-      description: event.display_description
+      description: event.display_description,
+      ticket_url: get_primary_source_ticket_url(event),
+      sources: serialize_sources(event),
+      nearby_events: Enum.map(nearby_events, &serialize_public_event/1)
     })
   end
 
@@ -428,10 +439,70 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   defp serialize_venue(venue) do
     %{
       name: venue.name,
+      slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,
       lng: venue.longitude
     }
+  end
+
+  # --- Source / Ticket helpers ---
+
+  defp get_primary_source_ticket_url(event) do
+    sorted_sources = get_sorted_sources(event.sources)
+
+    sorted_sources
+    |> Enum.find_value(fn source ->
+      case source.source_url do
+        nil -> nil
+        "" -> nil
+        url -> url
+      end
+    end)
+  end
+
+  defp get_sorted_sources(sources) when is_list(sources) do
+    sources
+    |> Enum.sort_by(fn source ->
+      priority =
+        case source.metadata do
+          %{"priority" => p} when is_integer(p) -> p
+          %{"priority" => p} when is_binary(p) ->
+            case Integer.parse(p) do
+              {num, _} -> num
+              _ -> 10
+            end
+          _ -> 10
+        end
+
+      ts =
+        case source.last_seen_at do
+          %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+          _ -> 9_223_372_036_854_775_807
+        end
+
+      {priority, ts}
+    end)
+  end
+
+  defp get_sorted_sources(_), do: []
+
+  defp serialize_sources(event) do
+    case event.sources do
+      sources when is_list(sources) ->
+        sources
+        |> SourceAttribution.deduplicate_sources()
+        |> Enum.map(fn source ->
+          %{
+            name: SourceAttribution.get_source_name(source),
+            logo_url: SourceAttribution.get_source_logo_url(source),
+            url: SourceAttribution.get_source_url(source)
+          }
+        end)
+
+      _ ->
+        []
+    end
   end
 
   # Resolve image URLs through the same CDN pipeline the web uses.

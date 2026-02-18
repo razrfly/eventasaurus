@@ -70,6 +70,11 @@ struct ContainerDetailView: View {
                             .font(.body)
                     }
 
+                    // Source link
+                    if let sourceUrl = data.container.sourceUrl, let url = URL(string: sourceUrl) {
+                        ExternalLinkButton(title: "View Source", url: url, icon: "arrow.up.right.square")
+                    }
+
                     Divider()
 
                     // Events
@@ -78,8 +83,16 @@ struct ContainerDetailView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("Events")
-                            .font(.headline)
+                        HStack {
+                            Text("Events")
+                                .font(.headline)
+                            Spacer()
+                            if let count = data.container.eventCount {
+                                Text("\(count) event\(count == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
 
                         LazyVStack(spacing: 16) {
                             ForEach(data.events) { event in

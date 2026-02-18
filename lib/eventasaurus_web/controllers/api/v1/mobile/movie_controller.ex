@@ -122,7 +122,12 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
   defp serialize_venue_group(group, now) do
     %{
-      venue: %{name: group.venue.name, address: group.venue.address},
+      venue: %{
+        name: group.venue.name,
+        address: group.venue.address,
+        lat: group.venue.latitude,
+        lng: group.venue.longitude
+      },
       event_slug: group.event_slug,
       upcoming_count: group.upcoming_count,
       showtimes:
@@ -171,6 +176,40 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
           []
       end
 
+    md = movie.metadata || %{}
+
+    vote_average =
+      case md["vote_average"] do
+        v when is_number(v) and v > 0 -> v
+        _ -> nil
+      end
+
+    tagline =
+      case md["tagline"] do
+        t when is_binary(t) and t != "" -> t
+        _ -> nil
+      end
+
+    cast =
+      case get_in(md, ["credits", "cast"]) do
+        cast when is_list(cast) ->
+          cast
+          |> Enum.take(15)
+          |> Enum.map(fn member ->
+            profile_path = member["profile_path"]
+
+            %{
+              name: member["name"],
+              character: member["character"],
+              profile_url:
+                if(profile_path, do: "https://image.tmdb.org/t/p/w185#{profile_path}", else: nil)
+            }
+          end)
+
+        _ ->
+          nil
+      end
+
     %{
       title: movie.title,
       slug: movie.slug,
@@ -179,7 +218,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
       backdrop_url: movie.backdrop_url,
       release_date: movie.release_date,
       runtime: movie.runtime,
-      genres: genres
+      genres: genres,
+      vote_average: vote_average,
+      tagline: tagline,
+      cast: cast
     }
   end
 

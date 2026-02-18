@@ -10,4 +10,5 @@ struct SourceInfo: Codable {
     let slug: String
     let logoUrl: String?
     let websiteUrl: String?
+    let eventCount: Int?
 }

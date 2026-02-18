@@ -102,6 +102,28 @@ struct EventDetailView: View {
                         Text(description)
                             .font(.body)
                     }
+
+                    // Ticket link
+                    if let ticketUrl = event.ticketUrl, let url = URL(string: ticketUrl) {
+                        ExternalLinkButton(title: "Get Tickets", url: url, icon: "ticket")
+                    }
+
+                    // Venue map
+                    if let venue = event.venue, let lat = venue.lat, let lng = venue.lng {
+                        VenueMapCard(name: venue.name, address: venue.address, lat: lat, lng: lng)
+                    }
+
+                    // Source attribution
+                    if let sources = event.sources, !sources.isEmpty {
+                        Divider()
+                        SourceAttributionSection(sources: sources)
+                    }
+
+                    // Nearby events
+                    if let nearbyEvents = event.nearbyEvents, !nearbyEvents.isEmpty {
+                        Divider()
+                        NearbyEventsSection(events: nearbyEvents)
+                    }
                 }
                 .padding(.horizontal)
             }

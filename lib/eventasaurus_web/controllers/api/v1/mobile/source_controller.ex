@@ -20,7 +20,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
         events = PublicEventsEnhanced.list_events(opts)
 
         json(conn, %{
-          source: serialize_source(source),
+          source: serialize_source(source, length(events)),
           events: Enum.map(events, &serialize_public_event/1)
         })
     end
@@ -35,12 +35,13 @@ defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
 
   defp maybe_add_city(opts, _), do: opts
 
-  defp serialize_source(source) do
+  defp serialize_source(source, event_count) do
     %{
       name: source.name,
       slug: source.slug,
       logo_url: source.logo_url,
-      website_url: source.website_url
+      website_url: source.website_url,
+      event_count: event_count
     }
   end
 

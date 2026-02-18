@@ -31,6 +31,9 @@ struct Event: Codable, Identifiable {
     let attendeeCount: Int?
     let isAttending: Bool?
     let status: String?
+    let ticketUrl: String?
+    let sources: [EventSource]?
+    let nearbyEvents: [Event]?
 
     // Categories — API returns rich objects for list endpoints, strings for detail
     let categories: [Category]?
@@ -59,6 +62,7 @@ extension Event {
         case slug, title, startsAt, endsAt, coverImageUrl, type, venue
         case screeningCount, eventCount, venueCount, subtitle, containerType
         case description, attendeeCount, isAttending, status, categories
+        case ticketUrl, sources, nearbyEvents
     }
 
     init(from decoder: Decoder) throws {
@@ -79,6 +83,9 @@ extension Event {
         attendeeCount = try container.decodeIfPresent(Int.self, forKey: .attendeeCount)
         isAttending = try container.decodeIfPresent(Bool.self, forKey: .isAttending)
         status = try container.decodeIfPresent(String.self, forKey: .status)
+        ticketUrl = try container.decodeIfPresent(String.self, forKey: .ticketUrl)
+        sources = try container.decodeIfPresent([EventSource].self, forKey: .sources)
+        nearbyEvents = try container.decodeIfPresent([Event].self, forKey: .nearbyEvents)
 
         // Handle categories as either [Category] (rich objects) or [String] (detail endpoint)
         if let richCategories = try? container.decodeIfPresent([Category].self, forKey: .categories) {
@@ -93,8 +100,15 @@ extension Event {
     }
 }
 
+struct EventSource: Codable {
+    let name: String
+    let logoUrl: String?
+    let url: String?
+}
+
 struct Venue: Codable {
     let name: String
+    let slug: String?
     let address: String?
     let lat: Double?
     let lng: Double?

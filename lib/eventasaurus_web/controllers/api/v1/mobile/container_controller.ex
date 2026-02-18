@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.ContainerController do
 
   alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusWeb.Helpers.SourceAttribution
 
   def show(conn, %{"slug" => slug}) do
     case PublicEventContainers.get_container_by_slug(slug) do
@@ -35,7 +36,9 @@ defmodule EventasaurusWeb.Api.V1.Mobile.ContainerController do
       description: container.description,
       start_date: container.start_date,
       end_date: container.end_date,
-      cover_image_url: cover_image_url
+      cover_image_url: cover_image_url,
+      source_url: SourceAttribution.get_container_source_url(container),
+      event_count: length(events)
     }
   end
 
