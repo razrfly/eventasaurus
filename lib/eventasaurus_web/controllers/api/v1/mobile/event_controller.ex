@@ -75,12 +75,21 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         |> Keyword.put(:ignore_city_in_aggregation, true)
         |> Map.new()
 
-      {items, total_count, _all_count} =
+      {items, total_count, all_count} =
         PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
+
+      # Compute date range counts for filter chips (efficient SQL COUNTs)
+      date_range_counts = compute_date_range_counts(lat, lng, radius_km, city_id, params)
 
       json(conn, %{
         events: Enum.map(items, &serialize_item/1),
-        meta: %{page: page, per_page: per_page, total_count: total_count}
+        meta: %{
+          page: page,
+          per_page: per_page,
+          total_count: total_count,
+          all_events_count: all_count,
+          date_range_counts: date_range_counts
+        }
       })
     else
       {:error, field, message} ->
@@ -144,6 +153,31 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         |> put_status(:not_found)
         |> json(%{error: "not_found", message: "Event not found"})
     end
+  end
+
+  # --- Date range counts ---
+
+  @date_ranges ~w(today tomorrow this_weekend next_7_days next_30_days this_month next_month)a
+
+  defp compute_date_range_counts(lat, lng, radius_km, _city_id, params) do
+    # Build base filters matching the current search/category context (but NOT date range)
+    base_opts =
+      [center_lat: lat, center_lng: lng, radius_km: radius_km]
+      |> maybe_add_categories(params)
+      |> maybe_add_search(params)
+
+    Map.new(@date_ranges, fn range ->
+      {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range)
+
+      count =
+        base_opts
+        |> Keyword.put(:start_date, start_date)
+        |> Keyword.put(:end_date, end_date)
+        |> Map.new()
+        |> PublicEventsEnhanced.count_events()
+
+      {Atom.to_string(range), count}
+    end)
   end
 
   # --- Coordinate resolution ---
@@ -323,7 +357,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       ends_at: event.ends_at,
       cover_image_url: resolve_image_url(event.cover_image_url),
       type: "public",
-      venue: serialize_venue(event.venue)
+      venue: serialize_venue(event.venue),
+      categories: serialize_categories(event)
     }
   end
 
@@ -362,6 +397,14 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       status: to_string(event.status)
     })
   end
+
+  defp serialize_categories(%{categories: categories}) when is_list(categories) do
+    Enum.map(categories, fn cat ->
+      %{name: cat.name, slug: cat.slug, icon: cat.icon, color: cat.color}
+    end)
+  end
+
+  defp serialize_categories(_), do: []
 
   defp serialize_venue(nil), do: nil
 
