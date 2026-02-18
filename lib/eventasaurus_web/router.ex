@@ -1010,6 +1010,8 @@ defmodule EventasaurusWeb.Router do
     get "/events/attending", EventController, :attending
     get "/events/:slug", EventController, :show
     get "/categories", EventController, :categories
+    get "/cities/popular", CityController, :popular
+    get "/cities/resolve", CityController, :resolve
     get "/cities", CityController, :search
     get "/profile", ProfileController, :show
     get "/movies/:slug", MovieController, :show
