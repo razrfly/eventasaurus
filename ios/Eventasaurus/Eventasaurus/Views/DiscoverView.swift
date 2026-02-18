@@ -32,6 +32,7 @@ struct DiscoverView: View {
     @State private var currentPage = 1
     @State private var totalCount = 0
     @State private var isLoadingMore = false
+    @State private var loadGeneration = 0
 
     private static let dateRanges: [(label: String, value: String?)] = [
         ("All", nil),
@@ -296,6 +297,7 @@ struct DiscoverView: View {
             locationResolved = true
         } else {
             isLoading = false
+            locationResolved = true
             error = LocationError.unavailable
         }
     }
@@ -310,6 +312,7 @@ struct DiscoverView: View {
         }
 
         currentPage = 1
+        loadGeneration += 1
         isLoading = true
         error = nil
 
@@ -326,7 +329,10 @@ struct DiscoverView: View {
                 page: 1
             )
             events = response.events
-            totalCount = response.meta.totalCount ?? response.meta.total ?? response.events.count
+            #if DEBUG
+            assert(response.meta.resolvedTotal != nil, "Backend meta missing both total_count and total")
+            #endif
+            totalCount = response.meta.resolvedTotal ?? response.events.count
         } catch {
             self.error = error
         }
@@ -336,6 +342,7 @@ struct DiscoverView: View {
 
     private func loadMoreEvents() async {
         let nextPage = currentPage + 1
+        let generation = loadGeneration
         isLoadingMore = true
 
         do {
@@ -350,9 +357,13 @@ struct DiscoverView: View {
                 sortOrder: sortOrder == "asc" ? nil : sortOrder,
                 page: nextPage
             )
-            events.append(contentsOf: response.events)
+            // Discard stale response if a full reload happened while we were fetching
+            guard generation == loadGeneration else { return }
+            let existingIds = Set(events.map(\.id))
+            let newEvents = response.events.filter { !existingIds.contains($0.id) }
+            events.append(contentsOf: newEvents)
             currentPage = nextPage
-            totalCount = response.meta.totalCount ?? response.meta.total ?? totalCount
+            totalCount = response.meta.resolvedTotal ?? totalCount
         } catch {
             // Silently fail load-more; user can scroll again to retry
         }
