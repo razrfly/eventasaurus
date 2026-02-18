@@ -87,6 +87,23 @@ final class APIClient {
         return response.cities
     }
 
+    func fetchPopularCities() async throws -> [City] {
+        let url = baseURL.appendingPathComponent("api/v1/mobile/cities/popular")
+        let response: CitiesResponse = try await request(url: url)
+        return response.cities
+    }
+
+    func resolveCity(lat: Double, lng: Double) async throws -> City {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/mobile/cities/resolve"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lng", value: String(lng))
+        ]
+        guard let url = components.url else { throw APIError.invalidURL }
+        let response: CityResolveResponse = try await request(url: url)
+        return response.city
+    }
+
     func fetchAttendingEvents() async throws -> [Event] {
         let url = baseURL.appendingPathComponent("api/v1/mobile/events/attending")
         let response: EventsResponse = try await request(url: url)
