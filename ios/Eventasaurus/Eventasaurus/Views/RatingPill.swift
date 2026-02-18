@@ -16,5 +16,7 @@ struct RatingPill: View {
         .padding(.vertical, 4)
         .background(.ultraThinMaterial)
         .clipShape(Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(format: "%.1f out of 10 stars", rating))
     }
 }

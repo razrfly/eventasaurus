@@ -100,7 +100,8 @@ extension Event {
     }
 }
 
-struct EventSource: Codable {
+struct EventSource: Codable, Identifiable {
+    var id: String { name + (url ?? "") }
     let name: String
     let logoUrl: String?
     let url: String?

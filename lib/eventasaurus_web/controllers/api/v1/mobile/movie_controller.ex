@@ -199,15 +199,19 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
             profile_path = member["profile_path"]
 
             %{
+              id: member["id"],
               name: member["name"],
               character: member["character"],
               profile_url:
-                if(profile_path, do: "https://image.tmdb.org/t/p/w185#{profile_path}", else: nil)
+                if(is_binary(profile_path) && profile_path != "",
+                  do: "https://image.tmdb.org/t/p/w185#{profile_path}",
+                  else: nil
+                )
             }
           end)
 
         _ ->
-          nil
+          []
       end
 
     %{
