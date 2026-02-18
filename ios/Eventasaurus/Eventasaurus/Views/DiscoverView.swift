@@ -329,9 +329,7 @@ struct DiscoverView: View {
                 page: 1
             )
             events = response.events
-            #if DEBUG
             assert(response.meta.resolvedTotal != nil, "Backend meta missing both total_count and total")
-            #endif
             totalCount = response.meta.resolvedTotal ?? response.events.count
         } catch {
             self.error = error
@@ -358,7 +356,7 @@ struct DiscoverView: View {
                 page: nextPage
             )
             // Discard stale response if a full reload happened while we were fetching
-            guard generation == loadGeneration else { return }
+            guard generation == loadGeneration else { isLoadingMore = false; return }
             let existingIds = Set(events.map(\.id))
             let newEvents = response.events.filter { !existingIds.contains($0.id) }
             events.append(contentsOf: newEvents)
