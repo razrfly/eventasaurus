@@ -29,21 +29,13 @@ struct MovieDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // Backdrop image
-                if let imageUrl = data.movie.backdropUrl ?? data.movie.posterUrl,
-                   let url = URL(string: imageUrl) {
-                    Color.clear
-                        .frame(height: 220)
-                        .overlay {
-                            AsyncImage(url: url) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Rectangle()
-                                    .fill(.quaternary)
-                            }
-                        }
-                        .clipped()
+                if let imageUrl = data.movie.backdropUrl ?? data.movie.posterUrl {
+                    CachedImage(
+                        url: URL(string: imageUrl),
+                        height: 220,
+                        cornerRadius: 0,
+                        placeholderIcon: "film"
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 12) {

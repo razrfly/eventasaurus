@@ -28,20 +28,12 @@ struct EventDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // Cover image
-                if let imageUrl = event.coverImageUrl, let url = URL(string: imageUrl) {
-                    Color.clear
-                        .frame(height: 220)
-                        .overlay {
-                            AsyncImage(url: url) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Rectangle()
-                                    .fill(.quaternary)
-                            }
-                        }
-                        .clipped()
+                if event.coverImageUrl != nil {
+                    CachedImage(
+                        url: event.coverImageUrl.flatMap { URL(string: $0) },
+                        height: 220,
+                        cornerRadius: 0
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 12) {

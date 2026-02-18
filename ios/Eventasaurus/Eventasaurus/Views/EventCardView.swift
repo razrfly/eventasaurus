@@ -7,35 +7,11 @@ struct EventCardView: View {
         VStack(alignment: .leading, spacing: 8) {
             // Cover image
             ZStack(alignment: .topTrailing) {
-                if let imageUrl = event.coverImageUrl, let url = URL(string: imageUrl) {
-                    Color.clear
-                        .frame(height: 160)
-                        .overlay {
-                            AsyncImage(url: url) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Rectangle()
-                                    .fill(.quaternary)
-                                    .overlay {
-                                        Image(systemName: event.isGroup ? "square.stack" : "calendar")
-                                            .font(.title)
-                                            .foregroundStyle(.tertiary)
-                                    }
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(.quaternary)
-                        .frame(height: 160)
-                        .overlay {
-                            Image(systemName: event.isGroup ? "square.stack" : "calendar")
-                                .font(.title)
-                                .foregroundStyle(.tertiary)
-                        }
-                }
+                CachedImage(
+                    url: event.coverImageUrl.flatMap { URL(string: $0) },
+                    height: 160,
+                    placeholderIcon: event.isGroup ? "square.stack" : "calendar"
+                )
 
                 // Badge for aggregated groups
                 if event.isGroup {

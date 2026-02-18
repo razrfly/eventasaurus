@@ -30,17 +30,15 @@ struct SourceDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Source header
                 HStack(spacing: 12) {
-                    if let logoUrl = data.source.logoUrl, let url = URL(string: logoUrl) {
-                        AsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        } placeholder: {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(.quaternary)
-                        }
-                        .frame(width: 48, height: 48)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    if let logoUrl = data.source.logoUrl {
+                        CachedImage(
+                            url: URL(string: logoUrl),
+                            height: 48,
+                            cornerRadius: 8,
+                            placeholderIcon: "building.2",
+                            contentMode: .fit
+                        )
+                        .frame(width: 48)
                     }
 
                     Text(data.source.name)

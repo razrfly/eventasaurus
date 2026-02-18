@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusApp.{Events, Repo}
   alias EventasaurusWeb.Live.Helpers.EventFilters
+  alias Eventasaurus.CDN
 
   @default_radius_km 50
   @default_per_page 20
@@ -40,7 +41,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     - sort_order: asc, desc
   """
   def nearby(conn, params) do
-    with {:ok, lat, lng} <- resolve_coordinates(params) do
+    with {:ok, lat, lng, city_id} <- resolve_coordinates(params) do
       radius_km =
         case parse_float(params["radius"], "radius") do
           {:ok, meters} -> meters / 1000
@@ -59,6 +60,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
           page_size: per_page,
           language: "en"
         ]
+        |> maybe_add_browsing_city(city_id)
         |> maybe_add_categories(params)
         |> maybe_add_search(params)
         |> maybe_add_date_range(params)
@@ -118,7 +120,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
     json(conn, %{
       events: Enum.map(events, &serialize_user_event/1),
-      meta: %{total: length(events)}
+      meta: %{total_count: length(events)}
     })
   end
 
@@ -151,7 +153,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       {id, _} ->
         case Repo.get(City, id) do
           %City{latitude: lat, longitude: lng} when not is_nil(lat) and not is_nil(lng) ->
-            {:ok, Decimal.to_float(lat), Decimal.to_float(lng)}
+            {:ok, Decimal.to_float(lat), Decimal.to_float(lng), id}
 
           _ ->
             {:error, "city_id", "city not found"}
@@ -165,11 +167,14 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   defp resolve_coordinates(params) do
     with {:ok, lat} <- parse_float(params["lat"], "lat"),
          {:ok, lng} <- parse_float(params["lng"], "lng") do
-      {:ok, lat, lng}
+      {:ok, lat, lng, nil}
     end
   end
 
   # --- Filter builders ---
+
+  defp maybe_add_browsing_city(opts, nil), do: opts
+  defp maybe_add_browsing_city(opts, city_id), do: Keyword.put(opts, :browsing_city_id, city_id)
 
   defp maybe_add_categories(opts, %{"categories" => categories}) when is_binary(categories) do
     ids =
@@ -243,7 +248,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       title: AggregatedMovieGroup.title(group),
       starts_at: group.earliest_starts_at,
       ends_at: nil,
-      cover_image_url: group.movie_backdrop_url || group.movie_poster_url,
+      cover_image_url: resolve_image_url(group.movie_backdrop_url || group.movie_poster_url),
       type: "movie_group",
       venue: nil,
       screening_count: group.screening_count,
@@ -258,7 +263,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       title: AggregatedEventGroup.title(group),
       starts_at: nil,
       ends_at: nil,
-      cover_image_url: group.cover_image_url,
+      cover_image_url: resolve_image_url(group.cover_image_url),
       type: "event_group",
       venue: nil,
       event_count: group.event_count,
@@ -273,7 +278,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       title: AggregatedContainerGroup.title(group),
       starts_at: group.start_date,
       ends_at: group.end_date,
-      cover_image_url: group.cover_image_url,
+      cover_image_url: resolve_image_url(group.cover_image_url),
       type: "container_group",
       venue: nil,
       event_count: group.event_count,
@@ -316,7 +321,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       title: event.display_title || event.title,
       starts_at: event.starts_at,
       ends_at: event.ends_at,
-      cover_image_url: event.cover_image_url,
+      cover_image_url: resolve_image_url(event.cover_image_url),
       type: "public",
       venue: serialize_venue(event.venue)
     }
@@ -336,7 +341,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       title: event.title,
       starts_at: event.start_at,
       ends_at: event.ends_at,
-      cover_image_url: event.cover_image_url,
+      cover_image_url: resolve_image_url(event.cover_image_url),
       type: "user",
       venue: serialize_venue(event.venue)
     }
@@ -368,6 +373,23 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       lng: venue.longitude
     }
   end
+
+  # Resolve image URLs through the same CDN pipeline the web uses.
+  # Handles legacy Supabase→R2 conversion and applies Cloudflare optimization.
+  # Unlike the web (which can load HTTP URLs in browsers), mobile clients
+  # require HTTPS, so we always apply CDN transformation for HTTP URLs.
+  @cdn_opts [width: 400, height: 300, fit: "cover", quality: 85]
+  defp resolve_image_url(nil), do: nil
+  defp resolve_image_url(url) do
+    case CDN.url(url, @cdn_opts) do
+      # CDN disabled in dev — still need to upgrade HTTP→HTTPS for mobile
+      ^url -> ensure_https(url)
+      cdn_url -> cdn_url
+    end
+  end
+
+  defp ensure_https("http://" <> rest), do: "https://" <> rest
+  defp ensure_https(url), do: url
 
   defp parse_float(nil, field), do: {:error, field, "is required"}
   defp parse_float(val, field) when is_binary(val) do

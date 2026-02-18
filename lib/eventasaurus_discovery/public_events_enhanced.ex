@@ -1664,15 +1664,15 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       page = max(opts[:page] || 1, 1)
       page_size = min(opts[:page_size] || @default_limit, @max_limit)
 
-      # Fetch window sized to requested page (cap at @max_limit)
-      fetch_size = if page == 1, do: @max_limit, else: min(@max_limit, page * page_size * 3)
+      # Always fetch @max_limit raw events so aggregation output is consistent
+      # across pages (variable fetch windows cause items to shift between pages).
 
       # Build fetch opts without DB pagination
       opts_without_pagination =
         opts
         |> Map.new()
         |> Map.drop([:page, :offset, :limit, :all_events_filters])
-        |> Map.put(:page_size, fetch_size)
+        |> Map.put(:page_size, @max_limit)
         |> then(fn opts_map ->
           case opts_map[:viewing_city] do
             %{id: city_id} -> Map.put(opts_map, :browsing_city_id, city_id)
