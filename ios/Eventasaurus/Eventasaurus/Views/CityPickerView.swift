@@ -77,8 +77,8 @@ struct CityPickerView: View {
             .task(id: searchText) {
                 if !searchText.isEmpty {
                     try? await Task.sleep(for: .milliseconds(300))
-                    guard !Task.isCancelled else { return }
                 }
+                guard !Task.isCancelled else { return }
                 await loadCities()
             }
         }
