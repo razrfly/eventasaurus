@@ -54,10 +54,15 @@ defmodule EventasaurusWeb.Api.V1.Mobile.CityController do
          [nearest | _] <- Locations.get_nearby_cities(lat, lng, limit: 1, radius_km: 100) do
       json(conn, %{city: serialize_city(nearest)})
     else
-      _ ->
+      [] ->
         conn
         |> put_status(:not_found)
         |> json(%{error: "not_found", message: "No city found near those coordinates"})
+
+      _ ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "bad_request", message: "Invalid lat/lng values"})
     end
   end
 

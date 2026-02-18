@@ -14,6 +14,7 @@ struct DiscoverView: View {
 
     // City selection
     @State private var selectedCity: City?
+    @State private var resolvedCity: City?
     @State private var showCityPicker = false
 
     // Search
@@ -85,7 +86,7 @@ struct DiscoverView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: selectedCity != nil ? "building.2" : "location.fill")
-                            Text(selectedCity?.name ?? "Nearby")
+                            Text(selectedCity?.name ?? resolvedCity?.name ?? "Nearby")
                                 .lineLimit(1)
                         }
                         .font(.subheadline)
@@ -106,7 +107,7 @@ struct DiscoverView: View {
                 }
             }
             .sheet(isPresented: $showCityPicker) {
-                CityPickerView(selectedCity: selectedCity) { city in
+                CityPickerView(selectedCity: selectedCity, resolvedCity: resolvedCity) { city in
                     selectedCity = city
                     persistCitySelection(city)
                     Task { await loadEvents() }
@@ -259,6 +260,12 @@ struct DiscoverView: View {
         if let loc {
             lastLat = loc.coordinate.latitude
             lastLng = loc.coordinate.longitude
+            // Fire-and-forget: resolve GPS to a city name for display
+            let lat = loc.coordinate.latitude
+            let lng = loc.coordinate.longitude
+            Task {
+                resolvedCity = try? await APIClient.shared.resolveCity(lat: lat, lng: lng)
+            }
             await loadEvents()
         } else {
             isLoading = false
@@ -337,7 +344,7 @@ struct DiscoverView: View {
         let cityId = UserDefaults.standard.integer(forKey: Self.cityKey)
         if cityId > 0, let name = UserDefaults.standard.string(forKey: Self.cityNameKey) {
             let slug = UserDefaults.standard.string(forKey: Self.citySlugKey) ?? ""
-            selectedCity = City(id: cityId, name: name, slug: slug, latitude: nil, longitude: nil, timezone: nil, country: nil)
+            selectedCity = City(id: cityId, name: name, slug: slug, latitude: nil, longitude: nil, timezone: nil, country: nil, countryCode: nil, eventCount: nil)
         }
     }
 }
