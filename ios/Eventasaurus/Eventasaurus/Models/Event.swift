@@ -30,6 +30,7 @@ struct Event: Codable, Identifiable {
     let description: String?
     let attendeeCount: Int?
     let isAttending: Bool?
+    let attendanceStatus: String?
     let status: String?
     let ticketUrl: String?
     let sources: [EventSource]?
@@ -61,7 +62,7 @@ extension Event {
     enum CodingKeys: String, CodingKey {
         case slug, title, startsAt, endsAt, coverImageUrl, type, venue
         case screeningCount, eventCount, venueCount, subtitle, containerType
-        case description, attendeeCount, isAttending, status, categories
+        case description, attendeeCount, isAttending, attendanceStatus, status, categories
         case ticketUrl, sources, nearbyEvents
     }
 
@@ -82,6 +83,7 @@ extension Event {
         description = try container.decodeIfPresent(String.self, forKey: .description)
         attendeeCount = try container.decodeIfPresent(Int.self, forKey: .attendeeCount)
         isAttending = try container.decodeIfPresent(Bool.self, forKey: .isAttending)
+        attendanceStatus = try container.decodeIfPresent(String.self, forKey: .attendanceStatus)
         status = try container.decodeIfPresent(String.self, forKey: .status)
         ticketUrl = try container.decodeIfPresent(String.self, forKey: .ticketUrl)
         sources = try container.decodeIfPresent([EventSource].self, forKey: .sources)

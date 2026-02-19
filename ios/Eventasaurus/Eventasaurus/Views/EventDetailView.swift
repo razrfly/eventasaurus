@@ -6,6 +6,15 @@ struct EventDetailView: View {
     @State private var isLoading = true
     @State private var error: Error?
 
+    // RSVP state
+    @State private var attendanceStatus: String?
+    @State private var attendeeCount: Int = 0
+    @State private var isUpdatingStatus = false
+
+    // Plan with Friends state
+    @State private var existingPlan: PlanInfo?
+    @State private var showPlanSheet = false
+
     var body: some View {
         Group {
             if isLoading {
@@ -22,6 +31,13 @@ struct EventDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadEvent() }
+        .sheet(isPresented: $showPlanSheet) {
+            if let event {
+                PlanWithFriendsSheet(event: event) { plan in
+                    existingPlan = plan
+                }
+            }
+        }
     }
 
     private func eventContent(_ event: Event) -> some View {
@@ -92,12 +108,11 @@ struct EventDetailView: View {
                         }
                     }
 
-                    // Attendee count
-                    if let count = event.attendeeCount {
-                        Label("\(count) attending", systemImage: "person.2")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                    // RSVP buttons
+                    rsvpButtons
+
+                    // Plan with Friends
+                    planWithFriendsSection
 
                     // Categories
                     if let categories = event.categories, !categories.isEmpty {
@@ -154,12 +169,135 @@ struct EventDetailView: View {
         }
     }
 
+    // MARK: - RSVP Buttons
+
+    private var rsvpButtons: some View {
+        HStack(spacing: 10) {
+            Button {
+                Task { await toggleStatus("accepted") }
+            } label: {
+                Label("Going", systemImage: attendanceStatus == "accepted" ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .tint(attendanceStatus == "accepted" ? .green : .secondary)
+            .disabled(isUpdatingStatus)
+
+            Button {
+                Task { await toggleStatus("interested") }
+            } label: {
+                Label("Interested", systemImage: attendanceStatus == "interested" ? "star.fill" : "star")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .tint(attendanceStatus == "interested" ? .orange : .secondary)
+            .disabled(isUpdatingStatus)
+
+            if attendeeCount > 0 {
+                Text("\(attendeeCount) going")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Plan with Friends
+
+    private var planWithFriendsSection: some View {
+        Group {
+            if let plan = existingPlan {
+                HStack {
+                    Image(systemName: "person.2.fill")
+                        .foregroundStyle(.purple)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("You have a plan!")
+                            .font(.subheadline.weight(.medium))
+                        if let count = plan.inviteCount, count > 0 {
+                            Text("\(count) friends invited")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    NavigationLink(value: EventDestination.event(slug: plan.slug)) {
+                        Text("View")
+                            .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
+                    .controlSize(.small)
+                }
+                .padding(12)
+                .background(.purple.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                Button {
+                    showPlanSheet = true
+                } label: {
+                    Label("Plan with Friends", systemImage: "person.2.badge.plus")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.purple)
+            }
+        }
+    }
+
+    // MARK: - Data Loading
+
     private func loadEvent() async {
         do {
-            event = try await APIClient.shared.fetchEventDetail(slug: slug)
+            let loaded = try await APIClient.shared.fetchEventDetail(slug: slug)
+            event = loaded
+            attendanceStatus = loaded.attendanceStatus
+            attendeeCount = loaded.attendeeCount ?? 0
+
+            // Load existing plan
+            if let planResponse = try? await APIClient.shared.getExistingPlan(eventSlug: slug) {
+                existingPlan = planResponse.plan
+            }
         } catch {
             self.error = error
         }
         isLoading = false
+    }
+
+    private func toggleStatus(_ status: String) async {
+        let previousStatus = attendanceStatus
+        let previousCount = attendeeCount
+
+        // Optimistic update
+        isUpdatingStatus = true
+        if attendanceStatus == status {
+            // Toggling off
+            attendanceStatus = nil
+            if status == "accepted" { attendeeCount = max(0, attendeeCount - 1) }
+        } else {
+            // Switching to new status
+            if previousStatus == "accepted" { attendeeCount = max(0, attendeeCount - 1) }
+            attendanceStatus = status
+            if status == "accepted" { attendeeCount += 1 }
+        }
+
+        do {
+            if previousStatus == status {
+                // Remove
+                _ = try await APIClient.shared.removeParticipantStatus(eventSlug: slug)
+            } else {
+                // Set new status
+                let response = try await APIClient.shared.updateParticipantStatus(eventSlug: slug, status: status)
+                if let count = response.participantCount {
+                    attendeeCount = count
+                }
+            }
+        } catch {
+            // Revert on error
+            attendanceStatus = previousStatus
+            attendeeCount = previousCount
+        }
+        isUpdatingStatus = false
     }
 }
