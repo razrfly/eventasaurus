@@ -1014,9 +1014,11 @@ defmodule EventasaurusWeb.Router do
     get "/cities/resolve", CityController, :resolve
     get "/cities", CityController, :search
     get "/profile", ProfileController, :show
+    get "/movies", MovieController, :index
     get "/movies/:slug", MovieController, :show
     get "/sources/:slug", SourceController, :show
     get "/containers/:slug", ContainerController, :show
+    get "/venues/:slug", VenueController, :show
   end
 
   # Admin API routes for discovery/stats

@@ -23,6 +23,8 @@ struct MovieInfo: Codable {
     let voteAverage: Double?
     let tagline: String?
     let cast: [CastMember]?
+    let tmdbId: Int?
+    let imdbId: String?
 }
 
 struct CastMember: Codable, Identifiable {
@@ -51,6 +53,7 @@ struct Showtime: Codable {
     let date: String
     let time: String?
     let label: String?
+    let format: String?
     let datetime: Date
     let isUpcoming: Bool
 }

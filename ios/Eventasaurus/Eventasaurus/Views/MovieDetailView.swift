@@ -6,6 +6,7 @@ struct MovieDetailView: View {
     @State private var response: MovieDetailResponse?
     @State private var isLoading = true
     @State private var error: Error?
+    @State private var selectedDate: String?
 
     var body: some View {
         Group {
@@ -28,15 +29,8 @@ struct MovieDetailView: View {
     private func movieContent(_ data: MovieDetailResponse) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                // Backdrop image
-                if let imageUrl = data.movie.backdropUrl ?? data.movie.posterUrl {
-                    CachedImage(
-                        url: URL(string: imageUrl),
-                        height: 220,
-                        cornerRadius: 0,
-                        placeholderIcon: "film"
-                    )
-                }
+                // Hero: backdrop with poster overlay
+                heroImage(data.movie)
 
                 VStack(alignment: .leading, spacing: 12) {
                     // Title + year + rating
@@ -91,6 +85,9 @@ struct MovieDetailView: View {
                         CastCarousel(cast: cast)
                     }
 
+                    // External links
+                    externalLinks(data.movie)
+
                     Divider()
 
                     // Screenings header with count
@@ -108,7 +105,11 @@ struct MovieDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        ForEach(data.venues) { venueGroup in
+                        // Day picker
+                        dayPicker(venues: data.venues)
+
+                        let filteredVenues = filteredVenues(data.venues)
+                        ForEach(filteredVenues) { venueGroup in
                             venueCard(venueGroup)
                         }
                     }
@@ -193,14 +194,17 @@ struct MovieDetailView: View {
     }
 
     private func showtimePill(_ showtime: Showtime) -> some View {
-        VStack(spacing: 2) {
+        HStack(spacing: 4) {
             Text(showtime.datetime, format: .dateTime.hour().minute())
                 .font(.subheadline.bold())
-            if let label = showtime.label, !label.isEmpty {
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            if let format = showtime.format {
+                Text(format.uppercased())
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(formatColor(format).opacity(0.15))
+                    .foregroundStyle(formatColor(format))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
             }
         }
         .padding(.horizontal, 10)
@@ -211,6 +215,14 @@ struct MovieDetailView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(showtime.isUpcoming ? Color.accentColor.opacity(0.3) : Color(.systemGray4), lineWidth: 0.5)
         )
+    }
+
+    private func formatColor(_ format: String) -> Color {
+        switch format.uppercased() {
+        case "IMAX": return .blue
+        case "4DX", "3D": return .purple
+        default: return .gray
+        }
     }
 
     private static let isoDateFormatter: DateFormatter = {
@@ -230,6 +242,153 @@ struct MovieDetailView: View {
         guard let date = Self.isoDateFormatter.date(from: isoDate) else { return isoDate }
         return Self.displayDateFormatter.string(from: date)
     }
+
+    // MARK: - Hero Image
+
+    private func heroImage(_ movie: MovieInfo) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            if let backdropUrl = movie.backdropUrl {
+                CachedImage(
+                    url: URL(string: backdropUrl),
+                    height: 220,
+                    cornerRadius: 0,
+                    placeholderIcon: "film"
+                )
+
+                // Poster overlay (only when both exist)
+                if let posterUrl = movie.posterUrl {
+                    CachedImage(
+                        url: URL(string: posterUrl),
+                        height: 120,
+                        cornerRadius: 8,
+                        placeholderIcon: "film"
+                    )
+                    .frame(width: 80)
+                    .shadow(radius: 4)
+                    .padding(.leading, 16)
+                    .padding(.bottom, -20)
+                }
+            } else if let posterUrl = movie.posterUrl {
+                CachedImage(
+                    url: URL(string: posterUrl),
+                    height: 220,
+                    cornerRadius: 0,
+                    placeholderIcon: "film"
+                )
+            }
+        }
+        .clipped()
+    }
+
+    // MARK: - External Links
+
+    @ViewBuilder
+    private func externalLinks(_ movie: MovieInfo) -> some View {
+        let tmdbUrl = movie.tmdbId.flatMap { URL(string: "https://www.themoviedb.org/movie/\($0)") }
+        let cinegraphUrl = movie.tmdbId.flatMap { URL(string: "https://cinegraph.org/movies/tmdb/\($0)") }
+
+        if tmdbUrl != nil || cinegraphUrl != nil {
+            HStack(spacing: 12) {
+                if let url = tmdbUrl {
+                    ExternalLinkButton(title: "TMDB", url: url, icon: "film")
+                }
+                if let url = cinegraphUrl {
+                    ExternalLinkButton(title: "Cinegraph", url: url, icon: "popcorn")
+                }
+            }
+        }
+    }
+
+    // MARK: - Day Picker
+
+    private func dayPicker(venues: [VenueScreenings]) -> some View {
+        let allDates = allUniqueDates(from: venues)
+        let dateCounts = showtimeCountsByDate(from: venues)
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                // "All" pill
+                dayPill(
+                    label: "All",
+                    count: venues.reduce(0) { $0 + $1.showtimes.count },
+                    isSelected: selectedDate == nil
+                ) {
+                    selectedDate = nil
+                }
+
+                ForEach(allDates, id: \.self) { date in
+                    dayPill(
+                        label: formatDayPillLabel(date),
+                        count: dateCounts[date] ?? 0,
+                        isSelected: selectedDate == date
+                    ) {
+                        selectedDate = date
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func dayPill(label: String, count: Int, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text(label)
+                    .font(.caption.bold())
+                Text("\(count)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.accentColor : Color(.systemGray5))
+            .foregroundStyle(isSelected ? .white : .primary)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func allUniqueDates(from venues: [VenueScreenings]) -> [String] {
+        let dates = Set(venues.flatMap { $0.showtimes.map(\.date) })
+        return dates.sorted()
+    }
+
+    private func showtimeCountsByDate(from venues: [VenueScreenings]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for venue in venues {
+            for showtime in venue.showtimes {
+                counts[showtime.date, default: 0] += 1
+            }
+        }
+        return counts
+    }
+
+    private func filteredVenues(_ venues: [VenueScreenings]) -> [VenueScreenings] {
+        guard let date = selectedDate else { return venues }
+        return venues.compactMap { venue in
+            let filtered = venue.showtimes.filter { $0.date == date }
+            guard !filtered.isEmpty else { return nil }
+            return VenueScreenings(
+                venue: venue.venue,
+                eventSlug: venue.eventSlug,
+                upcomingCount: filtered.filter(\.isUpcoming).count,
+                showtimes: filtered
+            )
+        }
+    }
+
+    private static let dayPillFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEE d"
+        return f
+    }()
+
+    private func formatDayPillLabel(_ isoDate: String) -> String {
+        guard let date = Self.isoDateFormatter.date(from: isoDate) else { return isoDate }
+        return Self.dayPillFormatter.string(from: date).uppercased()
+    }
+
+    // MARK: - Data Loading
 
     private func loadMovie() async {
         do {

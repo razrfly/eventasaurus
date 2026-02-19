@@ -53,18 +53,42 @@ struct EventDetailView: View {
 
                     // Venue
                     if let venue = event.venue {
-                        Label {
-                            VStack(alignment: .leading) {
-                                Text(venue.name)
-                                    .font(.subheadline)
-                                if let address = venue.address {
-                                    Text(address)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                        if let venueSlug = venue.slug {
+                            NavigationLink(value: EventDestination.venue(slug: venueSlug)) {
+                                Label {
+                                    VStack(alignment: .leading) {
+                                        HStack(spacing: 4) {
+                                            Text(venue.name)
+                                                .font(.subheadline)
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        if let address = venue.address {
+                                            Text(address)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                } icon: {
+                                    Image(systemName: "mappin.and.ellipse")
                                 }
                             }
-                        } icon: {
-                            Image(systemName: "mappin.and.ellipse")
+                            .buttonStyle(.plain)
+                        } else {
+                            Label {
+                                VStack(alignment: .leading) {
+                                    Text(venue.name)
+                                        .font(.subheadline)
+                                    if let address = venue.address {
+                                        Text(address)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            } icon: {
+                                Image(systemName: "mappin.and.ellipse")
+                            }
                         }
                     }
 

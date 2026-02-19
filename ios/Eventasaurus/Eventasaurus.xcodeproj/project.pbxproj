@@ -40,6 +40,12 @@
 		BB11CC22DD33EE44FF550007 /* NearbyEventsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550008 /* NearbyEventsSection.swift */; };
 		BB11CC22DD33EE44FF550009 /* CastCarousel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF55000A /* CastCarousel.swift */; };
 		BB11CC22DD33EE44FF55000B /* RatingPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF55000C /* RatingPill.swift */; };
+		CC22DD33EE44FF550001A001 /* VenueDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC22DD33EE44FF550001A002 /* VenueDetail.swift */; };
+		CC22DD33EE44FF550001A003 /* VenueDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC22DD33EE44FF550001A004 /* VenueDetailView.swift */; };
+		DD33EE44FF550001B001 /* EventCardGridItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF550001B002 /* EventCardGridItem.swift */; };
+		DD33EE44FF550001B003 /* FiltersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF550001B004 /* FiltersSheet.swift */; };
+		DD33EE44FF550001B005 /* MoviesIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF550001B006 /* MoviesIndex.swift */; };
+		DD33EE44FF550001B007 /* MoviesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF550001B008 /* MoviesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,6 +92,12 @@
 		BB11CC22DD33EE44FF550008 /* NearbyEventsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyEventsSection.swift; sourceTree = "<group>"; };
 		BB11CC22DD33EE44FF55000A /* CastCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CastCarousel.swift; sourceTree = "<group>"; };
 		BB11CC22DD33EE44FF55000C /* RatingPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingPill.swift; sourceTree = "<group>"; };
+		CC22DD33EE44FF550001A002 /* VenueDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueDetail.swift; sourceTree = "<group>"; };
+		CC22DD33EE44FF550001A004 /* VenueDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueDetailView.swift; sourceTree = "<group>"; };
+		DD33EE44FF550001B002 /* EventCardGridItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCardGridItem.swift; sourceTree = "<group>"; };
+		DD33EE44FF550001B004 /* FiltersSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiltersSheet.swift; sourceTree = "<group>"; };
+		DD33EE44FF550001B006 /* MoviesIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoviesIndex.swift; sourceTree = "<group>"; };
+		DD33EE44FF550001B008 /* MoviesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoviesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -127,8 +139,10 @@
 				1D910507C20A4079D0F6753F /* Event.swift */,
 				AA11BB22CC33DD44EE55FF02 /* EventDestination.swift */,
 				AA11BB22CC33DD44EE55FF04 /* MovieDetail.swift */,
+				DD33EE44FF550001B006 /* MoviesIndex.swift */,
 				AA11BB22CC33DD44EE55FF06 /* SourceDetail.swift */,
 				21BAC9E54F63FED667138C7D /* UserProfile.swift */,
+				CC22DD33EE44FF550001A002 /* VenueDetail.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -181,16 +195,20 @@
 				F6A7B8C9D0E1F2A3B4C5D6E7 /* CityPickerView.swift */,
 				AA11BB22CC33DD44EE55FF0E /* ContainerDetailView.swift */,
 				74DE54496EE549F58B31CC75 /* DiscoverView.swift */,
+				DD33EE44FF550001B002 /* EventCardGridItem.swift */,
 				6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */,
 				DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */,
 				BB11CC22DD33EE44FF550004 /* ExternalLinkButton.swift */,
+				DD33EE44FF550001B004 /* FiltersSheet.swift */,
 				AA11BB22CC33DD44EE55FF0A /* MovieDetailView.swift */,
+				DD33EE44FF550001B008 /* MoviesView.swift */,
 				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
 				BB11CC22DD33EE44FF550008 /* NearbyEventsSection.swift */,
 				09081158264711B776E3A8C3 /* ProfileView.swift */,
 				BB11CC22DD33EE44FF55000C /* RatingPill.swift */,
 				BB11CC22DD33EE44FF550006 /* SourceAttributionSection.swift */,
 				AA11BB22CC33DD44EE55FF0C /* SourceDetailView.swift */,
+				CC22DD33EE44FF550001A004 /* VenueDetailView.swift */,
 				BB11CC22DD33EE44FF550002 /* VenueMapCard.swift */,
 			);
 			path = Views;
@@ -296,6 +314,7 @@
 				69C72F0A0750335F65C8C746 /* ContentView.swift in Sources */,
 				66BE87A517CC95E227F35C2B /* DiscoverView.swift in Sources */,
 				9106DB341AD8FFD52AC815F1 /* Event.swift in Sources */,
+				DD33EE44FF550001B001 /* EventCardGridItem.swift in Sources */,
 				552B3CC5F35CE02F411AA93E /* EventCardView.swift in Sources */,
 				CA41E7A845D6139B3A1DB9B4 /* CachedImage.swift in Sources */,
 				AA11BB22CC33DD44EE55FF01 /* EventDestination.swift in Sources */,
@@ -304,6 +323,9 @@
 				D577F3F99A409AC4E9EBC795 /* LocationManager.swift in Sources */,
 				AA11BB22CC33DD44EE55FF03 /* MovieDetail.swift in Sources */,
 				AA11BB22CC33DD44EE55FF09 /* MovieDetailView.swift in Sources */,
+				DD33EE44FF550001B005 /* MoviesIndex.swift in Sources */,
+				DD33EE44FF550001B007 /* MoviesView.swift in Sources */,
+				DD33EE44FF550001B003 /* FiltersSheet.swift in Sources */,
 				BF9ACEB5D68ECF001460E162 /* MyEventsView.swift in Sources */,
 				19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* SourceDetail.swift in Sources */,
@@ -315,6 +337,8 @@
 				BB11CC22DD33EE44FF550009 /* CastCarousel.swift in Sources */,
 				BB11CC22DD33EE44FF55000B /* RatingPill.swift in Sources */,
 				7F9F9F532434DCF96269280B /* UserProfile.swift in Sources */,
+				CC22DD33EE44FF550001A001 /* VenueDetail.swift in Sources */,
+				CC22DD33EE44FF550001A003 /* VenueDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

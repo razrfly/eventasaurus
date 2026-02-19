@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum ViewMode: String {
+    case list, grid
+}
+
 struct DiscoverView: View {
     @State private var events: [Event] = []
     @State private var isLoading = false
@@ -37,6 +41,22 @@ struct DiscoverView: View {
     // Date range counts from API
     @State private var dateRangeCounts: [String: Int] = [:]
     @State private var allEventsCount: Int = 0
+
+    // View mode (grid/list)
+    @State private var viewMode: ViewMode = {
+        let saved = UserDefaults.standard.string(forKey: "discoverViewMode")
+        return ViewMode(rawValue: saved ?? "") ?? .list
+    }()
+
+    // Filters sheet
+    @State private var showFilters = false
+    @State private var radiusKm: Double = {
+        let saved = UserDefaults.standard.double(forKey: "discoverRadiusKm")
+        return saved > 0 ? saved : 50
+    }()
+
+    // Language
+    @State private var language: String = UserDefaults.standard.string(forKey: "discoverLanguage") ?? "en"
 
     private static let dateRanges: [(label: String, value: String?)] = [
         ("All Events", nil),
@@ -109,8 +129,31 @@ struct DiscoverView: View {
                     }
                 }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    sortMenu
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    // Grid/List toggle
+                    Button {
+                        viewMode = viewMode == .list ? .grid : .list
+                        UserDefaults.standard.set(viewMode.rawValue, forKey: "discoverViewMode")
+                    } label: {
+                        Image(systemName: viewMode == .list ? "square.grid.2x2" : "list.bullet")
+                            .font(.subheadline)
+                    }
+
+                    // Filters button
+                    Button {
+                        showFilters = true
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .font(.subheadline)
+                            .overlay(alignment: .topTrailing) {
+                                if hasAdvancedFilters {
+                                    Circle()
+                                        .fill(.red)
+                                        .frame(width: 8, height: 8)
+                                        .offset(x: 4, y: -4)
+                                }
+                            }
+                    }
                 }
             }
             .searchable(text: $searchText, prompt: "Search events...")
@@ -134,6 +177,23 @@ struct DiscoverView: View {
                     Task { await loadEvents() }
                 }
             }
+            .sheet(isPresented: $showFilters) {
+                FiltersSheet(
+                    radiusKm: $radiusKm,
+                    sortBy: $sortBy,
+                    sortOrder: $sortOrder,
+                    selectedCategories: $selectedCategories,
+                    language: $language,
+                    categoryItems: categories.compactMap { cat in
+                        guard let catId = cat.numericId else { return nil }
+                        return FilterCategoryItem(id: catId, name: cat.name, icon: cat.icon, color: cat.resolvedColor)
+                    }
+                ) {
+                    UserDefaults.standard.set(radiusKm, forKey: "discoverRadiusKm")
+                    UserDefaults.standard.set(language, forKey: "discoverLanguage")
+                    Task { await loadEvents() }
+                }
+            }
             .task {
                 restoreCitySelection()
                 await loadCategories()
@@ -150,58 +210,9 @@ struct DiscoverView: View {
                     SourceDetailView(slug: slug, cityId: cityId)
                 case .containerGroup(let slug):
                     ContainerDetailView(slug: slug)
+                case .venue(let slug):
+                    VenueDetailView(slug: slug)
                 }
-            }
-        }
-    }
-
-    // MARK: - Sort Menu
-
-    private var sortMenu: some View {
-        Menu {
-            Section("Sort By") {
-                sortOption("Date", value: "starts_at")
-                sortOption("Title", value: "title")
-                sortOption("Popularity", value: "popularity")
-                sortOption("Relevance", value: "relevance")
-            }
-            Section("Order") {
-                Button {
-                    sortOrder = "asc"
-                    Task { await loadEvents() }
-                } label: {
-                    if sortOrder == "asc" {
-                        Label("Ascending", systemImage: "checkmark")
-                    } else {
-                        Text("Ascending")
-                    }
-                }
-                Button {
-                    sortOrder = "desc"
-                    Task { await loadEvents() }
-                } label: {
-                    if sortOrder == "desc" {
-                        Label("Descending", systemImage: "checkmark")
-                    } else {
-                        Text("Descending")
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "arrow.up.arrow.down")
-                .font(.subheadline)
-        }
-    }
-
-    private func sortOption(_ label: String, value: String) -> some View {
-        Button {
-            sortBy = value
-            Task { await loadEvents() }
-        } label: {
-            if sortBy == value {
-                Label(label, systemImage: "checkmark")
-            } else {
-                Text(label)
             }
         }
     }
@@ -265,9 +276,11 @@ struct DiscoverView: View {
         events.count < totalCount
     }
 
+    private let gridColumns = [GridItem(.flexible()), GridItem(.flexible())]
+
     private var eventList: some View {
         ScrollView {
-            LazyVStack(spacing: 16) {
+            VStack(spacing: 0) {
                 // Pagination info
                 if totalCount > 0 {
                     HStack {
@@ -277,17 +290,17 @@ struct DiscoverView: View {
                         Spacer()
                     }
                     .padding(.horizontal, 4)
+                    .padding(.bottom, 8)
                 }
 
-                ForEach(events) { event in
-                    NavigationLink(value: event.destination(cityId: selectedCity?.id)) {
-                        EventCardView(event: event)
+                switch viewMode {
+                case .list:
+                    LazyVStack(spacing: 16) {
+                        eventItems
                     }
-                    .buttonStyle(.plain)
-                    .onAppear {
-                        if event.id == events.last?.id, hasMorePages, !isLoadingMore {
-                            Task { await loadMoreEvents() }
-                        }
+                case .grid:
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
+                        eventItems
                     }
                 }
 
@@ -297,6 +310,26 @@ struct DiscoverView: View {
                 }
             }
             .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var eventItems: some View {
+        ForEach(events) { event in
+            NavigationLink(value: event.destination(cityId: selectedCity?.id)) {
+                switch viewMode {
+                case .list:
+                    EventCardView(event: event)
+                case .grid:
+                    EventCardGridItem(event: event)
+                }
+            }
+            .buttonStyle(.plain)
+            .onAppear {
+                if event.id == events.last?.id, hasMorePages, !isLoadingMore {
+                    Task { await loadMoreEvents() }
+                }
+            }
         }
     }
 
@@ -368,13 +401,15 @@ struct DiscoverView: View {
             let response = try await APIClient.shared.fetchNearbyEvents(
                 lat: selectedCity == nil ? lastLat : nil,
                 lng: selectedCity == nil ? lastLng : nil,
+                radius: radiusKm * 1000,
                 cityId: selectedCity?.id,
                 categoryIds: Array(selectedCategories),
                 search: searchText.isEmpty ? nil : searchText,
                 dateRange: selectedDateRange,
                 sortBy: sortBy == "starts_at" ? nil : sortBy,
                 sortOrder: sortOrder == "asc" ? nil : sortOrder,
-                page: 1
+                page: 1,
+                language: language
             )
             events = response.events
             assert(response.meta.resolvedTotal != nil, "Backend meta missing both total_count and total")
@@ -405,13 +440,15 @@ struct DiscoverView: View {
             let response = try await APIClient.shared.fetchNearbyEvents(
                 lat: selectedCity == nil ? lastLat : nil,
                 lng: selectedCity == nil ? lastLng : nil,
+                radius: radiusKm * 1000,
                 cityId: selectedCity?.id,
                 categoryIds: Array(selectedCategories),
                 search: searchText.isEmpty ? nil : searchText,
                 dateRange: selectedDateRange,
                 sortBy: sortBy == "starts_at" ? nil : sortBy,
                 sortOrder: sortOrder == "asc" ? nil : sortOrder,
-                page: nextPage
+                page: nextPage,
+                language: language
             )
             // Discard stale response if a full reload happened while we were fetching
             guard generation == loadGeneration else { isLoadingMore = false; return }
@@ -433,12 +470,21 @@ struct DiscoverView: View {
         !selectedCategories.isEmpty || selectedDateRange != nil || !searchText.isEmpty
     }
 
+    /// Whether advanced filters (non-default radius, sort, or language) are active
+    private var hasAdvancedFilters: Bool {
+        radiusKm != 50 || sortBy != "starts_at" || sortOrder != "asc" || language != "en" || !selectedCategories.isEmpty
+    }
+
     private func clearFilters() {
         selectedCategories.removeAll()
         selectedDateRange = nil
         searchText = ""
         sortBy = "starts_at"
         sortOrder = "asc"
+        radiusKm = 50
+        language = "en"
+        UserDefaults.standard.set(radiusKm, forKey: "discoverRadiusKm")
+        UserDefaults.standard.set(language, forKey: "discoverLanguage")
     }
 
     private func toggleCategory(_ id: Int) {

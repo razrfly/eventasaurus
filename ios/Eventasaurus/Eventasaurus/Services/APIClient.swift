@@ -34,7 +34,8 @@ final class APIClient {
         sortBy: String? = nil,
         sortOrder: String? = nil,
         page: Int = 1,
-        perPage: Int = 20
+        perPage: Int = 20,
+        language: String? = nil
     ) async throws -> EventsResponse {
         var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/mobile/events/nearby"), resolvingAgainstBaseURL: false)!
         var queryItems: [URLQueryItem] = []
@@ -67,10 +68,34 @@ final class APIClient {
             queryItems.append(URLQueryItem(name: "sort_order", value: sortOrder))
         }
 
+        if let language, language != "en" {
+            queryItems.append(URLQueryItem(name: "language", value: language))
+        }
+
         queryItems.append(URLQueryItem(name: "page", value: String(page)))
         queryItems.append(URLQueryItem(name: "per_page", value: String(perPage)))
 
         components.queryItems = queryItems
+        guard let url = components.url else { throw APIError.invalidURL }
+        return try await request(url: url)
+    }
+
+    func fetchMoviesIndex(search: String? = nil, limit: Int = 24) async throws -> MoviesIndexResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/mobile/movies"), resolvingAgainstBaseURL: false)!
+        var queryItems: [URLQueryItem] = []
+
+        if let search, !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
+        }
+
+        if limit != 24 {
+            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
+        }
+
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+
         guard let url = components.url else { throw APIError.invalidURL }
         return try await request(url: url)
     }
@@ -146,6 +171,11 @@ final class APIClient {
 
     func fetchContainerDetail(slug: String) async throws -> ContainerDetailResponse {
         let url = baseURL.appendingPathComponent("api/v1/mobile/containers/\(slug)")
+        return try await request(url: url)
+    }
+
+    func fetchVenueDetail(slug: String) async throws -> VenueDetailResponse {
+        let url = baseURL.appendingPathComponent("api/v1/mobile/venues/\(slug)")
         return try await request(url: url)
     }
 
