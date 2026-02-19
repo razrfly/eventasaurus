@@ -61,7 +61,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
           radius_km: radius_km,
           page: page,
           page_size: per_page,
-          language: "en"
+          language: params["language"] || "en"
         ]
         |> maybe_add_browsing_city(city_id)
         |> maybe_add_categories(params)

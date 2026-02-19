@@ -2,11 +2,43 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
   use EventasaurusWeb, :controller
 
   alias EventasaurusDiscovery.Movies.MovieStore
+  alias EventasaurusDiscovery.Movies.MovieStats
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusWeb.Utils.TimezoneUtils
+  alias EventasaurusApp.Images.MovieImages
   alias EventasaurusApp.Repo
+  alias Eventasaurus.CDN
 
   import Ecto.Query
+
+  @cdn_poster_opts [width: 300, height: 450, fit: "cover", quality: 85]
+
+  @doc """
+  GET /api/v1/mobile/movies
+
+  Returns movies currently showing with stats and city data.
+  Supports search filtering and limit.
+  """
+  @spec index(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def index(conn, params) do
+    search = params["search"]
+    limit = parse_int(params["limit"], 24)
+
+    movies = MovieStats.list_now_showing_movies(limit: limit, search: search)
+    movie_count = MovieStats.count_now_showing_movies() || 0
+    screening_count = MovieStats.count_upcoming_screenings() || 0
+    cities = MovieStats.list_cities_with_movies(limit: 8)
+
+    json(conn, %{
+      movies: Enum.map(movies, &serialize_movie_list_item/1),
+      stats: %{
+        movie_count: movie_count,
+        screening_count: screening_count,
+        city_count: length(cities)
+      },
+      cities: Enum.map(cities, &serialize_city_with_movies/1)
+    })
+  end
 
   @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, %{"slug" => slug} = params) do
@@ -136,6 +168,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
             date: Date.to_iso8601(s.date),
             time: s.time_str,
             label: s.label,
+            format: extract_format(s.label),
             datetime: s.datetime,
             is_upcoming: DateTime.compare(s.datetime, now) == :gt
           }
@@ -226,9 +259,25 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
       genres: genres,
       vote_average: vote_average,
       tagline: tagline,
-      cast: cast
+      cast: cast,
+      tmdb_id: movie.tmdb_id,
+      imdb_id: movie.imdb_id
     }
   end
+
+  defp extract_format(label) when is_binary(label) do
+    label_lower = String.downcase(label)
+
+    cond do
+      String.contains?(label_lower, "imax") -> "IMAX"
+      String.contains?(label_lower, "4dx") -> "4DX"
+      String.contains?(label_lower, "3d") -> "3D"
+      String.contains?(label_lower, "2d") -> "2D"
+      true -> nil
+    end
+  end
+
+  defp extract_format(_), do: nil
 
   defp parse_int(nil), do: nil
 
@@ -241,4 +290,86 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
   defp parse_int(val) when is_integer(val), do: val
   defp parse_int(_), do: nil
+
+  # --- Movie list serializers ---
+
+  defp serialize_movie_list_item(%{movie: movie, city_count: city_count, screening_count: screening_count, next_screening: next_screening}) do
+    poster_url = resolve_poster_url(movie)
+
+    genres =
+      case movie.metadata do
+        %{"genres" => genres} when is_list(genres) ->
+          Enum.map(genres, fn
+            %{"name" => name} -> name
+            name when is_binary(name) -> name
+            _ -> nil
+          end)
+          |> Enum.reject(&is_nil/1)
+
+        _ ->
+          []
+      end
+
+    vote_average =
+      case movie.metadata do
+        %{"vote_average" => v} when is_number(v) and v > 0 -> v
+        _ -> nil
+      end
+
+    release_year =
+      case movie.release_date do
+        %Date{year: year} -> Integer.to_string(year)
+        _ -> nil
+      end
+
+    %{
+      slug: movie.slug,
+      title: movie.title,
+      poster_url: poster_url,
+      release_date: release_year,
+      runtime: movie.runtime,
+      genres: genres,
+      vote_average: vote_average,
+      city_count: city_count,
+      screening_count: screening_count,
+      next_screening: next_screening
+    }
+  end
+
+  defp serialize_city_with_movies(%{city: city, movie_count: movie_count, screening_count: screening_count}) do
+    %{
+      name: city.name,
+      slug: city.slug,
+      movie_count: movie_count,
+      screening_count: screening_count
+    }
+  end
+
+  defp resolve_poster_url(movie) do
+    url = MovieImages.get_poster_url(movie.id, movie.poster_url)
+
+    case url do
+      nil -> nil
+      url ->
+        case CDN.url(url, @cdn_poster_opts) do
+          ^url -> ensure_https(url)
+          cdn_url -> cdn_url
+        end
+    end
+  end
+
+  defp ensure_https("http://" <> rest), do: "https://" <> rest
+  defp ensure_https(url), do: url
+
+  defp parse_int(nil, default), do: default
+
+  defp parse_int(val, default) when is_binary(val) do
+    case Integer.parse(val) do
+      {num, _} when num > 0 -> num
+      _ -> default
+    end
+  end
+
+  defp parse_int(val, _default) when is_integer(val) and val > 0, do: val
+  defp parse_int(_, default), do: default
 end

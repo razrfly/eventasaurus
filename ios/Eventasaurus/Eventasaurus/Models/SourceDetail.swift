@@ -3,6 +3,7 @@ import Foundation
 struct SourceDetailResponse: Codable {
     let source: SourceInfo
     let events: [Event]
+    let availableCities: [SourceCity]?
 }
 
 struct SourceInfo: Codable {
@@ -11,4 +12,11 @@ struct SourceInfo: Codable {
     let logoUrl: String?
     let websiteUrl: String?
     let eventCount: Int?
+    let domains: [String]?
+}
+
+struct SourceCity: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let slug: String
 }

@@ -5,6 +5,7 @@ enum EventDestination: Hashable {
     case movieGroup(slug: String, cityId: Int?)
     case eventGroup(slug: String, cityId: Int?)
     case containerGroup(slug: String)
+    case venue(slug: String)
 }
 
 extension Event {

@@ -1,8 +1,11 @@
 defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
   use EventasaurusWeb, :controller
 
+  import Ecto.Query
+
   alias EventasaurusDiscovery.Sources.SourceStore
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusApp.Repo
 
   @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, %{"slug" => slug} = params) do
@@ -26,10 +29,12 @@ defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
           end
 
         total_count = PublicEventsEnhanced.count_events_by_source(slug, count_opts)
+        available_cities = get_available_cities(slug)
 
         json(conn, %{
           source: serialize_source(source, total_count),
-          events: Enum.map(events, &serialize_public_event/1)
+          events: Enum.map(events, &serialize_public_event/1),
+          available_cities: available_cities
         })
     end
   end
@@ -43,13 +48,33 @@ defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
 
   defp maybe_add_city(opts, _), do: opts
 
+  defp get_available_cities(source_slug) do
+    from(c in EventasaurusDiscovery.Locations.City,
+      join: v in EventasaurusApp.Venues.Venue,
+      on: v.city_id == c.id,
+      join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+      on: pe.venue_id == v.id,
+      join: pes in "public_event_sources",
+      on: pes.event_id == pe.id,
+      join: s in "sources",
+      on: s.id == pes.source_id,
+      where: s.slug == ^source_slug,
+      distinct: c.id,
+      select: %{id: c.id, name: c.name, slug: c.slug},
+      order_by: [asc: c.id]
+    )
+    |> Repo.all()
+    |> Enum.sort_by(& &1.name)
+  end
+
   defp serialize_source(source, event_count) do
     %{
       name: source.name,
       slug: source.slug,
       logo_url: source.logo_url,
       website_url: source.website_url,
-      event_count: event_count
+      event_count: event_count,
+      domains: source.domains
     }
   end
 

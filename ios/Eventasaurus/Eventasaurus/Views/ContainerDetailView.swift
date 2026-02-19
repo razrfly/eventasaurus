@@ -94,18 +94,80 @@ struct ContainerDetailView: View {
                             }
                         }
 
-                        LazyVStack(spacing: 16) {
-                            ForEach(data.events) { event in
-                                NavigationLink(value: EventDestination.event(slug: event.slug)) {
-                                    EventCardView(event: event)
+                        let grouped = groupEventsByDate(data.events)
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                            ForEach(grouped, id: \.0) { dateKey, events in
+                                Section {
+                                    ForEach(events) { event in
+                                        NavigationLink(value: EventDestination.event(slug: event.slug)) {
+                                            EventCardView(event: event)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                } header: {
+                                    Text(formatDateGroupHeader(dateKey))
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
                 .padding(.horizontal)
             }
+        }
+    }
+
+    private static let isoDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM d"
+        return f
+    }()
+
+    private static let fullDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE, MMMM d"
+        return f
+    }()
+
+    private func groupEventsByDate(_ events: [Event]) -> [(String, [Event])] {
+        var groups: [String: [Event]] = [:]
+
+        for event in events {
+            if let date = event.startsAt {
+                let key = Self.isoDateFormatter.string(from: date)
+                groups[key, default: []].append(event)
+            } else {
+                groups["TBD", default: []].append(event)
+            }
+        }
+
+        return groups.sorted { a, b in
+            if a.key == "TBD" { return false }
+            if b.key == "TBD" { return true }
+            return a.key < b.key
+        }
+    }
+
+    private func formatDateGroupHeader(_ isoDate: String) -> String {
+        if isoDate == "TBD" { return "Date TBD" }
+
+        guard let date = Self.isoDateFormatter.date(from: isoDate) else { return isoDate }
+
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return "Today, \(Self.monthDayFormatter.string(from: date))"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow, \(Self.monthDayFormatter.string(from: date))"
+        } else {
+            return Self.fullDateFormatter.string(from: date)
         }
     }
 

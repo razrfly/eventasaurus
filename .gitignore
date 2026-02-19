@@ -143,3 +143,6 @@ ios/Eventasaurus/.swiftpm/
 # Playgrounds
 timeline.xctimeline
 playground.xcworkspace
+
+# Reference screenshots (design comps, not needed in version control)
+tmp/
