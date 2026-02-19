@@ -26,7 +26,7 @@ struct MovieInfo: Codable {
 }
 
 struct CastMember: Codable, Identifiable {
-    var id: String { name + (character ?? "") }
+    let id: Int
     let name: String
     let character: String?
     let profileUrl: String?

@@ -24,7 +24,7 @@ struct CastCarousel: View {
                 CachedImage(
                     url: url,
                     height: 80,
-                    cornerRadius: 40,
+                    cornerRadius: 0,
                     placeholderIcon: "person.fill",
                     contentMode: .fill
                 )

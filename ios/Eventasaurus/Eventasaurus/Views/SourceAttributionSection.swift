@@ -8,7 +8,7 @@ struct SourceAttributionSection: View {
             Text("Sources")
                 .font(.headline)
 
-            ForEach(sources, id: \.name) { source in
+            ForEach(sources) { source in
                 sourceRow(source)
             }
         }

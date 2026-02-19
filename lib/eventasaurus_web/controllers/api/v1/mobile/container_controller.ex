@@ -59,6 +59,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.ContainerController do
   defp serialize_venue(venue) do
     %{
       name: venue.name,
+      slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,
       lng: venue.longitude

@@ -172,7 +172,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     defaults = Map.new(@date_ranges, &{Atom.to_string(&1), 0})
 
     @date_ranges
-    |> Task.async_stream(
+    |> Task.Supervisor.async_stream_nolink(
+      Eventasaurus.TaskSupervisor,
       fn range ->
         {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range)
 
@@ -194,7 +195,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         Map.put(acc, key, count)
 
       {:exit, reason}, acc ->
-        Logger.error("Date range count task failed: #{inspect(reason)}")
+        Logger.error("Date range count task failed",
+          reason: inspect(reason)
+        )
+
         acc
     end)
   end
@@ -449,11 +453,9 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   # --- Source / Ticket helpers ---
 
   defp get_primary_source_ticket_url(event) do
-    sorted_sources = get_sorted_sources(event.sources)
-
-    sorted_sources
+    get_sorted_sources(event.sources)
     |> Enum.find_value(fn source ->
-      case source.source_url do
+      case SourceAttribution.get_source_url(source) do
         nil -> nil
         "" -> nil
         url -> url
