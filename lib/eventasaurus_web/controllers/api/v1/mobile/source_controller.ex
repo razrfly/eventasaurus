@@ -18,7 +18,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
           |> maybe_add_city(params)
 
         events = PublicEventsEnhanced.list_events(opts)
-        total_count = PublicEventsEnhanced.count_events_by_source(slug)
+
+        total_count =
+          if opts[:city_id],
+            do: length(events),
+            else: PublicEventsEnhanced.count_events_by_source(slug)
 
         json(conn, %{
           source: serialize_source(source, total_count),

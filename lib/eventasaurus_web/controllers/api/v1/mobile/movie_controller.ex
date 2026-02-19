@@ -194,6 +194,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
       case get_in(md, ["credits", "cast"]) do
         cast when is_list(cast) ->
           cast
+          |> Enum.filter(fn member -> is_integer(member["id"]) end)
           |> Enum.take(15)
           |> Enum.map(fn member ->
             profile_path = member["profile_path"]
