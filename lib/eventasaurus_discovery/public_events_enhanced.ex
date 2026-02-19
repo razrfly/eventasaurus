@@ -2337,20 +2337,28 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   Count events by source slug using database aggregation.
   Much faster than fetching all events and counting in Elixir.
   """
-  def count_events_by_source(source_slug) when is_binary(source_slug) do
+  def count_events_by_source(source_slug, opts \\ []) when is_binary(source_slug) do
     current_time = DateTime.utc_now()
 
-    from(pe in PublicEvent,
-      join: pes in "public_event_sources",
-      on: pes.event_id == pe.id,
-      join: s in "sources",
-      on: s.id == pes.source_id,
-      where: s.slug == ^source_slug,
-      where:
-        pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
-      select: count(pe.id, :distinct)
-    )
-    |> Repo.one() || 0
+    query =
+      from(pe in PublicEvent,
+        join: pes in "public_event_sources",
+        on: pes.event_id == pe.id,
+        join: s in "sources",
+        on: s.id == pes.source_id,
+        where: s.slug == ^source_slug,
+        where:
+          pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+        select: count(pe.id, :distinct)
+      )
+
+    query =
+      case Keyword.get(opts, :city_id) do
+        nil -> query
+        city_id -> from(pe in query, join: v in Venue, on: pe.venue_id == v.id, where: v.city_id == ^city_id)
+      end
+
+    Repo.one(query) || 0
   end
 
   @doc """
