@@ -171,9 +171,9 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
     defaults = Map.new(@date_ranges, &{Atom.to_string(&1), 0})
 
-    @date_ranges
-    |> Task.Supervisor.async_stream_nolink(
+    Task.Supervisor.async_stream_nolink(
       Eventasaurus.TaskSupervisor,
+      @date_ranges,
       fn range ->
         {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range)
 
