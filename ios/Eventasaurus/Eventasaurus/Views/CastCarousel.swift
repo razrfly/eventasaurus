@@ -54,7 +54,10 @@ struct CastCarousel: View {
 
     private func castAccessibilityLabel(_ member: CastMember) -> String {
         if let character = member.character, !character.isEmpty {
-            return "\(member.name) as \(character)"
+            return String(
+                format: NSLocalizedString("%@ as %@", comment: "Accessibility: cast member name 'as' character name"),
+                member.name, character
+            )
         }
         return member.name
     }

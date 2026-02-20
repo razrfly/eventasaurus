@@ -57,6 +57,8 @@ struct MyEventsView: View {
 
         do {
             events = try await APIClient.shared.fetchAttendingEvents()
+        } catch is CancellationError {
+            return
         } catch {
             self.error = error
         }

@@ -338,23 +338,15 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
       |> maybe_put(:end_date, opts[:end_date])
       |> maybe_put(:show_past, opts[:show_past])
 
-    # Build filters for "all events" count (without date restrictions)
-    count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
-    date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
-
     # Build final query opts matching original city page behavior
     # IMPORTANT: Must return a Map (not keyword list) because aggregate_events uses is_map_key
+    # Uses shared EventFilters.enrich_with_all_events_filters/1 to build
+    # :all_events_filters (without date restrictions) for correct "all events" count
     query_filters
     |> Map.put(:aggregate, true)
     |> Map.put(:ignore_city_in_aggregation, true)
     |> Map.put(:viewing_city, viewing_city)
-    |> Map.put(
-      :all_events_filters,
-      date_range_count_filters
-      |> Map.put(:aggregate, true)
-      |> Map.put(:ignore_city_in_aggregation, true)
-      |> Map.put(:viewing_city, viewing_city)
-    )
+    |> EventFilters.enrich_with_all_events_filters()
   end
 
   defp maybe_put(map, _key, nil), do: map

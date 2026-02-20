@@ -6,11 +6,9 @@ struct RatingPill: View {
     var body: some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: "star.fill")
-                .font(DS.Typography.micro)
                 .foregroundStyle(DS.Colors.ratingFill)
 
             Text(String(format: "%.1f", rating))
-                .font(DS.Typography.captionBold)
         }
         .glassBadgeStyle()
         .accessibilityElement(children: .ignore)

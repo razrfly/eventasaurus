@@ -233,7 +233,7 @@ struct MovieDetailView: View {
 
     private static let displayDateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "EEEE, MMM d"
+        f.setLocalizedDateFormatFromTemplate("EEEE MMM d")
         return f
     }()
 
@@ -253,16 +253,17 @@ struct MovieDetailView: View {
                     cornerRadius: 0,
                     placeholderIcon: "film"
                 )
+                .clipped()
 
                 // Poster overlay
                 if let posterUrl = movie.posterUrl {
                     CachedImage(
                         url: URL(string: posterUrl),
-                        height: DS.ImageSize.posterOverlayHeight,
+                        height: DS.ImageSize.posterOverlaySize.height,
                         cornerRadius: DS.Radius.md,
                         placeholderIcon: "film"
                     )
-                    .frame(width: DS.ImageSize.posterOverlay)
+                    .frame(width: DS.ImageSize.posterOverlaySize.width)
                     .padding(DS.Spacing.xs)
                     .glassBackground(cornerRadius: DS.Radius.lg)
                     .padding(.leading, DS.Spacing.xl)
@@ -277,7 +278,6 @@ struct MovieDetailView: View {
                 )
             }
         }
-        .clipped()
     }
 
     // MARK: - External Links
@@ -382,7 +382,7 @@ struct MovieDetailView: View {
 
     private static let dayPillFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "EEE d"
+        f.setLocalizedDateFormatFromTemplate("EEE d")
         return f
     }()
 

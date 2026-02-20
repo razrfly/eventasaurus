@@ -164,7 +164,6 @@ struct MoviesView: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-            .accessibilityHidden(true)
 
             // Title
             Text(movie.title)

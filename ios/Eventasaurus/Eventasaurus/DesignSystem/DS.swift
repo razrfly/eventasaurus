@@ -147,10 +147,8 @@ enum DS {
         static let carouselItemWidth: CGFloat = 160
         /// Cast card width — 90pt
         static let castCard: CGFloat = 90
-        /// Poster overlay on hero — 80pt width
-        static let posterOverlay: CGFloat = 80
-        /// Poster overlay height — 120pt
-        static let posterOverlayHeight: CGFloat = 120
+        /// Poster overlay on hero — 80×120pt
+        static let posterOverlaySize = CGSize(width: 80, height: 120)
         /// Filter indicator dot — 8pt
         static let indicatorDot: CGFloat = 8
         /// Category color dot — 10pt
@@ -160,15 +158,16 @@ enum DS {
     // MARK: - Colors
 
     enum Colors {
-        // Semantic status
-        static let success = Color.green
-        static let warning = Color.orange
-        static let error = Color.red
-        static let info = Color.blue
+        // Semantic status (adaptive for dark mode)
+        static let success = Color(.systemGreen)
+        static let warning = Color(.systemOrange)
+        static let error = Color(.systemRed)
+        static let info = Color(.systemBlue)
 
-        // Interactive states
-        static let going = Color.green
-        static let interested = Color.orange
+        // Interactive states — intentionally mirror semantic success/warning
+        // to allow future divergence if RSVP colors need to differ
+        static let going = Color(.systemGreen)
+        static let interested = Color(.systemOrange)
         static let plan = Color.purple
 
         // Surfaces (for non-glass containers)

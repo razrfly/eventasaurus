@@ -48,6 +48,18 @@ struct NearbyEventsSection: View {
             }
         }
         .frame(width: DS.ImageSize.carouselItemWidth)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(nearbyEventAccessibilityLabel(event))
+    }
+
+    private func nearbyEventAccessibilityLabel(_ event: Event) -> String {
+        var parts = [event.title]
+        if let date = event.startsAt {
+            parts.append(date.formatted(.dateTime.month(.abbreviated).day()))
+        }
+        if let venue = event.venue {
+            parts.append(venue.name)
+        }
+        return parts.joined(separator: ", ")
     }
 }

@@ -25,7 +25,7 @@ struct EventCardView: View {
                     // Group badge or time badge (top-right)
                     if event.isGroup {
                         groupBadge
-                    } else if let badge = timeBadgeText {
+                    } else if let badge = event.timeBadgeText() {
                         timeBadge(badge)
                     }
                 }
@@ -98,18 +98,6 @@ struct EventCardView: View {
         Text(text)
             .font(DS.Typography.badge)
             .badgeStyle(backgroundColor: DS.Colors.success.opacity(DS.Opacity.badge))
-    }
-
-    // MARK: - Time Badge Text
-
-    private var timeBadgeText: String? {
-        guard let startsAt = event.startsAt, !event.isGroup else { return nil }
-        let interval = startsAt.timeIntervalSince(Date())
-        if interval < 0 { return nil }
-        if interval < 3600 { return "Starting soon" }
-        if Calendar.current.isDateInToday(startsAt) { return "Today" }
-        if Calendar.current.isDateInTomorrow(startsAt) { return "Tomorrow" }
-        return nil
     }
 
     // MARK: - Group Badge
