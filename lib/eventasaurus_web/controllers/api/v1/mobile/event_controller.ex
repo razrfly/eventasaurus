@@ -225,11 +225,18 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
           {:ok, :not_participant} ->
             json(conn, %{removed: true})
 
+          {:error, %Ecto.Changeset{} = changeset} ->
+            Logger.error("Failed to remove participant status",
+              slug: slug,
+              user_id: user.id,
+              reason: inspect(Ecto.Changeset.traverse_errors(changeset, & &1))
+            )
+
           {:error, reason} ->
             Logger.error("Failed to remove participant status",
               slug: slug,
               user_id: user.id,
-              reason: inspect(reason)
+              reason: inspect(reason, structs: false)
             )
 
             conn
