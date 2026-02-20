@@ -8,6 +8,8 @@
 	<string>$(API_BASE_URL_PROD)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Wombie</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -26,6 +28,8 @@
 	<string>$(CLERK_PUBLISHABLE_KEY)</string>
 	<key>ClerkPublishableKeyProd</key>
 	<string>$(CLERK_PUBLISHABLE_KEY_PROD)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Wombie uses your location to find events near you.</string>
 	<key>UIApplicationSceneManifest</key>

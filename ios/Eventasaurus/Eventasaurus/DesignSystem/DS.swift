@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Eventasaurus Design System
+// MARK: - Wombie Design System
 //
 // Thin token layer for consistent styling across the app.
 // Designed to work with iOS 26 Liquid Glass — no opaque backgrounds
@@ -141,6 +141,64 @@ enum DS {
         static let logoLarge: CGFloat = 56
         /// Inline attribution logos — 28pt
         static let logoSmall: CGFloat = 28
+        /// Compact event thumbnails — 60pt
+        static let thumbnail: CGFloat = 60
+        /// Carousel item width — 160pt
+        static let carouselItemWidth: CGFloat = 160
+        /// Cast card width — 90pt
+        static let castCard: CGFloat = 90
+        /// Poster overlay on hero — 80pt width
+        static let posterOverlay: CGFloat = 80
+        /// Poster overlay height — 120pt
+        static let posterOverlayHeight: CGFloat = 120
+        /// Filter indicator dot — 8pt
+        static let indicatorDot: CGFloat = 8
+        /// Category color dot — 10pt
+        static let categoryDot: CGFloat = 10
+    }
+
+    // MARK: - Colors
+
+    enum Colors {
+        // Semantic status
+        static let success = Color.green
+        static let warning = Color.orange
+        static let error = Color.red
+        static let info = Color.blue
+
+        // Interactive states
+        static let going = Color.green
+        static let interested = Color.orange
+        static let plan = Color.purple
+
+        // Surfaces (for non-glass containers)
+        static let surfacePrimary = Color(.systemBackground)
+        static let surfaceSecondary = Color(.secondarySystemBackground)
+        static let surfaceTertiary = Color(.tertiarySystemBackground)
+        static let surfaceGrouped = Color(.systemGroupedBackground)
+
+        // Fills
+        static let fillPrimary = Color(.systemFill)
+        static let fillSecondary = Color(.secondarySystemFill)
+        static let fillTertiary = Color(.tertiarySystemFill)
+
+        // Ratings
+        static let ratingFill = Color.yellow
+    }
+
+    // MARK: - Opacity
+
+    enum Opacity {
+        /// Tinted background for badges/pills
+        static let tintedBackground: Double = 0.1
+        /// Subtle tinted background
+        static let subtleBackground: Double = 0.08
+        /// Semi-visible overlay
+        static let overlay: Double = 0.3
+        /// High-visibility badge
+        static let badge: Double = 0.9
+        /// Semi-transparent dark badge backgrounds
+        static let darkOverlay: Double = 0.7
     }
 
     // MARK: - Glass

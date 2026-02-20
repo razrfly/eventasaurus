@@ -12,7 +12,7 @@ struct VenueMapCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Map(initialPosition: .region(
                 MKCoordinateRegion(
                     center: coordinate,
@@ -21,17 +21,17 @@ struct VenueMapCard: View {
             )) {
                 Marker(name, coordinate: coordinate)
             }
-            .frame(height: 160)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .frame(height: DS.ImageSize.map)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
             .allowsHitTesting(false)
 
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(name)
-                        .font(.subheadline.bold())
+                        .font(DS.Typography.bodyBold)
                     if let address, !address.isEmpty {
                         Text(address)
-                            .font(.caption)
+                            .font(DS.Typography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -42,15 +42,16 @@ struct VenueMapCard: View {
                     openDirections()
                 } label: {
                     Label("Directions", systemImage: "arrow.triangle.turn.up.right.circle.fill")
-                        .font(.subheadline.bold())
+                        .font(DS.Typography.bodyBold)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .accessibilityHint("Opens Maps with directions")
             }
         }
-        .padding(12)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(DS.Spacing.lg)
+        .background(DS.Colors.surfaceTertiary)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
     }
 
     private func openDirections() {

@@ -4,12 +4,11 @@ struct CastCarousel: View {
     let cast: [CastMember]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Cast")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            SectionHeader(title: "Cast")
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: DS.Spacing.lg) {
                     ForEach(cast) { member in
                         castCard(member)
                     }
@@ -19,35 +18,44 @@ struct CastCarousel: View {
     }
 
     private func castCard(_ member: CastMember) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: DS.Spacing.sm) {
             if let profileUrl = member.profileUrl, let url = URL(string: profileUrl) {
                 CachedImage(
                     url: url,
-                    height: 80,
+                    height: DS.ImageSize.avatarLarge,
                     cornerRadius: 0,
                     placeholderIcon: "person.fill",
                     contentMode: .fill
                 )
-                .frame(width: 80)
+                .frame(width: DS.ImageSize.avatarLarge)
                 .clipShape(Circle())
             } else {
                 Image(systemName: "person.circle.fill")
                     .resizable()
-                    .frame(width: 80, height: 80)
+                    .frame(width: DS.ImageSize.avatarLarge, height: DS.ImageSize.avatarLarge)
                     .foregroundStyle(.quaternary)
             }
 
             Text(member.name)
-                .font(.caption.bold())
+                .font(DS.Typography.captionBold)
                 .lineLimit(1)
 
             if let character = member.character, !character.isEmpty {
                 Text(character)
-                    .font(.caption2)
+                    .font(DS.Typography.micro)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
-        .frame(width: 90)
+        .frame(width: DS.ImageSize.castCard)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(castAccessibilityLabel(member))
+    }
+
+    private func castAccessibilityLabel(_ member: CastMember) -> String {
+        if let character = member.character, !character.isEmpty {
+            return "\(member.name) as \(character)"
+        }
+        return member.name
     }
 }

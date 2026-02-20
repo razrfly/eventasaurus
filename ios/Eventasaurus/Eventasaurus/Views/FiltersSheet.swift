@@ -45,7 +45,7 @@ struct FiltersSheet: View {
                         dismiss()
                         onApply()
                     }
-                    .fontWeight(.semibold)
+                    .font(DS.Typography.bodyBold)
                 }
             }
         }
@@ -119,7 +119,7 @@ struct FiltersSheet: View {
 
                 Circle()
                     .fill(item.color)
-                    .frame(width: 10, height: 10)
+                    .frame(width: DS.ImageSize.categoryDot, height: DS.ImageSize.categoryDot)
 
                 Text(item.name)
                     .foregroundStyle(.primary)

@@ -11,19 +11,19 @@ struct MyEventsView: View {
                 if isLoading {
                     ProgressView("Loading your events...")
                 } else if let error {
-                    ContentUnavailableView {
-                        Label("Something went wrong", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error.localizedDescription)
-                    } actions: {
-                        Button("Try Again") { Task { await loadEvents() } }
-                    }
+                    EmptyStateView(
+                        icon: "exclamationmark.triangle",
+                        title: "Something went wrong",
+                        message: error.localizedDescription,
+                        actionTitle: "Try Again",
+                        action: { Task { await loadEvents() } }
+                    )
                 } else if events.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Events Yet", systemImage: "calendar")
-                    } description: {
-                        Text("You haven't joined any events yet.")
-                    }
+                    EmptyStateView(
+                        icon: "calendar",
+                        title: "No Events Yet",
+                        message: "You haven't joined any events yet."
+                    )
                 } else {
                     eventList
                 }
@@ -36,7 +36,7 @@ struct MyEventsView: View {
 
     private var eventList: some View {
         ScrollView {
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: DS.Spacing.xl) {
                 ForEach(events) { event in
                     NavigationLink(value: event.slug) {
                         EventCardView(event: event)
@@ -44,7 +44,7 @@ struct MyEventsView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding()
+            .padding(DS.Spacing.xl)
         }
         .navigationDestination(for: String.self) { slug in
             EventDetailView(slug: slug)

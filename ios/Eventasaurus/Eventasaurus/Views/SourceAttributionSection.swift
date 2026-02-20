@@ -4,9 +4,8 @@ struct SourceAttributionSection: View {
     let sources: [EventSource]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Sources")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            SectionHeader(title: "Sources")
 
             ForEach(sources) { source in
                 sourceRow(source)
@@ -15,35 +14,35 @@ struct SourceAttributionSection: View {
     }
 
     private func sourceRow(_ source: EventSource) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: DS.Spacing.lg) {
             if let logoUrl = source.logoUrl, let url = URL(string: logoUrl) {
                 CachedImage(
                     url: url,
-                    height: 28,
-                    cornerRadius: 6,
+                    height: DS.ImageSize.logoSmall,
+                    cornerRadius: DS.Radius.sm,
                     placeholderIcon: "building.2",
                     contentMode: .fit
                 )
-                .frame(width: 28)
+                .frame(width: DS.ImageSize.logoSmall)
             } else {
                 Image(systemName: "building.2")
-                    .font(.body)
-                    .frame(width: 28, height: 28)
+                    .font(DS.Typography.prose)
+                    .frame(width: DS.ImageSize.logoSmall, height: DS.ImageSize.logoSmall)
                     .foregroundStyle(.secondary)
             }
 
             Text(source.name)
-                .font(.subheadline)
+                .font(DS.Typography.body)
 
             Spacer()
 
             if let urlString = source.url, let url = URL(string: urlString) {
                 Link(destination: url) {
                     Image(systemName: "arrow.up.right.square")
-                        .font(.subheadline)
+                        .font(DS.Typography.body)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, DS.Spacing.xs)
     }
 }

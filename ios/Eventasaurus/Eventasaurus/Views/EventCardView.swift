@@ -4,12 +4,12 @@ struct EventCardView: View {
     let event: Event
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             // Cover image with badges
             ZStack(alignment: .topLeading) {
                 CachedImage(
                     url: event.coverImageUrl.flatMap { URL(string: $0) },
-                    height: 160,
+                    height: DS.ImageSize.cardCover,
                     placeholderIcon: event.isGroup ? "square.stack" : "calendar"
                 )
 
@@ -29,73 +29,78 @@ struct EventCardView: View {
                         timeBadge(badge)
                     }
                 }
-                .padding(8)
+                .padding(DS.Spacing.md)
             }
 
             // Title
             Text(event.title)
-                .font(.headline)
+                .font(DS.Typography.heading)
                 .lineLimit(2)
 
-            // Subtitle for aggregated groups (e.g. "12 screenings across 3 venues")
+            // Subtitle for aggregated groups
             if let subtitle = event.subtitle {
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(DS.Typography.body)
                     .foregroundStyle(.secondary)
             } else {
                 // Date for regular events
                 if let date = event.startsAt {
                     Text(date, style: .date)
-                        .font(.subheadline)
+                        .font(DS.Typography.body)
                         .foregroundStyle(.secondary)
                 }
 
                 // Venue for regular events
                 if let venue = event.venue {
                     Label(venue.name, systemImage: "mappin")
-                        .font(.subheadline)
+                        .font(DS.Typography.body)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
         }
-        .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+        .cardStyle()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(eventAccessibilityLabel)
+    }
+
+    private var eventAccessibilityLabel: String {
+        var parts = [event.title]
+        if let date = event.startsAt {
+            parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+        }
+        if let venue = event.venue {
+            parts.append(venue.name)
+        }
+        if let subtitle = event.subtitle {
+            parts.append(subtitle)
+        }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Category Badge
 
     private func categoryBadge(_ category: Category) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: DS.Spacing.xxs) {
             if let icon = category.icon {
                 Text(icon)
-                    .font(.caption2)
+                    .font(DS.Typography.micro)
             }
             Text(category.name)
-                .font(.caption2.weight(.semibold))
+                .font(DS.Typography.badge)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(category.resolvedColor.opacity(0.9))
-        .foregroundStyle(.white)
-        .clipShape(Capsule())
+        .badgeStyle(backgroundColor: category.resolvedColor.opacity(DS.Opacity.badge))
     }
 
     // MARK: - Time Badge
 
     private func timeBadge(_ text: String) -> some View {
         Text(text)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.green.opacity(0.9))
-            .foregroundStyle(.white)
-            .clipShape(Capsule())
+            .font(DS.Typography.badge)
+            .badgeStyle(backgroundColor: DS.Colors.success.opacity(DS.Opacity.badge))
     }
 
-    // MARK: - Time Badge Text (view-level concern, not model)
+    // MARK: - Time Badge Text
 
     private var timeBadgeText: String? {
         guard let startsAt = event.startsAt, !event.isGroup else { return nil }
@@ -112,15 +117,12 @@ struct EventCardView: View {
     @ViewBuilder
     private var groupBadge: some View {
         if let (icon, label) = groupBadgeContent {
-            HStack(spacing: 4) {
+            HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
                 Text(label)
             }
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
+            .font(DS.Typography.badge)
+            .glassBadgeStyle()
         }
     }
 

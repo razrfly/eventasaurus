@@ -2,7 +2,7 @@ import SwiftUI
 import os
 
 struct CityPickerView: View {
-    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.eventasaurus", category: "CityPickerView")
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.wombie.app", category: "CityPickerView")
     private static let recentCitiesKey = "recentCities"
     private static let maxRecentCities = 5
     private static let eventCountFormatter: NumberFormatter = {
@@ -80,14 +80,14 @@ struct CityPickerView: View {
                 HStack {
                     Image(systemName: "location.slash.fill")
                         .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text("Location Unavailable")
                         Button("Enable in Settings") {
                             if let url = URL(string: UIApplication.openSettingsURLString) {
                                 UIApplication.shared.open(url)
                             }
                         }
-                        .font(.caption)
+                        .font(DS.Typography.caption)
                     }
                     Spacer()
                 }
@@ -99,18 +99,18 @@ struct CityPickerView: View {
                     HStack {
                         Image(systemName: "location.fill")
                             .foregroundStyle(.blue)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                             Text("Use My Location")
                             if let resolved = resolvedCity {
                                 Text(citySubtitle(resolved))
-                                    .font(.caption)
+                                    .font(DS.Typography.caption)
                                     .foregroundStyle(.secondary)
                             } else if !locationResolved {
-                                HStack(spacing: 4) {
+                                HStack(spacing: DS.Spacing.xs) {
                                     ProgressView()
                                         .controlSize(.mini)
                                     Text("Detecting location...")
-                                        .font(.caption)
+                                        .font(DS.Typography.caption)
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -156,7 +156,7 @@ struct CityPickerView: View {
                     Button("Clear Recent", role: .destructive) {
                         clearRecentCities()
                     }
-                    .font(.subheadline)
+                    .font(DS.Typography.body)
                 }
             } header: {
                 Text("Recently Selected")
@@ -198,15 +198,15 @@ struct CityPickerView: View {
             selectCity(city)
         } label: {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(city.name)
                     if showEventCount, let count = city.eventCount {
                         Text(formatEventCount(count))
-                            .font(.caption)
+                            .font(DS.Typography.caption)
                             .foregroundStyle(.secondary)
                     } else if let subtitle = citySubtitleOrNil(city) {
                         Text(subtitle)
-                            .font(.caption)
+                            .font(DS.Typography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }

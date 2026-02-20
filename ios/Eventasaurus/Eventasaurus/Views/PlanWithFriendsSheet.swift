@@ -16,6 +16,7 @@ struct PlanWithFriendsSheet: View {
             Group {
                 if showSuccess {
                     successView
+                        .transition(.scale.combined(with: .opacity))
                 } else {
                     formContent
                 }
@@ -33,24 +34,24 @@ struct PlanWithFriendsSheet: View {
 
     private var formContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxl) {
                 // Event header
-                HStack(spacing: 12) {
+                HStack(spacing: DS.Spacing.lg) {
                     CachedImage(
                         url: event.coverImageUrl.flatMap { URL(string: $0) },
-                        height: 60,
-                        cornerRadius: 8,
+                        height: DS.ImageSize.thumbnail,
+                        cornerRadius: DS.Radius.md,
                         placeholderIcon: "calendar"
                     )
-                    .frame(width: 60)
+                    .frame(width: DS.ImageSize.thumbnail)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(event.title)
-                            .font(.subheadline.weight(.semibold))
+                            .font(DS.Typography.bodyMedium)
                             .lineLimit(2)
                         if let date = event.startsAt {
                             Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
-                                .font(.caption)
+                                .font(DS.Typography.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -59,11 +60,11 @@ struct PlanWithFriendsSheet: View {
                 Divider()
 
                 // Email input
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     Text("Invite friends by email")
-                        .font(.subheadline.weight(.medium))
+                        .font(DS.Typography.bodyMedium)
                     Text("They'll receive an email invitation to join your plan.")
-                        .font(.caption)
+                        .font(DS.Typography.caption)
                         .foregroundStyle(.secondary)
                     EmailChipInput(emails: $emails)
                 }
@@ -71,9 +72,9 @@ struct PlanWithFriendsSheet: View {
                 Divider()
 
                 // Message
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     Text("Message (optional)")
-                        .font(.subheadline.weight(.medium))
+                        .font(DS.Typography.bodyMedium)
                     TextField("Let's go together!", text: $message, axis: .vertical)
                         .lineLimit(2...4)
                         .textFieldStyle(.roundedBorder)
@@ -81,8 +82,8 @@ struct PlanWithFriendsSheet: View {
 
                 if let errorMessage {
                     Text(errorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(DS.Colors.error)
                 }
 
                 // Submit button
@@ -98,29 +99,30 @@ struct PlanWithFriendsSheet: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.purple)
+                .tint(DS.Colors.plan)
                 .controlSize(.large)
                 .disabled(emails.isEmpty || isSubmitting)
+                .accessibilityLabel("Create plan and send \(emails.count) invites")
             }
-            .padding()
+            .padding(DS.Spacing.xl)
         }
     }
 
     private var successView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: DS.Spacing.xl) {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 56))
-                .foregroundStyle(.green)
+                .foregroundStyle(DS.Colors.success)
             Text("Invites sent!")
-                .font(.title3.weight(.semibold))
+                .font(DS.Typography.titleSecondary)
             Text("\(emails.count) friends have been invited to your plan.")
-                .font(.subheadline)
+                .font(DS.Typography.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             Spacer()
         }
-        .padding()
+        .padding(DS.Spacing.xl)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 dismiss()
@@ -142,7 +144,9 @@ struct PlanWithFriendsSheet: View {
 
             if let plan = response.plan {
                 onPlanCreated(plan)
-                showSuccess = true
+                withAnimation(DS.Animation.bouncy) {
+                    showSuccess = true
+                }
             } else {
                 errorMessage = "Could not create plan. Please try again."
             }

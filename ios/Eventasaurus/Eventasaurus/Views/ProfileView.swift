@@ -9,7 +9,7 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
+            VStack(spacing: DS.Spacing.xxxl) {
                 if isLoading {
                     ProgressView()
                 } else if let profile {
@@ -24,26 +24,26 @@ struct ProfileView: View {
                     Task { try? await clerk.auth.signOut() }
                 }
                 .buttonStyle(.bordered)
-                .padding(.bottom, 32)
+                .padding(.bottom, DS.Spacing.jumbo)
             }
-            .padding()
+            .padding(DS.Spacing.xl)
             .navigationTitle("Profile")
             .task { await loadProfile() }
         }
     }
 
     private func profileContent(_ profile: UserProfile) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: DS.Spacing.xl) {
             // Avatar
             if let avatarUrl = profile.avatarUrl, let url = URL(string: avatarUrl) {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle().fill(.quaternary)
-                }
-                .frame(width: 80, height: 80)
+                CachedImage(
+                    url: url,
+                    height: DS.ImageSize.avatarLarge,
+                    cornerRadius: 0,
+                    placeholderIcon: "person.fill",
+                    contentMode: .fill
+                )
+                .frame(width: DS.ImageSize.avatarLarge)
                 .clipShape(Circle())
             } else {
                 Image(systemName: "person.circle.fill")
@@ -52,35 +52,35 @@ struct ProfileView: View {
             }
 
             Text(profile.name)
-                .font(.title2.bold())
+                .font(DS.Typography.title)
 
             if let username = profile.username {
                 Text("@\(username)")
-                    .font(.subheadline)
+                    .font(DS.Typography.body)
                     .foregroundStyle(.secondary)
             }
 
             Text(profile.email)
-                .font(.subheadline)
+                .font(DS.Typography.body)
                 .foregroundStyle(.secondary)
 
             if let bio = profile.bio, !bio.isEmpty {
                 Text(bio)
-                    .font(.body)
+                    .font(DS.Typography.prose)
                     .multilineTextAlignment(.center)
-                    .padding(.top, 4)
+                    .padding(.top, DS.Spacing.xs)
             }
         }
     }
 
     // Fallback: show Clerk user info if API call fails
     private var clerkFallback: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DS.Spacing.lg) {
             UserButton()
 
             if let user = clerk.user {
                 Text("Welcome, \(user.firstName ?? "User")!")
-                    .font(.title2)
+                    .font(DS.Typography.title)
             }
         }
     }

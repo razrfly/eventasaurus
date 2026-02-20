@@ -5,8 +5,8 @@ import SwiftUI
 /// distinct error state on failure, and a fallback icon when no URL is provided.
 struct CachedImage: View {
     let url: URL?
-    var height: CGFloat = 160
-    var cornerRadius: CGFloat = 12
+    var height: CGFloat = DS.ImageSize.cardCover
+    var cornerRadius: CGFloat = DS.Radius.lg
     var placeholderIcon: String = "calendar"
     var contentMode: ContentMode = .fill
 
@@ -26,7 +26,7 @@ struct CachedImage: View {
                                 .fill(.quaternary)
                                 .overlay {
                                     Image(systemName: "photo.badge.exclamationmark")
-                                        .font(.title2)
+                                        .font(DS.Typography.title)
                                         .foregroundStyle(.tertiary)
                                 }
                         case .empty:
@@ -48,7 +48,7 @@ struct CachedImage: View {
                 .frame(height: height)
                 .overlay {
                     Image(systemName: placeholderIcon)
-                        .font(.title)
+                        .font(DS.Typography.title)
                         .foregroundStyle(.tertiary)
                 }
         }
