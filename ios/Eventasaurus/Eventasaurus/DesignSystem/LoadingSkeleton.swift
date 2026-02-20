@@ -19,25 +19,27 @@ struct LoadingSkeleton: View {
     }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(Color(.systemGray5))
-            .frame(width: width, height: height)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                Color(.systemGray4).opacity(0.5),
-                                .clear
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
+        GeometryReader { geometry in
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(Color(.systemGray5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    Color(.systemGray4).opacity(0.5),
+                                    .clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
-                    .offset(x: shimmer ? 200 : -200)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                        .offset(x: shimmer ? geometry.size.width * 1.2 : -geometry.size.width * 1.2)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        }
+        .frame(width: width, height: height)
             .onAppear {
                 withAnimation(
                     .linear(duration: 1.5)

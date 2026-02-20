@@ -1002,23 +1002,29 @@ defmodule EventasaurusWeb.Router do
     post "/sentry-test", SentryTestController, :test_production_error
   end
 
-  # Mobile API routes for iOS app (require authentication, return JSON)
+  # Mobile API — public discovery endpoints (no auth required)
   scope "/api/v1/mobile", EventasaurusWeb.Api.V1.Mobile do
-    pipe_through [:secure_api, :api_authenticated]
+    pipe_through [:secure_api]
 
     get "/events/nearby", EventController, :nearby
-    get "/events/attending", EventController, :attending
     get "/events/:slug", EventController, :show
     get "/categories", EventController, :categories
     get "/cities/popular", CityController, :popular
     get "/cities/resolve", CityController, :resolve
     get "/cities", CityController, :search
-    get "/profile", ProfileController, :show
     get "/movies", MovieController, :index
     get "/movies/:slug", MovieController, :show
     get "/sources/:slug", SourceController, :show
     get "/containers/:slug", ContainerController, :show
     get "/venues/:slug", VenueController, :show
+  end
+
+  # Mobile API — authenticated endpoints (require logged-in user)
+  scope "/api/v1/mobile", EventasaurusWeb.Api.V1.Mobile do
+    pipe_through [:secure_api, :api_authenticated]
+
+    get "/events/attending", EventController, :attending
+    get "/profile", ProfileController, :show
 
     # RSVP / Attendance
     put "/events/:slug/participant-status", EventController, :update_participant_status

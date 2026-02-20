@@ -64,7 +64,7 @@ extension View {
             .font(DS.Typography.badge)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.xs)
-            .glassBackground(cornerRadius: 99, interactive: false)
+            .glassBackground(cornerRadius: DS.Radius.full, interactive: false)
     }
 
     /// Chip/filter style (category chips, date chips)
