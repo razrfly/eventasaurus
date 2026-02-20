@@ -13,7 +13,7 @@ struct EventDetailView: View {
 
     // Plan with Friends state
     @State private var existingPlan: PlanInfo?
-    @State private var showPlanSheet = false
+    @State private var planSheetEvent: Event?
 
     var body: some View {
         Group {
@@ -31,11 +31,9 @@ struct EventDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadEvent() }
-        .sheet(isPresented: $showPlanSheet) {
-            if let event {
-                PlanWithFriendsSheet(event: event) { plan in
-                    existingPlan = plan
-                }
+        .sheet(item: $planSheetEvent) { event in
+            PlanWithFriendsSheet(event: event) { plan in
+                existingPlan = plan
             }
         }
     }
@@ -234,7 +232,7 @@ struct EventDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             } else {
                 Button {
-                    showPlanSheet = true
+                    planSheetEvent = event
                 } label: {
                     Label("Plan with Friends", systemImage: "person.2.badge.plus")
                         .font(.subheadline.weight(.medium))
