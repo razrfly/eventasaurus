@@ -1,5 +1,14 @@
 # Eventasaurus Development Guide
 
+## App Name
+
+The internal/codename for this project is **Eventasaurus**. The public-facing app name is **Wombie**. All user-facing strings, App Store metadata, and marketing materials should use "Wombie". Code, directories, modules, and internal references use "Eventasaurus".
+
+- **Public name:** Wombie
+- **Bundle ID:** `com.wombie.app`
+- **Domain:** `wombie.com`
+- **Internal codename:** Eventasaurus
+
 ## ⚠️ CRITICAL: GIT WORKFLOW RULES
 
 **DO NOT USE GIT COMMANDS** unless explicitly requested by the user.

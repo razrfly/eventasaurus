@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Consistent section header with optional trailing action.
+/// Consistent section header with optional trailing action or subtitle.
 struct SectionHeader: View {
     let title: String
     var action: (() -> Void)?
     var actionLabel: String?
+    var subtitle: String?
 
     var body: some View {
         HStack {
@@ -16,6 +17,10 @@ struct SectionHeader: View {
             if let action, let actionLabel {
                 Button(actionLabel, action: action)
                     .font(DS.Typography.caption)
+            } else if let subtitle {
+                Text(subtitle)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

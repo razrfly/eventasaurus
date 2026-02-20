@@ -86,32 +86,33 @@ struct DiscoverView: View {
                     if isLoading && events.isEmpty {
                         Spacer()
                         ProgressView("Finding events nearby...")
+                            .transition(.opacity)
                         Spacer()
                     } else if let error, events.isEmpty {
-                        ContentUnavailableView {
-                            Label("Something went wrong", systemImage: "exclamationmark.triangle")
-                        } description: {
-                            Text(error.localizedDescription)
-                        } actions: {
-                            Button("Try Again") { Task { await requestLocationAndLoad() } }
-                        }
+                        EmptyStateView(
+                            icon: "exclamationmark.triangle",
+                            title: "Something went wrong",
+                            message: error.localizedDescription,
+                            actionTitle: "Try Again",
+                            action: { Task { await requestLocationAndLoad() } }
+                        )
                     } else if events.isEmpty && !isLoading {
-                        ContentUnavailableView {
-                            Label("No Events Found", systemImage: "calendar.badge.exclamationmark")
-                        } description: {
-                            Text("No events match your filters. Try adjusting your search criteria.")
-                        } actions: {
-                            if hasActiveFilters {
-                                Button("Clear Filters") {
-                                    clearFilters()
-                                    Task { await loadEvents() }
-                                }
-                            }
-                        }
+                        EmptyStateView(
+                            icon: "calendar.badge.exclamationmark",
+                            title: "No Events Found",
+                            message: "No events match your filters. Try adjusting your search criteria.",
+                            actionTitle: hasActiveFilters ? "Clear Filters" : nil,
+                            action: hasActiveFilters ? {
+                                clearFilters()
+                                Task { await loadEvents() }
+                            } : nil
+                        )
                     } else {
                         eventList
+                            .transition(.opacity)
                     }
                 }
+                .animation(DS.Animation.standard, value: isLoading)
                 .frame(maxHeight: .infinity)
             }
             .navigationTitle("Discover")
@@ -120,13 +121,15 @@ struct DiscoverView: View {
                     Button {
                         showCityPicker = true
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: selectedCity != nil ? "building.2" : "location.fill")
                             Text(selectedCity?.name ?? resolvedCity?.name ?? "Nearby")
                                 .lineLimit(1)
                         }
-                        .font(.subheadline)
+                        .font(DS.Typography.body)
                     }
+                    .accessibilityLabel("City: \(selectedCity?.name ?? resolvedCity?.name ?? "Nearby")")
+                    .accessibilityHint("Opens city picker")
                 }
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -136,24 +139,27 @@ struct DiscoverView: View {
                         UserDefaults.standard.set(viewMode.rawValue, forKey: "discoverViewMode")
                     } label: {
                         Image(systemName: viewMode == .list ? "square.grid.2x2" : "list.bullet")
-                            .font(.subheadline)
+                            .font(DS.Typography.body)
                     }
+                    .accessibilityLabel(viewMode == .list ? "Switch to grid view" : "Switch to list view")
 
                     // Filters button
                     Button {
                         showFilters = true
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease")
-                            .font(.subheadline)
+                            .font(DS.Typography.body)
                             .overlay(alignment: .topTrailing) {
                                 if hasAdvancedFilters {
                                     Circle()
-                                        .fill(.red)
-                                        .frame(width: 8, height: 8)
+                                        .fill(DS.Colors.error)
+                                        .frame(width: DS.ImageSize.indicatorDot, height: DS.ImageSize.indicatorDot)
                                         .offset(x: 4, y: -4)
                                 }
                             }
                     }
+                    .accessibilityLabel(hasAdvancedFilters ? "Filters, active" : "Filters")
+                    .accessibilityHint("Opens filter options")
                 }
             }
             .searchable(text: $searchText, prompt: "Search events...")
@@ -217,14 +223,14 @@ struct DiscoverView: View {
         }
     }
 
-    // MARK: - Filter Chips (pinned above event list, full-width for horizontal scroll)
+    // MARK: - Filter Chips
 
     private var filterChips: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: DS.Spacing.md) {
             // Category chips
             if !categories.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: DS.Spacing.md) {
                         ForEach(categories) { cat in
                             if let catId = cat.numericId {
                                 CategoryChip(
@@ -236,28 +242,30 @@ struct DiscoverView: View {
                             }
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, DS.Spacing.xl)
                 }
             }
 
             // Date range chips
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: DS.Spacing.md) {
                     ForEach(Self.dateRanges, id: \.label) { range in
                         DateChip(
                             label: range.label,
                             count: countForDateRange(range.value),
                             isSelected: selectedDateRange == range.value
                         ) {
-                            selectedDateRange = range.value
+                            withAnimation(DS.Animation.fast) {
+                                selectedDateRange = range.value
+                            }
                             Task { await loadEvents() }
                         }
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, DS.Spacing.xl)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, DS.Spacing.md)
     }
 
     /// Get the count for a given date range value
@@ -265,7 +273,6 @@ struct DiscoverView: View {
         if let value {
             return dateRangeCounts[value]
         } else {
-            // "All Events" — use allEventsCount or totalCount
             return allEventsCount > 0 ? allEventsCount : (totalCount > 0 ? totalCount : nil)
         }
     }
@@ -285,31 +292,31 @@ struct DiscoverView: View {
                 if totalCount > 0 {
                     HStack {
                         Text(paginationText)
-                            .font(.caption)
+                            .font(DS.Typography.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
-                    .padding(.horizontal, 4)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, DS.Spacing.xs)
+                    .padding(.bottom, DS.Spacing.md)
                 }
 
                 switch viewMode {
                 case .list:
-                    LazyVStack(spacing: 16) {
+                    LazyVStack(spacing: DS.Spacing.xl) {
                         eventItems
                     }
                 case .grid:
-                    LazyVGrid(columns: gridColumns, spacing: 12) {
+                    LazyVGrid(columns: gridColumns, spacing: DS.Spacing.lg) {
                         eventItems
                     }
                 }
 
                 if isLoadingMore {
                     ProgressView()
-                        .padding()
+                        .padding(DS.Spacing.xl)
                 }
             }
-            .padding()
+            .padding(DS.Spacing.xl)
         }
     }
 
@@ -349,7 +356,6 @@ struct DiscoverView: View {
     }
 
     private func requestLocationAndLoad() async {
-        // If a city is selected, skip GPS
         if selectedCity != nil {
             await loadEvents()
             return
@@ -370,7 +376,6 @@ struct DiscoverView: View {
             lastLat = loc.coordinate.latitude
             lastLng = loc.coordinate.longitude
             await loadEvents()
-            // Resolve GPS to a city name for display (structured, cancellable)
             locationResolved = false
             resolvedCity = try? await APIClient.shared.resolveCity(
                 lat: loc.coordinate.latitude, lng: loc.coordinate.longitude
@@ -384,7 +389,6 @@ struct DiscoverView: View {
     }
 
     private func loadEvents() async {
-        // Need either city or GPS coords
         if selectedCity == nil {
             guard lastLat != nil, lastLng != nil else {
                 await requestLocationAndLoad()
@@ -415,7 +419,6 @@ struct DiscoverView: View {
             assert(response.meta.resolvedTotal != nil, "Backend meta missing both total_count and total")
             totalCount = response.meta.resolvedTotal ?? response.events.count
 
-            // Update date range counts from API
             if let counts = response.meta.dateRangeCounts {
                 dateRangeCounts = counts
             }
@@ -450,7 +453,6 @@ struct DiscoverView: View {
                 page: nextPage,
                 language: language
             )
-            // Discard stale response if a full reload happened while we were fetching
             guard generation == loadGeneration else { isLoadingMore = false; return }
             let existingIds = Set(events.map(\.id))
             let newEvents = response.events.filter { !existingIds.contains($0.id) }
@@ -470,7 +472,6 @@ struct DiscoverView: View {
         !selectedCategories.isEmpty || selectedDateRange != nil || !searchText.isEmpty
     }
 
-    /// Whether advanced filters (non-default radius, sort, or language) are active
     private var hasAdvancedFilters: Bool {
         radiusKm != 50 || sortBy != "starts_at" || sortOrder != "asc" || language != "en" || !selectedCategories.isEmpty
     }
@@ -488,10 +489,12 @@ struct DiscoverView: View {
     }
 
     private func toggleCategory(_ id: Int) {
-        if selectedCategories.contains(id) {
-            selectedCategories.remove(id)
-        } else {
-            selectedCategories.insert(id)
+        withAnimation(DS.Animation.fast) {
+            if selectedCategories.contains(id) {
+                selectedCategories.remove(id)
+            } else {
+                selectedCategories.insert(id)
+            }
         }
         Task { await loadEvents() }
     }
@@ -534,21 +537,20 @@ struct CategoryChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: DS.Spacing.xs) {
                 if let icon = category.icon {
                     Text(icon)
                 }
                 Text(category.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
+                    .font(DS.Typography.captionMedium)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(isSelected ? Color.accentColor : Color(.systemGray6))
-            .foregroundStyle(isSelected ? .white : .primary)
-            .clipShape(Capsule())
+            .chipStyle(isSelected: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(category.name)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -560,27 +562,26 @@ struct DateChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: DS.Spacing.xs) {
                 Text(label)
-                    .font(.caption)
-                    .fontWeight(.medium)
+                    .font(DS.Typography.captionMedium)
 
                 if let count {
                     Text("\(count)")
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 5)
+                        .font(DS.Typography.badge)
+                        .padding(.horizontal, DS.Spacing.xs + 1)
                         .padding(.vertical, 1)
-                        .background(isSelected ? Color.white.opacity(0.3) : Color(.systemGray4))
+                        .background(isSelected ? Color.primary.opacity(DS.Opacity.overlay) : DS.Colors.fillSecondary)
                         .clipShape(Capsule())
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(isSelected ? Color.accentColor : Color(.systemGray6))
-            .foregroundStyle(isSelected ? .white : .primary)
-            .clipShape(Capsule())
+            .chipStyle(isSelected: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(count != nil ? "\(label), \(count!) events" : label)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

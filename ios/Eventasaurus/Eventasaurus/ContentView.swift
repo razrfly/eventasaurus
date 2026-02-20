@@ -46,13 +46,13 @@ struct ContentView: View {
     }
 
     private var signedOutView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: DS.Spacing.xxl) {
             Image(systemName: "calendar.badge.clock")
                 .font(.system(size: 60))
                 .foregroundStyle(.tint)
 
-            Text("Eventasaurus")
-                .font(.largeTitle.bold())
+            Text("Wombie")
+                .font(DS.Typography.display)
 
             Text("Sign in to see events near you")
                 .foregroundStyle(.secondary)
@@ -63,7 +63,7 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
         }
-        .padding()
+        .padding(DS.Spacing.xl)
     }
 }
 

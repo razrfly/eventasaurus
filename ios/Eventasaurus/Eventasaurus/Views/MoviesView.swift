@@ -17,20 +17,27 @@ struct MoviesView: View {
             Group {
                 if isLoading && response == nil {
                     ProgressView("Loading movies...")
+                        .transition(.opacity)
                 } else if let error, response == nil {
-                    ContentUnavailableView {
-                        Label("Something went wrong", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error.localizedDescription)
-                    } actions: {
-                        Button("Try Again") { Task { await loadMovies() } }
-                    }
+                    EmptyStateView(
+                        icon: "exclamationmark.triangle",
+                        title: "Something went wrong",
+                        message: error.localizedDescription,
+                        actionTitle: "Try Again",
+                        action: { Task { await loadMovies() } }
+                    )
                 } else if let response {
                     movieContent(response)
+                        .transition(.opacity)
                 } else {
-                    ContentUnavailableView("No Movies", systemImage: "film", description: Text("No movies currently showing."))
+                    EmptyStateView(
+                        icon: "film",
+                        title: "No Movies",
+                        message: "No movies currently showing."
+                    )
                 }
             }
+            .animation(DS.Animation.standard, value: isLoading)
             .navigationTitle("Movies")
             .searchable(text: $searchText, prompt: "Search movies...")
             .onSubmit(of: .search) {
@@ -58,7 +65,7 @@ struct MoviesView: View {
 
     private func movieContent(_ data: MoviesIndexResponse) -> some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: DS.Spacing.xxl) {
                 // Stats header
                 statsHeader(data.stats)
 
@@ -66,7 +73,7 @@ struct MoviesView: View {
                 if data.movies.isEmpty {
                     ContentUnavailableView.search(text: searchText)
                 } else {
-                    LazyVGrid(columns: posterColumns, spacing: 12) {
+                    LazyVGrid(columns: posterColumns, spacing: DS.Spacing.lg) {
                         ForEach(data.movies) { movie in
                             NavigationLink(value: EventDestination.movieGroup(slug: movie.slug, cityId: nil)) {
                                 moviePosterCard(movie)
@@ -74,10 +81,10 @@ struct MoviesView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, DS.Spacing.xl)
                 }
             }
-            .padding(.bottom)
+            .padding(.bottom, DS.Spacing.xl)
         }
     }
 
@@ -91,18 +98,20 @@ struct MoviesView: View {
             Divider().frame(height: 30)
             statItem(value: stats.cityCount, label: "Cities")
         }
-        .padding(.vertical, 12)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal)
+        .padding(.vertical, DS.Spacing.lg)
+        .background(DS.Colors.surfaceTertiary)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .padding(.horizontal, DS.Spacing.xl)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(stats.movieCount) movies, \(stats.screeningCount) screenings, \(stats.cityCount) cities")
     }
 
     private func statItem(value: Int, label: String) -> some View {
-        VStack(spacing: 2) {
+        VStack(spacing: DS.Spacing.xxs) {
             Text("\(value)")
-                .font(.title2.bold())
+                .font(DS.Typography.title)
             Text(label)
-                .font(.caption)
+                .font(DS.Typography.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -111,30 +120,24 @@ struct MoviesView: View {
     // MARK: - Movie Poster Card
 
     private func moviePosterCard(_ movie: MovieListItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // Poster image with badges
             ZStack(alignment: .topLeading) {
                 CachedImage(
                     url: movie.posterUrl.flatMap { URL(string: $0) },
-                    height: 180,
+                    height: DS.ImageSize.cardCover,
                     placeholderIcon: "film"
                 )
                 .aspectRatio(2/3, contentMode: .fill)
 
                 // Rating badge (top-left)
                 if let rating = movie.voteAverage, rating > 0 {
-                    HStack(spacing: 2) {
+                    HStack(spacing: DS.Spacing.xxs) {
                         Image(systemName: "star.fill")
-                            .font(.system(size: 8))
                         Text(String(format: "%.1f", rating))
-                            .font(.system(size: 9, weight: .bold))
                     }
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 3)
-                    .background(.black.opacity(0.7))
-                    .foregroundStyle(.yellow)
-                    .clipShape(Capsule())
-                    .padding(6)
+                    .badgeStyle(backgroundColor: .black.opacity(DS.Opacity.darkOverlay), foregroundColor: DS.Colors.ratingFill)
+                    .padding(DS.Spacing.sm)
                 }
 
                 // City count badge (top-right)
@@ -143,42 +146,33 @@ struct MoviesView: View {
                         Spacer()
                         if movie.cityCount > 1 {
                             Text("\(movie.cityCount) cities")
-                                .font(.system(size: 8, weight: .semibold))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 3)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Capsule())
-                                .padding(6)
+                                .glassBadgeStyle()
+                                .padding(DS.Spacing.sm)
                         }
                     }
                     Spacer()
                     // Screening count badge (bottom-right)
                     HStack {
                         Spacer()
-                        HStack(spacing: 2) {
+                        HStack(spacing: DS.Spacing.xxs) {
                             Image(systemName: "ticket")
-                                .font(.system(size: 8))
                             Text("\(movie.screeningCount)")
-                                .font(.system(size: 9, weight: .bold))
                         }
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 3)
-                        .background(.black.opacity(0.7))
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                        .padding(6)
+                        .badgeStyle(backgroundColor: .black.opacity(DS.Opacity.darkOverlay))
+                        .padding(DS.Spacing.sm)
                     }
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .accessibilityHidden(true)
 
             // Title
             Text(movie.title)
-                .font(.caption.weight(.semibold))
+                .font(DS.Typography.captionBold)
                 .lineLimit(2)
 
             // Year + runtime
-            HStack(spacing: 4) {
+            HStack(spacing: DS.Spacing.xs) {
                 if let year = movie.releaseDate {
                     Text(year)
                 }
@@ -186,23 +180,24 @@ struct MoviesView: View {
                     Text("\(runtime)m")
                 }
             }
-            .font(.caption2)
+            .font(DS.Typography.micro)
             .foregroundStyle(.secondary)
 
             // Genre pills
             if let genres = movie.genres, !genres.isEmpty {
-                HStack(spacing: 4) {
+                HStack(spacing: DS.Spacing.xs) {
                     ForEach(genres.prefix(2), id: \.self) { genre in
                         Text(genre)
-                            .font(.system(size: 9))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Color(.systemGray5))
+                            .font(DS.Typography.micro)
+                            .padding(.horizontal, DS.Spacing.xs)
+                            .padding(.vertical, DS.Spacing.xxs)
+                            .background(DS.Colors.fillSecondary)
                             .clipShape(Capsule())
                     }
                 }
             }
         }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Data Loading

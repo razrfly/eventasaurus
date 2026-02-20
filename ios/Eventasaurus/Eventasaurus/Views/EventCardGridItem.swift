@@ -4,12 +4,12 @@ struct EventCardGridItem: View {
     let event: Event
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // Cover image with badges — taller aspect for grid
             ZStack(alignment: .topLeading) {
                 CachedImage(
                     url: event.coverImageUrl.flatMap { URL(string: $0) },
-                    height: 200,
+                    height: DS.ImageSize.gridCover,
                     placeholderIcon: event.isGroup ? "square.stack" : "calendar"
                 )
 
@@ -27,55 +27,60 @@ struct EventCardGridItem: View {
                         gridGroupBadge
                     } else if let badge = timeBadgeText {
                         Text(badge)
-                            .font(.system(size: 9, weight: .semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(.green.opacity(0.9))
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
+                            .font(DS.Typography.badge)
+                            .badgeStyle(backgroundColor: DS.Colors.success.opacity(DS.Opacity.badge))
                     }
                 }
-                .padding(6)
+                .padding(DS.Spacing.sm)
             }
 
             // Title (2 lines max)
             Text(event.title)
-                .font(.subheadline.weight(.semibold))
+                .font(DS.Typography.bodyMedium)
                 .lineLimit(2)
 
             // Date
             if let date = event.startsAt, !event.isGroup {
                 Text(date, style: .date)
-                    .font(.caption)
+                    .font(DS.Typography.caption)
                     .foregroundStyle(.secondary)
             } else if let subtitle = event.subtitle {
                 Text(subtitle)
-                    .font(.caption)
+                    .font(DS.Typography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
         .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .dsShadow(DS.Shadow.cardLight)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(eventAccessibilityLabel)
+    }
+
+    private var eventAccessibilityLabel: String {
+        var parts = [event.title]
+        if let date = event.startsAt {
+            parts.append(date.formatted(.dateTime.month(.wide).day()))
+        }
+        if let subtitle = event.subtitle {
+            parts.append(subtitle)
+        }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Category Badge (compact)
 
     private func gridCategoryBadge(_ category: Category) -> some View {
-        HStack(spacing: 2) {
+        HStack(spacing: DS.Spacing.xxs) {
             if let icon = category.icon {
                 Text(icon)
-                    .font(.system(size: 9))
+                    .font(DS.Typography.micro)
             }
             Text(category.name)
-                .font(.system(size: 9, weight: .semibold))
+                .font(DS.Typography.badge)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(category.resolvedColor.opacity(0.9))
-        .foregroundStyle(.white)
-        .clipShape(Capsule())
+        .badgeStyle(backgroundColor: category.resolvedColor.opacity(DS.Opacity.badge))
     }
 
     // MARK: - Group Badge (compact)
@@ -83,15 +88,12 @@ struct EventCardGridItem: View {
     @ViewBuilder
     private var gridGroupBadge: some View {
         if let (icon, label) = groupBadgeContent {
-            HStack(spacing: 2) {
+            HStack(spacing: DS.Spacing.xxs) {
                 Image(systemName: icon)
                 Text(label)
             }
-            .font(.system(size: 9, weight: .semibold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
+            .font(DS.Typography.badge)
+            .glassBadgeStyle()
         }
     }
 

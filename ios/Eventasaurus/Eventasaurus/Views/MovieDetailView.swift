@@ -15,11 +15,11 @@ struct MovieDetailView: View {
             } else if let response {
                 movieContent(response)
             } else if let error {
-                ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error.localizedDescription)
-                }
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Error",
+                    message: error.localizedDescription
+                )
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -28,20 +28,20 @@ struct MovieDetailView: View {
 
     private func movieContent(_ data: MovieDetailResponse) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 // Hero: backdrop with poster overlay
                 heroImage(data.movie)
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                     // Title + year + rating
                     HStack(alignment: .firstTextBaseline) {
                         Text(data.movie.title)
-                            .font(.title2.bold())
+                            .font(DS.Typography.title)
 
                         if let releaseDate = data.movie.releaseDate,
                            let year = releaseDate.split(separator: "-").first {
                             Text("(\(year))")
-                                .font(.title3)
+                                .font(DS.Typography.titleSecondary)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -55,21 +55,21 @@ struct MovieDetailView: View {
                     // Tagline
                     if let tagline = data.movie.tagline {
                         Text(tagline)
-                            .font(.subheadline.italic())
+                            .font(DS.Typography.bodyItalic)
                             .foregroundStyle(.secondary)
                     }
 
                     // Runtime + genres
-                    HStack(spacing: 12) {
+                    HStack(spacing: DS.Spacing.lg) {
                         if let runtime = data.movie.runtime {
                             Label("\(runtime) min", systemImage: "clock")
-                                .font(.subheadline)
+                                .font(DS.Typography.body)
                                 .foregroundStyle(.secondary)
                         }
 
                         if !data.movie.genres.isEmpty {
                             Text(data.movie.genres.joined(separator: ", "))
-                                .font(.subheadline)
+                                .font(DS.Typography.body)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -77,7 +77,7 @@ struct MovieDetailView: View {
                     // Overview
                     if let overview = data.movie.overview, !overview.isEmpty {
                         Text(overview)
-                            .font(.body)
+                            .font(DS.Typography.prose)
                     }
 
                     // Cast
@@ -90,20 +90,17 @@ struct MovieDetailView: View {
 
                     Divider()
 
-                    // Screenings header with count
+                    // Screenings
                     if data.venues.isEmpty {
                         Text("No screenings found")
-                            .font(.subheadline)
+                            .font(DS.Typography.body)
                             .foregroundStyle(.secondary)
                     } else {
-                        HStack {
-                            Text("Screenings")
-                                .font(.headline)
-                            Spacer()
-                            Text("\(data.meta.totalShowtimes) showtime\(data.meta.totalShowtimes == 1 ? "" : "s") at \(data.meta.totalVenues) venue\(data.meta.totalVenues == 1 ? "" : "s")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        // Screenings header
+                        SectionHeader(
+                            title: "Screenings",
+                            subtitle: "\(data.meta.totalShowtimes) at \(data.meta.totalVenues) venue\(data.meta.totalVenues == 1 ? "" : "s")"
+                        )
 
                         // Day picker
                         dayPicker(venues: data.venues)
@@ -112,29 +109,30 @@ struct MovieDetailView: View {
                         ForEach(filteredVenues) { venueGroup in
                             venueCard(venueGroup)
                         }
+                        .animation(DS.Animation.standard, value: selectedDate)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, DS.Spacing.xl)
             }
         }
     }
 
     private func venueCard(_ venueGroup: VenueScreenings) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Venue header — tapping navigates to the event detail
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            // Venue header
             NavigationLink(value: EventDestination.event(slug: venueGroup.eventSlug)) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     HStack {
                         Text(venueGroup.venue.name)
-                            .font(.subheadline.bold())
+                            .font(DS.Typography.bodyBold)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.caption)
+                            .font(DS.Typography.caption)
                             .foregroundStyle(.tertiary)
                     }
                     if let address = venueGroup.venue.address {
                         Text(address)
-                            .font(.caption)
+                            .font(DS.Typography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -153,7 +151,7 @@ struct MovieDetailView: View {
             if !past.isEmpty {
                 if upcoming.isEmpty {
                     Text("Recently shown")
-                        .font(.caption.bold())
+                        .font(DS.Typography.captionBold)
                         .foregroundStyle(.secondary)
                     showtimesByDate(Array(past.suffix(10)))
                 } else {
@@ -161,16 +159,16 @@ struct MovieDetailView: View {
                         showtimesByDate(Array(past.suffix(10)))
                     } label: {
                         Text("\(past.count) past showtime\(past.count == 1 ? "" : "s")")
-                            .font(.caption)
+                            .font(DS.Typography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.vertical, DS.Spacing.md)
+        .padding(.horizontal, DS.Spacing.lg)
+        .glassBackground(cornerRadius: DS.Radius.lg)
+        .accessibilityElement(children: .combine)
     }
 
     private func showtimesByDate(_ showtimes: [Showtime]) -> some View {
@@ -178,12 +176,12 @@ struct MovieDetailView: View {
         let sortedDates = byDate.keys.sorted()
         return ForEach(sortedDates, id: \.self) { date in
             if let times = byDate[date] {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     Text(formatDateHeader(date))
-                        .font(.caption.bold())
+                        .font(DS.Typography.captionBold)
                         .foregroundStyle(.secondary)
 
-                    FlowLayout(spacing: 6) {
+                    FlowLayout(spacing: DS.Spacing.sm) {
                         ForEach(Array(times.enumerated()), id: \.offset) { _, showtime in
                             showtimePill(showtime)
                         }
@@ -194,33 +192,34 @@ struct MovieDetailView: View {
     }
 
     private func showtimePill(_ showtime: Showtime) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DS.Spacing.xs) {
             Text(showtime.datetime, format: .dateTime.hour().minute())
-                .font(.subheadline.bold())
+                .font(DS.Typography.bodyBold)
             if let format = showtime.format {
                 Text(format.uppercased())
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 4)
+                    .font(DS.Typography.badge)
+                    .padding(.horizontal, DS.Spacing.xs)
                     .padding(.vertical, 1)
                     .background(formatColor(format).opacity(0.15))
                     .foregroundStyle(formatColor(format))
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xs))
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(showtime.isUpcoming ? Color.accentColor.opacity(0.1) : Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(showtime.isUpcoming ? Color.accentColor.opacity(DS.Opacity.tintedBackground) : DS.Colors.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(showtime.isUpcoming ? Color.accentColor.opacity(0.3) : Color(.systemGray4), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .stroke(showtime.isUpcoming ? Color.accentColor.opacity(DS.Opacity.overlay) : DS.Colors.fillSecondary, lineWidth: 0.5)
         )
+        .accessibilityElement(children: .combine)
     }
 
     private func formatColor(_ format: String) -> Color {
         switch format.uppercased() {
-        case "IMAX": return .blue
-        case "4DX", "3D": return .purple
+        case "IMAX": return DS.Colors.info
+        case "4DX", "3D": return DS.Colors.plan
         default: return .gray
         }
     }
@@ -250,28 +249,29 @@ struct MovieDetailView: View {
             if let backdropUrl = movie.backdropUrl {
                 CachedImage(
                     url: URL(string: backdropUrl),
-                    height: 220,
+                    height: DS.ImageSize.hero,
                     cornerRadius: 0,
                     placeholderIcon: "film"
                 )
 
-                // Poster overlay (only when both exist)
+                // Poster overlay
                 if let posterUrl = movie.posterUrl {
                     CachedImage(
                         url: URL(string: posterUrl),
-                        height: 120,
-                        cornerRadius: 8,
+                        height: DS.ImageSize.posterOverlayHeight,
+                        cornerRadius: DS.Radius.md,
                         placeholderIcon: "film"
                     )
-                    .frame(width: 80)
-                    .shadow(radius: 4)
-                    .padding(.leading, 16)
-                    .padding(.bottom, -20)
+                    .frame(width: DS.ImageSize.posterOverlay)
+                    .padding(DS.Spacing.xs)
+                    .glassBackground(cornerRadius: DS.Radius.lg)
+                    .padding(.leading, DS.Spacing.xl)
+                    .padding(.bottom, -DS.Spacing.xxl)
                 }
             } else if let posterUrl = movie.posterUrl {
                 CachedImage(
                     url: URL(string: posterUrl),
-                    height: 220,
+                    height: DS.ImageSize.hero,
                     cornerRadius: 0,
                     placeholderIcon: "film"
                 )
@@ -288,7 +288,7 @@ struct MovieDetailView: View {
         let cinegraphUrl = movie.tmdbId.flatMap { URL(string: "https://cinegraph.org/movies/tmdb/\($0)") }
 
         if tmdbUrl != nil || cinegraphUrl != nil {
-            HStack(spacing: 12) {
+            HStack(spacing: DS.Spacing.lg) {
                 if let url = tmdbUrl {
                     ExternalLinkButton(title: "TMDB", url: url, icon: "film")
                 }
@@ -306,14 +306,16 @@ struct MovieDetailView: View {
         let dateCounts = showtimeCountsByDate(from: venues)
 
         return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: DS.Spacing.md) {
                 // "All" pill
                 dayPill(
                     label: "All",
                     count: venues.reduce(0) { $0 + $1.showtimes.count },
                     isSelected: selectedDate == nil
                 ) {
-                    selectedDate = nil
+                    withAnimation(DS.Animation.fast) {
+                        selectedDate = nil
+                    }
                 }
 
                 ForEach(allDates, id: \.self) { date in
@@ -322,30 +324,31 @@ struct MovieDetailView: View {
                         count: dateCounts[date] ?? 0,
                         isSelected: selectedDate == date
                     ) {
-                        selectedDate = date
+                        withAnimation(DS.Animation.fast) {
+                            selectedDate = date
+                        }
                     }
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, DS.Spacing.xs)
         }
     }
 
     private func dayPill(label: String, count: Int, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 2) {
+            VStack(spacing: DS.Spacing.xxs) {
                 Text(label)
-                    .font(.caption.bold())
+                    .font(DS.Typography.captionBold)
                 Text("\(count)")
-                    .font(.caption2)
+                    .font(DS.Typography.micro)
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(isSelected ? Color.accentColor : Color(.systemGray5))
-            .foregroundStyle(isSelected ? .white : .primary)
-            .clipShape(Capsule())
+            .chipStyle(isSelected: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(label), \(count) showtimes")
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func allUniqueDates(from venues: [VenueScreenings]) -> [String] {

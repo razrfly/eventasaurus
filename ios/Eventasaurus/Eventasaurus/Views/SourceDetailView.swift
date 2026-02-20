@@ -15,11 +15,11 @@ struct SourceDetailView: View {
             } else if let response {
                 sourceContent(response)
             } else if let error {
-                ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error.localizedDescription)
-                }
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Error",
+                    message: error.localizedDescription
+                )
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -31,14 +31,14 @@ struct SourceDetailView: View {
 
     private func sourceContent(_ data: SourceDetailResponse) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 // Themed hero card
                 sourceHero(data.source)
 
                 // Website link
                 if let websiteUrl = data.source.websiteUrl, let url = URL(string: websiteUrl) {
                     ExternalLinkButton(title: "Visit Website", url: url, icon: "globe")
-                        .padding(.horizontal)
+                        .padding(.horizontal, DS.Spacing.xl)
                 }
 
                 // City filter pills
@@ -47,17 +47,17 @@ struct SourceDetailView: View {
                 }
 
                 Divider()
-                    .padding(.horizontal)
+                    .padding(.horizontal, DS.Spacing.xl)
 
                 // Events list
                 if data.events.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Events", systemImage: "calendar.badge.exclamationmark")
-                    } description: {
-                        Text("No upcoming events from this source.")
-                    }
+                    EmptyStateView(
+                        icon: "calendar.badge.exclamationmark",
+                        title: "No Events",
+                        message: "No upcoming events from this source."
+                    )
                 } else {
-                    LazyVStack(spacing: 16) {
+                    LazyVStack(spacing: DS.Spacing.xl) {
                         ForEach(data.events) { event in
                             NavigationLink(value: EventDestination.event(slug: event.slug)) {
                                 EventCardView(event: event)
@@ -65,7 +65,7 @@ struct SourceDetailView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, DS.Spacing.xl)
                 }
             }
         }
@@ -73,18 +73,13 @@ struct SourceDetailView: View {
 
     private func cityPicker(_ cities: [SourceCity]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: DS.Spacing.md) {
                 // "All Cities" pill
                 Button {
                     selectedCityId = nil
                 } label: {
                     Text("All Cities")
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(selectedCityId == nil ? Color.accentColor : Color(.systemGray5))
-                        .foregroundStyle(selectedCityId == nil ? .white : .primary)
-                        .clipShape(Capsule())
+                        .chipStyle(isSelected: selectedCityId == nil)
                 }
 
                 ForEach(cities) { city in
@@ -92,87 +87,67 @@ struct SourceDetailView: View {
                         selectedCityId = city.id
                     } label: {
                         Text(city.name)
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(selectedCityId == city.id ? Color.accentColor : Color(.systemGray5))
-                            .foregroundStyle(selectedCityId == city.id ? .white : .primary)
-                            .clipShape(Capsule())
+                            .chipStyle(isSelected: selectedCityId == city.id)
                     }
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, DS.Spacing.xl)
         }
     }
 
     private func sourceHero(_ source: SourceInfo) -> some View {
-        let theme = domainTheme(for: source.domains?.first)
+        let theme = dsTheme(for: source.domains?.first)
 
         return ZStack(alignment: .bottomLeading) {
             // Gradient background
-            LinearGradient(
-                colors: theme.colors,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 180)
+            theme.gradient
+                .frame(height: DS.ImageSize.sourceBanner)
 
             // Content overlay
-            HStack(spacing: 12) {
+            HStack(spacing: DS.Spacing.lg) {
                 if let logoUrl = source.logoUrl {
                     CachedImage(
                         url: URL(string: logoUrl),
-                        height: 56,
-                        cornerRadius: 12,
+                        height: DS.ImageSize.logoLarge,
+                        cornerRadius: DS.Radius.lg,
                         placeholderIcon: "building.2",
                         contentMode: .fit
                     )
-                    .frame(width: 56)
-                    .shadow(radius: 4)
+                    .frame(width: DS.ImageSize.logoLarge)
+                    .dsShadow(DS.Shadow.subtle)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     Text(source.name)
-                        .font(.title2.bold())
-                        .foregroundStyle(.white)
+                        .font(DS.Typography.title)
+                        .foregroundStyle(.primary)
 
                     if let count = source.eventCount {
                         Text("\(count) event\(count == 1 ? "" : "s")")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.85))
+                            .font(DS.Typography.body)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 Spacer()
             }
-            .padding()
+            .padding(DS.Spacing.lg)
+            .glassBackground(cornerRadius: DS.Radius.lg)
+            .padding(DS.Spacing.md)
         }
     }
 
-    private struct DomainTheme {
-        let colors: [Color]
-    }
-
-    private func domainTheme(for domain: String?) -> DomainTheme {
+    private func dsTheme(for domain: String?) -> DS.DomainTheme {
         switch domain {
-        case "music", "concert":
-            return DomainTheme(colors: [.blue, .blue.opacity(0.7)])
-        case "movies", "cinema", "screening":
-            return DomainTheme(colors: [.indigo, .indigo.opacity(0.7)])
-        case "food":
-            return DomainTheme(colors: [.orange, .orange.opacity(0.7)])
-        case "comedy":
-            return DomainTheme(colors: [.orange, .orange.opacity(0.8)])
-        case "theater":
-            return DomainTheme(colors: [.red, .red.opacity(0.7)])
-        case "sports", "tournament":
-            return DomainTheme(colors: [.green, .green.opacity(0.7)])
-        case "trivia":
-            return DomainTheme(colors: [.purple, .purple.opacity(0.7)])
-        case "festival":
-            return DomainTheme(colors: [.pink, .pink.opacity(0.7)])
-        default:
-            return DomainTheme(colors: [Color(.systemGray), Color(.systemGray2)])
+        case "music", "concert": .music
+        case "movies", "cinema", "screening": .cinema
+        case "food": .food
+        case "comedy": .comedy
+        case "theater": .theater
+        case "sports", "tournament": .sports
+        case "trivia": .trivia
+        case "festival": .festival
+        default: .other
         }
     }
 

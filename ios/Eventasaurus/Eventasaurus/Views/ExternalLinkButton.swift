@@ -8,7 +8,7 @@ struct ExternalLinkButton: View {
     var body: some View {
         Link(destination: url) {
             Label(title, systemImage: icon)
-                .font(.subheadline.bold())
+                .font(DS.Typography.bodyBold)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)

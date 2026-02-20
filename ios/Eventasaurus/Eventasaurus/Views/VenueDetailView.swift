@@ -13,11 +13,11 @@ struct VenueDetailView: View {
             } else if let response {
                 venueContent(response)
             } else if let error {
-                ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error.localizedDescription)
-                }
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Error",
+                    message: error.localizedDescription
+                )
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -26,27 +26,27 @@ struct VenueDetailView: View {
 
     private func venueContent(_ data: VenueDetailResponse) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 // Cover image
                 if let urlString = data.venue.coverImageUrl, let url = URL(string: urlString) {
                     CachedImage(
                         url: url,
-                        height: 220,
+                        height: DS.ImageSize.hero,
                         cornerRadius: 0,
                         placeholderIcon: "building.2"
                     )
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                     // Venue name
                     Text(data.venue.name)
-                        .font(.title2.bold())
+                        .font(DS.Typography.title)
 
                     // Address & location
                     if let address = data.venue.address, !address.isEmpty {
                         Label {
                             Text(address)
-                                .font(.subheadline)
+                                .font(DS.Typography.body)
                         } icon: {
                             Image(systemName: "mappin.and.ellipse")
                         }
@@ -57,11 +57,11 @@ struct VenueDetailView: View {
                         Label {
                             if let country = data.venue.country {
                                 Text("\(cityName), \(country)")
-                                    .font(.subheadline)
+                                    .font(DS.Typography.body)
                                     .foregroundStyle(.secondary)
                             } else {
                                 Text(cityName)
-                                    .font(.subheadline)
+                                    .font(DS.Typography.body)
                                     .foregroundStyle(.secondary)
                             }
                         } icon: {
@@ -83,24 +83,18 @@ struct VenueDetailView: View {
 
                     // Upcoming events
                     if data.events.isEmpty {
-                        ContentUnavailableView {
-                            Label("No Upcoming Events", systemImage: "calendar.badge.exclamationmark")
-                        } description: {
-                            Text("No upcoming events at this venue.")
-                        }
+                        EmptyStateView(
+                            icon: "calendar.badge.exclamationmark",
+                            title: "No Upcoming Events",
+                            message: "No upcoming events at this venue."
+                        )
                     } else {
-                        HStack {
-                            Text("Upcoming Events")
-                                .font(.headline)
-                            Spacer()
-                            if let count = data.venue.eventCount {
-                                Text("\(count) event\(count == 1 ? "" : "s")")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        SectionHeader(
+                            title: "Upcoming Events",
+                            subtitle: data.venue.eventCount.map { "\($0) event\($0 == 1 ? "" : "s")" }
+                        )
 
-                        LazyVStack(alignment: .leading, spacing: 16) {
+                        LazyVStack(alignment: .leading, spacing: DS.Spacing.xl) {
                             ForEach(data.events) { event in
                                 NavigationLink(value: EventDestination.event(slug: event.slug)) {
                                     EventCardView(event: event)
@@ -110,7 +104,7 @@ struct VenueDetailView: View {
                         }
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, DS.Spacing.xl)
             }
         }
     }

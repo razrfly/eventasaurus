@@ -6,10 +6,10 @@ struct EmailChipInput: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             // Chips for added emails
             if !emails.isEmpty {
-                FlowLayout(spacing: 6) {
+                FlowLayout(spacing: DS.Spacing.sm) {
                     ForEach(emails, id: \.self) { email in
                         emailChip(email)
                     }
@@ -36,22 +36,22 @@ struct EmailChipInput: View {
     }
 
     private func emailChip(_ email: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DS.Spacing.xs) {
             Text(email)
-                .font(.caption)
+                .font(DS.Typography.caption)
                 .lineLimit(1)
 
             Button {
                 emails.removeAll { $0 == email }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.caption2)
+                    .font(DS.Typography.micro)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Color.purple.opacity(0.1))
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
+        .background(DS.Colors.plan.opacity(DS.Opacity.tintedBackground))
         .clipShape(Capsule())
     }
 

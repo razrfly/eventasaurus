@@ -13,11 +13,11 @@ struct ContainerDetailView: View {
             } else if let response {
                 containerContent(response)
             } else if let error {
-                ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error.localizedDescription)
-                }
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Error",
+                    message: error.localizedDescription
+                )
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -26,39 +26,39 @@ struct ContainerDetailView: View {
 
     private func containerContent(_ data: ContainerDetailResponse) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 // Cover image
                 if data.container.coverImageUrl != nil {
                     CachedImage(
                         url: data.container.coverImageUrl.flatMap { URL(string: $0) },
-                        height: 220,
+                        height: DS.ImageSize.hero,
                         cornerRadius: 0,
                         placeholderIcon: "sparkles"
                     )
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                     // Title
                     Text(data.container.title)
-                        .font(.title2.bold())
+                        .font(DS.Typography.title)
 
                     // Type badge + date range
-                    HStack(spacing: 8) {
+                    HStack(spacing: DS.Spacing.md) {
                         Text(data.container.containerType.capitalized)
-                            .font(.caption.bold())
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(.tint.opacity(0.1))
+                            .font(DS.Typography.captionBold)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, DS.Spacing.xs)
+                            .background(.tint.opacity(DS.Opacity.tintedBackground))
                             .clipShape(Capsule())
 
                         if let start = data.container.startDate {
                             if let end = data.container.endDate {
                                 Text("\(start, format: .dateTime.month(.abbreviated).day()) – \(end, format: .dateTime.month(.abbreviated).day())")
-                                    .font(.subheadline)
+                                    .font(DS.Typography.body)
                                     .foregroundStyle(.secondary)
                             } else {
                                 Text(start, format: .dateTime.month(.abbreviated).day())
-                                    .font(.subheadline)
+                                    .font(DS.Typography.body)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -67,7 +67,7 @@ struct ContainerDetailView: View {
                     // Description
                     if let description = data.container.description, !description.isEmpty {
                         Text(description)
-                            .font(.body)
+                            .font(DS.Typography.prose)
                     }
 
                     // Source link
@@ -79,23 +79,19 @@ struct ContainerDetailView: View {
 
                     // Events
                     if data.events.isEmpty {
-                        Text("No events in this \(data.container.containerType)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        EmptyStateView(
+                            icon: "calendar.badge.exclamationmark",
+                            title: "No Events",
+                            message: "No events in this \(data.container.containerType)."
+                        )
                     } else {
-                        HStack {
-                            Text("Events")
-                                .font(.headline)
-                            Spacer()
-                            if let count = data.container.eventCount {
-                                Text("\(count) event\(count == 1 ? "" : "s")")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        SectionHeader(
+                            title: "Events",
+                            subtitle: data.container.eventCount.map { "\($0) event\($0 == 1 ? "" : "s")" }
+                        )
 
                         let grouped = groupEventsByDate(data.events)
-                        LazyVStack(alignment: .leading, spacing: 16) {
+                        LazyVStack(alignment: .leading, spacing: DS.Spacing.xl) {
                             ForEach(grouped, id: \.0) { dateKey, events in
                                 Section {
                                     ForEach(events) { event in
@@ -106,14 +102,14 @@ struct ContainerDetailView: View {
                                     }
                                 } header: {
                                     Text(formatDateGroupHeader(dateKey))
-                                        .font(.headline)
+                                        .font(DS.Typography.heading)
                                         .foregroundStyle(.primary)
                                 }
                             }
                         }
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, DS.Spacing.xl)
             }
         }
     }
