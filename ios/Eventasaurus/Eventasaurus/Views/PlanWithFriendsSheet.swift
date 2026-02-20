@@ -123,10 +123,9 @@ struct PlanWithFriendsSheet: View {
             Spacer()
         }
         .padding(DS.Spacing.xl)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                dismiss()
-            }
+        .task {
+            try? await Task.sleep(for: .milliseconds(1500))
+            dismiss()
         }
     }
 

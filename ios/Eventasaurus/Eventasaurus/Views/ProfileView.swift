@@ -6,6 +6,8 @@ struct ProfileView: View {
     @Environment(Clerk.self) private var clerk
     @State private var profile: UserProfile?
     @State private var isLoading = true
+    @State private var showSignOutError = false
+    @State private var signOutErrorMessage = ""
 
     var body: some View {
         NavigationStack {
@@ -21,7 +23,14 @@ struct ProfileView: View {
                 Spacer()
 
                 Button("Sign Out", role: .destructive) {
-                    Task { try? await clerk.auth.signOut() }
+                    Task {
+                        do {
+                            try await clerk.auth.signOut()
+                        } catch {
+                            signOutErrorMessage = error.localizedDescription
+                            showSignOutError = true
+                        }
+                    }
                 }
                 .buttonStyle(.bordered)
                 .padding(.bottom, DS.Spacing.jumbo)
@@ -29,6 +38,11 @@ struct ProfileView: View {
             .padding(DS.Spacing.xl)
             .navigationTitle("Profile")
             .task { await loadProfile() }
+            .alert("Sign Out Failed", isPresented: $showSignOutError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(signOutErrorMessage)
+            }
         }
     }
 
@@ -47,7 +61,7 @@ struct ProfileView: View {
                 .clipShape(Circle())
             } else {
                 Image(systemName: "person.circle.fill")
-                    .font(.system(size: 60))
+                    .font(.system(size: DS.ImageSize.avatarLarge))
                     .foregroundStyle(.secondary)
             }
 

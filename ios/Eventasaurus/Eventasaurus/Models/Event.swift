@@ -54,6 +54,18 @@ struct Event: Codable, Identifiable {
         guard let startsAt else { return false }
         return startsAt > Date()
     }
+
+    /// Time-based badge text for events starting soon/today/tomorrow.
+    /// - Parameter compact: When true, uses shorter text (e.g. "Soon" vs "Starting soon")
+    func timeBadgeText(compact: Bool = false) -> String? {
+        guard let startsAt, !isGroup else { return nil }
+        let interval = startsAt.timeIntervalSince(Date())
+        if interval < 0 { return nil }
+        if interval < 3600 { return compact ? "Soon" : "Starting soon" }
+        if Calendar.current.isDateInToday(startsAt) { return "Today" }
+        if Calendar.current.isDateInTomorrow(startsAt) { return "Tomorrow" }
+        return nil
+    }
 }
 
 // MARK: - Custom Decoder (handles categories as [Category] or [String])

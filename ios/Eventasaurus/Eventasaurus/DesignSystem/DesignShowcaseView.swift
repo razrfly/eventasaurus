@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 /// Preview-only showcase demonstrating all DS tokens and components.
@@ -58,17 +59,23 @@ struct DesignShowcaseView: View {
     }
 
     private func spacingRow(_ name: String, _ value: CGFloat) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            Text(name)
-                .font(DS.Typography.caption)
-                .frame(width: 50, alignment: .trailing)
-            RoundedRectangle(cornerRadius: DS.Radius.xs)
-                .fill(Color.accentColor)
-                .frame(width: value * 4, height: 16)
-            Text("\(Int(value))pt")
-                .font(DS.Typography.micro)
-                .foregroundStyle(.secondary)
+        GeometryReader { geo in
+            let labelWidth: CGFloat = 50
+            let ptLabelWidth: CGFloat = 40
+            let maxBarWidth = max(0, geo.size.width - labelWidth - ptLabelWidth - DS.Spacing.md * 2)
+            HStack(spacing: DS.Spacing.md) {
+                Text(name)
+                    .font(DS.Typography.caption)
+                    .frame(width: labelWidth, alignment: .trailing)
+                RoundedRectangle(cornerRadius: DS.Radius.xs)
+                    .fill(Color.accentColor)
+                    .frame(width: min(value * 4, maxBarWidth), height: 16)
+                Text("\(Int(value))pt")
+                    .font(DS.Typography.micro)
+                    .foregroundStyle(.secondary)
+            }
         }
+        .frame(height: 20)
     }
 
     // MARK: - Corner Radius
@@ -252,6 +259,8 @@ struct DesignShowcaseView: View {
                 }
                 .padding(DS.Spacing.xl)
             }
+            .frame(height: 320)
+            .clipped()
         }
     }
 }
@@ -261,3 +270,4 @@ struct DesignShowcaseView: View {
         DesignShowcaseView()
     }
 }
+#endif

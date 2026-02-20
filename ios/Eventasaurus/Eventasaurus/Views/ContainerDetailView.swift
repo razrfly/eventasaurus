@@ -28,9 +28,9 @@ struct ContainerDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 // Cover image
-                if data.container.coverImageUrl != nil {
+                if let urlString = data.container.coverImageUrl, let url = URL(string: urlString) {
                     CachedImage(
-                        url: data.container.coverImageUrl.flatMap { URL(string: $0) },
+                        url: url,
                         height: DS.ImageSize.hero,
                         cornerRadius: 0,
                         placeholderIcon: "sparkles"

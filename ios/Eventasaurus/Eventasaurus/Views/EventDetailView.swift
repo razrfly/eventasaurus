@@ -271,6 +271,8 @@ struct EventDetailView: View {
             if let planResponse = try? await APIClient.shared.getExistingPlan(eventSlug: slug) {
                 existingPlan = planResponse.plan
             }
+        } catch is CancellationError {
+            return
         } catch {
             self.error = error
         }
@@ -303,8 +305,10 @@ struct EventDetailView: View {
                 }
             }
         } catch {
-            attendanceStatus = previousStatus
-            attendeeCount = previousCount
+            withAnimation(DS.Animation.spring) {
+                attendanceStatus = previousStatus
+                attendeeCount = previousCount
+            }
         }
         isUpdatingStatus = false
     }

@@ -25,7 +25,7 @@ struct EventCardGridItem: View {
                     // Group badge or time badge (top-right)
                     if event.isGroup {
                         gridGroupBadge
-                    } else if let badge = timeBadgeText {
+                    } else if let badge = event.timeBadgeText(compact: true) {
                         Text(badge)
                             .font(DS.Typography.badge)
                             .badgeStyle(backgroundColor: DS.Colors.success.opacity(DS.Opacity.badge))
@@ -113,13 +113,4 @@ struct EventCardGridItem: View {
         }
     }
 
-    private var timeBadgeText: String? {
-        guard let startsAt = event.startsAt, !event.isGroup else { return nil }
-        let interval = startsAt.timeIntervalSince(Date())
-        if interval < 0 { return nil }
-        if interval < 3600 { return "Soon" }
-        if Calendar.current.isDateInToday(startsAt) { return "Today" }
-        if Calendar.current.isDateInTomorrow(startsAt) { return "Tomorrow" }
-        return nil
-    }
 }

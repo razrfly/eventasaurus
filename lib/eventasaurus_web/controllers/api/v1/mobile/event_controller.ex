@@ -78,6 +78,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         |> Keyword.put(:aggregate, true)
         |> Keyword.put(:ignore_city_in_aggregation, true)
         |> Map.new()
+        |> EventFilters.enrich_with_all_events_filters()
 
       {items, total_count, all_count} =
         PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)

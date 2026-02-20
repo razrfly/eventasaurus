@@ -210,4 +210,47 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
     |> Map.put(:show_past, false)
     |> Map.put(:aggregate, true)
   end
+
+  @doc """
+  Enrich aggregation query opts with `:all_events_filters`.
+
+  When a date filter is active, `list_events_with_aggregation_and_counts/1`
+  needs a separate set of filters (without date restrictions) to compute
+  the correct "all events" count. This function builds those filters
+  from the current query opts and attaches them as `:all_events_filters`.
+
+  Used by both the mobile API and the city page cache refresh job to
+  ensure consistent behavior.
+
+  ## Parameters
+
+    - query_opts: Map of query filters (must already include `:aggregate`
+      and `:ignore_city_in_aggregation` if needed)
+
+  ## Returns
+
+  The same map with `:all_events_filters` added (filters without date
+  restrictions, with aggregation enabled).
+  """
+  @spec enrich_with_all_events_filters(map()) :: map()
+  def enrich_with_all_events_filters(query_opts) do
+    count_filters = query_opts |> Map.delete(:page) |> Map.delete(:page_size)
+    all_events_filters = build_date_range_count_filters(count_filters)
+
+    # Propagate aggregation flags so the count query uses the same grouping
+    all_events_filters =
+      all_events_filters
+      |> maybe_propagate(query_opts, :aggregate)
+      |> maybe_propagate(query_opts, :ignore_city_in_aggregation)
+      |> maybe_propagate(query_opts, :viewing_city)
+
+    Map.put(query_opts, :all_events_filters, all_events_filters)
+  end
+
+  defp maybe_propagate(target, source, key) do
+    case Map.get(source, key) do
+      nil -> target
+      value -> Map.put(target, key, value)
+    end
+  end
 end

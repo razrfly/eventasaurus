@@ -1,11 +1,25 @@
 import SwiftUI
 
 /// Consistent section header with optional trailing action or subtitle.
+///
+/// `subtitle` and `action`+`actionLabel` are mutually exclusive.
+/// If both are provided, the action takes precedence and `subtitle` is ignored.
 struct SectionHeader: View {
     let title: String
     var action: (() -> Void)?
     var actionLabel: String?
     var subtitle: String?
+
+    init(title: String, action: (() -> Void)? = nil, actionLabel: String? = nil, subtitle: String? = nil) {
+        self.title = title
+        self.action = action
+        self.actionLabel = actionLabel
+        self.subtitle = subtitle
+        assert(
+            subtitle == nil || (action == nil && actionLabel == nil),
+            "SectionHeader: subtitle and action+actionLabel are mutually exclusive"
+        )
+    }
 
     var body: some View {
         HStack {
