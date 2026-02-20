@@ -5,6 +5,7 @@ struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 
     struct Cache {
+        var proposal: ProposedViewSize?
         var result: (positions: [CGPoint], size: CGSize)?
     }
 
@@ -14,12 +15,18 @@ struct FlowLayout: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
         let result = arrange(proposal: proposal, subviews: subviews)
+        cache.proposal = proposal
         cache.result = result
         return result.size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
-        let result = cache.result ?? arrange(proposal: proposal, subviews: subviews)
+        let result: (positions: [CGPoint], size: CGSize)
+        if let cached = cache.result, cache.proposal == proposal {
+            result = cached
+        } else {
+            result = arrange(proposal: proposal, subviews: subviews)
+        }
         for (index, position) in result.positions.enumerated() {
             subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
         }

@@ -275,7 +275,7 @@ final class APIClient {
     }
 }
 
-enum APIError: Error, LocalizedError {
+enum APIError: Error, LocalizedError, CustomDebugStringConvertible {
     case invalidURL
     case invalidResponse
     case httpError(statusCode: Int, body: String?)
@@ -285,12 +285,20 @@ enum APIError: Error, LocalizedError {
         switch self {
         case .invalidURL: return "Invalid URL"
         case .invalidResponse: return "Invalid server response"
+        case .httpError(let code, _): return "Server error (HTTP \(code))"
+        case .decodingError(let error): return "Data error: \(error.localizedDescription)"
+        }
+    }
+
+    var debugDescription: String {
+        switch self {
         case .httpError(let code, let body):
             if let body, !body.isEmpty {
-                return "Server error (HTTP \(code)): \(body)"
+                return "APIError.httpError(\(code)): \(body)"
             }
-            return "Server error (HTTP \(code))"
-        case .decodingError(let error): return "Data error: \(error.localizedDescription)"
+            return "APIError.httpError(\(code))"
+        default:
+            return errorDescription ?? String(describing: self)
         }
     }
 }

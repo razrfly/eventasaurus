@@ -232,6 +232,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
               reason: inspect(Ecto.Changeset.traverse_errors(changeset, & &1))
             )
 
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: "remove_failed", message: format_changeset_errors(changeset)})
+
           {:error, reason} ->
             Logger.error("Failed to remove participant status",
               slug: slug,
