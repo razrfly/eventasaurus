@@ -133,10 +133,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.PlanController do
       |> Enum.filter(&(Regex.match?(@email_regex, &1)))
       |> Enum.uniq()
 
-    if validated == [] and emails != [] do
-      {:error, "No valid email addresses provided"}
-    else
-      {:ok, validated}
+    cond do
+      validated == [] and emails == [] -> {:ok, []}
+      validated == [] -> {:error, "No valid email addresses provided"}
+      true -> {:ok, validated}
     end
   end
 
@@ -168,8 +168,28 @@ defmodule EventasaurusWeb.Api.V1.Mobile.PlanController do
       )
 
     case result do
-      %{successful_invitations: count} -> count
-      _ -> length(emails)
+      %{successful_invitations: count} ->
+        count
+
+      {:error, reason} ->
+        Logger.error("Failed to send email invitations",
+          event_id: event.id,
+          organizer_id: organizer.id,
+          email_count: length(emails),
+          reason: inspect(reason, structs: false)
+        )
+
+        0
+
+      other ->
+        Logger.warning("Unexpected result from process_guest_invitations",
+          event_id: event.id,
+          organizer_id: organizer.id,
+          email_count: length(emails),
+          result: inspect(other, structs: false)
+        )
+
+        0
     end
   end
 end

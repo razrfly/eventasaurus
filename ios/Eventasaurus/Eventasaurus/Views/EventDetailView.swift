@@ -110,7 +110,7 @@ struct EventDetailView: View {
                     rsvpButtons
 
                     // Plan with Friends
-                    planWithFriendsSection
+                    planWithFriendsSection(for: event)
 
                     // Categories
                     if let categories = event.categories, !categories.isEmpty {
@@ -203,7 +203,7 @@ struct EventDetailView: View {
 
     // MARK: - Plan with Friends
 
-    private var planWithFriendsSection: some View {
+    private func planWithFriendsSection(for event: Event) -> some View {
         Group {
             if let plan = existingPlan {
                 HStack {

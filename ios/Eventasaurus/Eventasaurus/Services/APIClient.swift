@@ -8,6 +8,7 @@ final class APIClient {
     private let baseURL: URL
     private let session = URLSession.shared
     private let decoder: JSONDecoder
+    private let encoder: JSONEncoder
 
     #if DEBUG
     static let defaultBaseURL = URL(string: "http://localhost:4000")!
@@ -21,6 +22,9 @@ final class APIClient {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         decoder.dateDecodingStrategy = .iso8601
         self.decoder = decoder
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        self.encoder = encoder
     }
 
     func fetchNearbyEvents(
@@ -228,7 +232,8 @@ final class APIClient {
         }
 
         guard 200..<300 ~= httpResponse.statusCode else {
-            throw APIError.httpError(statusCode: httpResponse.statusCode)
+            let body = String(data: data, encoding: .utf8)
+            throw APIError.httpError(statusCode: httpResponse.statusCode, body: body)
         }
 
         return data
@@ -247,10 +252,7 @@ final class APIClient {
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        urlRequest.httpBody = try encoder.encode(body)
+        urlRequest.httpBody = try self.encoder.encode(body)
 
         let data = try await performRequest(urlRequest)
         do {
@@ -276,14 +278,18 @@ final class APIClient {
 enum APIError: Error, LocalizedError {
     case invalidURL
     case invalidResponse
-    case httpError(statusCode: Int)
+    case httpError(statusCode: Int, body: String?)
     case decodingError(Error)
 
     var errorDescription: String? {
         switch self {
         case .invalidURL: return "Invalid URL"
         case .invalidResponse: return "Invalid server response"
-        case .httpError(let code): return "Server error (HTTP \(code))"
+        case .httpError(let code, let body):
+            if let body, !body.isEmpty {
+                return "Server error (HTTP \(code)): \(body)"
+            }
+            return "Server error (HTTP \(code))"
         case .decodingError(let error): return "Data error: \(error.localizedDescription)"
         }
     }

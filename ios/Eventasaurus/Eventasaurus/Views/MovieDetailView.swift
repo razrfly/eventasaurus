@@ -402,5 +402,3 @@ struct MovieDetailView: View {
         }
     }
 }
-
-// FlowLayout is defined in FlowLayout.swift
