@@ -48,6 +48,8 @@ enum DS {
         static let xxl: CGFloat = 20
         /// 24pt — large glass containers
         static let xxxl: CGFloat = 24
+        /// Full rounding — capsule buttons, pills
+        static let full: CGFloat = 99
     }
 
     // MARK: - Typography

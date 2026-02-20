@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Primary action button using Liquid Glass on iOS 26.
-/// Falls back to .borderedProminent on earlier versions.
+/// Falls back to ultraThinMaterial on earlier versions via glassBackground().
 struct GlassPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -21,7 +21,7 @@ struct GlassSecondaryButtonStyle: ButtonStyle {
             .font(DS.Typography.bodyMedium)
             .padding(.horizontal, DS.Spacing.xl)
             .padding(.vertical, DS.Spacing.md)
-            .glassBackground(cornerRadius: 99, interactive: true)
+            .glassBackground(cornerRadius: DS.Radius.full, interactive: true)
             .opacity(configuration.isPressed ? 0.8 : 1.0)
     }
 }
