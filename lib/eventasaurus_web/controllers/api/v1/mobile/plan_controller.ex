@@ -7,6 +7,12 @@ defmodule EventasaurusWeb.Api.V1.Mobile.PlanController do
 
   require Logger
 
+  # Stricter rate limit for plan creation (sends emails)
+  # 5 plan creations per 10 minutes per user
+  plug EventasaurusWeb.Plugs.RateLimitPlug, [limit: 5, window: 600_000] when action == :create
+
+  @email_regex ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
   @doc """
   POST /api/v1/mobile/events/:slug/plan-with-friends
 
@@ -15,60 +21,66 @@ defmodule EventasaurusWeb.Api.V1.Mobile.PlanController do
   def create(conn, %{"slug" => slug} = params) do
     user = conn.assigns.user
 
-    case PublicEvents.get_by_slug(slug) do
-      nil ->
+    with {:ok, emails} <- validate_emails(params["emails"]) do
+      message = params["message"]
+
+      case PublicEvents.get_by_slug(slug) do
+        nil ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "not_found", message: "Event not found"})
+
+        public_event ->
+          # Build attrs for EventPlans.create_from_public_event
+          plan_attrs = build_plan_attrs(params)
+
+          case EventPlans.create_from_public_event(public_event.id, user.id, plan_attrs) do
+            {:ok, {:created, event_plan, private_event}} ->
+              # Send email invitations
+              invite_count = send_email_invitations(private_event, emails, message, user)
+
+              json(conn, %{
+                plan: %{
+                  slug: private_event.slug,
+                  title: private_event.title,
+                  invite_count: invite_count,
+                  created_at: event_plan.inserted_at
+                }
+              })
+
+            {:ok, {:existing, event_plan, private_event}} ->
+              json(conn, %{
+                plan: %{
+                  slug: private_event.slug,
+                  title: private_event.title,
+                  invite_count: 0,
+                  created_at: event_plan.inserted_at
+                },
+                already_exists: true
+              })
+
+            {:error, :event_in_past} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: "event_in_past", message: "Cannot create plans for past events"})
+
+            {:error, reason} ->
+              Logger.error("Failed to create plan",
+                slug: slug,
+                user_id: user.id,
+                reason: inspect(reason)
+              )
+
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: "create_failed", message: "Could not create plan"})
+          end
+      end
+    else
+      {:error, message} ->
         conn
-        |> put_status(:not_found)
-        |> json(%{error: "not_found", message: "Event not found"})
-
-      public_event ->
-        emails = params["emails"] || []
-        message = params["message"]
-
-        # Build attrs for EventPlans.create_from_public_event
-        plan_attrs = build_plan_attrs(params)
-
-        case EventPlans.create_from_public_event(public_event.id, user.id, plan_attrs) do
-          {:ok, {:created, _event_plan, private_event}} ->
-            # Send email invitations
-            invite_count = send_email_invitations(private_event, emails, message, user)
-
-            json(conn, %{
-              plan: %{
-                slug: private_event.slug,
-                title: private_event.title,
-                invite_count: invite_count,
-                created_at: private_event.inserted_at
-              }
-            })
-
-          {:ok, {:existing, _event_plan, private_event}} ->
-            json(conn, %{
-              plan: %{
-                slug: private_event.slug,
-                title: private_event.title,
-                invite_count: 0,
-                created_at: private_event.inserted_at
-              },
-              already_exists: true
-            })
-
-          {:error, :event_in_past} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{error: "event_in_past", message: "Cannot create plans for past events"})
-
-          {:error, reason} ->
-            Logger.error("Failed to create plan",
-              slug: slug,
-              user_id: user.id,
-              reason: inspect(reason)
-            )
-
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{error: "create_failed", message: "Could not create plan"})
-        end
+        |> put_status(:bad_request)
+        |> json(%{error: "invalid_params", message: message})
     end
   end
 
@@ -110,6 +122,24 @@ defmodule EventasaurusWeb.Api.V1.Mobile.PlanController do
 
   # --- Private helpers ---
 
+  defp validate_emails(nil), do: {:error, "emails is required"}
+  defp validate_emails(emails) when not is_list(emails), do: {:error, "emails must be a list"}
+
+  defp validate_emails(emails) do
+    validated =
+      emails
+      |> Enum.filter(&is_binary/1)
+      |> Enum.map(&String.trim/1)
+      |> Enum.filter(&(Regex.match?(@email_regex, &1)))
+      |> Enum.uniq()
+
+    if validated == [] and emails != [] do
+      {:error, "No valid email addresses provided"}
+    else
+      {:ok, validated}
+    end
+  end
+
   defp build_plan_attrs(params) do
     base = %{}
 
@@ -128,14 +158,18 @@ defmodule EventasaurusWeb.Api.V1.Mobile.PlanController do
   defp send_email_invitations(_event, [], _message, _organizer), do: 0
 
   defp send_email_invitations(event, emails, message, organizer) do
-    Events.process_guest_invitations(
-      event,
-      organizer,
-      manual_emails: emails,
-      invitation_message: message || "",
-      mode: :invitation
-    )
+    result =
+      Events.process_guest_invitations(
+        event,
+        organizer,
+        manual_emails: emails,
+        invitation_message: message || "",
+        mode: :invitation
+      )
 
-    length(emails)
+    case result do
+      %{successful_invitations: count} -> count
+      _ -> length(emails)
+    end
   end
 end

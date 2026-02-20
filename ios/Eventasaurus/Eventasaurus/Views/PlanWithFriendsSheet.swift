@@ -131,6 +131,7 @@ struct PlanWithFriendsSheet: View {
     private func createPlan() async {
         isSubmitting = true
         errorMessage = nil
+        defer { isSubmitting = false }
 
         do {
             let response = try await APIClient.shared.createPlanWithFriends(
@@ -148,7 +149,5 @@ struct PlanWithFriendsSheet: View {
         } catch {
             errorMessage = error.localizedDescription
         }
-
-        isSubmitting = false
     }
 }

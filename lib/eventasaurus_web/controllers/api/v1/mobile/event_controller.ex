@@ -226,9 +226,15 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
             json(conn, %{removed: true})
 
           {:error, reason} ->
+            Logger.error("Failed to remove participant status",
+              slug: slug,
+              user_id: user.id,
+              reason: inspect(reason)
+            )
+
             conn
             |> put_status(:unprocessable_entity)
-            |> json(%{error: "remove_failed", message: inspect(reason)})
+            |> json(%{error: "remove_failed", message: "Failed to remove attendance status"})
         end
     end
   end
@@ -671,7 +677,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
     Map.merge(serialized, %{
       attendance_status: status,
-      is_attending: status in ["accepted", "interested", "confirmed_with_order"],
+      is_attending: status in ["accepted", "confirmed_with_order"],
       attendee_count: attendee_count
     })
   end

@@ -212,11 +212,11 @@ final class APIClient {
 
     // MARK: - Private
 
-    private func request<T: Decodable>(url: URL) async throws -> T {
-        var request = URLRequest(url: url)
+    /// Shared helper: attaches auth token, executes request, validates response, returns raw data.
+    private func performRequest(_ request: URLRequest) async throws -> Data {
+        var request = request
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        // Attach Clerk JWT for authenticated requests
         if let token = try? await Clerk.shared.auth.getToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -231,6 +231,11 @@ final class APIClient {
             throw APIError.httpError(statusCode: httpResponse.statusCode)
         }
 
+        return data
+    }
+
+    private func request<T: Decodable>(url: URL) async throws -> T {
+        let data = try await performRequest(URLRequest(url: url))
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
@@ -239,29 +244,15 @@ final class APIClient {
     }
 
     private func request<T: Decodable, B: Encodable>(url: URL, method: String, body: B) async throws -> T {
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = method
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
-        request.httpBody = try encoder.encode(body)
+        urlRequest.httpBody = try encoder.encode(body)
 
-        if let token = try? await Clerk.shared.auth.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-
-        guard 200..<300 ~= httpResponse.statusCode else {
-            throw APIError.httpError(statusCode: httpResponse.statusCode)
-        }
-
+        let data = try await performRequest(urlRequest)
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
@@ -270,24 +261,10 @@ final class APIClient {
     }
 
     private func request<T: Decodable>(url: URL, method: String) async throws -> T {
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = method
 
-        if let token = try? await Clerk.shared.auth.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-
-        guard 200..<300 ~= httpResponse.statusCode else {
-            throw APIError.httpError(statusCode: httpResponse.statusCode)
-        }
-
+        let data = try await performRequest(urlRequest)
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
