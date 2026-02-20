@@ -61,9 +61,9 @@ struct Event: Codable, Identifiable {
         guard let startsAt, !isGroup else { return nil }
         let interval = startsAt.timeIntervalSince(Date())
         if interval < 0 { return nil }
-        if interval < 3600 { return compact ? "Soon" : "Starting soon" }
-        if Calendar.current.isDateInToday(startsAt) { return "Today" }
-        if Calendar.current.isDateInTomorrow(startsAt) { return "Tomorrow" }
+        if interval < 3600 { return compact ? String(localized: "Soon") : String(localized: "Starting soon") }
+        if Calendar.current.isDateInToday(startsAt) { return String(localized: "Today") }
+        if Calendar.current.isDateInTomorrow(startsAt) { return String(localized: "Tomorrow") }
         return nil
     }
 }

@@ -123,13 +123,13 @@ struct ContainerDetailView: View {
 
     private static let monthDayFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "MMMM d"
+        f.setLocalizedDateFormatFromTemplate("MMMM d")
         return f
     }()
 
     private static let fullDateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "EEEE, MMMM d"
+        f.setLocalizedDateFormatFromTemplate("EEEE MMMM d")
         return f
     }()
 

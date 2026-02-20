@@ -168,7 +168,7 @@ enum DS {
         // to allow future divergence if RSVP colors need to differ
         static let going = Color(.systemGreen)
         static let interested = Color(.systemOrange)
-        static let plan = Color.purple
+        static let plan = Color(.systemPurple)
 
         // Surfaces (for non-glass containers)
         static let surfacePrimary = Color(.systemBackground)
@@ -182,7 +182,7 @@ enum DS {
         static let fillTertiary = Color(.tertiarySystemFill)
 
         // Ratings
-        static let ratingFill = Color.yellow
+        static let ratingFill = Color(.systemYellow)
     }
 
     // MARK: - Opacity

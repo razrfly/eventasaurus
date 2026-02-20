@@ -47,6 +47,7 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
   require Logger
 
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusWeb.Live.Helpers.EventFilters
 
   @cache_name :city_page_cache
   # Cache TTL: 2 hours (data updates daily, so this is conservative)
@@ -311,8 +312,6 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
   end
 
   defp build_query_opts_for_city(viewing_city, radius_km, opts) do
-    alias EventasaurusWeb.Live.Helpers.EventFilters
-
     # Extract coordinates for geographic filtering
     lat = if viewing_city.latitude, do: Decimal.to_float(viewing_city.latitude), else: nil
     lng = if viewing_city.longitude, do: Decimal.to_float(viewing_city.longitude), else: nil

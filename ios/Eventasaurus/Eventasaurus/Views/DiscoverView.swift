@@ -579,7 +579,7 @@ struct DateChip: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(count.map { "\(label), \($0) events" } ?? label)
+        .accessibilityLabel(count.map { String(localized: "\(label), \($0) events") } ?? label)
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
