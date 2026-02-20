@@ -1,0 +1,7 @@
+// Production environment (device, TestFlight, App Store)
+API_BASE_URL = https:/$()/wombie.com
+CLERK_PUBLISHABLE_KEY = pk_live_Y2xlcmsud29tYmllLmNvbSQ
+
+// Prod values (same as above for Release — used by AppConfig)
+API_BASE_URL_PROD = https:/$()/wombie.com
+CLERK_PUBLISHABLE_KEY_PROD = pk_live_Y2xlcmsud29tYmllLmNvbSQ

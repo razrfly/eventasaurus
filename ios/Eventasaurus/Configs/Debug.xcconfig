@@ -1,0 +1,7 @@
+// Development environment (simulator uses these, device overrides in AppConfig)
+API_BASE_URL = http:/$()/localhost:4000
+CLERK_PUBLISHABLE_KEY = pk_test_cmFyZS1tdXNrb3gtODkuY2xlcmsuYWNjb3VudHMuZGV2JA
+
+// Production values are also available for device builds
+API_BASE_URL_PROD = https:/$()/wombie.com
+CLERK_PUBLISHABLE_KEY_PROD = pk_live_Y2xlcmsud29tYmllLmNvbSQ

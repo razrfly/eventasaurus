@@ -10,11 +10,7 @@ final class APIClient {
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
 
-    #if DEBUG
-    static let defaultBaseURL = URL(string: "http://localhost:4000")!
-    #else
-    static let defaultBaseURL = URL(string: "https://eventasaur.us")!
-    #endif
+    static let defaultBaseURL = AppConfig.apiBaseURL
 
     init(baseURL: URL = defaultBaseURL) {
         self.baseURL = baseURL
