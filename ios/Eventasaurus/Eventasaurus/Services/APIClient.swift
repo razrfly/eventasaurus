@@ -179,11 +179,101 @@ final class APIClient {
         return try await request(url: url)
     }
 
+    // MARK: - RSVP / Attendance
+
+    func updateParticipantStatus(eventSlug: String, status: String) async throws -> ParticipantStatusResponse {
+        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/participant-status")
+        let body = ["status": status]
+        return try await request(url: url, method: "PUT", body: body)
+    }
+
+    func removeParticipantStatus(eventSlug: String) async throws -> ParticipantStatusResponse {
+        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/participant-status")
+        return try await request(url: url, method: "DELETE")
+    }
+
+    func getParticipantStatus(eventSlug: String) async throws -> ParticipantStatusResponse {
+        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/participant-status")
+        return try await request(url: url)
+    }
+
+    // MARK: - Plan with Friends
+
+    func createPlanWithFriends(eventSlug: String, emails: [String], message: String? = nil, occurrence: PlanOccurrence? = nil) async throws -> PlanResponse {
+        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/plan-with-friends")
+        let body = CreatePlanRequest(emails: emails, message: message, occurrence: occurrence)
+        return try await request(url: url, method: "POST", body: body)
+    }
+
+    func getExistingPlan(eventSlug: String) async throws -> PlanResponse {
+        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/plan-with-friends")
+        return try await request(url: url)
+    }
+
+    // MARK: - Private
+
     private func request<T: Decodable>(url: URL) async throws -> T {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         // Attach Clerk JWT for authenticated requests
+        if let token = try? await Clerk.shared.auth.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw APIError.decodingError(error)
+        }
+    }
+
+    private func request<T: Decodable, B: Encodable>(url: URL, method: String, body: B) async throws -> T {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        request.httpBody = try encoder.encode(body)
+
+        if let token = try? await Clerk.shared.auth.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw APIError.decodingError(error)
+        }
+    }
+
+    private func request<T: Decodable>(url: URL, method: String) async throws -> T {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
         if let token = try? await Clerk.shared.auth.getToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }

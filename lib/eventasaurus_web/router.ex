@@ -1019,6 +1019,15 @@ defmodule EventasaurusWeb.Router do
     get "/sources/:slug", SourceController, :show
     get "/containers/:slug", ContainerController, :show
     get "/venues/:slug", VenueController, :show
+
+    # RSVP / Attendance
+    put "/events/:slug/participant-status", EventController, :update_participant_status
+    delete "/events/:slug/participant-status", EventController, :remove_participant_status
+    get "/events/:slug/participant-status", EventController, :get_participant_status
+
+    # Plan with Friends
+    post "/events/:slug/plan-with-friends", PlanController, :create
+    get "/events/:slug/plan-with-friends", PlanController, :show
   end
 
   # Admin API routes for discovery/stats

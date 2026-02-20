@@ -46,6 +46,9 @@
 		DD33EE44FF550001B003 /* FiltersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF550001B004 /* FiltersSheet.swift */; };
 		DD33EE44FF550001B005 /* MoviesIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF550001B006 /* MoviesIndex.swift */; };
 		DD33EE44FF550001B007 /* MoviesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF550001B008 /* MoviesView.swift */; };
+		EE44FF550001C001 /* Plan.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE44FF550001C002 /* Plan.swift */; };
+		EE44FF550001C003 /* EmailChipInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE44FF550001C004 /* EmailChipInput.swift */; };
+		EE44FF550001C005 /* PlanWithFriendsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE44FF550001C006 /* PlanWithFriendsSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -98,6 +101,9 @@
 		DD33EE44FF550001B004 /* FiltersSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiltersSheet.swift; sourceTree = "<group>"; };
 		DD33EE44FF550001B006 /* MoviesIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoviesIndex.swift; sourceTree = "<group>"; };
 		DD33EE44FF550001B008 /* MoviesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoviesView.swift; sourceTree = "<group>"; };
+		EE44FF550001C002 /* Plan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plan.swift; sourceTree = "<group>"; };
+		EE44FF550001C004 /* EmailChipInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailChipInput.swift; sourceTree = "<group>"; };
+		EE44FF550001C006 /* PlanWithFriendsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanWithFriendsSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -140,6 +146,7 @@
 				AA11BB22CC33DD44EE55FF02 /* EventDestination.swift */,
 				AA11BB22CC33DD44EE55FF04 /* MovieDetail.swift */,
 				DD33EE44FF550001B006 /* MoviesIndex.swift */,
+				EE44FF550001C002 /* Plan.swift */,
 				AA11BB22CC33DD44EE55FF06 /* SourceDetail.swift */,
 				21BAC9E54F63FED667138C7D /* UserProfile.swift */,
 				CC22DD33EE44FF550001A002 /* VenueDetail.swift */,
@@ -197,6 +204,7 @@
 				74DE54496EE549F58B31CC75 /* DiscoverView.swift */,
 				DD33EE44FF550001B002 /* EventCardGridItem.swift */,
 				6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */,
+				EE44FF550001C004 /* EmailChipInput.swift */,
 				DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */,
 				BB11CC22DD33EE44FF550004 /* ExternalLinkButton.swift */,
 				DD33EE44FF550001B004 /* FiltersSheet.swift */,
@@ -204,6 +212,7 @@
 				DD33EE44FF550001B008 /* MoviesView.swift */,
 				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
 				BB11CC22DD33EE44FF550008 /* NearbyEventsSection.swift */,
+				EE44FF550001C006 /* PlanWithFriendsSheet.swift */,
 				09081158264711B776E3A8C3 /* ProfileView.swift */,
 				BB11CC22DD33EE44FF55000C /* RatingPill.swift */,
 				BB11CC22DD33EE44FF550006 /* SourceAttributionSection.swift */,
@@ -339,6 +348,9 @@
 				7F9F9F532434DCF96269280B /* UserProfile.swift in Sources */,
 				CC22DD33EE44FF550001A001 /* VenueDetail.swift in Sources */,
 				CC22DD33EE44FF550001A003 /* VenueDetailView.swift in Sources */,
+				EE44FF550001C001 /* Plan.swift in Sources */,
+				EE44FF550001C003 /* EmailChipInput.swift in Sources */,
+				EE44FF550001C005 /* PlanWithFriendsSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
