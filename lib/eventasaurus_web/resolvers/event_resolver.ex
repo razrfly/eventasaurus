@@ -53,7 +53,7 @@ defmodule EventasaurusWeb.Resolvers.EventResolver do
         {:ok, %{success: true, errors: []}}
 
       {:error, reason} ->
-        {:ok, %{success: false, errors: [%{field: "base", message: inspect(reason)}]}}
+        {:ok, %{success: false, errors: [%{field: "base", message: humanize_error(reason)}]}}
     end
   end
 
@@ -66,7 +66,7 @@ defmodule EventasaurusWeb.Resolvers.EventResolver do
         {:ok, %{event: nil, errors: format_changeset_errors(changeset)}}
 
       {:error, reason} ->
-        {:ok, %{event: nil, errors: [%{field: "base", message: inspect(reason)}]}}
+        {:ok, %{event: nil, errors: [%{field: "base", message: humanize_error(reason)}]}}
     end
   end
 
@@ -91,6 +91,10 @@ defmodule EventasaurusWeb.Resolvers.EventResolver do
     end)
     |> Enum.into(%{})
   end
+
+  defp humanize_error(reason) when is_atom(reason), do: to_string(reason)
+  defp humanize_error(reason) when is_binary(reason), do: reason
+  defp humanize_error(_reason), do: "An unexpected error occurred"
 
   defp format_changeset_errors(%Ecto.Changeset{} = changeset) do
     changeset

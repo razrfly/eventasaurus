@@ -3,6 +3,7 @@ import SwiftUI
 /// Detail/management view for a user-created event.
 /// Shows event details with edit, publish, cancel, and delete actions.
 struct EventManageView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var event: UserEvent
     @State private var isLoading = false
     @State private var showEditSheet = false
@@ -36,6 +37,14 @@ struct EventManageView: View {
         }
         .task { await refreshEvent() }
         .refreshable { await refreshEvent() }
+        .alert("Error", isPresented: Binding(
+            get: { error != nil },
+            set: { if !$0 { error = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(error?.localizedDescription ?? "Something went wrong")
+        }
         .sheet(isPresented: $showEditSheet) {
             EventEditView(
                 event: event,
@@ -45,6 +54,7 @@ struct EventManageView: View {
                 },
                 onDeleted: {
                     onChanged?()
+                    dismiss()
                 }
             )
         }

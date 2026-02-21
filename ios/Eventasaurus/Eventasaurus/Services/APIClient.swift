@@ -133,22 +133,10 @@ final class APIClient {
         return response.city
     }
 
-    func fetchAttendingEvents() async throws -> [Event] {
-        let url = baseURL.appendingPathComponent("api/v1/mobile/events/attending")
-        let response: EventsResponse = try await request(url: url)
-        return response.events
-    }
-
     func fetchEventDetail(slug: String) async throws -> Event {
         let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(slug)")
         let response: EventDetailResponse = try await request(url: url)
         return response.event
-    }
-
-    func fetchProfile() async throws -> UserProfile {
-        let url = baseURL.appendingPathComponent("api/v1/mobile/profile")
-        let response: ProfileResponse = try await request(url: url)
-        return response.user
     }
 
     func fetchMovieDetail(slug: String, cityId: Int? = nil) async throws -> MovieDetailResponse {
@@ -176,37 +164,6 @@ final class APIClient {
 
     func fetchVenueDetail(slug: String) async throws -> VenueDetailResponse {
         let url = baseURL.appendingPathComponent("api/v1/mobile/venues/\(slug)")
-        return try await request(url: url)
-    }
-
-    // MARK: - RSVP / Attendance
-
-    func updateParticipantStatus(eventSlug: String, status: String) async throws -> ParticipantStatusResponse {
-        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/participant-status")
-        let body = ["status": status]
-        return try await request(url: url, method: "PUT", body: body)
-    }
-
-    func removeParticipantStatus(eventSlug: String) async throws -> ParticipantStatusResponse {
-        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/participant-status")
-        return try await request(url: url, method: "DELETE")
-    }
-
-    func getParticipantStatus(eventSlug: String) async throws -> ParticipantStatusResponse {
-        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/participant-status")
-        return try await request(url: url)
-    }
-
-    // MARK: - Plan with Friends
-
-    func createPlanWithFriends(eventSlug: String, emails: [String], message: String? = nil, occurrence: PlanOccurrence? = nil) async throws -> PlanResponse {
-        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/plan-with-friends")
-        let body = CreatePlanRequest(emails: emails, message: message, occurrence: occurrence)
-        return try await request(url: url, method: "POST", body: body)
-    }
-
-    func getExistingPlan(eventSlug: String) async throws -> PlanResponse {
-        let url = baseURL.appendingPathComponent("api/v1/mobile/events/\(eventSlug)/plan-with-friends")
         return try await request(url: url)
     }
 

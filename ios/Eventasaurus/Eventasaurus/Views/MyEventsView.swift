@@ -8,7 +8,7 @@ struct MyEventsView: View {
 
     @State private var selectedTab: Tab = .created
     @State private var createdEvents: [UserEvent] = []
-    @State private var attendingEvents: [Event] = []
+    @State private var attendingEvents: [UserEvent] = []
     @State private var isLoading = false
     @State private var error: Error?
     @State private var showCreateSheet = false
@@ -137,16 +137,16 @@ struct MyEventsView: View {
         ScrollView {
             LazyVStack(spacing: DS.Spacing.xl) {
                 ForEach(attendingEvents) { event in
-                    NavigationLink(value: event.slug) {
-                        EventCardView(event: event)
+                    NavigationLink(value: event) {
+                        UserEventCardView(event: event)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(DS.Spacing.xl)
         }
-        .navigationDestination(for: String.self) { slug in
-            EventDetailView(slug: slug)
+        .navigationDestination(for: UserEvent.self) { event in
+            EventDetailView(slug: event.slug)
         }
     }
 
@@ -181,7 +181,7 @@ struct MyEventsView: View {
         defer { isLoading = false }
 
         do {
-            attendingEvents = try await APIClient.shared.fetchAttendingEvents()
+            attendingEvents = try await GraphQLClient.shared.fetchAttendingEvents()
         } catch is CancellationError {
             return
         } catch {

@@ -118,27 +118,6 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   end
 
   @doc """
-  GET /api/v1/mobile/events/attending
-
-  Returns events the current user is participating in.
-  """
-  def attending(conn, _params) do
-    user = conn.assigns.user
-
-    events =
-      Events.list_events_with_participation(user,
-        upcoming: true,
-        order_by: [asc: :start_at],
-        limit: 50
-      )
-
-    json(conn, %{
-      events: Enum.map(events, &serialize_user_event/1),
-      meta: %{total_count: length(events)}
-    })
-  end
-
-  @doc """
   GET /api/v1/mobile/events/:slug
 
   Returns event details by slug. Checks both public events and user-created events.
@@ -161,125 +140,6 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         conn
         |> put_status(:not_found)
         |> json(%{error: "not_found", message: "Event not found"})
-    end
-  end
-
-  @doc """
-  PUT /api/v1/mobile/events/:slug/participant-status
-
-  Updates the current user's RSVP status for an event.
-  """
-  def update_participant_status(conn, %{"slug" => slug} = params) do
-    user = conn.assigns.user
-    status_str = params["status"]
-    valid_statuses = EventParticipant.valid_status_strings()
-
-    with {:status_valid, true} <- {:status_valid, status_str in valid_statuses},
-         {:event, event} when not is_nil(event) <- {:event, Events.get_event_by_slug(slug)} do
-      status_atom = String.to_existing_atom(status_str)
-
-      case Events.update_participant_status(event, user, status_atom) do
-        {:ok, participant} ->
-          count =
-            Events.count_participants_by_status(event, :accepted) +
-              Events.count_participants_by_status(event, :confirmed_with_order)
-
-          json(conn, %{
-            status: status_str,
-            participant_count: count,
-            updated_at: participant.updated_at
-          })
-
-        {:error, changeset} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{error: "update_failed", message: format_changeset_errors(changeset)})
-      end
-    else
-      {:status_valid, false} ->
-        conn
-        |> put_status(:bad_request)
-        |> json(%{
-          error: "invalid_status",
-          message: "Valid statuses: #{Enum.join(valid_statuses, ", ")}"
-        })
-
-      {:event, nil} ->
-        conn
-        |> put_status(:not_found)
-        |> json(%{error: "not_found", message: "Event not found"})
-    end
-  end
-
-  @doc """
-  DELETE /api/v1/mobile/events/:slug/participant-status
-
-  Removes the current user's RSVP status from an event.
-  """
-  def remove_participant_status(conn, %{"slug" => slug}) do
-    user = conn.assigns.user
-
-    case Events.get_event_by_slug(slug) do
-      nil ->
-        conn
-        |> put_status(:not_found)
-        |> json(%{error: "not_found", message: "Event not found"})
-
-      event ->
-        case Events.remove_participant_status(event, user) do
-          {:ok, :removed} ->
-            json(conn, %{removed: true})
-
-          {:ok, :not_participant} ->
-            json(conn, %{removed: true})
-
-          {:error, %Ecto.Changeset{} = changeset} ->
-            Logger.error("Failed to remove participant status",
-              slug: slug,
-              user_id: user.id,
-              reason: inspect(Ecto.Changeset.traverse_errors(changeset, & &1))
-            )
-
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{error: "remove_failed", message: format_changeset_errors(changeset)})
-
-          {:error, reason} ->
-            Logger.error("Failed to remove participant status",
-              slug: slug,
-              user_id: user.id,
-              reason: inspect(reason, structs: false)
-            )
-
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{error: "remove_failed", message: "Failed to remove attendance status"})
-        end
-    end
-  end
-
-  @doc """
-  GET /api/v1/mobile/events/:slug/participant-status
-
-  Gets the current user's RSVP status for an event.
-  """
-  def get_participant_status(conn, %{"slug" => slug}) do
-    user = conn.assigns.user
-
-    case Events.get_event_by_slug(slug) do
-      nil ->
-        conn
-        |> put_status(:not_found)
-        |> json(%{error: "not_found", message: "Event not found"})
-
-      event ->
-        case Events.get_event_participant_by_event_and_user(event, user) do
-          %EventParticipant{status: status, updated_at: updated_at} ->
-            json(conn, %{status: Atom.to_string(status), updated_at: updated_at})
-
-          nil ->
-            json(conn, %{status: nil, updated_at: nil})
-        end
     end
   end
 
@@ -710,12 +570,4 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     })
   end
 
-  defp format_changeset_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {key, value}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(value))
-      end)
-    end)
-    |> inspect()
-  end
 end

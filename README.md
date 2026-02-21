@@ -862,6 +862,8 @@ social_card_url = SEOHelpers.build_social_card_url(city, :city, stats: stats)
 
 ### Documentation
 
+**[API Reference](docs/api-reference.md)** - REST + GraphQL API documentation for mobile clients
+
 For comprehensive SEO implementation guides, see:
 
 📖 **[SEO Best Practices Guide](docs/seo_best_practices.md)** - Complete guide covering:

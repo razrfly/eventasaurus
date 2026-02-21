@@ -866,6 +866,12 @@ defmodule EventasaurusApp.Events do
 
     query = apply_soft_delete_filter(query, opts)
 
+    query =
+      case opts[:limit] do
+        nil -> query
+        limit -> from(q in query, limit: ^limit)
+      end
+
     Repo.all(query)
   end
 

@@ -11,6 +11,20 @@ final class GraphQLClient {
     private let graphqlURL: URL
     private let session = URLSession.shared
 
+    /// Shared fragment with all UserEvent fields — single source of truth to prevent
+    /// Codable decode crashes from partial query fragments.
+    private static let eventFields = """
+        id slug title tagline description
+        startsAt endsAt timezone
+        status visibility theme
+        coverImageUrl
+        isTicketed isVirtual virtualVenueUrl
+        isOrganizer participantCount myRsvpStatus
+        venue { id name address latitude longitude }
+        organizer { id name avatarUrl }
+        createdAt updatedAt
+    """
+
     init(baseURL: URL = AppConfig.apiBaseURL) {
         self.graphqlURL = baseURL.appendingPathComponent("api/graphql")
     }
@@ -41,15 +55,7 @@ final class GraphQLClient {
             query: """
             query MyEvents($limit: Int) {
                 myEvents(limit: $limit) {
-                    id slug title tagline description
-                    startsAt endsAt timezone
-                    status visibility theme
-                    coverImageUrl
-                    isTicketed isVirtual virtualVenueUrl
-                    isOrganizer participantCount myRsvpStatus
-                    venue { id name address latitude longitude }
-                    organizer { id name avatarUrl }
-                    createdAt updatedAt
+                    \(Self.eventFields)
                 }
             }
             """,
@@ -63,15 +69,7 @@ final class GraphQLClient {
             query: """
             query MyEvent($slug: String!) {
                 myEvent(slug: $slug) {
-                    id slug title tagline description
-                    startsAt endsAt timezone
-                    status visibility theme
-                    coverImageUrl
-                    isTicketed isVirtual virtualVenueUrl
-                    isOrganizer participantCount myRsvpStatus
-                    venue { id name address latitude longitude }
-                    organizer { id name avatarUrl }
-                    createdAt updatedAt
+                    \(Self.eventFields)
                 }
             }
             """,
@@ -88,13 +86,7 @@ final class GraphQLClient {
             query: """
             query AttendingEvents($limit: Int) {
                 attendingEvents(limit: $limit) {
-                    id slug title tagline
-                    startsAt endsAt timezone
-                    status visibility
-                    coverImageUrl isOrganizer
-                    participantCount myRsvpStatus
-                    venue { id name address }
-                    organizer { id name avatarUrl }
+                    \(Self.eventFields)
                 }
             }
             """,
@@ -111,14 +103,7 @@ final class GraphQLClient {
             mutation CreateEvent($input: CreateEventInput!) {
                 createEvent(input: $input) {
                     event {
-                        id slug title tagline description
-                        startsAt endsAt timezone
-                        status visibility theme
-                        coverImageUrl
-                        isTicketed isVirtual virtualVenueUrl
-                        isOrganizer participantCount
-                        venue { id name address latitude longitude }
-                        createdAt updatedAt
+                        \(Self.eventFields)
                     }
                     errors { field message }
                 }
@@ -142,14 +127,7 @@ final class GraphQLClient {
             mutation UpdateEvent($slug: String!, $input: UpdateEventInput!) {
                 updateEvent(slug: $slug, input: $input) {
                     event {
-                        id slug title tagline description
-                        startsAt endsAt timezone
-                        status visibility theme
-                        coverImageUrl
-                        isTicketed isVirtual virtualVenueUrl
-                        isOrganizer participantCount
-                        venue { id name address latitude longitude }
-                        createdAt updatedAt
+                        \(Self.eventFields)
                     }
                     errors { field message }
                 }
@@ -192,11 +170,7 @@ final class GraphQLClient {
             mutation PublishEvent($slug: String!) {
                 publishEvent(slug: $slug) {
                     event {
-                        id slug title status visibility
-                        startsAt endsAt timezone
-                        coverImageUrl participantCount
-                        venue { id name address }
-                        createdAt updatedAt
+                        \(Self.eventFields)
                     }
                     errors { field message }
                 }
@@ -220,11 +194,7 @@ final class GraphQLClient {
             mutation CancelEvent($slug: String!) {
                 cancelEvent(slug: $slug) {
                     event {
-                        id slug title status
-                        startsAt endsAt timezone
-                        coverImageUrl participantCount
-                        venue { id name address }
-                        createdAt updatedAt
+                        \(Self.eventFields)
                     }
                     errors { field message }
                 }
@@ -250,8 +220,7 @@ final class GraphQLClient {
             mutation Rsvp($slug: String!, $status: RsvpStatus!) {
                 rsvp(slug: $slug, status: $status) {
                     event {
-                        id slug title participantCount myRsvpStatus
-                        startsAt endsAt venue { name }
+                        \(Self.eventFields)
                     }
                     status
                     errors { field message }
@@ -268,6 +237,70 @@ final class GraphQLClient {
             throw GraphQLMutationError.noData
         }
         return event
+    }
+
+    // MARK: - Cancel RSVP
+
+    func cancelRsvp(slug: String) async throws {
+        let result: GQLCancelRsvpResponse = try await execute(
+            query: """
+            mutation CancelRsvp($slug: String!) {
+                cancelRsvp(slug: $slug) {
+                    success
+                    errors { field message }
+                }
+            }
+            """,
+            variables: ["slug": slug]
+        )
+        let mutation = result.cancelRsvp
+        if !mutation.success {
+            let errors = mutation.errors ?? []
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+    }
+
+    // MARK: - Plan
+
+    func createPlan(slug: String, emails: [String], message: String? = nil) async throws -> GQLPlan {
+        var variables: [String: Any] = ["slug": slug, "emails": emails]
+        if let message { variables["message"] = message }
+
+        let result: GQLPlanResponse = try await execute(
+            query: """
+            mutation CreatePlan($slug: String!, $emails: [String!]!, $message: String) {
+                createPlan(slug: $slug, emails: $emails, message: $message) {
+                    plan {
+                        slug title inviteCount createdAt alreadyExists
+                    }
+                    errors { field message }
+                }
+            }
+            """,
+            variables: variables
+        )
+        let mutation = result.createPlan
+        if let errors = mutation.errors, !errors.isEmpty {
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+        guard let plan = mutation.plan else {
+            throw GraphQLMutationError.noData
+        }
+        return plan
+    }
+
+    func fetchMyPlan(slug: String) async throws -> GQLPlan? {
+        let result: GQLMyPlanResponse = try await execute(
+            query: """
+            query MyPlan($slug: String!) {
+                myPlan(slug: $slug) {
+                    slug title inviteCount createdAt alreadyExists
+                }
+            }
+            """,
+            variables: ["slug": slug]
+        )
+        return result.myPlan
     }
 
     // MARK: - Image Upload
@@ -390,8 +423,18 @@ final class GraphQLClient {
     }
 
     private func jsonString(_ string: String) -> String {
-        let data = try! JSONSerialization.data(withJSONObject: string)
-        return String(data: data, encoding: .utf8)!
+        guard let data = try? JSONSerialization.data(withJSONObject: string),
+              let result = String(data: data, encoding: .utf8) else {
+            // Fallback: manually escape for JSON
+            let escaped = string
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\n", with: "\\n")
+                .replacingOccurrences(of: "\r", with: "\\r")
+                .replacingOccurrences(of: "\t", with: "\\t")
+            return "\"\(escaped)\""
+        }
+        return result
     }
 }
 

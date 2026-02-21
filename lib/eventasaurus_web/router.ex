@@ -1054,23 +1054,6 @@ defmodule EventasaurusWeb.Router do
     get "/venues/:slug", VenueController, :show
   end
 
-  # Mobile API — authenticated endpoints (require logged-in user)
-  scope "/api/v1/mobile", EventasaurusWeb.Api.V1.Mobile do
-    pipe_through [:secure_api, :api_authenticated]
-
-    get "/events/attending", EventController, :attending
-    get "/profile", ProfileController, :show
-
-    # RSVP / Attendance
-    put "/events/:slug/participant-status", EventController, :update_participant_status
-    delete "/events/:slug/participant-status", EventController, :remove_participant_status
-    get "/events/:slug/participant-status", EventController, :get_participant_status
-
-    # Plan with Friends
-    post "/events/:slug/plan-with-friends", PlanController, :create
-    get "/events/:slug/plan-with-friends", PlanController, :show
-  end
-
   # Admin API routes for discovery/stats
   scope "/api/admin", EventasaurusWeb.Admin, as: :admin_api do
     pipe_through [:secure_api, :api_authenticated]
