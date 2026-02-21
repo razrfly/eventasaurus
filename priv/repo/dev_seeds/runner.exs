@@ -93,6 +93,10 @@ all_events = events ++ full_events
 Code.require_file("scenarios/key_organizers.exs", __DIR__)
 DevSeeds.EnsureKeyOrganizers.ensure_key_organizers()
 
+# Ensure Holden (the only Clerk-authenticated user) has events for iOS testing
+Code.require_file("scenarios/ensure_holden_events.exs", __DIR__)
+DevSeeds.EnsureHoldenEvents.run()
+
 # Create ticketed event organizer personas (Phase 1 from issue #1036)
 Code.require_file("features/ticketing/ticketed_events.exs", __DIR__)
 DevSeeds.TicketedEventOrganizers.ensure_ticketed_event_organizers()

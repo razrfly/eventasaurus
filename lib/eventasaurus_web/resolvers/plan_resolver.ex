@@ -5,9 +5,16 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
 
   require Logger
 
+  alias EventasaurusApp.Accounts
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.EventPlans
   alias EventasaurusDiscovery.PublicEvents
+
+  def participant_suggestions(_parent, args, %{context: %{current_user: user}}) do
+    limit = Map.get(args, :limit, 20)
+    suggestions = Events.get_participant_suggestions(user, limit: limit)
+    {:ok, suggestions}
+  end
 
   def my_plan(_parent, %{slug: slug}, %{context: %{current_user: user}}) do
     case PublicEvents.get_by_slug(slug) do
@@ -41,14 +48,18 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
   def create_plan(_parent, %{slug: slug, emails: emails} = args, %{
         context: %{current_user: user}
       }) do
-    if length(emails) > @max_invite_emails do
+    # Resolve friend_ids to emails and merge with provided emails
+    friend_emails = resolve_friend_emails(Map.get(args, :friend_ids, []))
+    all_emails = Enum.uniq(emails ++ friend_emails)
+
+    if length(all_emails) > @max_invite_emails do
       {:ok,
        %{
          plan: nil,
          errors: [%{field: "emails", message: "Maximum #{@max_invite_emails} invitations per plan"}]
        }}
     else
-      do_create_plan(slug, emails, args, user)
+      do_create_plan(slug, all_emails, args, user)
     end
   end
 
@@ -110,6 +121,22 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
             {:ok, %{plan: nil, errors: [%{field: "base", message: "Could not create plan"}]}}
         end
     end
+  end
+
+  defp resolve_friend_emails(nil), do: []
+  defp resolve_friend_emails([]), do: []
+
+  defp resolve_friend_emails(friend_ids) do
+    friend_ids
+    |> Enum.map(fn id ->
+      case Accounts.get_user(id) do
+        %{email: email} -> email
+        nil ->
+          Logger.warning("Friend ID #{id} not found, skipping")
+          nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
   end
 
   defp build_plan_attrs(args) do

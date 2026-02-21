@@ -336,3 +336,59 @@ struct GQLUploadResult: Codable {
     let url: String?
     let errors: [InputError]?
 }
+
+// MARK: - Participant Suggestions
+
+struct ParticipantSuggestion: Codable, Identifiable {
+    var id: String { userId }
+    let userId: String
+    let name: String?
+    let email: String
+    let username: String?
+    let participationCount: Int
+    let totalScore: Double
+    let recommendationLevel: String
+    let avatarUrl: String
+}
+
+struct GQLParticipantSuggestionsResponse: Codable {
+    let participantSuggestions: [ParticipantSuggestion]
+}
+
+// MARK: - Message Templates
+
+enum MessageTemplate: String, CaseIterable, Identifiable {
+    case casual, formal, excited, group
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .casual: return "Casual"
+        case .formal: return "Formal"
+        case .excited: return "Excited"
+        case .group: return "Group"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .casual: return "hand.wave"
+        case .formal: return "envelope.open"
+        case .excited: return "party.popper"
+        case .group: return "person.3"
+        }
+    }
+
+    var text: String {
+        switch self {
+        case .casual:
+            return "Hi! I'd love for you to join me at this event. It's going to be fun!"
+        case .formal:
+            return "You're cordially invited to join us for this special event. We would be delighted to have you attend."
+        case .excited:
+            return "Hey! I found this amazing event and immediately thought of you. Let's go together!"
+        case .group:
+            return "Hey everyone! Let's all go to this event together. It'll be a great time to catch up!"
+        }
+    }
+}

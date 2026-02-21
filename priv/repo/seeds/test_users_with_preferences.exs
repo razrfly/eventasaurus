@@ -20,6 +20,8 @@ defmodule TestUserSeeder do
   def get_or_create_user(attrs) do
     case Repo.get_by(User, email: attrs.email) do
       nil ->
+        attrs = Map.put_new_lazy(attrs, :family_name, &EventasaurusApp.Families.random_family_name/0)
+
         %User{}
         |> User.changeset(attrs)
         |> Repo.insert()

@@ -82,6 +82,9 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   end
 
   defp create_database_user(attrs) do
+    # Auto-assign a random family name if not provided (NOT NULL column)
+    attrs = Map.put_new_lazy(attrs, :family_name, &EventasaurusApp.Families.random_family_name/0)
+
     changeset =
       %Accounts.User{}
       |> Ecto.Changeset.change(attrs)
