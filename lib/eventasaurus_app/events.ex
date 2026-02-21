@@ -870,6 +870,7 @@ defmodule EventasaurusApp.Events do
     query =
       case opts[:limit] do
         limit when is_integer(limit) and limit > 0 -> from(q in query, limit: ^limit)
+        limit when is_integer(limit) -> from(q in query, limit: 0)
         _ -> query
       end
 
