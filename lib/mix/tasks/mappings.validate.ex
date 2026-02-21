@@ -54,7 +54,10 @@ defmodule Mix.Tasks.Mappings.Validate do
     IO.puts("  Checking ETS cache...")
     stats = CategoryMappings.get_stats()
     total_mappings = stats.total_direct + stats.total_patterns
-    IO.puts("  ETS cache: #{total_mappings} mappings (#{stats.total_direct} direct, #{stats.total_patterns} patterns)")
+
+    IO.puts(
+      "  ETS cache: #{total_mappings} mappings (#{stats.total_direct} direct, #{stats.total_patterns} patterns)"
+    )
 
     if total_mappings == 0 do
       IO.puts("\n#{IO.ANSI.red()}❌ ERROR: ETS cache is empty!#{IO.ANSI.reset()}")
@@ -68,7 +71,10 @@ defmodule Mix.Tasks.Mappings.Validate do
 
     test_cases =
       if test_cases == [] do
-        IO.puts("#{IO.ANSI.yellow()}⚠️  No test cases found. Using synthetic test data.#{IO.ANSI.reset()}\n")
+        IO.puts(
+          "#{IO.ANSI.yellow()}⚠️  No test cases found. Using synthetic test data.#{IO.ANSI.reset()}\n"
+        )
+
         get_synthetic_test_cases(limit, source_filter)
       else
         test_cases
@@ -103,7 +109,8 @@ defmodule Mix.Tasks.Mappings.Validate do
     # Get real event source categories from the database
     query =
       from(pe in "public_events",
-        join: esc in "event_source_categories", on: esc.event_id == pe.id,
+        join: esc in "event_source_categories",
+        on: esc.event_id == pe.id,
         select: %{
           source: esc.source,
           categories: esc.source_categories
@@ -131,10 +138,29 @@ defmodule Mix.Tasks.Mappings.Validate do
   defp get_synthetic_test_cases(limit, source_filter) do
     # Generate synthetic test cases from known mappings
     test_terms = %{
-      "bandsintown" => ["Rock", "Jazz", "Pop", "Electronic", "Hip-Hop", "R&B", "Country", "Folk", "Classical", "Metal"],
+      "bandsintown" => [
+        "Rock",
+        "Jazz",
+        "Pop",
+        "Electronic",
+        "Hip-Hop",
+        "R&B",
+        "Country",
+        "Folk",
+        "Classical",
+        "Metal"
+      ],
       "ticketmaster" => ["MUSIC", "SPORTS", "ARTS & THEATRE", "COMEDY", "FAMILY", "UNDEFINED"],
       "karnet" => ["koncerty", "wystawy", "teatr", "kino", "muzyka", "sport", "festiwale"],
-      "cinema_city" => ["Action", "Comedy", "Drama", "Horror", "Thriller", "Animation", "Documentary"],
+      "cinema_city" => [
+        "Action",
+        "Comedy",
+        "Drama",
+        "Horror",
+        "Thriller",
+        "Animation",
+        "Documentary"
+      ],
       "sortiraparis" => ["concerts-music-festival", "exhibit-museum", "theatre-show", "cinema"],
       "waw4free" => ["koncert", "wystawa", "teatr", "film", "festiwal"],
       "week_pl" => ["muzyka", "sztuka", "teatr", "sport", "rozrywka"],
@@ -167,7 +193,10 @@ defmodule Mix.Tasks.Mappings.Validate do
         if result != [] do
           if verbose? do
             category_ids = Enum.map(result, &elem(&1, 0))
-            IO.puts("#{IO.ANSI.green()}✓#{IO.ANSI.reset()} #{source}: #{inspect(cats)} → #{inspect(category_ids)}")
+
+            IO.puts(
+              "#{IO.ANSI.green()}✓#{IO.ANSI.reset()} #{source}: #{inspect(cats)} → #{inspect(category_ids)}"
+            )
           end
 
           {success_count + 1, failures}
@@ -175,7 +204,9 @@ defmodule Mix.Tasks.Mappings.Validate do
           failure = %{source: source, categories: cats}
 
           if verbose? do
-            IO.puts("#{IO.ANSI.yellow()}○#{IO.ANSI.reset()} #{source}: #{inspect(cats)} → (no mapping)")
+            IO.puts(
+              "#{IO.ANSI.yellow()}○#{IO.ANSI.reset()} #{source}: #{inspect(cats)} → (no mapping)"
+            )
           end
 
           {success_count, [failure | failures]}

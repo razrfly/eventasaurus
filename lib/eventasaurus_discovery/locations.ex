@@ -179,6 +179,7 @@ defmodule EventasaurusDiscovery.Locations do
   """
   def search_cities(query, opts \\ []) when is_binary(query) do
     limit = Keyword.get(opts, :limit, 20)
+
     sanitized =
       query
       |> String.replace("\\", "\\\\")
@@ -190,7 +191,11 @@ defmodule EventasaurusDiscovery.Locations do
     from(c in City,
       where:
         ilike(c.name, ^pattern) or
-          fragment("EXISTS (SELECT 1 FROM unnest(?) AS alt WHERE alt ILIKE ?)", c.alternate_names, ^pattern),
+          fragment(
+            "EXISTS (SELECT 1 FROM unnest(?) AS alt WHERE alt ILIKE ?)",
+            c.alternate_names,
+            ^pattern
+          ),
       where: not is_nil(c.latitude) and not is_nil(c.longitude),
       order_by: [asc: c.name],
       limit: ^limit,

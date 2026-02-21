@@ -455,7 +455,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
   end
 
   defp ensure_utf8(body) when is_binary(body) do
-    EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8_with_logging(body, "Repertuary MoviePageJob HTTP response")
+    EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8_with_logging(
+      body,
+      "Repertuary MoviePageJob HTTP response"
+    )
   end
 
   defp ensure_utf8(body), do: body

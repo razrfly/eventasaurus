@@ -15,34 +15,34 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktestRun do
 
   schema "category_backtest_runs" do
     # Run identification
-    field :name, :string
+    field(:name, :string)
 
     # Model configuration
-    field :model_name, :string, default: "facebook/bart-large-mnli"
-    field :candidate_labels, :map
-    field :threshold, :float, default: 0.5
+    field(:model_name, :string, default: "facebook/bart-large-mnli")
+    field(:candidate_labels, :map)
+    field(:threshold, :float, default: 0.5)
 
     # Sample configuration
-    field :sample_size, :integer
-    field :source_filter, :string
+    field(:sample_size, :integer)
+    field(:source_filter, :string)
 
     # Results summary
-    field :accuracy, :float
-    field :precision_macro, :float
-    field :recall_macro, :float
-    field :f1_macro, :float
+    field(:accuracy, :float)
+    field(:precision_macro, :float)
+    field(:recall_macro, :float)
+    field(:f1_macro, :float)
 
     # Execution status
-    field :status, :string, default: "pending"
-    field :started_at, :utc_datetime_usec
-    field :completed_at, :utc_datetime_usec
-    field :error_message, :string
+    field(:status, :string, default: "pending")
+    field(:started_at, :utc_datetime_usec)
+    field(:completed_at, :utc_datetime_usec)
+    field(:error_message, :string)
 
     # Additional metadata
-    field :metadata, :map, default: %{}
+    field(:metadata, :map, default: %{})
 
     # Associations
-    has_many :results, CategoryBacktestResult, foreign_key: :backtest_run_id
+    has_many(:results, CategoryBacktestResult, foreign_key: :backtest_run_id)
 
     timestamps()
   end

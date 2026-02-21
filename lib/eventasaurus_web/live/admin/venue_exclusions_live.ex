@@ -12,14 +12,14 @@ defmodule EventasaurusWeb.Admin.VenueExclusionsLive do
     {:ok,
      socket
      |> assign(:page_title, "Venue Exclusions")
-      |> assign(:loading, true)
-      |> assign(:cities, [])
-      |> assign(:filters, %{})
-      |> assign(:exclusions, [])
-      |> assign(:total_count, 0)
-      |> assign(:page, 1)
-      |> assign(:total_pages, 1)
-      |> assign(:current_user_id, get_user_id(session))}
+     |> assign(:loading, true)
+     |> assign(:cities, [])
+     |> assign(:filters, %{})
+     |> assign(:exclusions, [])
+     |> assign(:total_count, 0)
+     |> assign(:page, 1)
+     |> assign(:total_pages, 1)
+     |> assign(:current_user_id, get_user_id(session))}
   end
 
   @impl true
@@ -68,7 +68,8 @@ defmodule EventasaurusWeb.Admin.VenueExclusionsLive do
       end
     else
       _ ->
-        {:noreply, put_flash(socket, :error, "Unable to remove exclusion. Please refresh and try again.")}
+        {:noreply,
+         put_flash(socket, :error, "Unable to remove exclusion. Please refresh and try again.")}
     end
   end
 

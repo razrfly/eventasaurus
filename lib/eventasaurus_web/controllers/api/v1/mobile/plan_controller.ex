@@ -130,7 +130,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.PlanController do
       emails
       |> Enum.filter(&is_binary/1)
       |> Enum.map(&String.trim/1)
-      |> Enum.filter(&(Regex.match?(@email_regex, &1)))
+      |> Enum.filter(&Regex.match?(@email_regex, &1))
       |> Enum.uniq()
 
     cond do

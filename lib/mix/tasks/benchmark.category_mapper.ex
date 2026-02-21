@@ -56,7 +56,9 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
     category_lookup = build_category_lookup()
 
     if verbose? do
-      IO.puts("\n#{IO.ANSI.yellow()}Categories loaded: #{map_size(category_lookup)}#{IO.ANSI.reset()}")
+      IO.puts(
+        "\n#{IO.ANSI.yellow()}Categories loaded: #{map_size(category_lookup)}#{IO.ANSI.reset()}"
+      )
     end
 
     # 3. Benchmark lookup times
@@ -100,10 +102,13 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
     stats.by_source
     |> Enum.sort_by(fn {name, _} -> name end)
     |> Enum.each(fn {source, %{direct: d, patterns: p}} ->
-      IO.puts("  #{String.pad_trailing(source, 20)} Direct: #{String.pad_leading(to_string(d), 3)}  Patterns: #{String.pad_leading(to_string(p), 2)}")
+      IO.puts(
+        "  #{String.pad_trailing(source, 20)} Direct: #{String.pad_leading(to_string(d), 3)}  Patterns: #{String.pad_leading(to_string(p), 2)}"
+      )
     end)
 
     IO.puts("───────────────────────────────────────────────────────────")
+
     IO.puts(
       "  #{IO.ANSI.bright()}TOTAL#{IO.ANSI.reset()}                    Direct: #{String.pad_leading(to_string(stats.total_direct), 3)}  Patterns: #{String.pad_leading(to_string(stats.total_patterns), 2)}"
     )
@@ -134,7 +139,9 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
     ]
 
     if verbose? do
-      IO.puts("\n#{IO.ANSI.yellow()}Running #{iterations} iterations per test case...#{IO.ANSI.reset()}")
+      IO.puts(
+        "\n#{IO.ANSI.yellow()}Running #{iterations} iterations per test case...#{IO.ANSI.reset()}"
+      )
     end
 
     # Warm up
@@ -202,8 +209,13 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
   end
 
   defp print_stats(stats) do
-    IO.puts("    Min: #{format_time(stats.min)}  Max: #{format_time(stats.max)}  Avg: #{format_time(stats.avg)}")
-    IO.puts("    P50: #{format_time(stats.p50)}  P95: #{format_time(stats.p95)}  P99: #{format_time(stats.p99)}")
+    IO.puts(
+      "    Min: #{format_time(stats.min)}  Max: #{format_time(stats.max)}  Avg: #{format_time(stats.avg)}"
+    )
+
+    IO.puts(
+      "    P50: #{format_time(stats.p50)}  P95: #{format_time(stats.p95)}  P99: #{format_time(stats.p99)}"
+    )
   end
 
   defp format_time(microseconds) do
@@ -304,9 +316,17 @@ defmodule Mix.Tasks.Benchmark.CategoryMapper do
   defp print_summary(summary) do
     IO.puts("#{IO.ANSI.bright()}📋 Summary#{IO.ANSI.reset()}")
     IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    IO.puts("  Total mappings: #{summary.mappings.total} (#{summary.mappings.total_direct} direct + #{summary.mappings.total_patterns} patterns)")
+
+    IO.puts(
+      "  Total mappings: #{summary.mappings.total} (#{summary.mappings.total_direct} direct + #{summary.mappings.total_patterns} patterns)"
+    )
+
     IO.puts("  Avg single lookup: #{format_time(summary.performance.single_lookup_avg_us)}")
-    IO.puts("  Fallback rate: #{:erlang.float_to_binary(summary.quality.fallback_rate_percent, decimals: 1)}%")
+
+    IO.puts(
+      "  Fallback rate: #{:erlang.float_to_binary(summary.quality.fallback_rate_percent, decimals: 1)}%"
+    )
+
     IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
   end
 

@@ -236,10 +236,10 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
   def enrich_with_all_events_filters(query_opts) do
     all_events_filters = build_date_range_count_filters(query_opts)
 
-    # Propagate aggregation flags so the count query uses the same grouping
+    # Propagate city/grouping flags but NOT :aggregate — build_date_range_count_filters
+    # is the single source of truth for :aggregate (always true for count queries).
     all_events_filters =
       all_events_filters
-      |> maybe_propagate(query_opts, :aggregate)
       |> maybe_propagate(query_opts, :ignore_city_in_aggregation)
       |> maybe_propagate(query_opts, :viewing_city)
 

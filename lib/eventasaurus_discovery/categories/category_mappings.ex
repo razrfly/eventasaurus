@@ -356,9 +356,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryMappings do
   """
   def delete_all_by_source(source) do
     {count, _} =
-      Repo.delete_all(
-        from(m in CategoryMapping, where: m.source == ^source)
-      )
+      Repo.delete_all(from(m in CategoryMapping, where: m.source == ^source))
 
     refresh_cache()
     {:ok, count}

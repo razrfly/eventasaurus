@@ -66,11 +66,19 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
     # Start application for DB access
     Mix.Task.run("app.start")
 
-    IO.puts("\n#{IO.ANSI.cyan()}📦 YAML to Database Migration (from archived files)#{IO.ANSI.reset()}")
+    IO.puts(
+      "\n#{IO.ANSI.cyan()}📦 YAML to Database Migration (from archived files)#{IO.ANSI.reset()}"
+    )
+
     IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 
-    IO.puts("#{IO.ANSI.yellow()}⚠️  Note: YAML files are archived. Database is the authoritative source.#{IO.ANSI.reset()}")
-    IO.puts("#{IO.ANSI.yellow()}   Use /admin/category-mappings for normal operations.#{IO.ANSI.reset()}\n")
+    IO.puts(
+      "#{IO.ANSI.yellow()}⚠️  Note: YAML files are archived. Database is the authoritative source.#{IO.ANSI.reset()}"
+    )
+
+    IO.puts(
+      "#{IO.ANSI.yellow()}   Use /admin/category-mappings for normal operations.#{IO.ANSI.reset()}\n"
+    )
 
     if dry_run? do
       IO.puts("#{IO.ANSI.yellow()}🔍 DRY RUN MODE - No changes will be made#{IO.ANSI.reset()}\n")
@@ -228,7 +236,10 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
         result
 
       {:ok, _} ->
-        IO.puts("   #{IO.ANSI.red()}❌ Invalid YAML structure (missing 'mappings' key)#{IO.ANSI.reset()}\n")
+        IO.puts(
+          "   #{IO.ANSI.red()}❌ Invalid YAML structure (missing 'mappings' key)#{IO.ANSI.reset()}\n"
+        )
+
         %{source: source, status: :error, error: "Invalid YAML structure"}
 
       {:error, reason} ->
@@ -246,7 +257,10 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
         category_slug: to_string(category_slug),
         priority: 0,
         is_active: true,
-        metadata: %{imported_from: "yaml", imported_at: DateTime.utc_now() |> DateTime.to_iso8601()}
+        metadata: %{
+          imported_from: "yaml",
+          imported_at: DateTime.utc_now() |> DateTime.to_iso8601()
+        }
       }
     end)
   end
@@ -271,7 +285,10 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
           category_slug: to_string(category_slug),
           priority: priority,
           is_active: true,
-          metadata: %{imported_from: "yaml", imported_at: DateTime.utc_now() |> DateTime.to_iso8601()}
+          metadata: %{
+            imported_from: "yaml",
+            imported_at: DateTime.utc_now() |> DateTime.to_iso8601()
+          }
         }
       end)
     end)
@@ -316,14 +333,19 @@ defmodule Mix.Tasks.Mappings.MigrateYaml do
     IO.puts("    Patterns: #{total_patterns}")
 
     if dry_run? do
-      IO.puts("\n#{IO.ANSI.yellow()}Run without --dry-run to import these mappings#{IO.ANSI.reset()}")
+      IO.puts(
+        "\n#{IO.ANSI.yellow()}Run without --dry-run to import these mappings#{IO.ANSI.reset()}"
+      )
     else
       IO.puts("\n#{IO.ANSI.green()}✅ Migration complete!#{IO.ANSI.reset()}")
 
       # Show current DB stats
       stats = CategoryMappings.get_stats()
       IO.puts("\nDatabase now contains:")
-      IO.puts("  Total: #{stats.total} mappings (#{stats.total_direct} direct, #{stats.total_patterns} patterns)")
+
+      IO.puts(
+        "  Total: #{stats.total} mappings (#{stats.total_direct} direct, #{stats.total_patterns} patterns)"
+      )
     end
 
     IO.puts("")

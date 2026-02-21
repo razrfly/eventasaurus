@@ -100,7 +100,10 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
 
     socket =
       socket
-      |> assign(:flash_message, {:warning, "All caches cleared! Pages will reload from database."})
+      |> assign(
+        :flash_message,
+        {:warning, "All caches cleared! Pages will reload from database."}
+      )
 
     {:noreply, socket}
   end
@@ -151,7 +154,10 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
           socket
           |> assign(:mv_refreshing, false)
           |> assign(:mv_refresh_start_time, nil)
-          |> assign(:flash_message, {:info, "Materialized view refreshed: #{row_count} rows in #{duration_ms}ms"})
+          |> assign(
+            :flash_message,
+            {:info, "Materialized view refreshed: #{row_count} rows in #{duration_ms}ms"}
+          )
           |> load_mv_status()
 
         {:error, reason} ->

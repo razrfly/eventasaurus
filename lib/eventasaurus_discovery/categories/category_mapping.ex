@@ -43,15 +43,15 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapping do
   @mapping_types ~w(direct pattern)
 
   schema "category_mappings" do
-    field :source, :string
-    field :external_term, :string
-    field :mapping_type, :string
-    field :category_slug, :string
-    field :priority, :integer, default: 0
-    field :is_active, :boolean, default: true
-    field :metadata, :map, default: %{}
+    field(:source, :string)
+    field(:external_term, :string)
+    field(:mapping_type, :string)
+    field(:category_slug, :string)
+    field(:priority, :integer, default: 0)
+    field(:is_active, :boolean, default: true)
+    field(:metadata, :map, default: %{})
 
-    belongs_to :created_by, EventasaurusApp.Accounts.User
+    belongs_to(:created_by, EventasaurusApp.Accounts.User)
 
     timestamps()
   end
@@ -72,9 +72,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapping do
       :metadata
     ])
     |> validate_required([:source, :external_term, :mapping_type, :category_slug])
-    |> validate_inclusion(:mapping_type, @mapping_types,
-      message: "must be 'direct' or 'pattern'"
-    )
+    |> validate_inclusion(:mapping_type, @mapping_types, message: "must be 'direct' or 'pattern'")
     |> validate_length(:source, max: 50)
     |> validate_length(:external_term, max: 255)
     |> validate_length(:category_slug, max: 100)

@@ -1,0 +1,123 @@
+defmodule EventasaurusWeb.Resolvers.PlanResolver do
+  @moduledoc """
+  Resolvers for Plan with Friends GraphQL queries and mutations.
+  """
+
+  require Logger
+
+  alias EventasaurusApp.Events
+  alias EventasaurusApp.Events.EventPlans
+  alias EventasaurusDiscovery.PublicEvents
+
+  def my_plan(_parent, %{slug: slug}, %{context: %{current_user: user}}) do
+    case PublicEvents.get_by_slug(slug) do
+      nil ->
+        {:ok, nil}
+
+      public_event ->
+        case EventPlans.get_user_plan_for_event(user.id, public_event.id) do
+          %{private_event: private_event} = event_plan ->
+            invite_count =
+              Events.list_event_participants(private_event)
+              |> Enum.count(fn p -> p.role == :invitee end)
+
+            {:ok,
+             %{
+               slug: private_event.slug,
+               title: private_event.title,
+               invite_count: invite_count,
+               created_at: event_plan.inserted_at,
+               already_exists: nil
+             }}
+
+          nil ->
+            {:ok, nil}
+        end
+    end
+  end
+
+  def create_plan(_parent, %{slug: slug, emails: emails} = args, %{
+        context: %{current_user: user}
+      }) do
+    case PublicEvents.get_by_slug(slug) do
+      nil ->
+        {:ok, %{plan: nil, errors: [%{field: "slug", message: "Event not found"}]}}
+
+      public_event ->
+        plan_attrs = build_plan_attrs(args)
+
+        case EventPlans.create_from_public_event(public_event.id, user.id, plan_attrs) do
+          {:ok, {:created, event_plan, private_event}} ->
+            invite_count = send_email_invitations(private_event, emails, args[:message], user)
+
+            {:ok,
+             %{
+               plan: %{
+                 slug: private_event.slug,
+                 title: private_event.title,
+                 invite_count: invite_count,
+                 created_at: event_plan.inserted_at,
+                 already_exists: false
+               },
+               errors: []
+             }}
+
+          {:ok, {:existing, event_plan, private_event}} ->
+            {:ok,
+             %{
+               plan: %{
+                 slug: private_event.slug,
+                 title: private_event.title,
+                 invite_count: 0,
+                 created_at: event_plan.inserted_at,
+                 already_exists: true
+               },
+               errors: []
+             }}
+
+          {:error, :event_in_past} ->
+            {:ok,
+             %{
+               plan: nil,
+               errors: [%{field: "slug", message: "Cannot create plans for past events"}]
+             }}
+
+          {:error, reason} ->
+            Logger.error("Failed to create plan via GraphQL",
+              slug: slug,
+              user_id: user.id,
+              reason: inspect(reason)
+            )
+
+            {:ok, %{plan: nil, errors: [%{field: "base", message: "Could not create plan"}]}}
+        end
+    end
+  end
+
+  defp build_plan_attrs(args) do
+    base = %{}
+
+    case args[:occurrence] do
+      %{datetime: dt} -> Map.put(base, :occurrence_datetime, dt)
+      _ -> base
+    end
+  end
+
+  defp send_email_invitations(_event, [], _message, _organizer), do: 0
+
+  defp send_email_invitations(event, emails, message, organizer) do
+    result =
+      Events.process_guest_invitations(
+        event,
+        organizer,
+        manual_emails: emails,
+        invitation_message: message || "",
+        mode: :invitation
+      )
+
+    case result do
+      %{successful_invitations: count} -> count
+      _ -> 0
+    end
+  end
+end

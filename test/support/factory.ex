@@ -885,8 +885,11 @@ defmodule EventasaurusApp.Factory do
       end)
 
     case Repo.transaction(multi) do
-      {:ok, %{event: event}} -> event
-      {:error, _step, changeset, _changes} -> raise "Failed to create complete public event: #{inspect(changeset.errors)}"
+      {:ok, %{event: event}} ->
+        event
+
+      {:error, _step, changeset, _changes} ->
+        raise "Failed to create complete public event: #{inspect(changeset.errors)}"
     end
   end
 

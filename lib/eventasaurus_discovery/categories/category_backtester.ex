@@ -100,9 +100,10 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
   @spec get_latest_run() :: {:ok, CategoryBacktestRun.t()} | {:error, :not_found}
   def get_latest_run do
     query =
-      from r in CategoryBacktestRun,
+      from(r in CategoryBacktestRun,
         order_by: [desc: r.inserted_at],
         limit: 1
+      )
 
     case Repo.one(query) do
       nil -> {:error, :not_found}
@@ -124,13 +125,14 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
     status = Keyword.get(opts, :status)
 
     query =
-      from r in CategoryBacktestRun,
+      from(r in CategoryBacktestRun,
         order_by: [desc: r.inserted_at],
         limit: ^limit
+      )
 
     query =
       if status do
-        from r in query, where: r.status == ^status
+        from(r in query, where: r.status == ^status)
       else
         query
       end
@@ -148,7 +150,8 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
   - `:category` - Filter by expected or predicted category
   - `:limit` - Limit results
   """
-  @spec get_results(integer(), keyword()) :: {:ok, [CategoryBacktestResult.t()]} | {:error, term()}
+  @spec get_results(integer(), keyword()) ::
+          {:ok, [CategoryBacktestResult.t()]} | {:error, term()}
   def get_results(run_id, opts \\ []) do
     only_incorrect = Keyword.get(opts, :only_incorrect, false)
     source = Keyword.get(opts, :source)
@@ -156,35 +159,37 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
     limit = Keyword.get(opts, :limit)
 
     query =
-      from r in CategoryBacktestResult,
+      from(r in CategoryBacktestResult,
         where: r.backtest_run_id == ^run_id,
         order_by: [asc: r.source, asc: r.external_term]
+      )
 
     query =
       if only_incorrect do
-        from r in query, where: r.is_correct == false
+        from(r in query, where: r.is_correct == false)
       else
         query
       end
 
     query =
       if source do
-        from r in query, where: r.source == ^source
+        from(r in query, where: r.source == ^source)
       else
         query
       end
 
     query =
       if category do
-        from r in query,
+        from(r in query,
           where: r.expected_category_slug == ^category or r.predicted_category_slug == ^category
+        )
       else
         query
       end
 
     query =
       if limit do
-        from r in query, limit: ^limit
+        from(r in query, limit: ^limit)
       else
         query
       end
@@ -200,10 +205,11 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
   @spec confusion_matrix(integer()) :: {:ok, map()} | {:error, term()}
   def confusion_matrix(run_id) do
     query =
-      from r in CategoryBacktestResult,
+      from(r in CategoryBacktestResult,
         where: r.backtest_run_id == ^run_id,
         group_by: [r.expected_category_slug, r.predicted_category_slug],
         select: {r.expected_category_slug, r.predicted_category_slug, count(r.id)}
+      )
 
     results = Repo.all(query)
 
@@ -271,7 +277,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
 
   defp load_mappings(sample_size, source_filter) do
     query =
-      from m in CategoryMapping,
+      from(m in CategoryMapping,
         where: m.is_active == true,
         where: m.mapping_type == "direct",
         order_by: fragment("RANDOM()"),
@@ -281,10 +287,11 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
           external_term: m.external_term,
           category_slug: m.category_slug
         }
+      )
 
     query =
       if source_filter do
-        from m in query, where: m.source == ^source_filter
+        from(m in query, where: m.source == ^source_filter)
       else
         query
       end
@@ -390,17 +397,31 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktester do
     category_metrics =
       Enum.map(categories, fn cat ->
         # True positives: predicted=cat AND expected=cat
-        tp = Enum.count(results, &(&1.predicted_category_slug == cat && &1.expected_category_slug == cat))
+        tp =
+          Enum.count(
+            results,
+            &(&1.predicted_category_slug == cat && &1.expected_category_slug == cat)
+          )
 
         # False positives: predicted=cat AND expected!=cat
-        fp = Enum.count(results, &(&1.predicted_category_slug == cat && &1.expected_category_slug != cat))
+        fp =
+          Enum.count(
+            results,
+            &(&1.predicted_category_slug == cat && &1.expected_category_slug != cat)
+          )
 
         # False negatives: predicted!=cat AND expected=cat
-        fn_ = Enum.count(results, &(&1.predicted_category_slug != cat && &1.expected_category_slug == cat))
+        fn_ =
+          Enum.count(
+            results,
+            &(&1.predicted_category_slug != cat && &1.expected_category_slug == cat)
+          )
 
         precision = if tp + fp > 0, do: tp / (tp + fp), else: 0.0
         recall = if tp + fn_ > 0, do: tp / (tp + fn_), else: 0.0
-        f1 = if precision + recall > 0, do: 2 * precision * recall / (precision + recall), else: 0.0
+
+        f1 =
+          if precision + recall > 0, do: 2 * precision * recall / (precision + recall), else: 0.0
 
         {cat, %{precision: precision, recall: recall, f1: f1}}
       end)

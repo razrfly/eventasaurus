@@ -174,7 +174,9 @@ defmodule EventasaurusApp.ReleaseTasks do
 
         imported_msg = if result[:imported], do: ", Imported: #{result.imported}", else: ""
 
-        IO.puts("   #{status_icon} Direct: #{result.direct}, Patterns: #{result.patterns}#{imported_msg}\n")
+        IO.puts(
+          "   #{status_icon} Direct: #{result.direct}, Patterns: #{result.patterns}#{imported_msg}\n"
+        )
 
         result
 
@@ -197,7 +199,10 @@ defmodule EventasaurusApp.ReleaseTasks do
         category_slug: to_string(category_slug),
         priority: 0,
         is_active: true,
-        metadata: %{imported_from: "yaml", imported_at: DateTime.utc_now() |> DateTime.to_iso8601()}
+        metadata: %{
+          imported_from: "yaml",
+          imported_at: DateTime.utc_now() |> DateTime.to_iso8601()
+        }
       }
     end)
   end
@@ -222,7 +227,10 @@ defmodule EventasaurusApp.ReleaseTasks do
           category_slug: to_string(category_slug),
           priority: priority,
           is_active: true,
-          metadata: %{imported_from: "yaml", imported_at: DateTime.utc_now() |> DateTime.to_iso8601()}
+          metadata: %{
+            imported_from: "yaml",
+            imported_at: DateTime.utc_now() |> DateTime.to_iso8601()
+          }
         }
       end)
     end)

@@ -1002,6 +1002,41 @@ defmodule EventasaurusWeb.Router do
     post "/sentry-test", SentryTestController, :test_production_error
   end
 
+  # GraphQL API pipeline (Issue #3562)
+  pipeline :graphql do
+    plug :accepts, ["json"]
+    plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: true
+    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 60, window: 60_000
+    plug :fetch_session
+
+    if Mix.env() == :dev do
+      plug EventasaurusWeb.Dev.DevAuthPlug
+    end
+
+    plug :fetch_auth_user
+    plug :assign_user_struct
+    plug EventasaurusWeb.Plugs.GraphQLContextPlug
+  end
+
+  scope "/api/graphql" do
+    pipe_through :graphql
+
+    forward "/", Absinthe.Plug,
+      schema: EventasaurusWeb.Schema,
+      before_send: {EventasaurusWeb.Schema.AbsintheHelpers, :before_send}
+  end
+
+  # GraphiQL in dev only
+  if Mix.env() == :dev do
+    scope "/api" do
+      pipe_through :graphql
+
+      forward "/graphiql", Absinthe.Plug.GraphiQL,
+        schema: EventasaurusWeb.Schema,
+        interface: :playground
+    end
+  end
+
   # Mobile API — public discovery endpoints (no auth required)
   scope "/api/v1/mobile", EventasaurusWeb.Api.V1.Mobile do
     pipe_through [:secure_api]

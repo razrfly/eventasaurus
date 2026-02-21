@@ -835,7 +835,12 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
     target_images =
       from(c in EventasaurusApp.Images.CachedImage,
         where: c.entity_type == "venue" and c.entity_id == ^target_id,
-        select: %{id: c.id, image_type: c.image_type, position: c.position, original_url: c.original_url}
+        select: %{
+          id: c.id,
+          image_type: c.image_type,
+          position: c.position,
+          original_url: c.original_url
+        }
       )
       |> Repo.all()
 
@@ -875,7 +880,9 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
           |> Repo.update_all(set: [entity_id: target_id, position: next_position])
 
           new_pos_map = Map.put(pos_map, image_type, next_position)
-          new_url_map = Map.put(url_map, image_type, MapSet.put(existing_urls, image.original_url))
+
+          new_url_map =
+            Map.put(url_map, image_type, MapSet.put(existing_urls, image.original_url))
 
           {new_pos_map, new_url_map}
         end
