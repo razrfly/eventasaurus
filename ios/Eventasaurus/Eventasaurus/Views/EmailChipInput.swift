@@ -18,7 +18,7 @@ struct EmailChipInput: View {
 
             // Input field
             HStack {
-                TextField("friend@example.com", text: $currentInput)
+                TextField("Enter email address", text: $currentInput)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -58,8 +58,13 @@ struct EmailChipInput: View {
     private func addCurrentEmail() {
         let trimmed = currentInput.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Handle comma-separated paste
-        let parts = trimmed.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        // Handle comma, semicolon, or newline-separated paste
+        let parts = trimmed
+            .replacingOccurrences(of: ";", with: ",")
+            .replacingOccurrences(of: "\n", with: ",")
+            .replacingOccurrences(of: "\r", with: ",")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
 
         for part in parts {
             if isValidEmail(part) && !emails.contains(part) {

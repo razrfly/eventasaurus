@@ -4,4 +4,5 @@ defmodule EventasaurusWeb.Schema.Queries do
   import_types(EventasaurusWeb.Schema.Queries.ProfileQueries)
   import_types(EventasaurusWeb.Schema.Queries.EventQueries)
   import_types(EventasaurusWeb.Schema.Queries.ParticipationQueries)
+  import_types(EventasaurusWeb.Schema.Queries.PlanQueries)
 end

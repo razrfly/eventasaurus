@@ -262,14 +262,15 @@ final class GraphQLClient {
 
     // MARK: - Plan
 
-    func createPlan(slug: String, emails: [String], message: String? = nil) async throws -> GQLPlan {
+    func createPlan(slug: String, emails: [String], friendIds: [String] = [], message: String? = nil) async throws -> GQLPlan {
         var variables: [String: Any] = ["slug": slug, "emails": emails]
+        if !friendIds.isEmpty { variables["friendIds"] = friendIds }
         if let message { variables["message"] = message }
 
         let result: GQLPlanResponse = try await execute(
             query: """
-            mutation CreatePlan($slug: String!, $emails: [String!]!, $message: String) {
-                createPlan(slug: $slug, emails: $emails, message: $message) {
+            mutation CreatePlan($slug: String!, $emails: [String!]!, $friendIds: [ID!], $message: String) {
+                createPlan(slug: $slug, emails: $emails, friendIds: $friendIds, message: $message) {
                     plan {
                         slug title inviteCount createdAt alreadyExists
                     }
@@ -301,6 +302,24 @@ final class GraphQLClient {
             variables: ["slug": slug]
         )
         return result.myPlan
+    }
+
+    // MARK: - Participant Suggestions
+
+    func fetchParticipantSuggestions(limit: Int = 20) async throws -> [ParticipantSuggestion] {
+        let result: GQLParticipantSuggestionsResponse = try await execute(
+            query: """
+            query ParticipantSuggestions($limit: Int) {
+                participantSuggestions(limit: $limit) {
+                    userId name email username
+                    participationCount totalScore recommendationLevel
+                    avatarUrl
+                }
+            }
+            """,
+            variables: ["limit": limit]
+        )
+        return result.participantSuggestions
     }
 
     // MARK: - Image Upload

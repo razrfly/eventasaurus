@@ -7,4 +7,5 @@ defmodule EventasaurusWeb.Schema.Types do
   import_types(EventasaurusWeb.Schema.Types.Venue)
   import_types(EventasaurusWeb.Schema.Types.Participant)
   import_types(EventasaurusWeb.Schema.Types.Plan)
+  import_types(EventasaurusWeb.Schema.Types.ParticipantSuggestion)
 end

@@ -11,6 +11,17 @@ struct PlanWithFriendsSheet: View {
     @State private var showSuccess = false
     @State private var errorMessage: String?
 
+    // Suggestions
+    @State private var suggestions: [ParticipantSuggestion] = []
+    @State private var isLoadingSuggestions = true
+    @State private var selectedFriendIds: Set<String> = []
+
+    // Templates
+    @State private var selectedTemplate: MessageTemplate? = nil
+    @State private var showTemplates = false
+
+    private let maxMessageLength = 500
+
     var body: some View {
         NavigationStack {
             Group {
@@ -29,56 +40,30 @@ struct PlanWithFriendsSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
+        .task { await loadSuggestions() }
     }
+
+    // MARK: - Form Content
 
     private var formContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xxl) {
-                // Event header
-                HStack(spacing: DS.Spacing.lg) {
-                    CachedImage(
-                        url: event.coverImageUrl.flatMap { URL(string: $0) },
-                        height: DS.ImageSize.thumbnail,
-                        cornerRadius: DS.Radius.md,
-                        placeholderIcon: "calendar"
-                    )
-                    .frame(width: DS.ImageSize.thumbnail)
-
-                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                        Text(event.title)
-                            .font(DS.Typography.bodyMedium)
-                            .lineLimit(2)
-                        if let date = event.startsAt {
-                            Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
-                                .font(DS.Typography.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
+                eventHeader
 
                 Divider()
 
-                // Email input
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    Text("Invite friends by email")
-                        .font(DS.Typography.bodyMedium)
-                    Text("They'll receive an email invitation to join your plan.")
-                        .font(DS.Typography.caption)
-                        .foregroundStyle(.secondary)
-                    EmailChipInput(emails: $emails)
+                // Friend suggestions (hidden if empty and done loading)
+                if isLoadingSuggestions || !suggestions.isEmpty {
+                    suggestionsSection
+                    Divider()
                 }
+
+                emailInputSection
 
                 Divider()
 
-                // Message
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    Text("Message (optional)")
-                        .font(DS.Typography.bodyMedium)
-                    TextField("Let's go together!", text: $message, axis: .vertical)
-                        .lineLimit(2...4)
-                        .textFieldStyle(.roundedBorder)
-                }
+                messageSection
 
                 if let errorMessage {
                     Text(errorMessage)
@@ -86,27 +71,272 @@ struct PlanWithFriendsSheet: View {
                         .foregroundStyle(DS.Colors.error)
                 }
 
-                // Submit button
-                Button {
-                    Task { await createPlan() }
-                } label: {
-                    if isSubmitting {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Text("Create Plan & Send Invites (\(emails.count))")
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(DS.Colors.plan)
-                .controlSize(.large)
-                .disabled(emails.isEmpty || isSubmitting)
-                .accessibilityLabel("Create plan and send \(emails.count) invites")
+                submitButton
             }
             .padding(DS.Spacing.xl)
         }
     }
+
+    // MARK: - Event Header
+
+    private var eventHeader: some View {
+        HStack(spacing: DS.Spacing.lg) {
+            CachedImage(
+                url: event.coverImageUrl.flatMap { URL(string: $0) },
+                height: DS.ImageSize.thumbnail,
+                cornerRadius: DS.Radius.md,
+                placeholderIcon: "calendar"
+            )
+            .frame(width: DS.ImageSize.thumbnail)
+
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(event.title)
+                    .font(DS.Typography.bodyMedium)
+                    .lineLimit(2)
+                if let venue = event.venue {
+                    Text(venue.name)
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let date = event.startsAt {
+                    Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Suggestions Section
+
+    private var suggestionsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text("People from your past events")
+                .font(DS.Typography.bodyMedium)
+            Text("Select people who have attended your previous events")
+                .font(DS.Typography.caption)
+                .foregroundStyle(.secondary)
+
+            if isLoadingSuggestions {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+                .padding(.vertical, DS.Spacing.md)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.md) {
+                        ForEach(suggestions) { suggestion in
+                            suggestionCard(suggestion)
+                        }
+                    }
+                    .padding(.vertical, DS.Spacing.xs)
+                }
+            }
+        }
+    }
+
+    private func suggestionCard(_ suggestion: ParticipantSuggestion) -> some View {
+        let isSelected = selectedFriendIds.contains(suggestion.userId)
+        let avatarSize: CGFloat = 48
+
+        return Button {
+            toggleSuggestion(suggestion)
+        } label: {
+            VStack(spacing: DS.Spacing.xs) {
+                // Avatar with selection overlay
+                ZStack(alignment: .bottomTrailing) {
+                    DiceBearAvatar(email: suggestion.email, size: avatarSize)
+                        .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(isSelected ? DS.Colors.plan : .clear, lineWidth: 2.5)
+                    )
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(DS.Colors.plan)
+                            .background(Circle().fill(.white).frame(width: 14, height: 14))
+                            .offset(x: 2, y: 2)
+                    }
+                }
+
+                // Name
+                Text(suggestion.name ?? suggestion.username ?? suggestion.email)
+                    .font(DS.Typography.caption)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+
+                // Participation count
+                Text(participationText(suggestion.participationCount))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                // Recommendation badge
+                if suggestion.recommendationLevel == "highly_recommended" {
+                    badgeView(text: "Top pick", color: .green)
+                } else if suggestion.recommendationLevel == "recommended" {
+                    badgeView(text: "Recommended", color: .blue)
+                }
+            }
+            .frame(width: 80)
+            .padding(.vertical, DS.Spacing.sm)
+            .padding(.horizontal, DS.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md)
+                    .fill(isSelected ? DS.Colors.plan.opacity(0.06) : Color(.systemGray6))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func badgeView(text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule().fill(color.opacity(0.12))
+            )
+    }
+
+    private func participationText(_ count: Int) -> String {
+        switch count {
+        case 0: return "New"
+        case 1: return "1 event"
+        default: return "\(count) events"
+        }
+    }
+
+    // MARK: - Email Input Section
+
+    private var emailInputSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text("Invite friends by email")
+                .font(DS.Typography.bodyMedium)
+            Text("They'll receive an email invitation to join your plan.")
+                .font(DS.Typography.caption)
+                .foregroundStyle(.secondary)
+            EmailChipInput(emails: $emails)
+        }
+    }
+
+    // MARK: - Message Section
+
+    private var messageSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack {
+                Text("Personal message (optional)")
+                    .font(DS.Typography.bodyMedium)
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showTemplates.toggle()
+                    }
+                } label: {
+                    Text(showTemplates ? "Hide templates" : "Use template")
+                        .font(DS.Typography.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(DS.Colors.plan)
+                }
+            }
+
+            if showTemplates {
+                VStack(spacing: DS.Spacing.sm) {
+                    Text("Choose a template:")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    ForEach(MessageTemplate.allCases) { template in
+                        templateCard(template)
+                    }
+                }
+                .padding(DS.Spacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .fill(Color(.systemGray6))
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            TextField("Hi! I'd love for you to join me at this event...", text: $message, axis: .vertical)
+                .lineLimit(2...4)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: message) { _, newValue in
+                    if newValue.count > maxMessageLength {
+                        message = String(newValue.prefix(maxMessageLength))
+                    }
+                }
+
+            HStack {
+                Spacer()
+                Text("\(message.count)/\(maxMessageLength)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func templateCard(_ template: MessageTemplate) -> some View {
+        Button {
+            selectedTemplate = template
+            message = template.text
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showTemplates = false
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(template.displayName)
+                    .font(DS.Typography.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                Text(template.text)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.sm)
+                    .fill(.background)
+                    .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.sm)
+                    .stroke(Color(.systemGray4), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Submit Button
+
+    private var submitButton: some View {
+        Button {
+            Task { await createPlan() }
+        } label: {
+            if isSubmitting {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+            } else {
+                Text("Create Plan & Send Invites (\(emails.count))")
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(DS.Colors.plan)
+        .controlSize(.large)
+        .disabled(emails.isEmpty && selectedFriendIds.isEmpty || isSubmitting)
+        .accessibilityLabel("Create plan and send \(emails.count) invites")
+    }
+
+    // MARK: - Success View
 
     private var successView: some View {
         VStack(spacing: DS.Spacing.xl) {
@@ -129,15 +359,45 @@ struct PlanWithFriendsSheet: View {
         }
     }
 
+    // MARK: - Data Loading
+
+    private func loadSuggestions() async {
+        do {
+            suggestions = try await GraphQLClient.shared.fetchParticipantSuggestions(limit: 20)
+        } catch {
+            // Silently fail — suggestions are optional enhancement
+        }
+        isLoadingSuggestions = false
+    }
+
+    // MARK: - Actions
+
+    private func toggleSuggestion(_ suggestion: ParticipantSuggestion) {
+        if selectedFriendIds.contains(suggestion.userId) {
+            selectedFriendIds.remove(suggestion.userId)
+            emails.removeAll { $0 == suggestion.email }
+        } else {
+            selectedFriendIds.insert(suggestion.userId)
+            if !emails.contains(suggestion.email) {
+                emails.append(suggestion.email)
+            }
+        }
+    }
+
     private func createPlan() async {
         isSubmitting = true
         errorMessage = nil
         defer { isSubmitting = false }
 
         do {
+            // Separate emails added by suggestion (tracked via friendIds) from manually typed ones
+            let manualEmails = emails.filter { email in
+                !suggestions.contains { $0.email == email && selectedFriendIds.contains($0.userId) }
+            }
             let plan = try await GraphQLClient.shared.createPlan(
                 slug: event.slug,
-                emails: emails,
+                emails: manualEmails,
+                friendIds: Array(selectedFriendIds),
                 message: message.isEmpty ? nil : message
             )
 
