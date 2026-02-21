@@ -7,12 +7,12 @@ struct EventDetailView: View {
     @State private var error: Error?
 
     // RSVP state
-    @State private var attendanceStatus: String?
+    @State private var rsvpStatus: RsvpStatus?
     @State private var attendeeCount: Int = 0
     @State private var isUpdatingStatus = false
 
     // Plan with Friends state
-    @State private var existingPlan: PlanInfo?
+    @State private var existingPlan: GQLPlan?
     @State private var planSheetEvent: Event?
 
     var body: some View {
@@ -32,7 +32,7 @@ struct EventDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadEvent() }
         .sheet(item: $planSheetEvent) { event in
-            PlanWithFriendsSheet(event: event) { plan in
+            PlanWithFriendsSheet(event: event) { (plan: GQLPlan) in
                 existingPlan = plan
             }
         }
@@ -179,31 +179,31 @@ struct EventDetailView: View {
     private var rsvpButtons: some View {
         HStack(spacing: DS.Spacing.lg) {
             Button {
-                Task { await toggleStatus("accepted") }
+                Task { await toggleStatus(.going) }
             } label: {
-                Label("Going", systemImage: attendanceStatus == "accepted" ? "checkmark.circle.fill" : "checkmark.circle")
+                Label("Going", systemImage: rsvpStatus == .going ? "checkmark.circle.fill" : "checkmark.circle")
                     .font(DS.Typography.bodyMedium)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .tint(attendanceStatus == "accepted" ? DS.Colors.going : .secondary)
+            .tint(rsvpStatus == .going ? DS.Colors.going : .secondary)
             .disabled(isUpdatingStatus)
             .accessibilityLabel("Going")
-            .accessibilityValue(attendanceStatus == "accepted" ? "Selected" : "Not selected")
+            .accessibilityValue(rsvpStatus == .going ? "Selected" : "Not selected")
             .accessibilityHint("Double tap to mark as going")
 
             Button {
-                Task { await toggleStatus("interested") }
+                Task { await toggleStatus(.interested) }
             } label: {
-                Label("Interested", systemImage: attendanceStatus == "interested" ? "star.fill" : "star")
+                Label("Interested", systemImage: rsvpStatus == .interested ? "star.fill" : "star")
                     .font(DS.Typography.bodyMedium)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .tint(attendanceStatus == "interested" ? DS.Colors.interested : .secondary)
+            .tint(rsvpStatus == .interested ? DS.Colors.interested : .secondary)
             .disabled(isUpdatingStatus)
             .accessibilityLabel("Interested")
-            .accessibilityValue(attendanceStatus == "interested" ? "Selected" : "Not selected")
+            .accessibilityValue(rsvpStatus == .interested ? "Selected" : "Not selected")
             .accessibilityHint("Double tap to mark as interested")
 
             if attendeeCount > 0 {
@@ -226,8 +226,8 @@ struct EventDetailView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text("You have a plan!")
                             .font(DS.Typography.bodyMedium)
-                        if let count = plan.inviteCount, count > 0 {
-                            Text("\(count) friends invited")
+                        if plan.inviteCount > 0 {
+                            Text("\(plan.inviteCount) friends invited")
                                 .font(DS.Typography.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -266,12 +266,19 @@ struct EventDetailView: View {
         do {
             let loaded = try await APIClient.shared.fetchEventDetail(slug: slug)
             event = loaded
-            attendanceStatus = loaded.attendanceStatus
+
+            // Map REST attendance status to RsvpStatus enum
+            if let status = loaded.attendanceStatus {
+                switch status {
+                case "accepted": rsvpStatus = .going
+                case "interested": rsvpStatus = .interested
+                default: rsvpStatus = nil
+                }
+            }
             attendeeCount = loaded.attendeeCount ?? 0
 
-            if let planResponse = try? await APIClient.shared.getExistingPlan(eventSlug: slug) {
-                existingPlan = planResponse.plan
-            }
+            // Load existing plan via GraphQL
+            existingPlan = try? await GraphQLClient.shared.fetchMyPlan(slug: slug)
         } catch is CancellationError {
             return
         } catch {
@@ -279,34 +286,34 @@ struct EventDetailView: View {
         }
     }
 
-    private func toggleStatus(_ status: String) async {
-        let previousStatus = attendanceStatus
+    private func toggleStatus(_ status: RsvpStatus) async {
+        let previousStatus = rsvpStatus
         let previousCount = attendeeCount
 
         isUpdatingStatus = true
         withAnimation(DS.Animation.spring) {
-            if attendanceStatus == status {
-                attendanceStatus = nil
-                if status == "accepted" { attendeeCount = max(0, attendeeCount - 1) }
+            if rsvpStatus == status {
+                rsvpStatus = nil
+                if status == .going { attendeeCount = max(0, attendeeCount - 1) }
             } else {
-                if previousStatus == "accepted" { attendeeCount = max(0, attendeeCount - 1) }
-                attendanceStatus = status
-                if status == "accepted" { attendeeCount += 1 }
+                if previousStatus == .going { attendeeCount = max(0, attendeeCount - 1) }
+                rsvpStatus = status
+                if status == .going { attendeeCount += 1 }
             }
         }
 
         do {
             if previousStatus == status {
-                _ = try await APIClient.shared.removeParticipantStatus(eventSlug: slug)
+                // Cancel RSVP
+                try await GraphQLClient.shared.cancelRsvp(slug: slug)
             } else {
-                let response = try await APIClient.shared.updateParticipantStatus(eventSlug: slug, status: status)
-                if let count = response.participantCount {
-                    attendeeCount = count
-                }
+                // Set RSVP — returns updated event with participant count
+                let updatedEvent = try await GraphQLClient.shared.rsvp(slug: slug, status: status)
+                attendeeCount = updatedEvent.participantCount
             }
         } catch {
             withAnimation(DS.Animation.spring) {
-                attendanceStatus = previousStatus
+                rsvpStatus = previousStatus
                 attendeeCount = previousCount
             }
         }

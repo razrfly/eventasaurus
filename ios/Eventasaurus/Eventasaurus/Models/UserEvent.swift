@@ -288,6 +288,37 @@ struct GQLRsvpResult: Codable {
     let errors: [InputError]?
 }
 
+struct GQLCancelRsvpResponse: Codable {
+    let cancelRsvp: GQLCancelRsvpResult
+}
+
+struct GQLCancelRsvpResult: Codable {
+    let success: Bool
+    let errors: [InputError]?
+}
+
+struct GQLPlanResponse: Codable {
+    let createPlan: GQLPlanResult
+}
+
+struct GQLPlanResult: Codable {
+    let plan: GQLPlan?
+    let errors: [InputError]?
+}
+
+struct GQLMyPlanResponse: Codable {
+    let myPlan: GQLPlan?
+}
+
+struct GQLPlan: Codable, Identifiable {
+    var id: String { slug }
+    let slug: String
+    let title: String
+    let inviteCount: Int
+    let createdAt: String?
+    let alreadyExists: Bool?
+}
+
 struct GQLUploadResponse: Codable {
     let uploadImage: GQLUploadResult
 }

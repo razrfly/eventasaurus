@@ -4,7 +4,7 @@ import ClerkKitUI
 
 struct ProfileView: View {
     @Environment(Clerk.self) private var clerk
-    @State private var profile: UserProfile?
+    @State private var profile: GQLUser?
     @State private var isLoading = true
     @State private var showSignOutError = false
     @State private var signOutErrorMessage = ""
@@ -48,10 +48,10 @@ struct ProfileView: View {
         }
     }
 
-    private func profileContent(_ profile: UserProfile) -> some View {
+    private func profileContent(_ profile: GQLUser) -> some View {
         VStack(spacing: DS.Spacing.xl) {
             // Avatar
-            if let avatarUrl = profile.avatarUrl, let url = URL(string: avatarUrl) {
+            if let url = URL(string: profile.avatarUrl) {
                 CachedImage(
                     url: url,
                     height: DS.ImageSize.avatarLarge,
@@ -76,9 +76,11 @@ struct ProfileView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text(profile.email)
-                .font(DS.Typography.body)
-                .foregroundStyle(.secondary)
+            if let email = profile.email {
+                Text(email)
+                    .font(DS.Typography.body)
+                    .foregroundStyle(.secondary)
+            }
 
             if let bio = profile.bio, !bio.isEmpty {
                 Text(bio)
@@ -103,7 +105,7 @@ struct ProfileView: View {
 
     private func loadProfile() async {
         do {
-            profile = try await APIClient.shared.fetchProfile()
+            profile = try await GraphQLClient.shared.fetchMyProfile()
         } catch {
             // Profile fetch failed — will show Clerk fallback
         }

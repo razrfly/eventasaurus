@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PlanWithFriendsSheet: View {
     let event: Event
-    var onPlanCreated: (PlanInfo) -> Void = { _ in }
+    var onPlanCreated: (GQLPlan) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
     @State private var emails: [String] = []
@@ -135,19 +135,15 @@ struct PlanWithFriendsSheet: View {
         defer { isSubmitting = false }
 
         do {
-            let response = try await APIClient.shared.createPlanWithFriends(
-                eventSlug: event.slug,
+            let plan = try await GraphQLClient.shared.createPlan(
+                slug: event.slug,
                 emails: emails,
                 message: message.isEmpty ? nil : message
             )
 
-            if let plan = response.plan {
-                onPlanCreated(plan)
-                withAnimation(DS.Animation.bouncy) {
-                    showSuccess = true
-                }
-            } else {
-                errorMessage = "Could not create plan. Please try again."
+            onPlanCreated(plan)
+            withAnimation(DS.Animation.bouncy) {
+                showSuccess = true
             }
         } catch {
             errorMessage = error.localizedDescription

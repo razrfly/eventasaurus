@@ -76,6 +76,14 @@ struct EventEditView: View {
                     .fontWeight(.semibold)
                 }
             }
+            .alert("Error", isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
             .alert("Delete Event", isPresented: $showDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
                     Task { await deleteEvent() }

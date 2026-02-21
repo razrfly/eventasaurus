@@ -20,4 +20,5 @@ defmodule EventasaurusWeb.Schema.Helpers.RsvpStatus do
   def from_db(:cancelled), do: :not_going
   def from_db(:pending), do: :interested
   def from_db(nil), do: nil
+  def from_db(_unknown), do: :interested
 end

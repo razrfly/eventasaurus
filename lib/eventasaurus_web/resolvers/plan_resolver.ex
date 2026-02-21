@@ -36,9 +36,23 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
     end
   end
 
+  @max_invite_emails 50
+
   def create_plan(_parent, %{slug: slug, emails: emails} = args, %{
         context: %{current_user: user}
       }) do
+    if length(emails) > @max_invite_emails do
+      {:ok,
+       %{
+         plan: nil,
+         errors: [%{field: "emails", message: "Maximum #{@max_invite_emails} invitations per plan"}]
+       }}
+    else
+      do_create_plan(slug, emails, args, user)
+    end
+  end
+
+  defp do_create_plan(slug, emails, args, user) do
     case PublicEvents.get_by_slug(slug) do
       nil ->
         {:ok, %{plan: nil, errors: [%{field: "slug", message: "Event not found"}]}}

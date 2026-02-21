@@ -37,23 +37,31 @@ defmodule EventasaurusWeb.Resolvers.UploadResolver do
           # Fallback: use presigned URL flow
           case R2Client.presigned_upload_url(r2_path, content_type: content_type) do
             {:ok, %{public_url: url} = result} ->
-              # Upload the file using the presigned URL
-              upload_to_presigned(result.upload_url, path, content_type)
-              {:ok, %{url: url, errors: []}}
+              case upload_to_presigned(result.upload_url, path, content_type) do
+                {:ok, %{status: status}} when status in 200..299 ->
+                  {:ok, %{url: url, errors: []}}
 
-            {:error, reason} ->
+                _ ->
+                  {:ok,
+                   %{
+                     url: nil,
+                     errors: [%{field: "file", message: "Failed to upload file to storage"}]
+                   }}
+              end
+
+            {:error, _reason} ->
               {:ok,
                %{
                  url: nil,
                  errors: [
-                   %{field: "file", message: "Upload service unavailable: #{inspect(reason)}"}
+                   %{field: "file", message: "Upload service unavailable"}
                  ]
                }}
           end
 
-        {:error, reason} ->
+        {:error, _reason} ->
           {:ok,
-           %{url: nil, errors: [%{field: "file", message: "Upload failed: #{inspect(reason)}"}]}}
+           %{url: nil, errors: [%{field: "file", message: "Upload failed"}]}}
       end
     else
       {:error, message} ->
