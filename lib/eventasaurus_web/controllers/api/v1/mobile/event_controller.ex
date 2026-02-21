@@ -148,10 +148,14 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
     case find_event_by_slug(slug) do
       {:public, event} ->
-        json(conn, %{event: serialize_public_event_detail(event) |> add_attendance_info(slug, user)})
+        json(conn, %{
+          event: serialize_public_event_detail(event) |> add_attendance_info(slug, user)
+        })
 
       {:user, event} ->
-        json(conn, %{event: serialize_user_event_detail(event, user) |> add_attendance_info(event, user)})
+        json(conn, %{
+          event: serialize_user_event_detail(event, user) |> add_attendance_info(event, user)
+        })
 
       :not_found ->
         conn
@@ -195,7 +199,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       {:status_valid, false} ->
         conn
         |> put_status(:bad_request)
-        |> json(%{error: "invalid_status", message: "Valid statuses: #{Enum.join(valid_statuses, ", ")}"})
+        |> json(%{
+          error: "invalid_status",
+          message: "Valid statuses: #{Enum.join(valid_statuses, ", ")}"
+        })
 
       {:event, nil} ->
         conn
@@ -586,13 +593,17 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     |> Enum.sort_by(fn source ->
       priority =
         case source.metadata do
-          %{"priority" => p} when is_integer(p) -> p
+          %{"priority" => p} when is_integer(p) ->
+            p
+
           %{"priority" => p} when is_binary(p) ->
             case Integer.parse(p) do
               {num, _} -> num
               _ -> 10
             end
-          _ -> 10
+
+          _ ->
+            10
         end
 
       ts =
@@ -631,6 +642,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   # require HTTPS, so we always apply CDN transformation for HTTP URLs.
   @cdn_opts [width: 400, height: 300, fit: "cover", quality: 85]
   defp resolve_image_url(nil), do: nil
+
   defp resolve_image_url(url) do
     case CDN.url(url, @cdn_opts) do
       # CDN disabled in dev — still need to upgrade HTTP→HTTPS for mobile
@@ -643,21 +655,25 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   defp ensure_https(url), do: url
 
   defp parse_float(nil, field), do: {:error, field, "is required"}
+
   defp parse_float(val, field) when is_binary(val) do
     case Float.parse(val) do
       {num, _} -> {:ok, num}
       :error -> {:error, field, "must be a number"}
     end
   end
+
   defp parse_float(val, _field) when is_number(val), do: {:ok, val / 1}
 
   defp parse_int(nil, default), do: default
+
   defp parse_int(val, default) when is_binary(val) do
     case Integer.parse(val) do
       {num, _} when num > 0 -> num
       _ -> default
     end
   end
+
   defp parse_int(val, _default) when is_integer(val) and val > 0, do: val
   defp parse_int(_, default), do: default
 

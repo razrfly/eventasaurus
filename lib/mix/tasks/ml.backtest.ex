@@ -279,7 +279,10 @@ defmodule Mix.Tasks.Ml.Backtest do
       end
 
     accuracy_pct = if run.accuracy, do: "#{Float.round(run.accuracy * 100, 1)}%", else: "-"
-    precision_pct = if run.precision_macro, do: "#{Float.round(run.precision_macro * 100, 1)}%", else: "-"
+
+    precision_pct =
+      if run.precision_macro, do: "#{Float.round(run.precision_macro * 100, 1)}%", else: "-"
+
     recall_pct = if run.recall_macro, do: "#{Float.round(run.recall_macro * 100, 1)}%", else: "-"
     f1_str = if run.f1_macro, do: "#{Float.round(run.f1_macro, 3)}", else: "-"
 

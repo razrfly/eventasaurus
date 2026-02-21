@@ -425,6 +425,9 @@ struct DiscoverView: View {
             if let allCount = response.meta.allEventsCount {
                 allEventsCount = allCount
             }
+        } catch is CancellationError {
+            isLoading = false
+            return
         } catch {
             self.error = error
             dateRangeCounts = [:]

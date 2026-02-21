@@ -13,25 +13,25 @@ defmodule EventasaurusDiscovery.Categories.CategoryBacktestResult do
 
   schema "category_backtest_results" do
     # Parent association
-    belongs_to :backtest_run, CategoryBacktestRun
+    belongs_to(:backtest_run, CategoryBacktestRun)
 
     # Input data (from category_mappings)
-    field :source, :string
-    field :external_term, :string
+    field(:source, :string)
+    field(:external_term, :string)
 
     # Expected result (from DB mappings)
-    field :expected_category_slug, :string
+    field(:expected_category_slug, :string)
 
     # ML Prediction
-    field :predicted_category_slug, :string
-    field :prediction_score, :float
-    field :all_scores, :map
+    field(:predicted_category_slug, :string)
+    field(:prediction_score, :float)
+    field(:all_scores, :map)
 
     # Result analysis
-    field :is_correct, :boolean
+    field(:is_correct, :boolean)
 
     # Timing
-    field :classification_time_ms, :integer
+    field(:classification_time_ms, :integer)
 
     timestamps(updated_at: false)
   end

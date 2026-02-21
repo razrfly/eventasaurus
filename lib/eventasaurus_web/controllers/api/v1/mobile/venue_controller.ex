@@ -30,9 +30,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.VenueController do
         ]
 
         events =
-          PublicEventsEnhanced.list_events(
-            Keyword.merge(event_filters, page: 1, page_size: 50)
-          )
+          PublicEventsEnhanced.list_events(Keyword.merge(event_filters, page: 1, page_size: 50))
 
         total_events = PublicEventsEnhanced.count_events(event_filters)
 

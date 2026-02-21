@@ -71,12 +71,14 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
   # Showtimes live in the occurrences JSONB column, not starts_at.
   defp fetch_screenings(movie_id, city_id) do
     query =
-      from pe in PublicEvent,
-        join: em in "event_movies", on: pe.id == em.event_id,
+      from(pe in PublicEvent,
+        join: em in "event_movies",
+        on: pe.id == em.event_id,
         join: v in assoc(pe, :venue),
         where: em.movie_id == ^movie_id,
         order_by: [asc: pe.starts_at],
         preload: [venue: :city_ref]
+      )
 
     query = if city_id, do: where(query, [pe, em, v], v.city_id == ^city_id), else: query
 
@@ -101,7 +103,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
         venue: venue,
         event_slug: first_event.slug,
         showtimes: showtimes,
-        upcoming_count: Enum.count(showtimes, fn s -> DateTime.compare(s.datetime, now) == :gt end)
+        upcoming_count:
+          Enum.count(showtimes, fn s -> DateTime.compare(s.datetime, now) == :gt end)
       }
     end)
     |> Enum.reject(fn group -> group.showtimes == [] end)
@@ -130,13 +133,28 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
                {:ok, time} <- parse_time_string(date_info["time"]) do
             case DateTime.new(date, time, timezone) do
               {:ok, dt} ->
-                %{date: date, time_str: date_info["time"], label: date_info["label"], datetime: dt}
+                %{
+                  date: date,
+                  time_str: date_info["time"],
+                  label: date_info["label"],
+                  datetime: dt
+                }
 
               {:ambiguous, dt, _} ->
-                %{date: date, time_str: date_info["time"], label: date_info["label"], datetime: dt}
+                %{
+                  date: date,
+                  time_str: date_info["time"],
+                  label: date_info["label"],
+                  datetime: dt
+                }
 
               {:gap, _, after_dt} ->
-                %{date: date, time_str: date_info["time"], label: date_info["label"], datetime: after_dt}
+                %{
+                  date: date,
+                  time_str: date_info["time"],
+                  label: date_info["label"],
+                  datetime: after_dt
+                }
 
               _ ->
                 nil
@@ -293,7 +311,12 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
   # --- Movie list serializers ---
 
-  defp serialize_movie_list_item(%{movie: movie, city_count: city_count, screening_count: screening_count, next_screening: next_screening}) do
+  defp serialize_movie_list_item(%{
+         movie: movie,
+         city_count: city_count,
+         screening_count: screening_count,
+         next_screening: next_screening
+       }) do
     poster_url = resolve_poster_url(movie)
 
     genres =
@@ -336,7 +359,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     }
   end
 
-  defp serialize_city_with_movies(%{city: city, movie_count: movie_count, screening_count: screening_count}) do
+  defp serialize_city_with_movies(%{
+         city: city,
+         movie_count: movie_count,
+         screening_count: screening_count
+       }) do
     %{
       name: city.name,
       slug: city.slug,
@@ -349,7 +376,9 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     url = MovieImages.get_poster_url(movie.id, movie.poster_url)
 
     case url do
-      nil -> nil
+      nil ->
+        nil
+
       url ->
         case CDN.url(url, @cdn_poster_opts) do
           ^url -> ensure_https(url)

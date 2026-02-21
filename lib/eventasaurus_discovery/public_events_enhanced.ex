@@ -2354,8 +2354,15 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
     query =
       case Keyword.get(opts, :city_id) do
-        nil -> query
-        city_id -> from(pe in query, join: v in Venue, on: pe.venue_id == v.id, where: v.city_id == ^city_id)
+        nil ->
+          query
+
+        city_id ->
+          from(pe in query,
+            join: v in Venue,
+            on: pe.venue_id == v.id,
+            where: v.city_id == ^city_id
+          )
       end
 
     Repo.one(query) || 0

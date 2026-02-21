@@ -126,7 +126,10 @@ defmodule EventasaurusWeb.Admin.CategoryMappingsLive do
       {:ok, _mapping} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Mapping #{if mapping.is_active, do: "deactivated", else: "activated"}")
+         |> put_flash(
+           :info,
+           "Mapping #{if mapping.is_active, do: "deactivated", else: "activated"}"
+         )
          |> assign(:stats, CategoryMappings.get_stats())
          |> load_mappings()}
 

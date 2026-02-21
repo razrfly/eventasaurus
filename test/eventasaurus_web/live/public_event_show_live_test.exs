@@ -46,7 +46,8 @@ defmodule EventasaurusWeb.PublicEventShowLiveTest do
 
       # Modal should be open for authenticated users
       # Check for modal presence in rendered HTML
-      assert html =~ "Plan with Friends" or view |> has_element?("[data-test-id='plan-with-friends-modal']")
+      assert html =~ "Plan with Friends" or
+               view |> has_element?("[data-test-id='plan-with-friends-modal']")
     end
 
     test "redirects to existing plan when user already has one", %{
@@ -101,10 +102,12 @@ defmodule EventasaurusWeb.PublicEventShowLiveTest do
       # Both paths should result in the modal being shown
       # Check both have the modal content visible
       modal_visible_1 =
-        html1 =~ "Plan with Friends" or has_element?(view1, "[data-test-id='plan-with-friends-modal']")
+        html1 =~ "Plan with Friends" or
+          has_element?(view1, "[data-test-id='plan-with-friends-modal']")
 
       modal_visible_2 =
-        html2 =~ "Plan with Friends" or has_element?(view2, "[data-test-id='plan-with-friends-modal']")
+        html2 =~ "Plan with Friends" or
+          has_element?(view2, "[data-test-id='plan-with-friends-modal']")
 
       assert modal_visible_1 == modal_visible_2,
              "URL param and button click should produce same modal state"

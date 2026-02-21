@@ -1,0 +1,32 @@
+defmodule EventasaurusWeb.Schema.Mutations.ParticipationMutations do
+  use Absinthe.Schema.Notation
+
+  alias EventasaurusWeb.Resolvers.ParticipationResolver
+  alias EventasaurusWeb.Schema.Middleware.Authenticate
+
+  object :participation_mutations do
+    @desc "RSVP to an event."
+    field :rsvp, non_null(:rsvp_result) do
+      arg(:slug, non_null(:string))
+      arg(:status, non_null(:rsvp_status))
+      middleware(Authenticate)
+      resolve(&ParticipationResolver.rsvp/3)
+    end
+
+    @desc "Cancel RSVP for an event."
+    field :cancel_rsvp, non_null(:cancel_rsvp_result) do
+      arg(:slug, non_null(:string))
+      middleware(Authenticate)
+      resolve(&ParticipationResolver.cancel_rsvp/3)
+    end
+
+    @desc "Invite guests to an event by email. Must be the organizer."
+    field :invite_guests, non_null(:invite_guests_result) do
+      arg(:slug, non_null(:string))
+      arg(:emails, non_null(list_of(non_null(:string))))
+      arg(:message, :string)
+      middleware(Authenticate)
+      resolve(&ParticipationResolver.invite_guests/3)
+    end
+  end
+end
