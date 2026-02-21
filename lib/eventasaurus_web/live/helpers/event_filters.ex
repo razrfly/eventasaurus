@@ -234,8 +234,7 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
   """
   @spec enrich_with_all_events_filters(map()) :: map()
   def enrich_with_all_events_filters(query_opts) do
-    count_filters = query_opts |> Map.delete(:page) |> Map.delete(:page_size)
-    all_events_filters = build_date_range_count_filters(count_filters)
+    all_events_filters = build_date_range_count_filters(query_opts)
 
     # Propagate aggregation flags so the count query uses the same grouping
     all_events_filters =
@@ -248,9 +247,10 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
   end
 
   defp maybe_propagate(target, source, key) do
-    case Map.get(source, key) do
-      nil -> target
-      value -> Map.put(target, key, value)
+    if Map.has_key?(source, key) do
+      Map.put(target, key, Map.get(source, key))
+    else
+      target
     end
   end
 end

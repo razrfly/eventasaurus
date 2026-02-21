@@ -26,6 +26,8 @@ struct ProfileView: View {
                     Task {
                         do {
                             try await clerk.auth.signOut()
+                        } catch is CancellationError {
+                            // Ignore cancellation
                         } catch {
                             signOutErrorMessage = error.localizedDescription
                             showSignOutError = true

@@ -54,6 +54,7 @@ struct MyEventsView: View {
     private func loadEvents() async {
         isLoading = true
         error = nil
+        defer { isLoading = false }
 
         do {
             events = try await APIClient.shared.fetchAttendingEvents()
@@ -62,7 +63,5 @@ struct MyEventsView: View {
         } catch {
             self.error = error
         }
-
-        isLoading = false
     }
 }

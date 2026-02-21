@@ -262,6 +262,7 @@ struct EventDetailView: View {
     // MARK: - Data Loading
 
     private func loadEvent() async {
+        defer { isLoading = false }
         do {
             let loaded = try await APIClient.shared.fetchEventDetail(slug: slug)
             event = loaded
@@ -276,7 +277,6 @@ struct EventDetailView: View {
         } catch {
             self.error = error
         }
-        isLoading = false
     }
 
     private func toggleStatus(_ status: String) async {

@@ -155,7 +155,6 @@ struct SourceDetailView: View {
         response = nil
         error = nil
         isLoading = true
-        defer { isLoading = false }
         do {
             response = try await APIClient.shared.fetchSourceDetail(slug: slug, cityId: selectedCityId)
         } catch is CancellationError {
@@ -163,5 +162,6 @@ struct SourceDetailView: View {
         } catch {
             self.error = error
         }
+        isLoading = false
     }
 }

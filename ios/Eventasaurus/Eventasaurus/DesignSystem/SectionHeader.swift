@@ -19,6 +19,10 @@ struct SectionHeader: View {
             subtitle == nil || (action == nil && actionLabel == nil),
             "SectionHeader: subtitle and action+actionLabel are mutually exclusive"
         )
+        assert(
+            (action == nil) == (actionLabel == nil),
+            "SectionHeader: action and actionLabel must both be provided or both be nil"
+        )
     }
 
     var body: some View {

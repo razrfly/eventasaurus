@@ -58,6 +58,11 @@ defmodule Eventasaurus.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:plug_cowboy, "~> 2.5"},
       {:heroicons, "~> 0.5.6"},
+
+      # GraphQL API (Issue #3562)
+      {:absinthe, "~> 1.7"},
+      {:absinthe_plug, "~> 1.5"},
+      {:absinthe_phoenix, "~> 2.0"},
       {:nanoid, "~> 2.1.0"},
       {:time_zone_info, "~> 0.7.8"},
       {:earmark, "~> 1.5.0-pre"},
