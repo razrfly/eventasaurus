@@ -77,12 +77,16 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
              }}
 
           {:ok, {:existing, event_plan, private_event}} ->
+            invite_count =
+              Events.list_event_participants(private_event)
+              |> Enum.count(fn p -> p.role == :invitee end)
+
             {:ok,
              %{
                plan: %{
                  slug: private_event.slug,
                  title: private_event.title,
-                 invite_count: 0,
+                 invite_count: invite_count,
                  created_at: event_plan.inserted_at,
                  already_exists: true
                },
@@ -130,8 +134,25 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
       )
 
     case result do
-      %{successful_invitations: count} -> count
-      _ -> 0
+      %{successful_invitations: count} ->
+        count
+
+      {:error, reason} ->
+        Logger.error("Failed to send email invitations",
+          event_id: event.id,
+          email_count: length(emails),
+          reason: inspect(reason)
+        )
+
+        0
+
+      other ->
+        Logger.warning("Unexpected result from process_guest_invitations",
+          event_id: event.id,
+          result: inspect(other)
+        )
+
+        0
     end
   end
 end

@@ -80,26 +80,6 @@ final class APIClient {
         return try await request(url: url)
     }
 
-    func fetchMoviesIndex(search: String? = nil, limit: Int = 24) async throws -> MoviesIndexResponse {
-        var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/mobile/movies"), resolvingAgainstBaseURL: false)!
-        var queryItems: [URLQueryItem] = []
-
-        if let search, !search.isEmpty {
-            queryItems.append(URLQueryItem(name: "search", value: search))
-        }
-
-        if limit != 24 {
-            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
-        }
-
-        if !queryItems.isEmpty {
-            components.queryItems = queryItems
-        }
-
-        guard let url = components.url else { throw APIError.invalidURL }
-        return try await request(url: url)
-    }
-
     func fetchCategories() async throws -> [Category] {
         let url = baseURL.appendingPathComponent("api/v1/mobile/categories")
         let response: CategoriesResponse = try await request(url: url)
