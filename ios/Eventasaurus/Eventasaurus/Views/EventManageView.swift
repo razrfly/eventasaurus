@@ -7,6 +7,7 @@ struct EventManageView: View {
     @State private var event: UserEvent
     @State private var isLoading = false
     @State private var showEditSheet = false
+    @State private var showInviteSheet = false
     @State private var error: Error?
 
     var onChanged: (() -> Void)?
@@ -58,6 +59,14 @@ struct EventManageView: View {
                 }
             )
         }
+        .sheet(isPresented: $showInviteSheet) {
+            InviteGuestsSheet(event: event) { count in
+                if count > 0 {
+                    Task { await refreshEvent() }
+                    onChanged?()
+                }
+            }
+        }
     }
 
     // MARK: - Cover Image
@@ -65,14 +74,27 @@ struct EventManageView: View {
     @ViewBuilder
     private var coverImage: some View {
         if let url = event.coverImageUrl.flatMap({ URL(string: $0) }) {
-            AsyncImage(url: url) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Rectangle()
-                    .foregroundStyle(.quaternary)
-                    .overlay { ProgressView() }
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                case .failure:
+                    Rectangle()
+                        .foregroundStyle(.quaternary)
+                        .overlay {
+                            Image(systemName: "photo")
+                                .font(.largeTitle)
+                                .foregroundStyle(.secondary)
+                        }
+                case .empty:
+                    Rectangle()
+                        .foregroundStyle(.quaternary)
+                        .overlay { ProgressView() }
+                @unknown default:
+                    EmptyView()
+                }
             }
             .frame(height: DS.ImageSize.hero)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
@@ -228,11 +250,18 @@ struct EventManageView: View {
 
     private var statsSection: some View {
         HStack(spacing: DS.Spacing.xl) {
-            statItem(
-                icon: "person.2.fill",
-                value: "\(event.participantCount)",
-                label: "Attendees"
-            )
+            NavigationLink {
+                ParticipantListView(event: event) {
+                    Task { await refreshEvent() }
+                }
+            } label: {
+                statItem(
+                    icon: "person.2.fill",
+                    value: "\(event.participantCount)",
+                    label: "Attendees"
+                )
+            }
+            .buttonStyle(.plain)
 
             if let theme = event.theme {
                 statItem(
@@ -272,6 +301,16 @@ struct EventManageView: View {
     @ViewBuilder
     private var actionsSection: some View {
         VStack(spacing: DS.Spacing.md) {
+            if event.status != .draft && event.status != .canceled {
+                Button {
+                    showInviteSheet = true
+                } label: {
+                    Label("Invite Guests", systemImage: "person.badge.plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassSecondary)
+            }
+
             if event.status == .draft {
                 Button {
                     Task { await publishEvent() }

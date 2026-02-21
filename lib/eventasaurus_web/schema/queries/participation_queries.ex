@@ -19,5 +19,15 @@ defmodule EventasaurusWeb.Schema.Queries.ParticipationQueries do
       middleware(Authenticate)
       resolve(&PlanResolver.my_plan/3)
     end
+
+    @desc "List participants for an event. Must be the organizer."
+    field :event_participants, non_null(list_of(non_null(:participant))) do
+      arg(:slug, non_null(:string))
+      arg(:status, :string)
+      arg(:limit, :integer)
+      arg(:offset, :integer)
+      middleware(Authenticate)
+      resolve(&ParticipationResolver.event_participants/3)
+    end
   end
 end

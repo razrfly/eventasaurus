@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - User Event Model (GraphQL)
 //
@@ -337,22 +338,126 @@ struct GQLUploadResult: Codable {
     let errors: [InputError]?
 }
 
+// MARK: - Event Participant (Organizer View)
+
+struct EventParticipant: Codable, Identifiable {
+    let id: String
+    let role: String?
+    let status: RsvpStatus
+    let rawStatus: String
+    let invitedAt: Date?
+    let createdAt: Date
+    let emailStatus: String?
+    let invitationMessage: String?
+    let email: String?
+    let user: ParticipantUser?
+}
+
+struct ParticipantUser: Codable, Hashable {
+    let id: String
+    let name: String
+    let email: String?
+}
+
+enum EmailDeliveryStatus: String, CaseIterable {
+    case notSent = "not_sent"
+    case sent = "sent"
+    case delivered = "delivered"
+    case failed = "failed"
+    case bounced = "bounced"
+
+    init(from string: String?) {
+        self = EmailDeliveryStatus(rawValue: string ?? "not_sent") ?? .notSent
+    }
+
+    var displayName: String {
+        switch self {
+        case .notSent: return "Not Sent"
+        case .sent: return "Sent"
+        case .delivered: return "Delivered"
+        case .failed: return "Failed"
+        case .bounced: return "Bounced"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .notSent: return "envelope"
+        case .sent: return "paperplane.fill"
+        case .delivered: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        case .bounced: return "arrow.uturn.backward.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .notSent: return .secondary
+        case .sent: return .blue
+        case .delivered: return .green
+        case .failed: return .red
+        case .bounced: return .orange
+        }
+    }
+}
+
 // MARK: - Participant Suggestions
+
+enum RecommendationLevel: String, Codable {
+    case highlyRecommended = "HIGHLY_RECOMMENDED"
+    case recommended = "RECOMMENDED"
+    case suggested = "SUGGESTED"
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        self = RecommendationLevel(rawValue: raw) ?? .unknown
+    }
+}
 
 struct ParticipantSuggestion: Codable, Identifiable {
     var id: String { userId }
     let userId: String
     let name: String?
-    let email: String
+    let maskedEmail: String?
     let username: String?
     let participationCount: Int
     let totalScore: Double
-    let recommendationLevel: String
-    let avatarUrl: String
+    let recommendationLevel: RecommendationLevel
+    let avatarUrl: String?
 }
 
 struct GQLParticipantSuggestionsResponse: Codable {
     let participantSuggestions: [ParticipantSuggestion]
+}
+
+// MARK: - GraphQL Response Wrappers (Participants)
+
+struct GQLEventParticipantsResponse: Codable {
+    let eventParticipants: [EventParticipant]
+}
+
+struct GQLInviteGuestsResponse: Codable {
+    let inviteGuests: GQLInviteGuestsResult
+}
+
+struct GQLInviteGuestsResult: Codable {
+    let inviteCount: Int
+    let errors: [InputError]?
+}
+
+struct GQLRemoveParticipantResponse: Codable {
+    let removeParticipant: GQLSuccessResult
+}
+
+struct GQLResendInvitationResponse: Codable {
+    let resendInvitation: GQLSuccessResult
+}
+
+struct GQLSuccessResult: Codable {
+    let success: Bool
+    let errors: [InputError]?
 }
 
 // MARK: - Message Templates

@@ -10,8 +10,16 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
   alias EventasaurusApp.Events.EventPlans
   alias EventasaurusDiscovery.PublicEvents
 
+  @max_suggestion_limit 50
+
+  @spec participant_suggestions(any(), map(), map()) :: {:ok, list()} | {:error, term()}
   def participant_suggestions(_parent, args, %{context: %{current_user: user}}) do
-    limit = Map.get(args, :limit, 20)
+    limit =
+      args
+      |> Map.get(:limit, 20)
+      |> max(1)
+      |> min(@max_suggestion_limit)
+
     suggestions = Events.get_participant_suggestions(user, limit: limit)
     {:ok, suggestions}
   end
@@ -45,21 +53,33 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
 
   @max_invite_emails 50
 
-  def create_plan(_parent, %{slug: slug, emails: emails} = args, %{
+  def create_plan(_parent, %{slug: slug} = args, %{
         context: %{current_user: user}
       }) do
     # Resolve friend_ids to emails and merge with provided emails
+    emails = Map.get(args, :emails, [])
     friend_emails = resolve_friend_emails(Map.get(args, :friend_ids, []))
     all_emails = Enum.uniq(emails ++ friend_emails)
 
-    if length(all_emails) > @max_invite_emails do
-      {:ok,
-       %{
-         plan: nil,
-         errors: [%{field: "emails", message: "Maximum #{@max_invite_emails} invitations per plan"}]
-       }}
-    else
-      do_create_plan(slug, all_emails, args, user)
+    cond do
+      Enum.empty?(all_emails) ->
+        {:ok,
+         %{
+           plan: nil,
+           errors: [%{field: "emails", message: "At least one recipient required"}]
+         }}
+
+      length(all_emails) > @max_invite_emails ->
+        {:ok,
+         %{
+           plan: nil,
+           errors: [
+             %{field: "emails", message: "Maximum #{@max_invite_emails} invitations per plan"}
+           ]
+         }}
+
+      true ->
+        do_create_plan(slug, all_emails, args, user)
     end
   end
 

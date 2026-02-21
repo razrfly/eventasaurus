@@ -66,6 +66,40 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
     end
   end
 
+  def event_participants(_parent, %{slug: slug} = args, %{context: %{current_user: user}}) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        {:error, "Event not found"}
+
+      event ->
+        if Events.user_is_organizer?(event, user) do
+          opts =
+            []
+            |> then(fn o -> if args[:limit], do: Keyword.put(o, :limit, args[:limit]), else: o end)
+            |> then(fn o ->
+              if args[:offset], do: Keyword.put(o, :offset, args[:offset]), else: o
+            end)
+
+          participants = Events.list_event_participants(event, opts)
+
+          # Filter by raw status if provided
+          participants =
+            case args[:status] do
+              nil ->
+                participants
+
+              status_filter ->
+                status_atom = String.to_existing_atom(status_filter)
+                Enum.filter(participants, fn p -> p.status == status_atom end)
+            end
+
+          {:ok, participants}
+        else
+          {:error, "NOT_FOUND"}
+        end
+    end
+  end
+
   def invite_guests(_parent, %{slug: slug, emails: emails} = args, %{
         context: %{current_user: user}
       }) do
@@ -96,6 +130,82 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
           end
         else
           {:ok, %{invite_count: 0, errors: [%{field: "base", message: "NOT_FOUND"}]}}
+        end
+    end
+  end
+
+  def remove_participant(_parent, %{slug: slug, user_id: user_id}, %{
+        context: %{current_user: current_user}
+      }) do
+    alias EventasaurusApp.Accounts
+
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        {:ok, %{success: false, errors: [%{field: "slug", message: "Event not found"}]}}
+
+      event ->
+        if Events.user_is_organizer?(event, current_user) do
+          case Accounts.get_user(user_id) do
+            nil ->
+              {:ok, %{success: false, errors: [%{field: "user_id", message: "User not found"}]}}
+
+            user ->
+              case Events.remove_participant_status(event, user) do
+                {:ok, _} ->
+                  {:ok, %{success: true, errors: []}}
+
+                {:error, reason} ->
+                  {:ok,
+                   %{
+                     success: false,
+                     errors: [%{field: "base", message: inspect(reason)}]
+                   }}
+              end
+          end
+        else
+          {:ok, %{success: false, errors: [%{field: "base", message: "NOT_FOUND"}]}}
+        end
+    end
+  end
+
+  def resend_invitation(_parent, %{slug: slug, user_id: user_id}, %{
+        context: %{current_user: current_user}
+      }) do
+    alias EventasaurusApp.Accounts
+
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        {:ok, %{success: false, errors: [%{field: "slug", message: "Event not found"}]}}
+
+      event ->
+        if Events.user_is_organizer?(event, current_user) do
+          case Accounts.get_user(user_id) do
+            nil ->
+              {:ok, %{success: false, errors: [%{field: "user_id", message: "User not found"}]}}
+
+            user ->
+              result =
+                Events.process_guest_invitations(
+                  event,
+                  current_user,
+                  manual_emails: [user.email],
+                  mode: :invitation
+                )
+
+              case result do
+                %{successful_invitations: _count} ->
+                  {:ok, %{success: true, errors: []}}
+
+                {:error, reason} ->
+                  {:ok,
+                   %{
+                     success: false,
+                     errors: [%{field: "base", message: inspect(reason)}]
+                   }}
+              end
+          end
+        else
+          {:ok, %{success: false, errors: [%{field: "base", message: "NOT_FOUND"}]}}
         end
     end
   end

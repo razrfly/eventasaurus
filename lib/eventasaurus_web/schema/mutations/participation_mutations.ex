@@ -28,5 +28,21 @@ defmodule EventasaurusWeb.Schema.Mutations.ParticipationMutations do
       middleware(Authenticate)
       resolve(&ParticipationResolver.invite_guests/3)
     end
+
+    @desc "Remove a participant from an event. Must be the organizer."
+    field :remove_participant, non_null(:remove_participant_result) do
+      arg(:slug, non_null(:string))
+      arg(:user_id, non_null(:id))
+      middleware(Authenticate)
+      resolve(&ParticipationResolver.remove_participant/3)
+    end
+
+    @desc "Resend an invitation email to a participant. Must be the organizer."
+    field :resend_invitation, non_null(:resend_invitation_result) do
+      arg(:slug, non_null(:string))
+      arg(:user_id, non_null(:id))
+      middleware(Authenticate)
+      resolve(&ParticipationResolver.resend_invitation/3)
+    end
   end
 end
