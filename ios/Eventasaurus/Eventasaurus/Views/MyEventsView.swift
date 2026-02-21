@@ -6,12 +6,18 @@ struct MyEventsView: View {
         case attending = "Attending"
     }
 
+    enum NavigationTarget: Hashable {
+        case created(UserEvent)
+        case attending(UserEvent)
+    }
+
     @State private var selectedTab: Tab = .created
     @State private var createdEvents: [UserEvent] = []
     @State private var attendingEvents: [UserEvent] = []
     @State private var isLoading = false
     @State private var error: Error?
     @State private var showCreateSheet = false
+    @State private var currentLoadTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -49,12 +55,23 @@ struct MyEventsView: View {
             .task { await loadData() }
             .refreshable { await loadData() }
             .onChange(of: selectedTab) { _, _ in
-                Task { await loadData() }
+                currentLoadTask?.cancel()
+                currentLoadTask = Task { await loadData() }
             }
             .sheet(isPresented: $showCreateSheet) {
                 EventCreateView { newEvent in
                     createdEvents.insert(newEvent, at: 0)
                     selectedTab = .created
+                }
+            }
+            .navigationDestination(for: NavigationTarget.self) { target in
+                switch target {
+                case .created(let event):
+                    EventManageView(event: event) {
+                        Task { await loadCreatedEvents() }
+                    }
+                case .attending(let event):
+                    EventDetailView(slug: event.slug)
                 }
             }
         }
@@ -92,18 +109,13 @@ struct MyEventsView: View {
         ScrollView {
             LazyVStack(spacing: DS.Spacing.xl) {
                 ForEach(createdEvents) { event in
-                    NavigationLink(value: event) {
+                    NavigationLink(value: NavigationTarget.created(event)) {
                         UserEventCardView(event: event)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(DS.Spacing.xl)
-        }
-        .navigationDestination(for: UserEvent.self) { event in
-            EventManageView(event: event) {
-                Task { await loadCreatedEvents() }
-            }
         }
     }
 
@@ -137,16 +149,13 @@ struct MyEventsView: View {
         ScrollView {
             LazyVStack(spacing: DS.Spacing.xl) {
                 ForEach(attendingEvents) { event in
-                    NavigationLink(value: event) {
+                    NavigationLink(value: NavigationTarget.attending(event)) {
                         UserEventCardView(event: event)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(DS.Spacing.xl)
-        }
-        .navigationDestination(for: UserEvent.self) { event in
-            EventDetailView(slug: event.slug)
         }
     }
 

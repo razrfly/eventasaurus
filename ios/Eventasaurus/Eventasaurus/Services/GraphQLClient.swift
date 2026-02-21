@@ -423,9 +423,11 @@ final class GraphQLClient {
     }
 
     private func jsonString(_ string: String) -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: string),
-              let result = String(data: data, encoding: .utf8) else {
-            // Fallback: manually escape for JSON
+        // Wrap in array to guarantee valid top-level JSON, then extract the encoded string
+        guard let data = try? JSONSerialization.data(withJSONObject: [string]),
+              let arrayString = String(data: data, encoding: .utf8),
+              arrayString.count > 2 else {
+            // Fallback should never be reached, but handle gracefully
             let escaped = string
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "\"", with: "\\\"")
@@ -434,7 +436,10 @@ final class GraphQLClient {
                 .replacingOccurrences(of: "\t", with: "\\t")
             return "\"\(escaped)\""
         }
-        return result
+        // Strip the surrounding [ and ]
+        let start = arrayString.index(after: arrayString.startIndex)
+        let end = arrayString.index(before: arrayString.endIndex)
+        return String(arrayString[start..<end])
     }
 }
 

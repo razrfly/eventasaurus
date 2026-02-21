@@ -855,6 +855,7 @@ defmodule EventasaurusApp.Events do
   @doc """
   Returns the list of events by a specific user.
   """
+  @spec list_events_by_user(%User{}, keyword()) :: [%Event{}]
   def list_events_by_user(%User{} = user, opts \\ []) do
     query =
       from(e in Event,
@@ -868,8 +869,8 @@ defmodule EventasaurusApp.Events do
 
     query =
       case opts[:limit] do
-        nil -> query
-        limit -> from(q in query, limit: ^limit)
+        limit when is_integer(limit) and limit > 0 -> from(q in query, limit: ^limit)
+        _ -> query
       end
 
     Repo.all(query)

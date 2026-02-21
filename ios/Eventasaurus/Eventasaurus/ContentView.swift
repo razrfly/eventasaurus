@@ -28,11 +28,6 @@ struct ContentView: View {
                     Label("Discover", systemImage: "magnifyingglass")
                 }
 
-            MoviesView()
-                .tabItem {
-                    Label("Movies", systemImage: "film")
-                }
-
             MyEventsView()
                 .tabItem {
                     Label("My Events", systemImage: "calendar")

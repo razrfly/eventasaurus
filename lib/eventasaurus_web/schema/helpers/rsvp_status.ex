@@ -7,6 +7,8 @@ defmodule EventasaurusWeb.Schema.Helpers.RsvpStatus do
   Database uses: :accepted, :interested, :declined, :cancelled, :confirmed_with_order, :pending
   """
 
+  require Logger
+
   # GraphQL → DB
   def to_db(:going), do: :accepted
   def to_db(:interested), do: :interested
@@ -20,5 +22,9 @@ defmodule EventasaurusWeb.Schema.Helpers.RsvpStatus do
   def from_db(:cancelled), do: :not_going
   def from_db(:pending), do: :interested
   def from_db(nil), do: nil
-  def from_db(_unknown), do: :interested
+
+  def from_db(unknown) do
+    Logger.warning("Unknown RSVP DB status mapped to :interested", status: inspect(unknown))
+    :interested
+  end
 end

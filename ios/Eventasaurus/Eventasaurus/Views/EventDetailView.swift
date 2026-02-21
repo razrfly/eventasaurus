@@ -269,16 +269,18 @@ struct EventDetailView: View {
 
             // Map REST attendance status to RsvpStatus enum
             if let status = loaded.attendanceStatus {
-                switch status {
-                case "accepted": rsvpStatus = .going
-                case "interested": rsvpStatus = .interested
-                default: rsvpStatus = nil
-                }
+                rsvpStatus = RsvpStatus(restStatus: status)
             }
             attendeeCount = loaded.attendeeCount ?? 0
 
             // Load existing plan via GraphQL
-            existingPlan = try? await GraphQLClient.shared.fetchMyPlan(slug: slug)
+            do {
+                existingPlan = try await GraphQLClient.shared.fetchMyPlan(slug: slug)
+            } catch {
+                #if DEBUG
+                print("[EventDetailView] Failed to fetch plan for \(slug): \(error)")
+                #endif
+            }
         } catch is CancellationError {
             return
         } catch {

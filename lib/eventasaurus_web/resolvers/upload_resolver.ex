@@ -6,11 +6,14 @@ defmodule EventasaurusWeb.Resolvers.UploadResolver do
   Cloudflare R2, and returns the public CDN URL.
   """
 
+  require Logger
+
   alias EventasaurusApp.Services.R2Client
 
   @allowed_mime_types ~w(image/jpeg image/png image/gif image/webp image/avif)
   @max_file_size 5 * 1024 * 1024
 
+  @spec upload_image(any(), map(), any()) :: {:ok, map()}
   def upload_image(
         _parent,
         %{file: %Absinthe.Blueprint.Input.RawValue{content: upload}},
@@ -41,7 +44,12 @@ defmodule EventasaurusWeb.Resolvers.UploadResolver do
                 {:ok, %{status: status}} when status in 200..299 ->
                   {:ok, %{url: url, errors: []}}
 
-                _ ->
+                other ->
+                  Logger.error("Upload to presigned URL failed",
+                    path: r2_path,
+                    response: inspect(other)
+                  )
+
                   {:ok,
                    %{
                      url: nil,
@@ -49,7 +57,12 @@ defmodule EventasaurusWeb.Resolvers.UploadResolver do
                    }}
               end
 
-            {:error, _reason} ->
+            {:error, reason} ->
+              Logger.error("Failed to get presigned upload URL",
+                path: r2_path,
+                reason: inspect(reason)
+              )
+
               {:ok,
                %{
                  url: nil,
@@ -59,7 +72,12 @@ defmodule EventasaurusWeb.Resolvers.UploadResolver do
                }}
           end
 
-        {:error, _reason} ->
+        {:error, reason} ->
+          Logger.error("R2 upload failed",
+            path: r2_path,
+            reason: inspect(reason)
+          )
+
           {:ok,
            %{url: nil, errors: [%{field: "file", message: "Upload failed"}]}}
       end

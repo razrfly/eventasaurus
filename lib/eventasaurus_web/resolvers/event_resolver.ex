@@ -92,8 +92,11 @@ defmodule EventasaurusWeb.Resolvers.EventResolver do
     |> Enum.into(%{})
   end
 
-  defp humanize_error(reason) when is_atom(reason), do: to_string(reason)
-  defp humanize_error(reason) when is_binary(reason), do: reason
+  defp humanize_error(:event_not_found), do: "Event not found"
+  defp humanize_error(:not_found), do: "Event not found"
+  defp humanize_error(:already_deleted), do: "Event has already been deleted"
+  defp humanize_error(:unauthorized), do: "You are not authorized to perform this action"
+  defp humanize_error(:invalid_params), do: "Invalid parameters"
   defp humanize_error(_reason), do: "An unexpected error occurred"
 
   defp format_changeset_errors(%Ecto.Changeset{} = changeset) do

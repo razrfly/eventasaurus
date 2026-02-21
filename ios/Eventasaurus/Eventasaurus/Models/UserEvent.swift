@@ -144,6 +144,15 @@ enum RsvpStatus: String, Codable, CaseIterable {
         case .notGoing: return "xmark.circle"
         }
     }
+
+    /// Initialize from REST API attendance status strings.
+    init?(restStatus: String) {
+        switch restStatus {
+        case "accepted": self = .going
+        case "interested": self = .interested
+        default: return nil
+        }
+    }
 }
 
 // MARK: - GraphQL Input Types

@@ -280,6 +280,7 @@ struct EventManageView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassPrimary)
+                .disabled(isLoading)
             }
 
             if event.status == .confirmed {
@@ -290,6 +291,15 @@ struct EventManageView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassSecondary)
+                .disabled(isLoading)
+            }
+        }
+        .overlay {
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
             }
         }
     }
