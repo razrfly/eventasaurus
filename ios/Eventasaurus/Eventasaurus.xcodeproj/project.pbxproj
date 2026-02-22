@@ -12,6 +12,7 @@
 		19D4A7B2C3E8F1A590B21E47 /* DiceBearAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F23D1E7B4C9A0652D1F3E8 /* DiceBearAvatar.swift */; };
 		19FF44634ACFF7B843530B5A /* PlanWithFriendsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C053782CA24EDE6B1DE7FBB /* PlanWithFriendsSheet.swift */; };
 		1A2B3C4D5E6F7A8B9C0D1E2F /* ParticipantListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* ParticipantListView.swift */; };
+		3C4D5E6F7A8B9C0D1E2F3A4B /* ParticipantDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6A7B8C9D0E1F2A3B4 /* ParticipantDetailView.swift */; };
 		2B3C4D5E6F7A8B9C0D1E2F3A /* InviteGuestsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* InviteGuestsSheet.swift */; };
 		246A58033A9AA406F39043B1 /* LoadingSkeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B4475BE562F544ADD835239 /* LoadingSkeleton.swift */; };
 		2CBE1900F8D991008A0BE2FF /* EventCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AAF0EF0E711979E18C9F3C9 /* EventCreateView.swift */; };
@@ -87,6 +88,7 @@
 		1D910507C20A4079D0F6753F /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
 		1DD58E490FBBFABB4DCA5D90 /* CachedImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedImage.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* ParticipantListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantListView.swift; sourceTree = "<group>"; };
+		C3D4E5F6A7B8C9D0E1F2A3B4 /* ParticipantDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantDetailView.swift; sourceTree = "<group>"; };
 		A8F23D1E7B4C9A0652D1F3E8 /* DiceBearAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiceBearAvatar.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A7B8C9D0E1F2A3 /* InviteGuestsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteGuestsSheet.swift; sourceTree = "<group>"; };
 		23239257453EA681CC7A9039 /* GlassButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassButtonStyles.swift; sourceTree = "<group>"; };
@@ -270,6 +272,7 @@
 				19E16E9AAF138CB7EA570320 /* MovieDetailView.swift */,
 				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
 				450DFE821D9BA30131B7CAA0 /* NearbyEventsSection.swift */,
+				C3D4E5F6A7B8C9D0E1F2A3B4 /* ParticipantDetailView.swift */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* ParticipantListView.swift */,
 				2C053782CA24EDE6B1DE7FBB /* PlanWithFriendsSheet.swift */,
 				09081158264711B776E3A8C3 /* ProfileView.swift */,
@@ -427,6 +430,7 @@
 				2E32E8029F8A18DA3BCCCB93 /* MovieDetailView.swift in Sources */,
 				BF9ACEB5D68ECF001460E162 /* MyEventsView.swift in Sources */,
 				37098B29CE8BEAD07AC00C72 /* NearbyEventsSection.swift in Sources */,
+				3C4D5E6F7A8B9C0D1E2F3A4B /* ParticipantDetailView.swift in Sources */,
 				1A2B3C4D5E6F7A8B9C0D1E2F /* ParticipantListView.swift in Sources */,
 				19FF44634ACFF7B843530B5A /* PlanWithFriendsSheet.swift in Sources */,
 				19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */,

@@ -24,6 +24,7 @@ defmodule EventasaurusWeb.Schema.Mutations.ParticipationMutations do
     field :invite_guests, non_null(:invite_guests_result) do
       arg(:slug, non_null(:string))
       arg(:emails, non_null(list_of(non_null(:string))))
+      arg(:friend_ids, list_of(non_null(:id)))
       arg(:message, :string)
       middleware(Authenticate)
       resolve(&ParticipationResolver.invite_guests/3)
@@ -43,6 +44,15 @@ defmodule EventasaurusWeb.Schema.Mutations.ParticipationMutations do
       arg(:user_id, non_null(:id))
       middleware(Authenticate)
       resolve(&ParticipationResolver.resend_invitation/3)
+    end
+
+    @desc "Update a participant's RSVP status. Must be the organizer."
+    field :update_participant_status, non_null(:remove_participant_result) do
+      arg(:slug, non_null(:string))
+      arg(:user_id, non_null(:id))
+      arg(:status, non_null(:rsvp_status))
+      middleware(Authenticate)
+      resolve(&ParticipationResolver.update_participant_status/3)
     end
   end
 end

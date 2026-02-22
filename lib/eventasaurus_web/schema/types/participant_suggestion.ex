@@ -24,7 +24,7 @@ defmodule EventasaurusWeb.Schema.Types.ParticipantSuggestion do
     field :avatar_url, non_null(:string) do
       resolve(fn participant, _, _ ->
         # Use PNG format (not SVG) so iOS AsyncImage can render it
-        seed = URI.encode_www_form(participant.email)
+        seed = URI.encode_www_form(to_string(participant.email || participant.user_id))
         url = "https://api.dicebear.com/9.x/dylan/png?seed=#{seed}&size=80"
         {:ok, url}
       end)

@@ -77,7 +77,7 @@ struct EmailChipInput: View {
     }
 
     private func containsSeparator(_ input: String) -> Bool {
-        input.contains(",") || input.contains(";") || input.contains("\n")
+        input.contains(",") || input.contains(";") || input.contains("\n") || input.contains("\r")
     }
 
     private func isValidEmail(_ email: String) -> Bool {
