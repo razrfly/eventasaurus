@@ -5,4 +5,6 @@ defmodule EventasaurusWeb.Schema.Mutations do
   import_types(EventasaurusWeb.Schema.Mutations.ParticipationMutations)
   import_types(EventasaurusWeb.Schema.Mutations.PlanMutations)
   import_types(EventasaurusWeb.Schema.Mutations.UploadMutations)
+  import_types(EventasaurusWeb.Schema.Mutations.VenueMutations)
+  import_types(EventasaurusWeb.Schema.Mutations.PollMutations)
 end

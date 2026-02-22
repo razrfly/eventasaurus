@@ -5,6 +5,7 @@ import ClerkKitUI
 struct ContentView: View {
     @Environment(Clerk.self) private var clerk
     @State private var showAuth = false
+    @Binding var deepLinkSlug: String?
 
     var body: some View {
         Group {
@@ -18,6 +19,16 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showAuth) {
             AuthView(mode: .signIn)
+        }
+        .sheet(isPresented: Binding(
+            get: { deepLinkSlug != nil },
+            set: { if !$0 { deepLinkSlug = nil } }
+        )) {
+            if let slug = deepLinkSlug {
+                NavigationStack {
+                    EventDetailView(slug: slug)
+                }
+            }
         }
     }
 
@@ -63,7 +74,7 @@ struct ContentView: View {
 }
 
 #Preview("Signed Out") {
-    ContentView()
+    ContentView(deepLinkSlug: .constant(nil))
         .environment(Clerk.preview { preview in
             preview.isSignedIn = false
         })

@@ -8,6 +8,9 @@ struct EventManageView: View {
     @State private var isLoading = false
     @State private var showEditSheet = false
     @State private var showInviteSheet = false
+    @State private var showAddOrganizerAlert = false
+    @State private var newOrganizerEmail = ""
+    @State private var polls: [EventPoll] = []
     @State private var error: Error?
 
     var onChanged: (() -> Void)?
@@ -24,7 +27,10 @@ struct EventManageView: View {
                 headerSection
                 detailsSection
                 venueSection
+                organizersSection
                 statsSection
+                thresholdSection
+                pollsSection
                 actionsSection
             }
             .padding(DS.Spacing.xl)
@@ -246,6 +252,67 @@ struct EventManageView: View {
         }
     }
 
+    // MARK: - Organizers
+
+    @ViewBuilder
+    private var organizersSection: some View {
+        if let organizers = event.organizers, !organizers.isEmpty {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                HStack {
+                    Text("Organizers")
+                        .font(DS.Typography.bodyBold)
+                    Spacer()
+                    Button {
+                        newOrganizerEmail = ""
+                        showAddOrganizerAlert = true
+                    } label: {
+                        Image(systemName: "plus.circle")
+                    }
+                }
+
+                ForEach(organizers) { organizer in
+                    HStack(spacing: DS.Spacing.md) {
+                        DiceBearAvatar(email: organizer.email, size: 32)
+
+                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                            Text(organizer.name)
+                                .font(DS.Typography.bodyMedium)
+                            if let email = organizer.email {
+                                Text(email)
+                                    .font(DS.Typography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        if organizers.count > 1 {
+                            Button(role: .destructive) {
+                                Task { await removeOrganizer(userId: organizer.id) }
+                            } label: {
+                                Image(systemName: "xmark.circle")
+                                    .foregroundStyle(.red.opacity(0.6))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .cardStyle()
+            .alert("Add Co-organizer", isPresented: $showAddOrganizerAlert) {
+                TextField("Email address", text: $newOrganizerEmail)
+                    .textContentType(.emailAddress)
+                    .autocorrectionDisabled()
+                Button("Add") {
+                    Task { await addOrganizer(email: newOrganizerEmail) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Enter the email of the person you'd like to add as a co-organizer.")
+            }
+        }
+    }
+
     // MARK: - Stats
 
     private var statsSection: some View {
@@ -296,6 +363,72 @@ struct EventManageView: View {
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - Threshold
+
+    @ViewBuilder
+    private var thresholdSection: some View {
+        if event.status == .threshold, let thresholdCount = event.thresholdCount, thresholdCount > 0 {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                Text("Threshold Progress")
+                    .font(DS.Typography.bodyBold)
+
+                let current = event.participantCount
+                let progress = min(Double(current) / Double(thresholdCount), 1.0)
+
+                ProgressView(value: progress) {
+                    HStack {
+                        Text("\(current) of \(thresholdCount) needed")
+                            .font(DS.Typography.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(Int(progress * 100))%")
+                            .font(DS.Typography.captionBold)
+                            .foregroundStyle(progress >= 1.0 ? .green : .purple)
+                    }
+                }
+                .tint(progress >= 1.0 ? .green : .purple)
+
+                if progress >= 1.0 {
+                    Button {
+                        Task { await publishEvent() }
+                    } label: {
+                        Label("Announce to Attendees", systemImage: "megaphone.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glassPrimary)
+                }
+            }
+            .cardStyle()
+        }
+    }
+
+    // MARK: - Polls
+
+    @ViewBuilder
+    private var pollsSection: some View {
+        if !polls.isEmpty {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                Text("Polls")
+                    .font(DS.Typography.bodyBold)
+
+                ForEach(polls) { poll in
+                    PollCardView(poll: poll, slug: event.slug)
+                }
+            }
+        } else if event.status == .polling {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                HStack {
+                    Image(systemName: "chart.bar")
+                        .foregroundStyle(.blue)
+                    Text("No polls yet")
+                        .font(DS.Typography.body)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .cardStyle()
+        }
+    }
+
     // MARK: - Actions
 
     @ViewBuilder
@@ -310,6 +443,16 @@ struct EventManageView: View {
                 }
                 .buttonStyle(.glassSecondary)
             }
+
+            ShareLink(
+                item: URL(string: "https://wombie.com/events/\(event.slug)")!,
+                subject: Text(event.title),
+                message: Text(event.tagline ?? event.title)
+            ) {
+                Label("Share Event", systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassSecondary)
 
             if event.status == .draft {
                 Button {
@@ -348,6 +491,29 @@ struct EventManageView: View {
     private func refreshEvent() async {
         do {
             event = try await GraphQLClient.shared.fetchMyEvent(slug: event.slug)
+            // Load polls if event supports them
+            if event.status == .polling || event.status == .threshold {
+                polls = (try? await GraphQLClient.shared.fetchEventPolls(slug: event.slug)) ?? []
+            }
+        } catch {
+            self.error = error
+        }
+    }
+
+    private func addOrganizer(email: String) async {
+        guard !email.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        do {
+            try await GraphQLClient.shared.addOrganizer(slug: event.slug, email: email)
+            await refreshEvent()
+        } catch {
+            self.error = error
+        }
+    }
+
+    private func removeOrganizer(userId: String) async {
+        do {
+            try await GraphQLClient.shared.removeOrganizer(slug: event.slug, userId: userId)
+            await refreshEvent()
         } catch {
             self.error = error
         }

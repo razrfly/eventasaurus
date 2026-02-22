@@ -12,6 +12,8 @@ defmodule EventasaurusWeb.Schema do
     import_fields(:event_queries)
     import_fields(:participation_queries)
     import_fields(:plan_queries)
+    import_fields(:venue_queries)
+    import_fields(:poll_queries)
   end
 
   mutation do
@@ -19,6 +21,8 @@ defmodule EventasaurusWeb.Schema do
     import_fields(:participation_mutations)
     import_fields(:plan_mutations)
     import_fields(:upload_mutations)
+    import_fields(:venue_mutations)
+    import_fields(:poll_mutations)
   end
 
   def middleware(middleware, _field, %{identifier: :mutation}) do

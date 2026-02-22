@@ -6,5 +6,9 @@
 	<true/>
 	<key>com.apple.developer.network-access</key>
 	<true/>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:wombie.com</string>
+	</array>
 </dict>
 </plist>

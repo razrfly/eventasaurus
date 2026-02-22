@@ -19,9 +19,11 @@ final class GraphQLClient {
         status visibility theme
         coverImageUrl
         isTicketed isVirtual virtualVenueUrl
+        thresholdCount thresholdType
         isOrganizer participantCount myRsvpStatus
         venue { id name address latitude longitude }
         organizer { id name avatarUrl }
+        organizers { id name email avatarUrl }
         createdAt updatedAt
     """
 
@@ -424,6 +426,153 @@ final class GraphQLClient {
             let errors = mutation.errors ?? []
             throw GraphQLMutationError.validationErrors(errors)
         }
+    }
+
+    // MARK: - Poll Queries
+
+    func fetchEventPolls(slug: String) async throws -> [EventPoll] {
+        let result: GQLEventPollsResponse = try await execute(
+            query: """
+            query EventPolls($slug: String!) {
+                eventPolls(slug: $slug) {
+                    id title description
+                    pollType votingSystem phase votingDeadline
+                    options { id title description voteCount averageScore }
+                    myVotes { id optionId score }
+                }
+            }
+            """,
+            variables: ["slug": slug]
+        )
+        return result.eventPolls
+    }
+
+    func voteOnPoll(pollId: String, optionId: String, score: Int? = nil) async throws {
+        var variables: [String: Any] = ["pollId": pollId, "optionId": optionId]
+        if let score { variables["score"] = score }
+
+        let result: GQLVoteOnPollResponse = try await execute(
+            query: """
+            mutation VoteOnPoll($pollId: ID!, $optionId: ID!, $score: Int) {
+                voteOnPoll(pollId: $pollId, optionId: $optionId, score: $score) {
+                    success
+                    errors { field message }
+                }
+            }
+            """,
+            variables: variables
+        )
+        let mutation = result.voteOnPoll
+        if !mutation.success {
+            let errors = mutation.errors ?? []
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+    }
+
+    // MARK: - Organizer Management
+
+    func addOrganizer(slug: String, email: String) async throws {
+        let result: GQLAddOrganizerResponse = try await execute(
+            query: """
+            mutation AddOrganizer($slug: String!, $email: String!) {
+                addOrganizer(slug: $slug, email: $email) {
+                    success
+                    errors { field message }
+                }
+            }
+            """,
+            variables: ["slug": slug, "email": email]
+        )
+        let mutation = result.addOrganizer
+        if !mutation.success {
+            let errors = mutation.errors ?? []
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+    }
+
+    func removeOrganizer(slug: String, userId: String) async throws {
+        let result: GQLRemoveOrganizerResponse = try await execute(
+            query: """
+            mutation RemoveOrganizer($slug: String!, $userId: ID!) {
+                removeOrganizer(slug: $slug, userId: $userId) {
+                    success
+                    errors { field message }
+                }
+            }
+            """,
+            variables: ["slug": slug, "userId": userId]
+        )
+        let mutation = result.removeOrganizer
+        if !mutation.success {
+            let errors = mutation.errors ?? []
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+    }
+
+    // MARK: - Venue Queries
+
+    func searchVenues(query: String, limit: Int = 20) async throws -> [UserEventVenue] {
+        let result: GQLSearchVenuesResponse = try await execute(
+            query: """
+            query SearchVenues($query: String!, $limit: Int) {
+                searchVenues(query: $query, limit: $limit) {
+                    id name address latitude longitude
+                }
+            }
+            """,
+            variables: ["query": query, "limit": limit]
+        )
+        return result.searchVenues
+    }
+
+    func fetchRecentVenues(limit: Int = 10) async throws -> [RecentVenue] {
+        let result: GQLRecentVenuesResponse = try await execute(
+            query: """
+            query MyRecentVenues($limit: Int) {
+                myRecentVenues(limit: $limit) {
+                    id name address latitude longitude usageCount
+                }
+            }
+            """,
+            variables: ["limit": limit]
+        )
+        return result.myRecentVenues
+    }
+
+    func createVenue(
+        name: String,
+        address: String?,
+        latitude: Double?,
+        longitude: Double?,
+        cityName: String? = nil,
+        countryCode: String? = nil
+    ) async throws -> UserEventVenue {
+        var variables: [String: Any] = ["name": name]
+        if let address { variables["address"] = address }
+        if let latitude { variables["latitude"] = latitude }
+        if let longitude { variables["longitude"] = longitude }
+        if let cityName { variables["cityName"] = cityName }
+        if let countryCode { variables["countryCode"] = countryCode }
+
+        let result: GQLCreateVenueResponse = try await execute(
+            query: """
+            mutation CreateVenue($name: String!, $address: String, $latitude: Float, $longitude: Float, $cityName: String, $countryCode: String) {
+                createVenue(name: $name, address: $address, latitude: $latitude, longitude: $longitude, cityName: $cityName, countryCode: $countryCode) {
+                    venue { id name address latitude longitude }
+                    errors { field message }
+                }
+            }
+            """,
+            variables: variables
+        )
+        let mutation = result.createVenue
+        if let errors = mutation.errors, !errors.isEmpty {
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+        guard let venue = mutation.venue else {
+            throw GraphQLMutationError.noData
+        }
+        return venue
     }
 
     // MARK: - Image Upload

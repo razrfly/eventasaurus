@@ -31,6 +31,8 @@ defmodule EventasaurusWeb.Schema.Types.Event do
     field(:is_ticketed, non_null(:boolean))
     field(:is_virtual, non_null(:boolean))
     field(:virtual_venue_url, :string)
+    field(:threshold_count, :integer)
+    field(:threshold_type, :string)
 
     field :is_organizer, non_null(:boolean) do
       resolve(fn event, _, %{context: context} ->
@@ -68,6 +70,13 @@ defmodule EventasaurusWeb.Schema.Types.Event do
               participant -> {:ok, RsvpStatus.from_db(participant.status)}
             end
         end
+      end)
+    end
+
+    field :organizers, non_null(list_of(non_null(:user))) do
+      resolve(fn event, _, _ ->
+        organizers = Events.list_event_organizers(event)
+        {:ok, organizers}
       end)
     end
 
@@ -184,6 +193,13 @@ defmodule EventasaurusWeb.Schema.Types.Event do
 
   object :plan_result do
     field(:plan, :plan)
+    field(:errors, list_of(non_null(:input_error)))
+  end
+
+  # Organizer result type
+
+  object :organizer_result do
+    field(:success, non_null(:boolean))
     field(:errors, list_of(non_null(:input_error)))
   end
 

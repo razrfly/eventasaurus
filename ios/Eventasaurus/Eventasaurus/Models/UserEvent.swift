@@ -28,6 +28,9 @@ struct UserEvent: Codable, Identifiable, Hashable {
     let myRsvpStatus: RsvpStatus?
     let venue: UserEventVenue?
     let organizer: UserEventOrganizer?
+    let organizers: [UserEventOrganizer]?
+    let thresholdCount: Int?
+    let thresholdType: String?
     let createdAt: Date?
     let updatedAt: Date?
 
@@ -40,7 +43,7 @@ struct UserEvent: Codable, Identifiable, Hashable {
     }
 }
 
-struct UserEventVenue: Codable, Hashable {
+struct UserEventVenue: Codable, Hashable, Identifiable {
     let id: String
     let name: String
     let address: String?
@@ -48,9 +51,19 @@ struct UserEventVenue: Codable, Hashable {
     let longitude: Double?
 }
 
-struct UserEventOrganizer: Codable, Hashable {
+struct RecentVenue: Codable, Identifiable {
     let id: String
     let name: String
+    let address: String?
+    let latitude: Double?
+    let longitude: Double?
+    let usageCount: Int
+}
+
+struct UserEventOrganizer: Codable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    let email: String?
     let avatarUrl: String?
 }
 
@@ -177,6 +190,7 @@ struct CreateEventInput {
     var isTicketed: Bool?
     var isVirtual: Bool?
     var virtualVenueUrl: String?
+    var venueId: String?
 
     func toVariables() -> [String: Any] {
         var vars: [String: Any] = ["title": title]
@@ -191,6 +205,7 @@ struct CreateEventInput {
         if let isTicketed { vars["isTicketed"] = isTicketed }
         if let isVirtual { vars["isVirtual"] = isVirtual }
         if let virtualVenueUrl { vars["virtualVenueUrl"] = virtualVenueUrl }
+        if let venueId { vars["venueId"] = venueId }
         return vars
     }
 }
@@ -208,6 +223,8 @@ struct UpdateEventInput {
     var isTicketed: Bool?
     var isVirtual: Bool?
     var virtualVenueUrl: String?
+    var venueId: String?
+    var clearVenue: Bool = false
 
     func toVariables() -> [String: Any] {
         var vars: [String: Any] = [:]
@@ -223,6 +240,11 @@ struct UpdateEventInput {
         if let isTicketed { vars["isTicketed"] = isTicketed }
         if let isVirtual { vars["isVirtual"] = isVirtual }
         if let virtualVenueUrl { vars["virtualVenueUrl"] = virtualVenueUrl }
+        if clearVenue {
+            vars["venueId"] = NSNull()
+        } else if let venueId {
+            vars["venueId"] = venueId
+        }
         return vars
     }
 }
@@ -342,6 +364,81 @@ struct GQLUploadResponse: Codable {
 struct GQLUploadResult: Codable {
     let url: String?
     let errors: [InputError]?
+}
+
+// MARK: - Venue Response Wrappers
+
+struct GQLSearchVenuesResponse: Codable {
+    let searchVenues: [UserEventVenue]
+}
+
+struct GQLRecentVenuesResponse: Codable {
+    let myRecentVenues: [RecentVenue]
+}
+
+struct GQLCreateVenueResponse: Codable {
+    let createVenue: GQLCreateVenueResult
+}
+
+struct GQLCreateVenueResult: Codable {
+    let venue: UserEventVenue?
+    let errors: [InputError]?
+}
+
+// MARK: - Organizer Response Wrappers
+
+struct GQLAddOrganizerResponse: Codable {
+    let addOrganizer: GQLSuccessResult
+}
+
+struct GQLRemoveOrganizerResponse: Codable {
+    let removeOrganizer: GQLSuccessResult
+}
+
+// MARK: - Poll Models
+
+struct EventPoll: Codable, Identifiable {
+    let id: String
+    let title: String
+    let description: String?
+    let pollType: String
+    let votingSystem: String
+    let phase: String
+    let votingDeadline: Date?
+    let options: [PollOption]
+    let myVotes: [PollVote]?
+
+    var isClosed: Bool {
+        phase == "closed"
+    }
+
+    var isVotingActive: Bool {
+        !isClosed && (votingDeadline == nil || (votingDeadline ?? .distantPast) > Date())
+    }
+}
+
+struct PollOption: Codable, Identifiable {
+    let id: String
+    let title: String
+    let description: String?
+    let voteCount: Int
+    let averageScore: Double?
+}
+
+struct PollVote: Codable, Identifiable {
+    let id: String
+    let optionId: String
+    let score: Int?
+}
+
+// MARK: - Poll Response Wrappers
+
+struct GQLEventPollsResponse: Codable {
+    let eventPolls: [EventPoll]
+}
+
+struct GQLVoteOnPollResponse: Codable {
+    let voteOnPoll: GQLSuccessResult
 }
 
 // MARK: - Event Participant (Organizer View)

@@ -31,6 +31,19 @@ defmodule EventasaurusApp.Accounts do
   def get_user(id), do: Repo.get(User, id)
 
   @doc """
+  Gets multiple users by their IDs in a single query.
+
+  Returns a list of users found. IDs with no matching user are silently skipped.
+  """
+  @spec get_users_by_ids([integer() | String.t()]) :: [User.t()]
+  def get_users_by_ids([]), do: []
+
+  def get_users_by_ids(ids) when is_list(ids) do
+    from(u in User, where: u.id in ^ids)
+    |> Repo.all()
+  end
+
+  @doc """
   Gets a user by email (case-insensitive).
   Returns nil if email is invalid or user not found.
   """
