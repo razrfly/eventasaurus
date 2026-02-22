@@ -76,6 +76,7 @@ struct ParticipantDetailView: View {
         .onDisappear {
             successTask?.cancel()
             successTask = nil
+            showSuccess = nil
         }
     }
 

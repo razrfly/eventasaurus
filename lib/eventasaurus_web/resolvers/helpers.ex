@@ -29,7 +29,14 @@ defmodule EventasaurusWeb.Resolvers.Helpers do
     end)
   end
 
-  # Recursively flatten error messages, handling nested maps from embeds_one/embeds_many
+  # Handle nested maps from embeds_one (e.g., %{first_name: ["can't be blank"]})
+  defp flatten_messages(field, messages) when is_map(messages) do
+    Enum.flat_map(messages, fn {sub_field, sub_messages} ->
+      flatten_messages("#{field}.#{sub_field}", sub_messages)
+    end)
+  end
+
+  # Handle lists of error strings or nested maps from embeds_many
   defp flatten_messages(field, messages) when is_list(messages) do
     Enum.flat_map(messages, fn
       message when is_binary(message) ->
