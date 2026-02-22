@@ -14,6 +14,7 @@ defmodule EventasaurusWeb.Schema do
     import_fields(:plan_queries)
     import_fields(:venue_queries)
     import_fields(:poll_queries)
+    import_fields(:user_queries)
   end
 
   mutation do

@@ -175,6 +175,20 @@ enum RsvpStatus: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - User Search Result (Organizer Search)
+
+struct UserSearchResult: Codable, Identifiable {
+    let id: String
+    let name: String
+    let username: String?
+    let email: String?
+    let avatarUrl: String?
+}
+
+struct GQLSearchUsersForOrganizersResponse: Codable {
+    let searchUsersForOrganizers: [UserSearchResult]
+}
+
 // MARK: - GraphQL Input Types
 
 struct CreateEventInput {

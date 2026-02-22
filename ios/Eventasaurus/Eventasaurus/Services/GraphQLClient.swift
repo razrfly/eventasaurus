@@ -13,7 +13,24 @@ final class GraphQLClient {
 
     /// Shared fragment with all UserEvent fields — single source of truth to prevent
     /// Codable decode crashes from partial query fragments.
+    /// Note: organizer email is intentionally excluded here to avoid exposing it
+    /// to attendees. Use `eventFieldsForOrganizer` in organizer-only queries.
     private static let eventFields = """
+        id slug title tagline description
+        startsAt endsAt timezone
+        status visibility theme
+        coverImageUrl
+        isTicketed isVirtual virtualVenueUrl
+        thresholdCount thresholdType
+        isOrganizer participantCount myRsvpStatus
+        venue { id name address latitude longitude }
+        organizer { id name avatarUrl }
+        organizers { id name avatarUrl }
+        createdAt updatedAt
+    """
+
+    /// Extended fragment that includes organizer email — only for organizer-authorized queries.
+    private static let eventFieldsForOrganizer = """
         id slug title tagline description
         startsAt endsAt timezone
         status visibility theme
@@ -57,7 +74,7 @@ final class GraphQLClient {
             query: """
             query MyEvents($limit: Int) {
                 myEvents(limit: $limit) {
-                    \(Self.eventFields)
+                    \(Self.eventFieldsForOrganizer)
                 }
             }
             """,
@@ -71,7 +88,7 @@ final class GraphQLClient {
             query: """
             query MyEvent($slug: String!) {
                 myEvent(slug: $slug) {
-                    \(Self.eventFields)
+                    \(Self.eventFieldsForOrganizer)
                 }
             }
             """,
@@ -507,6 +524,22 @@ final class GraphQLClient {
             let errors = mutation.errors ?? []
             throw GraphQLMutationError.validationErrors(errors)
         }
+    }
+
+    // MARK: - User Search
+
+    func searchUsersForOrganizers(query: String, slug: String, limit: Int = 20) async throws -> [UserSearchResult] {
+        let result: GQLSearchUsersForOrganizersResponse = try await execute(
+            query: """
+            query SearchUsersForOrganizers($query: String!, $slug: String!, $limit: Int) {
+                searchUsersForOrganizers(query: $query, slug: $slug, limit: $limit) {
+                    id name username email avatarUrl
+                }
+            }
+            """,
+            variables: ["query": query, "slug": slug, "limit": limit]
+        )
+        return result.searchUsersForOrganizers
     }
 
     // MARK: - Venue Queries

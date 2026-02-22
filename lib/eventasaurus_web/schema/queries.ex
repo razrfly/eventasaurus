@@ -7,4 +7,5 @@ defmodule EventasaurusWeb.Schema.Queries do
   import_types(EventasaurusWeb.Schema.Queries.PlanQueries)
   import_types(EventasaurusWeb.Schema.Queries.VenueQueries)
   import_types(EventasaurusWeb.Schema.Queries.PollQueries)
+  import_types(EventasaurusWeb.Schema.Queries.UserQueries)
 end

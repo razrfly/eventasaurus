@@ -44,8 +44,8 @@ struct EventEditView: View {
         _title = State(initialValue: event.title)
         _tagline = State(initialValue: event.tagline ?? "")
         _description = State(initialValue: event.description ?? "")
-        _startsAt = State(initialValue: event.startsAt ?? Date())
-        _endsAt = State(initialValue: event.endsAt ?? Date().addingTimeInterval(3600))
+        _startsAt = State(initialValue: (event.startsAt ?? Date()).snappedToNearest30Minutes())
+        _endsAt = State(initialValue: (event.endsAt ?? Date().addingTimeInterval(3600)).snappedToNearest30Minutes())
         _hasEndDate = State(initialValue: event.endsAt != nil)
         _visibility = State(initialValue: event.visibility)
         _isVirtual = State(initialValue: event.isVirtual)
@@ -218,17 +218,19 @@ struct EventEditView: View {
 
     private var dateTimeSection: some View {
         Section {
-            DatePicker("Starts", selection: $startsAt)
-                .font(DS.Typography.body)
+            DatePicker30MinRow(label: "Starts", selection: $startsAt)
 
             Toggle("Add end time", isOn: $hasEndDate.animation())
 
             if hasEndDate {
-                DatePicker("Ends", selection: $endsAt, in: startsAt...)
-                    .font(DS.Typography.body)
+                DatePicker30MinRow(label: "Ends", selection: $endsAt, minimumDate: startsAt)
             }
         } header: {
             Text("Date & Time")
+        }
+        .onChange(of: startsAt) { oldValue, newValue in
+            let gap = max(endsAt.timeIntervalSince(oldValue), 1800) // minimum 30 min
+            endsAt = newValue.addingTimeInterval(gap)
         }
     }
 
