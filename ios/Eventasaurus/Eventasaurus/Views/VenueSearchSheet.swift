@@ -314,18 +314,22 @@ struct VenueSearchSheet: View {
     private func performSearch(_ query: String) async {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             searchResults = []
+            isSearching = false
             return
         }
         isSearching = true
-        defer { isSearching = false }
         do {
             searchResults = try await GraphQLClient.shared.searchVenues(query: query)
+            isSearching = false
         } catch is CancellationError {
+            // Leave isSearching true so the replacement task manages loading state
             return
         } catch let urlError as URLError where urlError.code == .cancelled {
+            // Leave isSearching true so the replacement task manages loading state
             return
         } catch {
             searchResults = []
+            isSearching = false
             #if DEBUG
             print("[VenueSearchSheet] Search failed: \(error)")
             #endif
