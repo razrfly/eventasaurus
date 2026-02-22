@@ -311,7 +311,7 @@ final class GraphQLClient {
             query: """
             query ParticipantSuggestions($limit: Int) {
                 participantSuggestions(limit: $limit) {
-                    userId name email username
+                    userId name maskedEmail username
                     participationCount totalScore recommendationLevel
                     avatarUrl
                 }
@@ -322,6 +322,90 @@ final class GraphQLClient {
         return result.participantSuggestions
     }
 
+    // MARK: - Participant Management
+
+    func fetchEventParticipants(slug: String, status: String? = nil, limit: Int? = nil, offset: Int? = nil) async throws -> [EventParticipant] {
+        var variables: [String: Any] = ["slug": slug]
+        if let status { variables["status"] = status }
+        if let limit { variables["limit"] = limit }
+        if let offset { variables["offset"] = offset }
+
+        let result: GQLEventParticipantsResponse = try await execute(
+            query: """
+            query EventParticipants($slug: String!, $status: String, $limit: Int, $offset: Int) {
+                eventParticipants(slug: $slug, status: $status, limit: $limit, offset: $offset) {
+                    id role status rawStatus
+                    invitedAt createdAt
+                    emailStatus invitationMessage email
+                    user { id name email }
+                }
+            }
+            """,
+            variables: variables
+        )
+        return result.eventParticipants
+    }
+
+    func inviteGuests(slug: String, emails: [String], message: String? = nil) async throws -> Int {
+        var variables: [String: Any] = ["slug": slug, "emails": emails]
+        if let message { variables["message"] = message }
+
+        let result: GQLInviteGuestsResponse = try await execute(
+            query: """
+            mutation InviteGuests($slug: String!, $emails: [String!]!, $message: String) {
+                inviteGuests(slug: $slug, emails: $emails, message: $message) {
+                    inviteCount
+                    errors { field message }
+                }
+            }
+            """,
+            variables: variables
+        )
+        let mutation = result.inviteGuests
+        if let errors = mutation.errors, !errors.isEmpty {
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+        return mutation.inviteCount
+    }
+
+    func removeParticipant(slug: String, userId: String) async throws {
+        let result: GQLRemoveParticipantResponse = try await execute(
+            query: """
+            mutation RemoveParticipant($slug: String!, $userId: ID!) {
+                removeParticipant(slug: $slug, userId: $userId) {
+                    success
+                    errors { field message }
+                }
+            }
+            """,
+            variables: ["slug": slug, "userId": userId]
+        )
+        let mutation = result.removeParticipant
+        if !mutation.success {
+            let errors = mutation.errors ?? []
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+    }
+
+    func resendInvitation(slug: String, userId: String) async throws {
+        let result: GQLResendInvitationResponse = try await execute(
+            query: """
+            mutation ResendInvitation($slug: String!, $userId: ID!) {
+                resendInvitation(slug: $slug, userId: $userId) {
+                    success
+                    errors { field message }
+                }
+            }
+            """,
+            variables: ["slug": slug, "userId": userId]
+        )
+        let mutation = result.resendInvitation
+        if !mutation.success {
+            let errors = mutation.errors ?? []
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+    }
+
     // MARK: - Image Upload
 
     func uploadImage(data: Data, filename: String, mimeType: String) async throws -> String {
@@ -330,6 +414,7 @@ final class GraphQLClient {
         var request = URLRequest(url: graphqlURL)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         if let token = try? await Clerk.shared.auth.getToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -345,22 +430,19 @@ final class GraphQLClient {
         """
 
         var body = Data()
-        // operations part
-        let operations = """
-        {"query": \(jsonString(query)), "variables": {"file": null}}
-        """
+        // query part (Absinthe native multipart format)
         body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"operations\"\r\n\r\n")
-        body.append(operations)
+        body.append("Content-Disposition: form-data; name=\"query\"\r\n\r\n")
+        body.append(query)
         body.append("\r\n")
 
-        // map part
+        // variables part — "file" value references the form field name containing the upload
         body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"map\"\r\n\r\n")
-        body.append("{\"0\": [\"variables.file\"]}")
+        body.append("Content-Disposition: form-data; name=\"variables\"\r\n\r\n")
+        body.append("{\"file\": \"0\"}")
         body.append("\r\n")
 
-        // file part
+        // file part — field name "0" matches the variable reference above
         body.append("--\(boundary)\r\n")
         body.append("Content-Disposition: form-data; name=\"0\"; filename=\"\(filename)\"\r\n")
         body.append("Content-Type: \(mimeType)\r\n\r\n")

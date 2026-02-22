@@ -3,14 +3,20 @@ import SwiftUI
 /// Loads a DiceBear Dylan-style avatar as PNG.
 /// Uses URLSession directly because AsyncImage can fail on some CDN responses.
 struct DiceBearAvatar: View {
-    let email: String
+    var email: String? = nil
+    var url: URL? = nil
     var size: CGFloat = 48
 
     @State private var image: UIImage?
     @State private var isLoading = true
 
     private var avatarURL: URL? {
-        let seed = email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? email
+        if let url { return url }
+        guard let email else { return nil }
+        // Use a strict character set that also encodes '+' (which .urlQueryAllowed leaves unescaped)
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove("+")
+        let seed = email.addingPercentEncoding(withAllowedCharacters: allowed) ?? email
         return URL(string: "https://api.dicebear.com/9.x/dylan/png?seed=\(seed)&size=\(Int(size * 2))")
     }
 
@@ -20,6 +26,7 @@ struct DiceBearAvatar: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+                    .clipped()
             } else if isLoading {
                 ProgressView()
             } else {
@@ -29,7 +36,7 @@ struct DiceBearAvatar: View {
             }
         }
         .frame(width: size, height: size)
-        .task(id: email) {
+        .task(id: email ?? url?.absoluteString) {
             await loadAvatar()
         }
     }
@@ -49,6 +56,7 @@ struct DiceBearAvatar: View {
                 return
             }
             image = uiImage
+            isLoading = false
         } catch {
             isLoading = false
         }

@@ -28,11 +28,12 @@ defmodule EventasaurusWeb.Resolvers.UploadResolver do
 
   defp do_upload(%Plug.Upload{content_type: content_type, filename: filename, path: path}) do
     with :ok <- validate_content_type(content_type),
-         :ok <- validate_file_size(path) do
+         :ok <- validate_file_size(path),
+         {:ok, file_data} <- File.read(path) do
       unique_filename = generate_unique_filename(filename)
       r2_path = "events/#{unique_filename}"
 
-      case R2Client.upload(path, r2_path, content_type: content_type) do
+      case R2Client.upload(r2_path, file_data, content_type: content_type) do
         {:ok, url} when is_binary(url) ->
           {:ok, %{url: url, errors: []}}
 
@@ -82,8 +83,14 @@ defmodule EventasaurusWeb.Resolvers.UploadResolver do
            %{url: nil, errors: [%{field: "file", message: "Upload failed"}]}}
       end
     else
-      {:error, message} ->
+      {:error, :enoent} ->
+        {:ok, %{url: nil, errors: [%{field: "file", message: "Could not read uploaded file"}]}}
+
+      {:error, message} when is_binary(message) ->
         {:ok, %{url: nil, errors: [%{field: "file", message: message}]}}
+
+      {:error, reason} ->
+        {:ok, %{url: nil, errors: [%{field: "file", message: "Upload failed: #{inspect(reason)}"}]}}
     end
   end
 

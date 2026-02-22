@@ -11,6 +11,8 @@
 		19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09081158264711B776E3A8C3 /* ProfileView.swift */; };
 		19D4A7B2C3E8F1A590B21E47 /* DiceBearAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F23D1E7B4C9A0652D1F3E8 /* DiceBearAvatar.swift */; };
 		19FF44634ACFF7B843530B5A /* PlanWithFriendsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C053782CA24EDE6B1DE7FBB /* PlanWithFriendsSheet.swift */; };
+		1A2B3C4D5E6F7A8B9C0D1E2F /* ParticipantListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* ParticipantListView.swift */; };
+		2B3C4D5E6F7A8B9C0D1E2F3A /* InviteGuestsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* InviteGuestsSheet.swift */; };
 		246A58033A9AA406F39043B1 /* LoadingSkeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B4475BE562F544ADD835239 /* LoadingSkeleton.swift */; };
 		2CBE1900F8D991008A0BE2FF /* EventCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AAF0EF0E711979E18C9F3C9 /* EventCreateView.swift */; };
 		2E32E8029F8A18DA3BCCCB93 /* MovieDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E16E9AAF138CB7EA570320 /* MovieDetailView.swift */; };
@@ -84,7 +86,9 @@
 		1B1C65EA3CEB181EA47B1CA7 /* CityPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityPickerView.swift; sourceTree = "<group>"; };
 		1D910507C20A4079D0F6753F /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
 		1DD58E490FBBFABB4DCA5D90 /* CachedImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedImage.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* ParticipantListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantListView.swift; sourceTree = "<group>"; };
 		A8F23D1E7B4C9A0652D1F3E8 /* DiceBearAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiceBearAvatar.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* InviteGuestsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteGuestsSheet.swift; sourceTree = "<group>"; };
 		23239257453EA681CC7A9039 /* GlassButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassButtonStyles.swift; sourceTree = "<group>"; };
 		29DB2240AAF684CE1A11E249 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		2C053782CA24EDE6B1DE7FBB /* PlanWithFriendsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanWithFriendsSheet.swift; sourceTree = "<group>"; };
@@ -261,10 +265,12 @@
 				B35F1A39494A33D157DD9BE8 /* EventManageView.swift */,
 				7B05D65CE187A5EE31364A6C /* ExternalLinkButton.swift */,
 				973CC9AD642345A3ED7B6F24 /* FiltersSheet.swift */,
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* InviteGuestsSheet.swift */,
 				CCC601A146E33CBE05DCD517 /* FlowLayout.swift */,
 				19E16E9AAF138CB7EA570320 /* MovieDetailView.swift */,
 				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
 				450DFE821D9BA30131B7CAA0 /* NearbyEventsSection.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* ParticipantListView.swift */,
 				2C053782CA24EDE6B1DE7FBB /* PlanWithFriendsSheet.swift */,
 				09081158264711B776E3A8C3 /* ProfileView.swift */,
 				08B4300EF32363EE8C563181 /* RatingPill.swift */,
@@ -414,12 +420,14 @@
 				5255001398205FFA081CBECE /* GlassButtonStyles.swift in Sources */,
 				86B8CB7F418727A11F632ECB /* GlassCard.swift in Sources */,
 				5D4E5CD10455E4CD962EFEDE /* GraphQLClient.swift in Sources */,
+				2B3C4D5E6F7A8B9C0D1E2F3A /* InviteGuestsSheet.swift in Sources */,
 				246A58033A9AA406F39043B1 /* LoadingSkeleton.swift in Sources */,
 				D577F3F99A409AC4E9EBC795 /* LocationManager.swift in Sources */,
 				DE6D0309991E94B825D168A1 /* MovieDetail.swift in Sources */,
 				2E32E8029F8A18DA3BCCCB93 /* MovieDetailView.swift in Sources */,
 				BF9ACEB5D68ECF001460E162 /* MyEventsView.swift in Sources */,
 				37098B29CE8BEAD07AC00C72 /* NearbyEventsSection.swift in Sources */,
+				1A2B3C4D5E6F7A8B9C0D1E2F /* ParticipantListView.swift in Sources */,
 				19FF44634ACFF7B843530B5A /* PlanWithFriendsSheet.swift in Sources */,
 				19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */,
 				63EDA81DDAF6EC9311F9DFCD /* RatingPill.swift in Sources */,

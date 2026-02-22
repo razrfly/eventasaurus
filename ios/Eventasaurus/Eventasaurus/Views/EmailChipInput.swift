@@ -30,7 +30,7 @@ struct EmailChipInput: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(!isValidEmail(currentInput))
+                .disabled(!isValidEmail(currentInput) && !containsSeparator(currentInput))
             }
         }
     }
@@ -74,6 +74,10 @@ struct EmailChipInput: View {
 
         currentInput = ""
         isFocused = true
+    }
+
+    private func containsSeparator(_ input: String) -> Bool {
+        input.contains(",") || input.contains(";") || input.contains("\n")
     }
 
     private func isValidEmail(_ email: String) -> Bool {
