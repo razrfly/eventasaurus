@@ -31,7 +31,7 @@ struct EventDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let event, let shareURL = eventURL(slug: slug) {
+            if let event, let shareURL = URL.event(slug: slug) {
                 ToolbarItem(placement: .primaryAction) {
                     ShareLink(
                         item: shareURL,
@@ -335,11 +335,4 @@ struct EventDetailView: View {
         isUpdatingStatus = false
     }
 
-    private func eventURL(slug: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "wombie.com"
-        components.path = "/events/\(slug)"
-        return components.url
-    }
 }

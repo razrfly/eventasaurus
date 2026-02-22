@@ -71,6 +71,7 @@
 		FE2EEDD88330BA075A5E9CC3 /* EventCardGridItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1375920877D214004606FDE /* EventCardGridItem.swift */; };
 		A1B2C3D401F6A7B8C9D0E1F2 /* Date+RoundTo30.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* Date+RoundTo30.swift */; };
 		B2C3D4E501A7B8C9D0E1F2A3 /* DatePicker30Min.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* DatePicker30Min.swift */; };
+		C3D4E5F601B8C9A0D1E2F3B4 /* URL+Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6A7B8C9A0D1E2F3B4 /* URL+Event.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -152,6 +153,7 @@
 		FD46770CC3F41864DFC21903 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* Date+RoundTo30.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+RoundTo30.swift"; sourceTree = "<group>"; };
 		B2C3D4E5F6A7B8C9D0E1F2A3 /* DatePicker30Min.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatePicker30Min.swift; sourceTree = "<group>"; };
+		C3D4E5F6A7B8C9A0D1E2F3B4 /* URL+Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URL+Event.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -259,6 +261,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* Date+RoundTo30.swift */,
+				C3D4E5F6A7B8C9A0D1E2F3B4 /* URL+Event.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -420,6 +423,7 @@
 			files = (
 				A1B2C3D401F6A7B8C9D0E1F2 /* Date+RoundTo30.swift in Sources */,
 				B2C3D4E501A7B8C9D0E1F2A3 /* DatePicker30Min.swift in Sources */,
+				C3D4E5F601B8C9A0D1E2F3B4 /* URL+Event.swift in Sources */,
 				DBCCCB04C953FC3B590FB802 /* APIClient.swift in Sources */,
 				3EA0FF93E892E00FA88F1789 /* CachedImage.swift in Sources */,
 				C1CD3752540DFD2C5ABF8059 /* CastCarousel.swift in Sources */,

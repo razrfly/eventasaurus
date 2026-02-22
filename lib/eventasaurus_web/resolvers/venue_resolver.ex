@@ -4,17 +4,13 @@ defmodule EventasaurusWeb.Resolvers.VenueResolver do
   alias EventasaurusDiscovery.Locations.VenueStore
 
   def search_venues(_parent, %{query: query} = args, _resolution) do
-    limit = Map.get(args, :limit, 20)
-
-    venues =
-      Venues.search_venues(query)
-      |> Enum.take(limit)
-
+    limit = min(Map.get(args, :limit, 20), 100)
+    venues = Venues.search_venues(query, limit: limit)
     {:ok, venues}
   end
 
   def my_recent_venues(_parent, args, %{context: %{current_user: user}}) do
-    limit = Map.get(args, :limit, 10)
+    limit = min(Map.get(args, :limit, 10), 100)
     recent = Events.get_recent_locations_for_user(user.id, limit: limit)
 
     venues =
@@ -23,8 +19,8 @@ defmodule EventasaurusWeb.Resolvers.VenueResolver do
           id: loc.id,
           name: loc.name,
           address: loc.address,
-          latitude: nil,
-          longitude: nil,
+          latitude: loc[:latitude],
+          longitude: loc[:longitude],
           usage_count: loc.usage_count
         }
       end)
@@ -90,7 +86,11 @@ defmodule EventasaurusWeb.Resolvers.VenueResolver do
   end
 
   defp format_changeset_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
     |> Enum.flat_map(fn {field, messages} ->
       Enum.map(messages, &%{field: to_string(field), message: &1})
     end)

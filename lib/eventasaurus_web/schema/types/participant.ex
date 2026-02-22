@@ -65,6 +65,12 @@ defmodule EventasaurusWeb.Schema.Types.Participant do
   defp to_utc_datetime(%DateTime{} = dt), do: dt
   defp to_utc_datetime(%NaiveDateTime{} = ndt), do: DateTime.from_naive!(ndt, "Etc/UTC")
 
+  object :participant_action_result do
+    field(:success, non_null(:boolean))
+    field(:errors, list_of(:input_error))
+  end
+
+  # Keep legacy names as aliases for backwards compatibility
   object :remove_participant_result do
     field(:success, non_null(:boolean))
     field(:errors, list_of(:input_error))

@@ -72,6 +72,11 @@ struct EventManageView: View {
                 }
             }
         }
+        .sheet(isPresented: $showOrganizerSearch) {
+            OrganizerSearchSheet(slug: event.slug) {
+                await refreshEvent()
+            }
+        }
     }
 
     // MARK: - Cover Image
@@ -270,7 +275,7 @@ struct EventManageView: View {
 
                 ForEach(organizers) { organizer in
                     HStack(spacing: DS.Spacing.md) {
-                        DiceBearAvatar(email: organizer.email, size: 32)
+                        DiceBearAvatar(url: organizer.avatarUrl.flatMap { URL(string: $0) }, size: 32)
 
                         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                             Text(organizer.name)
@@ -297,11 +302,6 @@ struct EventManageView: View {
                 }
             }
             .cardStyle()
-            .sheet(isPresented: $showOrganizerSearch) {
-                OrganizerSearchSheet(slug: event.slug) {
-                    await refreshEvent()
-                }
-            }
         }
     }
 
@@ -436,7 +436,7 @@ struct EventManageView: View {
                 .buttonStyle(.glassSecondary)
             }
 
-            if let shareURL = eventURL(slug: event.slug) {
+            if let shareURL = URL.event(slug: event.slug) {
                 ShareLink(
                     item: shareURL,
                     subject: Text(event.title),
@@ -529,11 +529,4 @@ struct EventManageView: View {
         isLoading = false
     }
 
-    private func eventURL(slug: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "wombie.com"
-        components.path = "/events/\(slug)"
-        return components.url
-    }
 }

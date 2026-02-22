@@ -980,7 +980,10 @@ defmodule EventasaurusApp.Events do
       from(u in User,
         join: eu in EventUser,
         on: u.id == eu.user_id,
-        where: eu.event_id == ^event.id
+        where:
+          eu.event_id == ^event.id and
+            eu.role == "organizer" and
+            is_nil(eu.deleted_at)
       )
 
     Repo.all(query)
@@ -3693,11 +3696,13 @@ defmodule EventasaurusApp.Events do
             is_nil(e.virtual_venue_url) and
             not is_nil(e.venue_id) and
             is_nil(e.deleted_at),
-        group_by: [e.venue_id, v.name, v.address, c.name, country.name],
+        group_by: [e.venue_id, v.name, v.address, v.latitude, v.longitude, c.name, country.name],
         select: %{
           venue_id: e.venue_id,
           venue_name: v.name,
           venue_address: v.address,
+          venue_latitude: v.latitude,
+          venue_longitude: v.longitude,
           venue_city: c.name,
           venue_state: nil,
           venue_country: country.name,
@@ -3718,6 +3723,8 @@ defmodule EventasaurusApp.Events do
         id: row.venue_id,
         name: if(is_deleted, do: "Deleted Venue", else: row.venue_name),
         address: if(is_deleted, do: nil, else: row.venue_address),
+        latitude: if(is_deleted, do: nil, else: row.venue_latitude),
+        longitude: if(is_deleted, do: nil, else: row.venue_longitude),
         city: if(is_deleted, do: nil, else: row.venue_city),
         state: if(is_deleted, do: nil, else: row.venue_state),
         country: if(is_deleted, do: nil, else: row.venue_country),

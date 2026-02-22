@@ -53,6 +53,10 @@ struct VenueSearchSheet: View {
                     await performSearch(newValue)
                 }
             }
+            .onDisappear {
+                searchTask?.cancel()
+                searchTask = nil
+            }
             .navigationTitle("Select Venue")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -316,6 +320,7 @@ struct VenueSearchSheet: View {
         do {
             searchResults = try await GraphQLClient.shared.searchVenues(query: query)
         } catch {
+            searchResults = []
             #if DEBUG
             print("[VenueSearchSheet] Search failed: \(error)")
             #endif
@@ -325,6 +330,7 @@ struct VenueSearchSheet: View {
 
     private func createAndSelectVenue() async {
         isCreatingVenue = true
+        defer { isCreatingVenue = false }
         error = nil
 
         // If name is empty but address is provided, use address as name (matches web behavior)
@@ -360,10 +366,8 @@ struct VenueSearchSheet: View {
             )
             onSelect(venue)
             dismiss()
-        } catch {
-            self.error = error.localizedDescription
+        } catch let createError {
+            self.error = createError.localizedDescription
         }
-
-        isCreatingVenue = false
     }
 }

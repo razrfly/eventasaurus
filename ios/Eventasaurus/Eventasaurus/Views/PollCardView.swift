@@ -6,6 +6,7 @@ struct PollCardView: View {
     @State private var localPoll: EventPoll
     @State private var isVoting = false
     @State private var error: String?
+    @State private var selectedScore: Int = 5
 
     init(poll: EventPoll, slug: String) {
         self.poll = poll
@@ -93,12 +94,24 @@ struct PollCardView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(option.title)
                     .font(isMyVote ? DS.Typography.bodyMedium : DS.Typography.body)
-                    .foregroundStyle(isMyVote ? .primary : .primary)
+                    .foregroundStyle(isMyVote ? Color.accentColor : .primary)
 
                 if let desc = option.description, !desc.isEmpty {
                     Text(desc)
                         .font(DS.Typography.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                // Star rating picker for star voting system
+                if localPoll.votingSystem == "star" && localPoll.isVotingActive && !isMyVote {
+                    HStack(spacing: DS.Spacing.xxs) {
+                        ForEach(1...5, id: \.self) { star in
+                            Image(systemName: star <= selectedScore ? "star.fill" : "star")
+                                .foregroundStyle(star <= selectedScore ? .yellow : .secondary)
+                                .onTapGesture { selectedScore = star }
+                        }
+                    }
+                    .font(DS.Typography.caption)
                 }
 
                 // Vote bar
@@ -140,7 +153,7 @@ struct PollCardView: View {
         isVoting = true
         error = nil
 
-        let score: Int? = localPoll.votingSystem == "star" ? 5 : nil
+        let score: Int? = localPoll.votingSystem == "star" ? selectedScore : nil
 
         do {
             try await GraphQLClient.shared.voteOnPoll(
@@ -148,13 +161,23 @@ struct PollCardView: View {
                 optionId: option.id,
                 score: score
             )
-            // Refresh polls
+        } catch {
+            self.error = error.localizedDescription
+            isVoting = false
+            return
+        }
+
+        // Refresh polls separately — vote already succeeded
+        do {
             let polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
             if let updated = polls.first(where: { $0.id == localPoll.id }) {
                 localPoll = updated
             }
         } catch {
-            self.error = error.localizedDescription
+            // Vote succeeded but refresh failed — not a user-facing error
+            #if DEBUG
+            print("[PollCardView] Poll refresh failed after successful vote: \(error)")
+            #endif
         }
 
         isVoting = false

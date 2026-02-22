@@ -39,7 +39,17 @@ defmodule EventasaurusWeb.Schema.Types.User do
     field(:id, non_null(:id))
     field(:name, non_null(:string))
     field(:username, :string)
-    field(:email, :string)
+
+    field :email, :string do
+      resolve(fn user, _, %{context: context} ->
+        if context[:current_user] do
+          {:ok, Map.get(user, :email)}
+        else
+          {:ok, nil}
+        end
+      end)
+    end
+
     field(:avatar_url, :string)
   end
 end

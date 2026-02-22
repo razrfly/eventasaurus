@@ -8,14 +8,14 @@ defmodule EventasaurusWeb.Schema.Queries.VenueQueries do
     @desc "Search venues by name."
     field :search_venues, non_null(list_of(non_null(:venue))) do
       arg(:query, non_null(:string))
-      arg(:limit, :integer)
+      arg(:limit, :integer, default_value: 20, description: "Max results (capped at 100)")
       middleware(Authenticate)
       resolve(&VenueResolver.search_venues/3)
     end
 
     @desc "Get the current user's recently used venues."
     field :my_recent_venues, non_null(list_of(non_null(:recent_venue))) do
-      arg(:limit, :integer)
+      arg(:limit, :integer, default_value: 10, description: "Max results (capped at 100)")
       middleware(Authenticate)
       resolve(&VenueResolver.my_recent_venues/3)
     end

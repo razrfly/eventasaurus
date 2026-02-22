@@ -262,6 +262,7 @@ struct ParticipantDetailView: View {
 
     private func updateStatus(_ status: RsvpStatus) async {
         guard let userId = participant.user?.id else {
+            selectedStatus = participant.status
             self.error = ParticipantActionError.noUserAccount
             return
         }
