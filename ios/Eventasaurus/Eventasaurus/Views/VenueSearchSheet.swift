@@ -319,6 +319,10 @@ struct VenueSearchSheet: View {
         isSearching = true
         do {
             searchResults = try await GraphQLClient.shared.searchVenues(query: query)
+        } catch is CancellationError {
+            return
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            return
         } catch {
             searchResults = []
             #if DEBUG
@@ -367,7 +371,15 @@ struct VenueSearchSheet: View {
             onSelect(venue)
             dismiss()
         } catch let createError {
-            self.error = createError.localizedDescription
+            if let mutationError = createError as? GraphQLMutationError {
+                self.error = mutationError.localizedDescription
+            } else if let urlError = createError as? URLError {
+                self.error = urlError.code == .notConnectedToInternet
+                    ? "No internet connection. Please check your network and try again."
+                    : "Network error. Please try again."
+            } else {
+                self.error = "Failed to create venue. Please try again."
+            }
         }
     }
 }

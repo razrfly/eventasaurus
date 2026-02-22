@@ -234,10 +234,11 @@ defmodule EventasaurusApp.Venues do
   Options:
     * `:limit` - maximum number of results (default: 20)
   """
+  @spec search_venues(String.t(), keyword()) :: [Venue.t()]
   def search_venues(name, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
 
-    from(v in Venue, where: ilike(v.name, ^"%#{name}%"), limit: ^limit)
+    from(v in Venue, where: ilike(v.name, ^"%#{name}%"), order_by: [asc: v.name, asc: v.id], limit: ^limit)
     |> Repo.all()
   end
 

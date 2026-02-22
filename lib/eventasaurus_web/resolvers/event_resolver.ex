@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.Resolvers.EventResolver do
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Accounts
+  import EventasaurusWeb.Resolvers.Helpers, only: [format_changeset_errors: 1]
 
   def my_events(_parent, args, %{context: %{current_user: user}}) do
     opts =
@@ -150,17 +151,4 @@ defmodule EventasaurusWeb.Resolvers.EventResolver do
   defp humanize_error(:invalid_params), do: "Invalid parameters"
   defp humanize_error(_reason), do: "An unexpected error occurred"
 
-  defp format_changeset_errors(%Ecto.Changeset{} = changeset) do
-    changeset
-    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
-      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
-    |> Enum.flat_map(fn {field, messages} ->
-      Enum.map(messages, fn message ->
-        %{field: to_string(field), message: message}
-      end)
-    end)
-  end
 end

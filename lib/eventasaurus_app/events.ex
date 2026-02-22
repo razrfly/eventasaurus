@@ -975,6 +975,7 @@ defmodule EventasaurusApp.Events do
   @doc """
   Lists all organizers of an event.
   """
+  @spec list_event_organizers(Event.t()) :: [User.t()]
   def list_event_organizers(%Event{} = event) do
     query =
       from(u in User,
@@ -995,7 +996,11 @@ defmodule EventasaurusApp.Events do
   def user_is_organizer?(%Event{} = event, %User{} = user) do
     query =
       from(eu in EventUser,
-        where: eu.event_id == ^event.id and eu.user_id == ^user.id,
+        where:
+          eu.event_id == ^event.id and
+            eu.user_id == ^user.id and
+            eu.role == "organizer" and
+            is_nil(eu.deleted_at),
         select: count(eu.id)
       )
 
@@ -3614,6 +3619,8 @@ defmodule EventasaurusApp.Events do
   - `id` - Venue ID (always present for physical venues)
   - `name` - Venue name (or "Deleted Venue" if venue was deleted)
   - `address` - Full address (or nil if venue was deleted)
+  - `latitude` - Venue latitude (or nil if venue was deleted)
+  - `longitude` - Venue longitude (or nil if venue was deleted)
   - `city` - City name (or nil if venue was deleted)
   - `state` - State name (or nil if venue was deleted)
   - `country` - Country name (or nil if venue was deleted)
@@ -3630,6 +3637,8 @@ defmodule EventasaurusApp.Events do
           id: 456,
           name: "Downtown Conference Center",
           address: "123 Main St, Downtown, CA 90210, USA",
+          latitude: 34.0522,
+          longitude: -118.2437,
           city: "Downtown",
           state: "CA",
           country: "USA",
@@ -3642,6 +3651,8 @@ defmodule EventasaurusApp.Events do
           id: 789,
           name: "Deleted Venue",
           address: nil,
+          latitude: nil,
+          longitude: nil,
           city: nil,
           state: nil,
           country: nil,

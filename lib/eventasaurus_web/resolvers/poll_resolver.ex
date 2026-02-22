@@ -30,50 +30,62 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
       if is_nil(option) do
         {:ok, %{success: false, errors: [%{field: "optionId", message: "Option not found"}]}}
       else
-        vote_data = build_vote_data(poll.voting_system, args)
-
-        case Events.create_poll_vote(option, user, vote_data, poll.voting_system) do
-          {:ok, _vote} ->
-            {:ok, %{success: true, errors: []}}
-
-          {:error, %Ecto.Changeset{} = changeset} ->
-            errors =
-              Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
-              |> Enum.flat_map(fn {field, messages} ->
-                Enum.map(messages, &%{field: to_string(field), message: &1})
-              end)
-
-            {:ok, %{success: false, errors: errors}}
-
-          {:error, reason} when is_binary(reason) ->
+        case build_vote_data(poll.voting_system, args) do
+          {:error, reason} ->
             {:ok, %{success: false, errors: [%{field: "base", message: reason}]}}
 
-          {:error, _} ->
-            {:ok,
-             %{success: false, errors: [%{field: "base", message: "Could not cast vote"}]}}
+          {:ok, vote_data} ->
+            case Events.create_poll_vote(option, user, vote_data, poll.voting_system) do
+              {:ok, _vote} ->
+                {:ok, %{success: true, errors: []}}
+
+              {:error, %Ecto.Changeset{} = changeset} ->
+                errors =
+                  Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
+                  |> Enum.flat_map(fn {field, messages} ->
+                    Enum.map(messages, &%{field: to_string(field), message: &1})
+                  end)
+
+                {:ok, %{success: false, errors: errors}}
+
+              {:error, reason} when is_binary(reason) ->
+                {:ok, %{success: false, errors: [%{field: "base", message: reason}]}}
+
+              {:error, _} ->
+                {:ok,
+                 %{success: false, errors: [%{field: "base", message: "Could not cast vote"}]}}
+            end
         end
       end
     end
   end
 
   defp build_vote_data("binary", _args) do
-    %{vote_value: "yes", voted_at: DateTime.utc_now()}
+    {:ok, %{vote_value: "yes", voted_at: DateTime.utc_now()}}
   end
 
   defp build_vote_data("approval", _args) do
-    %{vote_value: "selected", voted_at: DateTime.utc_now()}
+    {:ok, %{vote_value: "selected", voted_at: DateTime.utc_now()}}
   end
 
-  defp build_vote_data("star", %{score: score}) when is_integer(score) do
-    %{vote_value: "star", vote_numeric: Decimal.new(score), voted_at: DateTime.utc_now()}
+  defp build_vote_data("star", %{score: score}) when is_integer(score) and score >= 1 and score <= 5 do
+    {:ok, %{vote_value: "star", vote_numeric: Decimal.new(score), voted_at: DateTime.utc_now()}}
   end
 
-  defp build_vote_data("ranked", %{score: rank}) when is_integer(rank) do
-    %{vote_value: "ranked", vote_rank: rank, voted_at: DateTime.utc_now()}
+  defp build_vote_data("star", _args) do
+    {:error, "Star voting requires a score between 1 and 5"}
+  end
+
+  defp build_vote_data("ranked", %{score: rank}) when is_integer(rank) and rank >= 1 do
+    {:ok, %{vote_value: "ranked", vote_rank: rank, voted_at: DateTime.utc_now()}}
+  end
+
+  defp build_vote_data("ranked", _args) do
+    {:error, "Ranked voting requires a positive integer rank"}
   end
 
   defp build_vote_data(system, _args) do
-    Logger.warning("Unknown voting system #{inspect(system)}, defaulting to binary vote")
-    %{vote_value: "yes", voted_at: DateTime.utc_now()}
+    Logger.warning("Unknown voting system #{inspect(system)}")
+    {:error, "Unsupported voting system"}
   end
 end

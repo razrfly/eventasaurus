@@ -275,7 +275,7 @@ struct EventManageView: View {
 
                 ForEach(organizers) { organizer in
                     HStack(spacing: DS.Spacing.md) {
-                        DiceBearAvatar(url: organizer.avatarUrl.flatMap { URL(string: $0) }, size: 32)
+                        DiceBearAvatar(email: organizer.email, url: organizer.avatarUrl.flatMap { URL(string: $0) }, size: 32)
 
                         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                             Text(organizer.name)

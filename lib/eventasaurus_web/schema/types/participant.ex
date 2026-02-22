@@ -69,15 +69,4 @@ defmodule EventasaurusWeb.Schema.Types.Participant do
     field(:success, non_null(:boolean))
     field(:errors, list_of(:input_error))
   end
-
-  # Keep legacy names as aliases for backwards compatibility
-  object :remove_participant_result do
-    field(:success, non_null(:boolean))
-    field(:errors, list_of(:input_error))
-  end
-
-  object :resend_invitation_result do
-    field(:success, non_null(:boolean))
-    field(:errors, list_of(:input_error))
-  end
 end

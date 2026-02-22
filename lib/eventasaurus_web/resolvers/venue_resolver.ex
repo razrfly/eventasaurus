@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.Resolvers.VenueResolver do
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Events
   alias EventasaurusDiscovery.Locations.VenueStore
+  import EventasaurusWeb.Resolvers.Helpers, only: [format_changeset_errors: 1]
 
   def search_venues(_parent, %{query: query} = args, _resolution) do
     limit = min(Map.get(args, :limit, 20), 100)
@@ -83,17 +84,6 @@ defmodule EventasaurusWeb.Resolvers.VenueResolver do
       nil ->
         :not_duplicate
     end
-  end
-
-  defp format_changeset_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
-    |> Enum.flat_map(fn {field, messages} ->
-      Enum.map(messages, &%{field: to_string(field), message: &1})
-    end)
   end
 
   defp maybe_put(map, _key, nil), do: map
