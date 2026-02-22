@@ -15,6 +15,10 @@ struct EventCreateView: View {
     @State private var virtualVenueUrl = ""
     @State private var theme: EventTheme = .minimal
 
+    // Venue
+    @State private var selectedVenue: UserEventVenue?
+    @State private var showVenueSheet = false
+
     // Cover image
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var coverImageData: Data?
@@ -32,6 +36,9 @@ struct EventCreateView: View {
         NavigationStack {
             Form {
                 detailsSection
+                if !isVirtual {
+                    venueSection
+                }
                 dateTimeSection
                 coverImageSection
                 settingsSection
@@ -89,6 +96,11 @@ struct EventCreateView: View {
                         }
                 }
             }
+            .sheet(isPresented: $showVenueSheet) {
+                VenueSearchSheet(selectedVenue: selectedVenue) { venue in
+                    selectedVenue = venue
+                }
+            }
         }
     }
 
@@ -118,6 +130,41 @@ struct EventCreateView: View {
                 }
         } header: {
             Text("Details")
+        }
+    }
+
+    private var venueSection: some View {
+        Section {
+            if let venue = selectedVenue {
+                HStack {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundStyle(.red)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        Text(venue.name)
+                            .font(DS.Typography.bodyMedium)
+                        if let address = venue.address {
+                            Text(address)
+                                .font(DS.Typography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button {
+                        showVenueSheet = true
+                    } label: {
+                        Text("Change")
+                            .font(DS.Typography.caption)
+                    }
+                }
+            } else {
+                Button {
+                    showVenueSheet = true
+                } label: {
+                    Label("Add Venue", systemImage: "mappin.circle")
+                }
+            }
+        } header: {
+            Text("Venue")
         }
     }
 
@@ -263,7 +310,8 @@ struct EventCreateView: View {
             theme: theme,
             coverImageUrl: uploadedImageUrl,
             isVirtual: isVirtual,
-            virtualVenueUrl: isVirtual && !virtualVenueUrl.isEmpty ? virtualVenueUrl : nil
+            virtualVenueUrl: isVirtual && !virtualVenueUrl.isEmpty ? virtualVenueUrl : nil,
+            venueId: isVirtual ? nil : selectedVenue?.id
         )
 
         do {

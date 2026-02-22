@@ -163,6 +163,30 @@ defmodule EventasaurusApp.Relationships do
   end
 
   @doc """
+  Returns the subset of `candidate_ids` that have an active relationship with `user`.
+
+  Performs a single query instead of checking each ID individually.
+
+  ## Examples
+
+      iex> connected_ids(user, [1, 2, 3])
+      [1, 3]
+  """
+  @spec connected_ids(User.t(), [integer() | String.t()]) :: [integer()]
+  def connected_ids(_user, []), do: []
+
+  def connected_ids(%User{id: user_id}, candidate_ids) when is_list(candidate_ids) do
+    from(r in UserRelationship,
+      where:
+        r.user_id == ^user_id and
+          r.related_user_id in ^candidate_ids and
+          r.status == :active,
+      select: r.related_user_id
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Checks if initiator is within N degrees of separation from target.
 
   Degrees of separation:

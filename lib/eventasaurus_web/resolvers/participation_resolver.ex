@@ -111,7 +111,7 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
     alias EventasaurusApp.Accounts
 
     # Resolve friend_ids to real emails and merge with provided emails
-    friend_emails = resolve_friend_ids(Map.get(args, :friend_ids, []))
+    friend_emails = resolve_friend_ids(Map.get(args, :friend_ids, []), user)
     all_emails = Enum.uniq(emails ++ friend_emails)
 
     case Events.get_event_by_slug(slug) do
@@ -255,9 +255,9 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
                     {:error, %Ecto.Changeset{} = changeset} ->
                       {:ok, %{success: false, errors: format_changeset_errors(changeset)}}
 
-                    {:error, reason} ->
+                    {:error, _reason} ->
                       {:ok,
-                       %{success: false, errors: [%{field: "base", message: inspect(reason)}]}}
+                       %{success: false, errors: [%{field: "base", message: "Failed to update status"}]}}
                   end
               end
           end
@@ -267,20 +267,20 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
     end
   end
 
-  defp resolve_friend_ids(nil), do: []
-  defp resolve_friend_ids([]), do: []
+  defp resolve_friend_ids(nil, _organizer), do: []
+  defp resolve_friend_ids([], _organizer), do: []
 
-  defp resolve_friend_ids(friend_ids) do
+  defp resolve_friend_ids(friend_ids, organizer) do
     alias EventasaurusApp.Accounts
+    alias EventasaurusApp.Relationships
 
-    friend_ids
-    |> Enum.map(fn id ->
-      case Accounts.get_user(id) do
-        %{email: email} -> email
-        nil -> nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
+    # Filter to only IDs that are actually connected to the organizer (single query)
+    verified_ids = Relationships.connected_ids(organizer, friend_ids)
+
+    # Batch-fetch all verified users in one query
+    verified_ids
+    |> Accounts.get_users_by_ids()
+    |> Enum.map(& &1.email)
   end
 
   defp format_changeset_errors(%Ecto.Changeset{} = changeset) do

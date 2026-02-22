@@ -17,6 +17,11 @@ struct EventEditView: View {
     @State private var virtualVenueUrl: String
     @State private var theme: EventTheme
 
+    // Venue
+    @State private var selectedVenue: UserEventVenue?
+    @State private var showVenueSheet = false
+    @State private var venueChanged = false
+
     // Cover image
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var coverImageData: Data?
@@ -47,6 +52,7 @@ struct EventEditView: View {
         _virtualVenueUrl = State(initialValue: event.virtualVenueUrl ?? "")
         _theme = State(initialValue: event.theme ?? .minimal)
         _coverImageUrl = State(initialValue: event.coverImageUrl)
+        _selectedVenue = State(initialValue: event.venue)
     }
 
     var body: some View {
@@ -54,6 +60,9 @@ struct EventEditView: View {
             Form {
                 statusBanner
                 detailsSection
+                if !isVirtual {
+                    venueSection
+                }
                 dateTimeSection
                 coverImageSection
                 settingsSection
@@ -101,6 +110,12 @@ struct EventEditView: View {
                                 .padding(DS.Spacing.xxl)
                                 .glassBackground(cornerRadius: DS.Radius.xl)
                         }
+                }
+            }
+            .sheet(isPresented: $showVenueSheet) {
+                VenueSearchSheet(selectedVenue: selectedVenue) { venue in
+                    selectedVenue = venue
+                    venueChanged = true
                 }
             }
         }
@@ -163,6 +178,41 @@ struct EventEditView: View {
                 }
         } header: {
             Text("Details")
+        }
+    }
+
+    private var venueSection: some View {
+        Section {
+            if let venue = selectedVenue {
+                HStack {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundStyle(.red)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        Text(venue.name)
+                            .font(DS.Typography.bodyMedium)
+                        if let address = venue.address {
+                            Text(address)
+                                .font(DS.Typography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button {
+                        showVenueSheet = true
+                    } label: {
+                        Text("Change")
+                            .font(DS.Typography.caption)
+                    }
+                }
+            } else {
+                Button {
+                    showVenueSheet = true
+                } label: {
+                    Label("Add Venue", systemImage: "mappin.circle")
+                }
+            }
+        } header: {
+            Text("Venue")
         }
     }
 
@@ -336,7 +386,7 @@ struct EventEditView: View {
         errorMessage = nil
         fieldErrors = [:]
 
-        let input = UpdateEventInput(
+        var input = UpdateEventInput(
             title: title.trimmingCharacters(in: .whitespaces) != event.title ? title.trimmingCharacters(in: .whitespaces) : nil,
             description: description != (event.description ?? "") ? (description.isEmpty ? nil : description) : nil,
             tagline: tagline != (event.tagline ?? "") ? (tagline.isEmpty ? nil : tagline) : nil,
@@ -349,6 +399,14 @@ struct EventEditView: View {
             isVirtual: isVirtual != event.isVirtual ? isVirtual : nil,
             virtualVenueUrl: isVirtual && !virtualVenueUrl.isEmpty ? virtualVenueUrl : nil
         )
+
+        if venueChanged {
+            if let venue = selectedVenue {
+                input.venueId = venue.id
+            } else {
+                input.clearVenue = true
+            }
+        }
 
         do {
             let result = try await GraphQLClient.shared.updateEvent(slug: event.slug, input: input)

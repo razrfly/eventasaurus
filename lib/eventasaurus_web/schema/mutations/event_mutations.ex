@@ -45,5 +45,23 @@ defmodule EventasaurusWeb.Schema.Mutations.EventMutations do
       middleware(AuthorizeOrganizer)
       resolve(&EventResolver.cancel_event/3)
     end
+
+    @desc "Add a co-organizer to an event by email. Must be an organizer."
+    field :add_organizer, non_null(:organizer_result) do
+      arg(:slug, non_null(:string))
+      arg(:email, non_null(:string))
+      middleware(Authenticate)
+      middleware(AuthorizeOrganizer)
+      resolve(&EventResolver.add_organizer/3)
+    end
+
+    @desc "Remove a co-organizer from an event. Must be an organizer."
+    field :remove_organizer, non_null(:organizer_result) do
+      arg(:slug, non_null(:string))
+      arg(:user_id, non_null(:id))
+      middleware(Authenticate)
+      middleware(AuthorizeOrganizer)
+      resolve(&EventResolver.remove_organizer/3)
+    end
   end
 end

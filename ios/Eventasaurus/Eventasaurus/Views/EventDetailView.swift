@@ -30,6 +30,19 @@ struct EventDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let event {
+                ToolbarItem(placement: .primaryAction) {
+                    ShareLink(
+                        item: URL(string: "https://wombie.com/events/\(slug)")!,
+                        subject: Text(event.title),
+                        message: Text(event.description ?? event.title)
+                    ) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+            }
+        }
         .task { await loadEvent() }
         .sheet(item: $planSheetEvent) { event in
             PlanWithFriendsSheet(event: event) { (plan: GQLPlan) in
