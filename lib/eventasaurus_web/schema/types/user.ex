@@ -42,8 +42,10 @@ defmodule EventasaurusWeb.Schema.Types.User do
 
     field :email, :string do
       resolve(fn user, _, %{context: context} ->
+        # Email is visible to authenticated users because this type is only used in
+        # search_users_for_organizers, which is gated at the resolver level.
         if context[:current_user] do
-          {:ok, Map.get(user, :email)}
+          {:ok, user.email}
         else
           {:ok, nil}
         end

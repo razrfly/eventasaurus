@@ -122,7 +122,7 @@ final class GraphQLClient {
             mutation CreateEvent($input: CreateEventInput!) {
                 createEvent(input: $input) {
                     event {
-                        \(Self.eventFields)
+                        \(Self.eventFieldsForOrganizer)
                     }
                     errors { field message }
                 }

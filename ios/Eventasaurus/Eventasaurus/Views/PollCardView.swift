@@ -6,7 +6,7 @@ struct PollCardView: View {
     @State private var localPoll: EventPoll
     @State private var isVoting = false
     @State private var error: String?
-    @State private var selectedScore: Int = 5
+    @State private var selectedScores: [String: Int] = [:]
 
     init(poll: EventPoll, slug: String) {
         self.poll = poll
@@ -104,11 +104,12 @@ struct PollCardView: View {
 
                 // Star rating picker for star voting system
                 if localPoll.votingSystem == "star" && localPoll.isVotingActive && !isMyVote {
+                    let score = selectedScores[option.id] ?? 5
                     HStack(spacing: DS.Spacing.xxs) {
                         ForEach(1...5, id: \.self) { star in
-                            Image(systemName: star <= selectedScore ? "star.fill" : "star")
-                                .foregroundStyle(star <= selectedScore ? .yellow : .secondary)
-                                .onTapGesture { selectedScore = star }
+                            Image(systemName: star <= score ? "star.fill" : "star")
+                                .foregroundStyle(star <= score ? .yellow : .secondary)
+                                .onTapGesture { selectedScores[option.id] = star }
                         }
                     }
                     .font(DS.Typography.caption)
@@ -153,7 +154,7 @@ struct PollCardView: View {
         isVoting = true
         error = nil
 
-        let score: Int? = localPoll.votingSystem == "star" ? selectedScore : nil
+        let score: Int? = localPoll.votingSystem == "star" ? (selectedScores[option.id] ?? 5) : nil
 
         do {
             try await GraphQLClient.shared.voteOnPoll(

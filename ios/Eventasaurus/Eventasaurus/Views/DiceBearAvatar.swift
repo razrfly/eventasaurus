@@ -12,10 +12,16 @@ struct DiceBearAvatar: View {
 
     private var avatarURL: URL? {
         if let url {
-            // Backend returns SVG URLs but UIImage needs PNG — swap format for DiceBear URLs
-            let str = url.absoluteString
-            if str.contains("api.dicebear.com"), str.contains("/svg") {
-                return URL(string: str.replacingOccurrences(of: "/svg", with: "/png"))
+            // Backend returns SVG URLs but UIImage needs PNG — swap only the path component
+            if var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               components.host?.contains("api.dicebear.com") == true {
+                let pathParts = components.path.split(separator: "/", omittingEmptySubsequences: false)
+                if let idx = pathParts.lastIndex(of: "svg") {
+                    var mutable = pathParts
+                    mutable[idx] = "png"
+                    components.path = mutable.joined(separator: "/")
+                    return components.url ?? url
+                }
             }
             return url
         }

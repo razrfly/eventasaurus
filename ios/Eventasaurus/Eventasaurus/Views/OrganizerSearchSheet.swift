@@ -137,15 +137,20 @@ struct OrganizerSearchSheet: View {
                 query: query,
                 slug: slug
             )
-            // Only update if this task wasn't cancelled while the request was in-flight
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                isSearching = false
+                return
+            }
             searchResults = results
         } catch is CancellationError {
-            return // Don't update UI state for cancelled requests
+            return // Replacement task will manage isSearching
         } catch let urlError as URLError where urlError.code == .cancelled {
-            return // URLSession cancellation — don't update UI state
+            return // Replacement task will manage isSearching
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                isSearching = false
+                return
+            }
             #if DEBUG
             print("[OrganizerSearchSheet] Search failed: \(error)")
             #endif

@@ -15,6 +15,7 @@ struct ParticipantDetailView: View {
     @State private var isRemoving = false
     @State private var error: Error?
     @State private var showSuccess: String?
+    @State private var successTask: Task<Void, Never>?
 
     init(event: UserEvent, participant: EventParticipant, onChanged: (() -> Void)? = nil) {
         self.event = event
@@ -305,6 +306,7 @@ struct ParticipantDetailView: View {
         do {
             try await GraphQLClient.shared.removeParticipant(slug: event.slug, userId: userId)
             onChanged?()
+            isRemoving = false
             dismiss()
         } catch {
             self.error = error
@@ -313,9 +315,11 @@ struct ParticipantDetailView: View {
     }
 
     private func showTemporarySuccess(_ message: String) {
+        successTask?.cancel()
         withAnimation { showSuccess = message }
-        Task {
+        successTask = Task {
             try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
             withAnimation { showSuccess = nil }
         }
     }

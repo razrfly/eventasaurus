@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
   alias EventasaurusApp.Accounts
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Schema.Helpers.RsvpStatus
+  import EventasaurusWeb.Resolvers.Helpers, only: [format_changeset_errors: 1]
 
   def attending_events(_parent, args, %{context: %{current_user: user}}) do
     opts = [
@@ -280,17 +281,4 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
     |> Enum.reject(&is_nil/1)
   end
 
-  defp format_changeset_errors(%Ecto.Changeset{} = changeset) do
-    changeset
-    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
-      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
-    |> Enum.flat_map(fn {field, messages} ->
-      Enum.map(messages, fn message ->
-        %{field: to_string(field), message: message}
-      end)
-    end)
-  end
 end
