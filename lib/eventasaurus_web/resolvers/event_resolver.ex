@@ -109,8 +109,22 @@ defmodule EventasaurusWeb.Resolvers.EventResolver do
       user = Enum.find(organizers, &(to_string(&1.id) == to_string(user_id)))
 
       if user do
-        Events.remove_user_from_event(event, user)
-        {:ok, %{success: true, errors: []}}
+        case Events.remove_user_from_event(event, user) do
+          {count, _} when is_integer(count) and count > 0 ->
+            {:ok, %{success: true, errors: []}}
+
+          {:ok, _} ->
+            {:ok, %{success: true, errors: []}}
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            {:ok, %{success: false, errors: format_changeset_errors(changeset)}}
+
+          {:error, reason} ->
+            {:ok, %{success: false, errors: [%{field: "base", message: humanize_error(reason)}]}}
+
+          _ ->
+            {:ok, %{success: true, errors: []}}
+        end
       else
         {:ok, %{success: false, errors: [%{field: "userId", message: "User is not an organizer of this event"}]}}
       end

@@ -3,6 +3,9 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
   Resolvers for participation-related GraphQL queries and mutations.
   """
 
+  require Logger
+
+  alias EventasaurusApp.Accounts
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Schema.Helpers.RsvpStatus
 
@@ -94,6 +97,7 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
                     Enum.filter(participants, fn p -> p.status == status_atom end)
 
                   {:error, :invalid_status} ->
+                    Logger.warning("Invalid participant status filter: #{inspect(status_filter)}")
                     participants
                 end
             end
@@ -108,19 +112,15 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
   def invite_guests(_parent, %{slug: slug, emails: emails} = args, %{
         context: %{current_user: user}
       }) do
-    alias EventasaurusApp.Accounts
-
-    # Resolve friend_ids to real emails and merge with provided emails
-    friend_emails = resolve_friend_ids(Map.get(args, :friend_ids, []), user)
-    all_emails = Enum.uniq(emails ++ friend_emails)
-
     case Events.get_event_by_slug(slug) do
       nil ->
         {:ok, %{invite_count: 0, errors: [%{field: "slug", message: "Event not found"}]}}
 
       event ->
-        # Verify organizer authorization
+        # Verify organizer authorization before resolving friend_ids
         if Events.user_is_organizer?(event, user) do
+          friend_emails = resolve_friend_ids(Map.get(args, :friend_ids, []), user)
+          all_emails = Enum.uniq(emails ++ friend_emails)
           message = args[:message] || ""
 
           result =
@@ -148,7 +148,6 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
   def remove_participant(_parent, %{slug: slug, user_id: user_id}, %{
         context: %{current_user: current_user}
       }) do
-    alias EventasaurusApp.Accounts
 
     case Events.get_event_by_slug(slug) do
       nil ->
@@ -182,7 +181,6 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
   def resend_invitation(_parent, %{slug: slug, user_id: user_id}, %{
         context: %{current_user: current_user}
       }) do
-    alias EventasaurusApp.Accounts
 
     case Events.get_event_by_slug(slug) do
       nil ->
@@ -224,7 +222,6 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
   def update_participant_status(_parent, %{slug: slug, user_id: user_id, status: graphql_status}, %{
         context: %{current_user: current_user}
       }) do
-    alias EventasaurusApp.Accounts
 
     case Events.get_event_by_slug(slug) do
       nil ->
@@ -271,16 +268,16 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
   defp resolve_friend_ids([], _organizer), do: []
 
   defp resolve_friend_ids(friend_ids, organizer) do
-    alias EventasaurusApp.Accounts
     alias EventasaurusApp.Relationships
 
     # Filter to only IDs that are actually connected to the organizer (single query)
     verified_ids = Relationships.connected_ids(organizer, friend_ids)
 
-    # Batch-fetch all verified users in one query
+    # Batch-fetch all verified users in one query, filtering out nil emails
     verified_ids
     |> Accounts.get_users_by_ids()
     |> Enum.map(& &1.email)
+    |> Enum.reject(&is_nil/1)
   end
 
   defp format_changeset_errors(%Ecto.Changeset{} = changeset) do

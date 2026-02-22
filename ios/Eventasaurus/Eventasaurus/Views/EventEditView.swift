@@ -223,7 +223,7 @@ struct EventEditView: View {
             Toggle("Add end time", isOn: $hasEndDate.animation())
 
             if hasEndDate {
-                DatePicker30MinRow(label: "Ends", selection: $endsAt, minimumDate: startsAt)
+                DatePicker30MinRow(label: "Ends", selection: $endsAt, minimumDate: startsAt.addingTimeInterval(1800))
             }
         } header: {
             Text("Date & Time")

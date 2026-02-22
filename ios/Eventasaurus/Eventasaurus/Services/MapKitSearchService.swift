@@ -18,8 +18,6 @@ final class MapKitSearchService: NSObject {
     var isSearching = false
 
     private let completer = MKLocalSearchCompleter()
-    private var continuation: AsyncStream<[MKLocalSearchCompletion]>.Continuation?
-    private var stream: AsyncStream<[MKLocalSearchCompletion]>?
 
     override init() {
         super.init()

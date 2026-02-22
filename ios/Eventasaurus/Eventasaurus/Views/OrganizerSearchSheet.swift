@@ -49,7 +49,7 @@ struct OrganizerSearchSheet: View {
                                 userRow(user)
                             }
                             .buttonStyle(.plain)
-                            .disabled(isAdding)
+                            .disabled(isAdding || user.email == nil)
                         }
                     } header: {
                         Text("Results")
@@ -76,6 +76,10 @@ struct OrganizerSearchSheet: View {
                     guard !Task.isCancelled else { return }
                     await performSearch(newValue)
                 }
+            }
+            .onDisappear {
+                searchTask?.cancel()
+                searchTask = nil
             }
             .navigationTitle("Add Co-organizer")
             .navigationBarTitleDisplayMode(.inline)
@@ -129,14 +133,23 @@ struct OrganizerSearchSheet: View {
         isSearching = true
         error = nil
         do {
-            searchResults = try await GraphQLClient.shared.searchUsersForOrganizers(
+            let results = try await GraphQLClient.shared.searchUsersForOrganizers(
                 query: query,
                 slug: slug
             )
+            // Only update if this task wasn't cancelled while the request was in-flight
+            guard !Task.isCancelled else { return }
+            searchResults = results
+        } catch is CancellationError {
+            return // Don't update UI state for cancelled requests
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            return // URLSession cancellation — don't update UI state
         } catch {
+            guard !Task.isCancelled else { return }
             #if DEBUG
             print("[OrganizerSearchSheet] Search failed: \(error)")
             #endif
+            self.error = error.localizedDescription
         }
         isSearching = false
     }

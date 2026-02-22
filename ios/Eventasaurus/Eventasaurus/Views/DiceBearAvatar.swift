@@ -11,7 +11,14 @@ struct DiceBearAvatar: View {
     @State private var isLoading = true
 
     private var avatarURL: URL? {
-        if let url { return url }
+        if let url {
+            // Backend returns SVG URLs but UIImage needs PNG — swap format for DiceBear URLs
+            let str = url.absoluteString
+            if str.contains("api.dicebear.com"), str.contains("/svg") {
+                return URL(string: str.replacingOccurrences(of: "/svg", with: "/png"))
+            }
+            return url
+        }
         guard let email else { return nil }
         // Use a strict character set that also encodes '+' (which .urlQueryAllowed leaves unescaped)
         var allowed = CharacterSet.urlQueryAllowed

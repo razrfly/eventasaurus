@@ -146,7 +146,7 @@ final class GraphQLClient {
             mutation UpdateEvent($slug: String!, $input: UpdateEventInput!) {
                 updateEvent(slug: $slug, input: $input) {
                     event {
-                        \(Self.eventFields)
+                        \(Self.eventFieldsForOrganizer)
                     }
                     errors { field message }
                 }
@@ -189,7 +189,7 @@ final class GraphQLClient {
             mutation PublishEvent($slug: String!) {
                 publishEvent(slug: $slug) {
                     event {
-                        \(Self.eventFields)
+                        \(Self.eventFieldsForOrganizer)
                     }
                     errors { field message }
                 }
@@ -213,7 +213,7 @@ final class GraphQLClient {
             mutation CancelEvent($slug: String!) {
                 cancelEvent(slug: $slug) {
                     event {
-                        \(Self.eventFields)
+                        \(Self.eventFieldsForOrganizer)
                     }
                     errors { field message }
                 }

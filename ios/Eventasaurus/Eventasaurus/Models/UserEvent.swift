@@ -427,7 +427,7 @@ struct EventPoll: Codable, Identifiable {
     }
 
     var isVotingActive: Bool {
-        !isClosed && (votingDeadline == nil || (votingDeadline ?? .distantPast) > Date())
+        !isClosed && (votingDeadline.map { $0 > Date() } ?? true)
     }
 }
 

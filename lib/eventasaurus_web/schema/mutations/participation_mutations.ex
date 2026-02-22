@@ -47,7 +47,7 @@ defmodule EventasaurusWeb.Schema.Mutations.ParticipationMutations do
     end
 
     @desc "Update a participant's RSVP status. Must be the organizer."
-    field :update_participant_status, non_null(:remove_participant_result) do
+    field :update_participant_status, non_null(:participant_action_result) do
       arg(:slug, non_null(:string))
       arg(:user_id, non_null(:id))
       arg(:status, non_null(:rsvp_status))

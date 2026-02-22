@@ -1,4 +1,6 @@
 defmodule EventasaurusWeb.Resolvers.PollResolver do
+  require Logger
+
   alias EventasaurusApp.Events
   alias EventasaurusApp.Repo
 
@@ -70,7 +72,8 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
     %{vote_value: "ranked", vote_rank: rank, voted_at: DateTime.utc_now()}
   end
 
-  defp build_vote_data(_system, _args) do
+  defp build_vote_data(system, _args) do
+    Logger.warning("Unknown voting system #{inspect(system)}, defaulting to binary vote")
     %{vote_value: "yes", voted_at: DateTime.utc_now()}
   end
 end

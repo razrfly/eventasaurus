@@ -230,9 +230,14 @@ defmodule EventasaurusApp.Venues do
 
   @doc """
   Returns the list of venues with name search.
+
+  Options:
+    * `:limit` - maximum number of results (default: 20)
   """
-  def search_venues(name) do
-    from(v in Venue, where: ilike(v.name, ^"%#{name}%"))
+  def search_venues(name, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+
+    from(v in Venue, where: ilike(v.name, ^"%#{name}%"), limit: ^limit)
     |> Repo.all()
   end
 
