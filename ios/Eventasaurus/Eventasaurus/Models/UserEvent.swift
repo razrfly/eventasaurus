@@ -130,6 +130,12 @@ enum RsvpStatus: String, Codable, CaseIterable {
     case interested = "INTERESTED"
     case notGoing = "NOT_GOING"
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        self = RsvpStatus(rawValue: raw) ?? .interested
+    }
+
     var displayName: String {
         switch self {
         case .going: return "Going"
@@ -453,6 +459,10 @@ struct GQLRemoveParticipantResponse: Codable {
 
 struct GQLResendInvitationResponse: Codable {
     let resendInvitation: GQLSuccessResult
+}
+
+struct GQLUpdateParticipantStatusResponse: Codable {
+    let updateParticipantStatus: GQLSuccessResult
 }
 
 struct GQLSuccessResult: Codable {

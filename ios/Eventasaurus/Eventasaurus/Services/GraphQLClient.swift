@@ -346,14 +346,15 @@ final class GraphQLClient {
         return result.eventParticipants
     }
 
-    func inviteGuests(slug: String, emails: [String], message: String? = nil) async throws -> Int {
+    func inviteGuests(slug: String, emails: [String], friendIds: [String] = [], message: String? = nil) async throws -> Int {
         var variables: [String: Any] = ["slug": slug, "emails": emails]
+        if !friendIds.isEmpty { variables["friendIds"] = friendIds }
         if let message { variables["message"] = message }
 
         let result: GQLInviteGuestsResponse = try await execute(
             query: """
-            mutation InviteGuests($slug: String!, $emails: [String!]!, $message: String) {
-                inviteGuests(slug: $slug, emails: $emails, message: $message) {
+            mutation InviteGuests($slug: String!, $emails: [String!]!, $friendIds: [ID!], $message: String) {
+                inviteGuests(slug: $slug, emails: $emails, friendIds: $friendIds, message: $message) {
                     inviteCount
                     errors { field message }
                 }
@@ -400,6 +401,25 @@ final class GraphQLClient {
             variables: ["slug": slug, "userId": userId]
         )
         let mutation = result.resendInvitation
+        if !mutation.success {
+            let errors = mutation.errors ?? []
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+    }
+
+    func updateParticipantStatus(slug: String, userId: String, status: RsvpStatus) async throws {
+        let result: GQLUpdateParticipantStatusResponse = try await execute(
+            query: """
+            mutation UpdateParticipantStatus($slug: String!, $userId: ID!, $status: RsvpStatus!) {
+                updateParticipantStatus(slug: $slug, userId: $userId, status: $status) {
+                    success
+                    errors { field message }
+                }
+            }
+            """,
+            variables: ["slug": slug, "userId": userId, "status": status.rawValue]
+        )
+        let mutation = result.updateParticipantStatus
         if !mutation.success {
             let errors = mutation.errors ?? []
             throw GraphQLMutationError.validationErrors(errors)

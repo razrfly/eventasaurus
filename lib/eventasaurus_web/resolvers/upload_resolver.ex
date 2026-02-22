@@ -90,7 +90,11 @@ defmodule EventasaurusWeb.Resolvers.UploadResolver do
         {:ok, %{url: nil, errors: [%{field: "file", message: message}]}}
 
       {:error, reason} ->
-        {:ok, %{url: nil, errors: [%{field: "file", message: "Upload failed: #{inspect(reason)}"}]}}
+        Logger.error("Upload failed in do_upload with clause",
+          reason: inspect(reason)
+        )
+
+        {:ok, %{url: nil, errors: [%{field: "file", message: "Upload failed"}]}}
     end
   end
 

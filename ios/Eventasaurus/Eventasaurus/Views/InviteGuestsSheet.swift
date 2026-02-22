@@ -321,15 +321,10 @@ struct InviteGuestsSheet: View {
     }
 
     private func toggleSuggestion(_ suggestion: ParticipantSuggestion) {
-        guard let email = suggestion.maskedEmail else { return }
         if selectedFriendIds.contains(suggestion.userId) {
             selectedFriendIds.remove(suggestion.userId)
-            emails.removeAll { $0 == email }
         } else {
             selectedFriendIds.insert(suggestion.userId)
-            if !emails.contains(email) {
-                emails.append(email)
-            }
         }
     }
 
@@ -339,11 +334,10 @@ struct InviteGuestsSheet: View {
         defer { isSubmitting = false }
 
         do {
-            // Collect all emails (from suggestions and manual input)
-            let allEmails = emails
             let count = try await GraphQLClient.shared.inviteGuests(
                 slug: event.slug,
-                emails: allEmails,
+                emails: emails,
+                friendIds: Array(selectedFriendIds),
                 message: message.isEmpty ? nil : message
             )
 

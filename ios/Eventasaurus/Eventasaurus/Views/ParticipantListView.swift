@@ -164,30 +164,37 @@ struct ParticipantListView: View {
             List {
                 Section {
                     ForEach(filteredParticipants) { participant in
-                        participantRow(participant)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    participantToRemove = participant
+                        NavigationLink {
+                            ParticipantDetailView(event: event, participant: participant) {
+                                Task { await loadParticipants() }
+                                onParticipantsChanged?()
+                            }
+                        } label: {
+                            participantRow(participant)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                participantToRemove = participant
+                            } label: {
+                                Label("Remove", systemImage: "trash")
+                            }
+                        }
+                        .contextMenu {
+                            let emailStatus = EmailDeliveryStatus(from: participant.emailStatus)
+                            if emailStatus == .failed || emailStatus == .bounced {
+                                Button {
+                                    Task { await resendInvitation(participant) }
                                 } label: {
-                                    Label("Remove", systemImage: "trash")
+                                    Label("Resend Invitation", systemImage: "arrow.clockwise")
                                 }
                             }
-                            .contextMenu {
-                                let emailStatus = EmailDeliveryStatus(from: participant.emailStatus)
-                                if emailStatus == .failed || emailStatus == .bounced {
-                                    Button {
-                                        Task { await resendInvitation(participant) }
-                                    } label: {
-                                        Label("Resend Invitation", systemImage: "arrow.clockwise")
-                                    }
-                                }
 
-                                Button(role: .destructive) {
-                                    participantToRemove = participant
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
-                                }
+                            Button(role: .destructive) {
+                                participantToRemove = participant
+                            } label: {
+                                Label("Remove", systemImage: "trash")
                             }
+                        }
                     }
                 } header: {
                     Text("\(filteredParticipants.count) participant\(filteredParticipants.count == 1 ? "" : "s")")
@@ -284,7 +291,10 @@ struct ParticipantListView: View {
     }
 
     private func removeParticipant(_ participant: EventParticipant) async {
-        guard let userId = participant.user?.id else { return }
+        guard let userId = participant.user?.id else {
+            self.error = ParticipantActionError.noUserAccount
+            return
+        }
         do {
             try await GraphQLClient.shared.removeParticipant(slug: event.slug, userId: userId)
             participants.removeAll { $0.id == participant.id }
@@ -295,13 +305,27 @@ struct ParticipantListView: View {
     }
 
     private func resendInvitation(_ participant: EventParticipant) async {
-        guard let userId = participant.user?.id else { return }
+        guard let userId = participant.user?.id else {
+            self.error = ParticipantActionError.noUserAccount
+            return
+        }
         do {
             try await GraphQLClient.shared.resendInvitation(slug: event.slug, userId: userId)
             // Refresh to get updated email status
             await loadParticipants()
         } catch {
             self.error = error
+        }
+    }
+}
+
+enum ParticipantActionError: Error, LocalizedError {
+    case noUserAccount
+
+    var errorDescription: String? {
+        switch self {
+        case .noUserAccount:
+            return "This participant hasn't created an account yet, so this action isn't available."
         }
     }
 }
