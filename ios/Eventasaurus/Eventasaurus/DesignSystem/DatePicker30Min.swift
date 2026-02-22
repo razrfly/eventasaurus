@@ -40,7 +40,11 @@ struct DatePicker30MinRow: View {
                 comps.hour = newSlot / 60
                 comps.minute = newSlot % 60
                 if let newDate = cal.date(from: comps) {
-                    selection = newDate
+                    if let minimumDate, newDate < minimumDate {
+                        selection = minimumDate.roundedUpToNext30Minutes()
+                    } else {
+                        selection = newDate
+                    }
                 }
             }
         )) {
@@ -49,6 +53,7 @@ struct DatePicker30MinRow: View {
                     .tag(minutes)
             }
         }
+        .pickerStyle(.menu)
     }
 
     private static func formatTime(minutes: Int) -> String {

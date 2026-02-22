@@ -73,6 +73,10 @@ struct ParticipantDetailView: View {
                 successToast(message)
             }
         }
+        .onDisappear {
+            successTask?.cancel()
+            successTask = nil
+        }
     }
 
     // MARK: - Header

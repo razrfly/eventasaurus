@@ -902,7 +902,7 @@ defmodule EventasaurusApp.Events do
   @doc """
   Adds a user as an organizer to an event.
   """
-  def add_user_to_event(%Event{} = event, %User{} = user, role \\ nil) do
+  def add_user_to_event(%Event{} = event, %User{} = user, role \\ "organizer") do
     %EventUser{}
     |> EventUser.changeset(%{
       event_id: event.id,
@@ -947,7 +947,7 @@ defmodule EventasaurusApp.Events do
         %{
           event_id: event.id,
           user_id: user_id,
-          role: nil,
+          role: "organizer",
           inserted_at: timestamp,
           updated_at: timestamp
         }
@@ -993,6 +993,7 @@ defmodule EventasaurusApp.Events do
   @doc """
   Checks if a user is an organizer of an event.
   """
+  @spec user_is_organizer?(Event.t(), User.t()) :: boolean()
   def user_is_organizer?(%Event{} = event, %User{} = user) do
     query =
       from(eu in EventUser,
