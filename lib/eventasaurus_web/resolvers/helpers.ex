@@ -43,9 +43,7 @@ defmodule EventasaurusWeb.Resolvers.Helpers do
         [%{field: field, message: message}]
 
       nested when is_map(nested) ->
-        Enum.flat_map(nested, fn {sub_field, sub_messages} ->
-          flatten_messages("#{field}.#{sub_field}", sub_messages)
-        end)
+        flatten_messages(field, nested)
     end)
   end
 end

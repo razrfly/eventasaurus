@@ -56,6 +56,7 @@ struct VenueSearchSheet: View {
             .onDisappear {
                 searchTask?.cancel()
                 searchTask = nil
+                isSearching = false
             }
             .navigationTitle("Select Venue")
             .navigationBarTitleDisplayMode(.inline)
