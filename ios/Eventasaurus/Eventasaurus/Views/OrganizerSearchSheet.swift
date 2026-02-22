@@ -69,6 +69,7 @@ struct OrganizerSearchSheet: View {
                 searchTask?.cancel()
                 guard newValue.trimmingCharacters(in: .whitespaces).count >= 2 else {
                     searchResults = []
+                    isSearching = false
                     return
                 }
                 searchTask = Task {
@@ -104,6 +105,7 @@ struct OrganizerSearchSheet: View {
     private func userRow(_ user: UserSearchResult) -> some View {
         HStack(spacing: DS.Spacing.md) {
             DiceBearAvatar(
+                email: user.email,
                 url: user.avatarUrl.flatMap { URL(string: $0) },
                 size: 32
             )

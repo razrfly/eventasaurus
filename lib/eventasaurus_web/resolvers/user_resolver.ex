@@ -26,6 +26,8 @@ defmodule EventasaurusWeb.Resolvers.UserResolver do
     else
       nil -> {:error, "Event not found"}
       false -> {:error, "Unauthorized"}
+      {:error, reason} when is_binary(reason) -> {:error, reason}
+      _ -> {:error, "Something went wrong"}
     end
   end
 end

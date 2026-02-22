@@ -317,6 +317,7 @@ struct VenueSearchSheet: View {
             return
         }
         isSearching = true
+        defer { isSearching = false }
         do {
             searchResults = try await GraphQLClient.shared.searchVenues(query: query)
         } catch is CancellationError {
@@ -329,7 +330,6 @@ struct VenueSearchSheet: View {
             print("[VenueSearchSheet] Search failed: \(error)")
             #endif
         }
-        isSearching = false
     }
 
     private func createAndSelectVenue() async {
