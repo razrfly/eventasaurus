@@ -7,8 +7,8 @@ struct EventCreateView: View {
     @State private var title = ""
     @State private var tagline = ""
     @State private var description = ""
-    @State private var startsAt = Date().addingTimeInterval(3600) // 1 hour from now
-    @State private var endsAt = Date().addingTimeInterval(7200)   // 2 hours from now
+    @State private var startsAt = Date().roundedUpToNext30Minutes()
+    @State private var endsAt = Date().roundedUpToNext30Minutes().addingTimeInterval(3600)
     @State private var hasEndDate = false
     @State private var visibility: EventVisibility = .public
     @State private var isVirtual = false
@@ -170,17 +170,19 @@ struct EventCreateView: View {
 
     private var dateTimeSection: some View {
         Section {
-            DatePicker("Starts", selection: $startsAt, in: Date()...)
-                .font(DS.Typography.body)
+            DatePicker30MinRow(label: "Starts", selection: $startsAt, minimumDate: Date())
 
             Toggle("Add end time", isOn: $hasEndDate.animation())
 
             if hasEndDate {
-                DatePicker("Ends", selection: $endsAt, in: startsAt...)
-                    .font(DS.Typography.body)
+                DatePicker30MinRow(label: "Ends", selection: $endsAt, minimumDate: startsAt)
             }
         } header: {
             Text("Date & Time")
+        }
+        .onChange(of: startsAt) { oldValue, newValue in
+            let gap = max(endsAt.timeIntervalSince(oldValue), 1800) // minimum 30 min
+            endsAt = newValue.addingTimeInterval(gap)
         }
     }
 

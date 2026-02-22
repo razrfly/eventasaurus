@@ -6,6 +6,8 @@ struct ContentView: View {
     @Environment(Clerk.self) private var clerk
     @State private var showAuth = false
     @Binding var deepLinkSlug: String?
+    /// Local copy so sheet content stays stable during the dismiss animation.
+    @State private var presentedSlug: String?
 
     var body: some View {
         Group {
@@ -20,11 +22,16 @@ struct ContentView: View {
         .sheet(isPresented: $showAuth) {
             AuthView(mode: .signIn)
         }
+        .onChange(of: deepLinkSlug) { _, newValue in
+            if let newValue {
+                presentedSlug = newValue
+            }
+        }
         .sheet(isPresented: Binding(
-            get: { deepLinkSlug != nil },
-            set: { if !$0 { deepLinkSlug = nil } }
+            get: { presentedSlug != nil },
+            set: { if !$0 { presentedSlug = nil; deepLinkSlug = nil } }
         )) {
-            if let slug = deepLinkSlug {
+            if let slug = presentedSlug {
                 NavigationStack {
                     EventDetailView(slug: slug)
                 }

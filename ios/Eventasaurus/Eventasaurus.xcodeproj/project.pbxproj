@@ -18,6 +18,7 @@
 		2EFA6923E7A922942DA1B27E /* EventManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B35F1A39494A33D157DD9BE8 /* EventManageView.swift */; };
 		345EB3C4A22ABD7B06E50961 /* VenueSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38BAE24FBAAB1D6E0746B447 /* VenueSearchSheet.swift */; };
 		37098B29CE8BEAD07AC00C72 /* NearbyEventsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 450DFE821D9BA30131B7CAA0 /* NearbyEventsSection.swift */; };
+		A7B3C4D5E6F809120ABCDE01 /* OrganizerSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B3C4D5E6F809120ABCDE02 /* OrganizerSearchSheet.swift */; };
 		3B9CDEC3692A99BF1356530B /* UserEventCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7002C88C99B5B6CE6933738 /* UserEventCardView.swift */; };
 		3EA0FF93E892E00FA88F1789 /* CachedImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DD58E490FBBFABB4DCA5D90 /* CachedImage.swift */; };
 		3F70BEFBE0AE0714411CD5FB /* EventDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4DF61B2734C3263F75F7D04 /* EventDestination.swift */; };
@@ -68,6 +69,8 @@
 		FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86142150038F49A64DEA51BF /* EventasaurusApp.swift */; };
 		FBA9A374B4037E16F25071A5 /* DS.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD30792FDFA411234460F16 /* DS.swift */; };
 		FE2EEDD88330BA075A5E9CC3 /* EventCardGridItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1375920877D214004606FDE /* EventCardGridItem.swift */; };
+		A1B2C3D401F6A7B8C9D0E1F2 /* Date+RoundTo30.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* Date+RoundTo30.swift */; };
+		B2C3D4E501A7B8C9D0E1F2A3 /* DatePicker30Min.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* DatePicker30Min.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -102,6 +105,7 @@
 		441EE8FDBC09FDA3917032BF /* SectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionHeader.swift; sourceTree = "<group>"; };
 		44A0DA4DB7CF2300D99929B9 /* InviteGuestsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteGuestsSheet.swift; sourceTree = "<group>"; };
 		450DFE821D9BA30131B7CAA0 /* NearbyEventsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyEventsSection.swift; sourceTree = "<group>"; };
+		A7B3C4D5E6F809120ABCDE02 /* OrganizerSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizerSearchSheet.swift; sourceTree = "<group>"; };
 		452D6129D87692BB949FC654 /* UserEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserEvent.swift; sourceTree = "<group>"; };
 		4AAF0EF0E711979E18C9F3C9 /* EventCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCreateView.swift; sourceTree = "<group>"; };
 		4C1602B14DEDFC56DC6FE864 /* DesignShowcaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignShowcaseView.swift; sourceTree = "<group>"; };
@@ -146,6 +150,8 @@
 		F4DE3C0EF2D3E76B3F2D326E /* CastCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CastCarousel.swift; sourceTree = "<group>"; };
 		F9C1EC4FE4F1A755EDFFFE47 /* ParticipantListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantListView.swift; sourceTree = "<group>"; };
 		FD46770CC3F41864DFC21903 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* Date+RoundTo30.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+RoundTo30.swift"; sourceTree = "<group>"; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* DatePicker30Min.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatePicker30Min.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -205,6 +211,7 @@
 				86142150038F49A64DEA51BF /* EventasaurusApp.swift */,
 				E2E69ACAD10FDFC97D84683E /* Info.plist */,
 				C5B4FA9C9C901BDA01CCA9D5 /* DesignSystem */,
+				E5F6A7B8C9D0E1F2A3B4C5D6 /* Extensions */,
 				3EDCE817A6B8F3304A7DC46F /* Models */,
 				39E2E9980538AA714649F161 /* Preview Content */,
 				52A989D87F318C9730693A38 /* Services */,
@@ -235,6 +242,7 @@
 		C5B4FA9C9C901BDA01CCA9D5 /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* DatePicker30Min.swift */,
 				4C1602B14DEDFC56DC6FE864 /* DesignShowcaseView.swift */,
 				CAD30792FDFA411234460F16 /* DS.swift */,
 				6F8CAF663FAEA3C6C4C47FDD /* EmptyStateView.swift */,
@@ -245,6 +253,14 @@
 				A92BC76215247A40FAE1AD1E /* ViewModifiers.swift */,
 			);
 			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		E5F6A7B8C9D0E1F2A3B4C5D6 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* Date+RoundTo30.swift */,
+			);
+			path = Extensions;
 			sourceTree = "<group>";
 		};
 		C9D0682FE16D02E5B1363C78 /* Products */ = {
@@ -279,6 +295,7 @@
 				19E16E9AAF138CB7EA570320 /* MovieDetailView.swift */,
 				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
 				450DFE821D9BA30131B7CAA0 /* NearbyEventsSection.swift */,
+				A7B3C4D5E6F809120ABCDE02 /* OrganizerSearchSheet.swift */,
 				B5ECED002269154F5B6A09CF /* ParticipantDetailView.swift */,
 				F9C1EC4FE4F1A755EDFFFE47 /* ParticipantListView.swift */,
 				2C053782CA24EDE6B1DE7FBB /* PlanWithFriendsSheet.swift */,
@@ -401,6 +418,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1B2C3D401F6A7B8C9D0E1F2 /* Date+RoundTo30.swift in Sources */,
+				B2C3D4E501A7B8C9D0E1F2A3 /* DatePicker30Min.swift in Sources */,
 				DBCCCB04C953FC3B590FB802 /* APIClient.swift in Sources */,
 				3EA0FF93E892E00FA88F1789 /* CachedImage.swift in Sources */,
 				C1CD3752540DFD2C5ABF8059 /* CastCarousel.swift in Sources */,
@@ -440,6 +459,7 @@
 				2E32E8029F8A18DA3BCCCB93 /* MovieDetailView.swift in Sources */,
 				BF9ACEB5D68ECF001460E162 /* MyEventsView.swift in Sources */,
 				37098B29CE8BEAD07AC00C72 /* NearbyEventsSection.swift in Sources */,
+				A7B3C4D5E6F809120ABCDE01 /* OrganizerSearchSheet.swift in Sources */,
 				2224A0108C2422B0DCBB0B82 /* ParticipantDetailView.swift in Sources */,
 				F9F47629233C0F15F102E088 /* ParticipantListView.swift in Sources */,
 				19FF44634ACFF7B843530B5A /* PlanWithFriendsSheet.swift in Sources */,

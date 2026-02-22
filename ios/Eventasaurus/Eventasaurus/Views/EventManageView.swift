@@ -8,8 +8,7 @@ struct EventManageView: View {
     @State private var isLoading = false
     @State private var showEditSheet = false
     @State private var showInviteSheet = false
-    @State private var showAddOrganizerAlert = false
-    @State private var newOrganizerEmail = ""
+    @State private var showOrganizerSearch = false
     @State private var polls: [EventPoll] = []
     @State private var error: Error?
 
@@ -263,8 +262,7 @@ struct EventManageView: View {
                         .font(DS.Typography.bodyBold)
                     Spacer()
                     Button {
-                        newOrganizerEmail = ""
-                        showAddOrganizerAlert = true
+                        showOrganizerSearch = true
                     } label: {
                         Image(systemName: "plus.circle")
                     }
@@ -299,16 +297,10 @@ struct EventManageView: View {
                 }
             }
             .cardStyle()
-            .alert("Add Co-organizer", isPresented: $showAddOrganizerAlert) {
-                TextField("Email address", text: $newOrganizerEmail)
-                    .textContentType(.emailAddress)
-                    .autocorrectionDisabled()
-                Button("Add") {
-                    Task { await addOrganizer(email: newOrganizerEmail) }
+            .sheet(isPresented: $showOrganizerSearch) {
+                OrganizerSearchSheet(slug: event.slug) {
+                    await refreshEvent()
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Enter the email of the person you'd like to add as a co-organizer.")
             }
         }
     }
@@ -444,15 +436,17 @@ struct EventManageView: View {
                 .buttonStyle(.glassSecondary)
             }
 
-            ShareLink(
-                item: URL(string: "https://wombie.com/events/\(event.slug)")!,
-                subject: Text(event.title),
-                message: Text(event.tagline ?? event.title)
-            ) {
-                Label("Share Event", systemImage: "square.and.arrow.up")
-                    .frame(maxWidth: .infinity)
+            if let shareURL = eventURL(slug: event.slug) {
+                ShareLink(
+                    item: shareURL,
+                    subject: Text(event.title),
+                    message: Text(event.tagline ?? event.title)
+                ) {
+                    Label("Share Event", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassSecondary)
             }
-            .buttonStyle(.glassSecondary)
 
             if event.status == .draft {
                 Button {
@@ -491,32 +485,26 @@ struct EventManageView: View {
     private func refreshEvent() async {
         do {
             event = try await GraphQLClient.shared.fetchMyEvent(slug: event.slug)
-            // Load polls if event supports them
+            // Load polls if event supports them, clear if not
             if event.status == .polling || event.status == .threshold {
                 polls = (try? await GraphQLClient.shared.fetchEventPolls(slug: event.slug)) ?? []
+            } else {
+                polls = []
             }
         } catch {
             self.error = error
         }
     }
 
-    private func addOrganizer(email: String) async {
-        guard !email.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        do {
-            try await GraphQLClient.shared.addOrganizer(slug: event.slug, email: email)
-            await refreshEvent()
-        } catch {
-            self.error = error
-        }
-    }
-
     private func removeOrganizer(userId: String) async {
+        isLoading = true
         do {
             try await GraphQLClient.shared.removeOrganizer(slug: event.slug, userId: userId)
             await refreshEvent()
         } catch {
             self.error = error
         }
+        isLoading = false
     }
 
     private func publishEvent() async {
@@ -539,5 +527,13 @@ struct EventManageView: View {
             self.error = error
         }
         isLoading = false
+    }
+
+    private func eventURL(slug: String) -> URL? {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "wombie.com"
+        components.path = "/events/\(slug)"
+        return components.url
     }
 }

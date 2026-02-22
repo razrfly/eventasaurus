@@ -34,4 +34,12 @@ defmodule EventasaurusWeb.Schema.Types.User do
       end)
     end
   end
+
+  object :user_search_result do
+    field(:id, non_null(:id))
+    field(:name, non_null(:string))
+    field(:username, :string)
+    field(:email, :string)
+    field(:avatar_url, :string)
+  end
 end
