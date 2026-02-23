@@ -18,6 +18,7 @@ struct MyEventsView: View {
     @State private var error: Error?
     @State private var showCreateSheet = false
     @State private var currentLoadTask: Task<Void, Never>?
+    @State private var refreshID = UUID()
 
     var body: some View {
         NavigationStack {
@@ -52,7 +53,7 @@ struct MyEventsView: View {
                     }
                 }
             }
-            .task { await loadData() }
+            .task(id: refreshID) { await loadData() }
             .refreshable { await loadData() }
             .onChange(of: selectedTab) { _, _ in
                 currentLoadTask?.cancel()
@@ -68,7 +69,7 @@ struct MyEventsView: View {
                 switch target {
                 case .created(let event):
                     EventManageView(event: event) {
-                        Task { await loadCreatedEvents() }
+                        self.refreshID = UUID()
                     }
                 case .attending(let event):
                     EventDetailView(slug: event.slug)
