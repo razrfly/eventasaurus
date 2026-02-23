@@ -12,6 +12,7 @@ struct EventManageView: View {
     @State private var polls: [EventPoll] = []
     @State private var error: Error?
     @State private var selectedTab: ManageTab = .overview
+    @State private var guestRefreshID = UUID()
 
     var onChanged: (() -> Void)?
 
@@ -188,7 +189,11 @@ struct EventManageView: View {
                 onOrganizerSearch: { showOrganizerSearch = true },
                 onPublish: { Task { await publishEvent() } },
                 onCancel: { Task { await cancelEvent() } },
-                onRemoveOrganizer: { userId in Task { await removeOrganizer(userId: userId) } }
+                onRemoveOrganizer: { userId in Task { await removeOrganizer(userId: userId) } },
+                onParticipantsChanged: {
+                    Task { await refreshEvent() }
+                    onChanged?()
+                }
             )
 
         case .guests:
@@ -198,7 +203,8 @@ struct EventManageView: View {
                 onParticipantsChanged: {
                     Task { await refreshEvent() }
                     onChanged?()
-                }
+                },
+                refreshTrigger: guestRefreshID
             )
 
         case .polls:
@@ -226,6 +232,8 @@ struct EventManageView: View {
             } else {
                 polls = []
             }
+            // Trigger guest list reload so pull-to-refresh updates participants
+            guestRefreshID = UUID()
         } catch {
             self.error = error
         }

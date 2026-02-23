@@ -5,6 +5,7 @@ struct ManageGuestsTab: View {
     let event: UserEvent
     var onInvite: () -> Void
     var onParticipantsChanged: () -> Void
+    var refreshTrigger: UUID = UUID()
 
     @State private var participants: [EventParticipant] = []
     @State private var isLoading = true
@@ -45,7 +46,15 @@ struct ManageGuestsTab: View {
             filterChips
             participantContent
         }
-        .task { await loadParticipants() }
+        .task(id: refreshTrigger) { await loadParticipants() }
+        .alert("Error", isPresented: Binding(
+            get: { error != nil },
+            set: { if !$0 { error = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(error?.localizedDescription ?? "Something went wrong")
+        }
         .alert("Remove Participant", isPresented: Binding(
             get: { participantToRemove != nil },
             set: { if !$0 { participantToRemove = nil } }
@@ -63,11 +72,6 @@ struct ManageGuestsTab: View {
                 Text("Remove \(p.user?.name ?? p.email ?? "this participant") from the event?")
             }
         }
-    }
-
-    /// Reload participants (called by parent refreshable).
-    func reload() async {
-        await loadParticipants()
     }
 
     // MARK: - Filter Chips
@@ -137,48 +141,46 @@ struct ManageGuestsTab: View {
             )
             .padding(.top, DS.Spacing.xxl)
         } else {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    Text("\(filteredParticipants.count) participant\(filteredParticipants.count == 1 ? "" : "s")")
-                        .font(DS.Typography.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, DS.Spacing.xl)
-                        .padding(.vertical, DS.Spacing.sm)
+            LazyVStack(spacing: 0) {
+                Text("\(filteredParticipants.count) participant\(filteredParticipants.count == 1 ? "" : "s")")
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.vertical, DS.Spacing.sm)
 
-                    ForEach(filteredParticipants) { participant in
-                        NavigationLink {
-                            ParticipantDetailView(event: event, participant: participant) {
-                                Task { await loadParticipants() }
-                                onParticipantsChanged()
-                            }
-                        } label: {
-                            participantRow(participant)
+                ForEach(filteredParticipants) { participant in
+                    NavigationLink {
+                        ParticipantDetailView(event: event, participant: participant) {
+                            Task { await loadParticipants() }
+                            onParticipantsChanged()
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, DS.Spacing.xl)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .contextMenu {
-                            let emailStatus = EmailDeliveryStatus(from: participant.emailStatus)
-                            if emailStatus == .failed || emailStatus == .bounced {
-                                Button {
-                                    Task { await resendInvitation(participant) }
-                                } label: {
-                                    Label("Resend Invitation", systemImage: "arrow.clockwise")
-                                }
-                            }
-
-                            Button(role: .destructive) {
-                                participantToRemove = participant
+                    } label: {
+                        participantRow(participant)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .contextMenu {
+                        let emailStatus = EmailDeliveryStatus(from: participant.emailStatus)
+                        if emailStatus == .failed || emailStatus == .bounced {
+                            Button {
+                                Task { await resendInvitation(participant) }
                             } label: {
-                                Label("Remove", systemImage: "trash")
+                                Label("Resend Invitation", systemImage: "arrow.clockwise")
                             }
                         }
 
-                        if participant.id != filteredParticipants.last?.id {
-                            Divider()
-                                .padding(.leading, DS.Spacing.xl + 44 + DS.Spacing.lg)
+                        Button(role: .destructive) {
+                            participantToRemove = participant
+                        } label: {
+                            Label("Remove", systemImage: "trash")
                         }
+                    }
+
+                    if participant.id != filteredParticipants.last?.id {
+                        Divider()
+                            .padding(.leading, DS.Spacing.xl + 44 + DS.Spacing.lg)
                     }
                 }
             }
@@ -266,7 +268,10 @@ struct ManageGuestsTab: View {
     }
 
     private func removeParticipant(_ participant: EventParticipant) async {
-        guard let userId = participant.user?.id else { return }
+        guard let userId = participant.user?.id else {
+            self.error = ParticipantActionError.noUserAccount
+            return
+        }
         do {
             try await GraphQLClient.shared.removeParticipant(slug: event.slug, userId: userId)
             participants.removeAll { $0.id == participant.id }
@@ -277,7 +282,10 @@ struct ManageGuestsTab: View {
     }
 
     private func resendInvitation(_ participant: EventParticipant) async {
-        guard let userId = participant.user?.id else { return }
+        guard let userId = participant.user?.id else {
+            self.error = ParticipantActionError.noUserAccount
+            return
+        }
         do {
             try await GraphQLClient.shared.resendInvitation(slug: event.slug, userId: userId)
             await loadParticipants()
