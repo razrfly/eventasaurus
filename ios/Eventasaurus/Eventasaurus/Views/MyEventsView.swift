@@ -1,197 +1,355 @@
 import SwiftUI
 
 struct MyEventsView: View {
-    enum Tab: String, CaseIterable {
-        case created = "Created"
-        case attending = "Attending"
+
+    // MARK: - Filter Enums
+
+    enum TimeFilter: String, CaseIterable {
+        case upcoming, past, archived
     }
 
-    enum NavigationTarget: Hashable {
-        case created(UserEvent)
-        case attending(UserEvent)
+    enum RoleFilter: String, CaseIterable {
+        case all = "All Events"
+        case hosting = "Hosting"
+        case going = "Going"
+        case pending = "Pending"
     }
 
-    @State private var selectedTab: Tab = .created
-    @State private var createdEvents: [UserEvent] = []
-    @State private var attendingEvents: [UserEvent] = []
+    enum ViewMode: String {
+        case compact, card
+    }
+
+    // MARK: - State
+
+    @State private var timeFilter: TimeFilter = .upcoming
+    @State private var roleFilter: RoleFilter = .all
+    @State private var viewMode: ViewMode = {
+        let saved = UserDefaults.standard.string(forKey: "myEventsViewMode")
+        return ViewMode(rawValue: saved ?? "") ?? .card
+    }()
+    @State private var events: [DashboardEvent] = []
+    @State private var filterCounts: DashboardFilterCounts?
     @State private var isLoading = false
     @State private var error: Error?
     @State private var showCreateSheet = false
-    @State private var currentLoadTask: Task<Void, Never>?
     @State private var refreshID = UUID()
+
+    // Cache per time filter to avoid re-fetching on tab switch
+    @State private var cache: [TimeFilter: [DashboardEvent]] = [:]
+
+    // MARK: - Computed
+
+    private var filteredEvents: [DashboardEvent] {
+        let base = events
+        switch roleFilter {
+        case .all:
+            return base
+        case .hosting:
+            return base.filter { $0.role == .hosting }
+        case .going:
+            return base.filter { $0.role == .going }
+        case .pending:
+            return base.filter { $0.role == .pending }
+        }
+    }
+
+    private var groupedEvents: [(key: Date?, events: [DashboardEvent])] {
+        let dict = Dictionary(grouping: filteredEvents) { event -> Date? in
+            guard let startsAt = event.startsAt else { return nil }
+            return Calendar.current.startOfDay(for: startsAt)
+        }
+
+        let sorted = dict.sorted { lhs, rhs in
+            // nil dates go last
+            guard let l = lhs.key else { return false }
+            guard let r = rhs.key else { return true }
+            return timeFilter == .upcoming ? l < r : l > r
+        }
+
+        return sorted.map { (key: $0.key, events: $0.value) }
+    }
+
+    private var isPast: Bool {
+        timeFilter == .past || timeFilter == .archived
+    }
+
+    // MARK: - Body
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Tab picker
-                Picker("", selection: $selectedTab) {
-                    ForEach(Tab.allCases, id: \.self) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, DS.Spacing.xl)
-                .padding(.vertical, DS.Spacing.md)
-
-                // Tab content
-                Group {
-                    switch selectedTab {
-                    case .created:
-                        createdContent
-                    case .attending:
-                        attendingContent
-                    }
-                }
+                timeFilterPicker
+                contentArea
             }
             .navigationTitle("My Events")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
+            .toolbar { toolbarContent }
+            .task(id: refreshID) { await loadEvents(for: timeFilter) }
+            .refreshable { await loadEvents(for: timeFilter, forceRefresh: true) }
+            .onChange(of: timeFilter) { _, newValue in
+                if let cached = cache[newValue] {
+                    events = cached
+                } else {
+                    Task { await loadEvents(for: newValue) }
                 }
             }
-            .task(id: refreshID) { await loadData() }
-            .refreshable { await loadData() }
-            .onChange(of: selectedTab) { _, _ in
-                currentLoadTask?.cancel()
-                currentLoadTask = Task { await loadData() }
+            .onChange(of: viewMode) { _, newValue in
+                UserDefaults.standard.set(newValue.rawValue, forKey: "myEventsViewMode")
             }
             .sheet(isPresented: $showCreateSheet) {
-                EventCreateView { newEvent in
-                    createdEvents.insert(newEvent, at: 0)
-                    selectedTab = .created
+                EventCreateView { _ in
+                    refreshID = UUID()
                 }
             }
-            .navigationDestination(for: NavigationTarget.self) { target in
-                switch target {
-                case .created(let event):
-                    EventManageView(event: event) {
+            .navigationDestination(for: DashboardEvent.self) { event in
+                if event.canManage {
+                    EventManageView(slug: event.slug) {
                         self.refreshID = UUID()
                     }
-                case .attending(let event):
+                } else {
                     EventDetailView(slug: event.slug)
                 }
             }
         }
     }
 
-    // MARK: - Created Tab
+    // MARK: - Time Filter Picker
+
+    private var timeFilterPicker: some View {
+        Picker("", selection: $timeFilter) {
+            ForEach(TimeFilter.allCases, id: \.self) { filter in
+                Text(timeFilterLabel(filter)).tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, DS.Spacing.xl)
+        .padding(.vertical, DS.Spacing.md)
+    }
+
+    private func timeFilterLabel(_ filter: TimeFilter) -> String {
+        guard let counts = filterCounts else {
+            return filter.rawValue.capitalized
+        }
+        let count: Int
+        switch filter {
+        case .upcoming: count = counts.upcoming
+        case .past: count = counts.past
+        case .archived: count = counts.archived
+        }
+        return "\(filter.rawValue.capitalized) (\(count))"
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            HStack(spacing: DS.Spacing.md) {
+                viewModeToggle
+                roleFilterMenu
+                Button { showCreateSheet = true } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+    }
+
+    private var viewModeToggle: some View {
+        Button {
+            withAnimation(DS.Animation.fast) {
+                viewMode = viewMode == .compact ? .card : .compact
+            }
+        } label: {
+            Image(systemName: viewMode == .compact ? "rectangle.grid.1x2" : "list.bullet")
+        }
+    }
+
+    private var roleFilterMenu: some View {
+        Menu {
+            ForEach(RoleFilter.allCases, id: \.self) { filter in
+                Button {
+                    roleFilter = filter
+                } label: {
+                    if roleFilter == filter {
+                        Label(filter.rawValue, systemImage: "checkmark")
+                    } else {
+                        Text(filter.rawValue)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: roleFilter == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+        }
+    }
+
+    // MARK: - Content
 
     @ViewBuilder
-    private var createdContent: some View {
-        if isLoading && createdEvents.isEmpty {
-            ProgressView("Loading your events...")
+    private var contentArea: some View {
+        if isLoading && events.isEmpty {
+            ProgressView("Loading events...")
                 .frame(maxHeight: .infinity)
-        } else if let error, createdEvents.isEmpty {
+        } else if let error, events.isEmpty {
             EmptyStateView(
                 icon: "exclamationmark.triangle",
                 title: "Something went wrong",
                 message: error.localizedDescription,
                 actionTitle: "Try Again",
-                action: { Task { await loadCreatedEvents() } }
+                action: { Task { await loadEvents(for: timeFilter, forceRefresh: true) } }
             )
-        } else if createdEvents.isEmpty {
+        } else if filteredEvents.isEmpty {
+            emptyState
+        } else {
+            eventList
+        }
+    }
+
+    // MARK: - Event List
+
+    private var eventList: some View {
+        ScrollView {
+            if timeFilter == .archived {
+                archiveBanner
+            }
+
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                ForEach(groupedEvents, id: \.key) { section in
+                    Section {
+                        LazyVStack(spacing: viewMode == .compact ? DS.Spacing.xs : DS.Spacing.xl) {
+                            ForEach(section.events) { event in
+                                NavigationLink(value: event) {
+                                    if viewMode == .compact {
+                                        DashboardCompactRow(event: event, isPast: isPast)
+                                    } else {
+                                        DashboardCardView(event: event, isPast: isPast)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.xl)
+                        .padding(.bottom, DS.Spacing.lg)
+                    } header: {
+                        sectionHeader(for: section.key)
+                    }
+                }
+            }
+        }
+    }
+
+    private func sectionHeader(for date: Date?) -> some View {
+        HStack {
+            if let date {
+                Text(date, format: .dateTime.weekday(.wide).month(.wide).day().year())
+                    .font(DS.Typography.captionBold)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("No Date Set")
+                    .font(DS.Typography.captionBold)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, DS.Spacing.xl)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(.bar)
+    }
+
+    private var archiveBanner: some View {
+        HStack(spacing: DS.Spacing.md) {
+            Image(systemName: "info.circle")
+            Text("Deleted events are kept for 90 days.")
+                .font(DS.Typography.caption)
+        }
+        .foregroundStyle(.secondary)
+        .padding(DS.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground))
+    }
+
+    // MARK: - Empty States
+
+    @ViewBuilder
+    private var emptyState: some View {
+        switch (timeFilter, roleFilter) {
+        case (.upcoming, .all):
             EmptyStateView(
-                icon: "plus.circle",
-                title: "No Events Created",
-                message: "Create your first event to get started.",
+                icon: "calendar.badge.plus",
+                title: "No Upcoming Events",
+                message: "Create an event or RSVP to one to see it here.",
                 actionTitle: "Create Event",
                 action: { showCreateSheet = true }
             )
-        } else {
-            createdEventList
-        }
-    }
-
-    private var createdEventList: some View {
-        ScrollView {
-            LazyVStack(spacing: DS.Spacing.xl) {
-                ForEach(createdEvents) { event in
-                    NavigationLink(value: NavigationTarget.created(event)) {
-                        UserEventCardView(event: event)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(DS.Spacing.xl)
-        }
-    }
-
-    // MARK: - Attending Tab
-
-    @ViewBuilder
-    private var attendingContent: some View {
-        if isLoading && attendingEvents.isEmpty {
-            ProgressView("Loading your events...")
-                .frame(maxHeight: .infinity)
-        } else if let error, attendingEvents.isEmpty {
+        case (.upcoming, .hosting):
             EmptyStateView(
-                icon: "exclamationmark.triangle",
-                title: "Something went wrong",
-                message: error.localizedDescription,
-                actionTitle: "Try Again",
-                action: { Task { await loadAttendingEvents() } }
+                icon: "star.circle",
+                title: "Not Hosting Any Events",
+                message: "Create an event to start hosting.",
+                actionTitle: "Create Event",
+                action: { showCreateSheet = true }
             )
-        } else if attendingEvents.isEmpty {
+        case (.upcoming, .going):
             EmptyStateView(
-                icon: "calendar",
-                title: "No Events Yet",
-                message: "You haven't joined any events yet."
+                icon: "checkmark.circle",
+                title: "No Events You're Attending",
+                message: "RSVP to events to see them here."
             )
-        } else {
-            attendingEventList
-        }
-    }
-
-    private var attendingEventList: some View {
-        ScrollView {
-            LazyVStack(spacing: DS.Spacing.xl) {
-                ForEach(attendingEvents) { event in
-                    NavigationLink(value: NavigationTarget.attending(event)) {
-                        UserEventCardView(event: event)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(DS.Spacing.xl)
+        case (.upcoming, .pending):
+            EmptyStateView(
+                icon: "clock",
+                title: "No Pending Invitations",
+                message: "You're all caught up!"
+            )
+        case (.past, .all):
+            EmptyStateView(
+                icon: "clock.arrow.circlepath",
+                title: "No Past Events",
+                message: "Events you've attended will appear here."
+            )
+        case (.past, .hosting):
+            EmptyStateView(
+                icon: "clock.arrow.circlepath",
+                title: "No Past Hosted Events",
+                message: "Events you've hosted will appear here after they end."
+            )
+        case (.past, _):
+            EmptyStateView(
+                icon: "clock.arrow.circlepath",
+                title: "No Past Events",
+                message: "Nothing here yet."
+            )
+        case (.archived, _):
+            EmptyStateView(
+                icon: "archivebox",
+                title: "No Archived Events",
+                message: "Deleted events will appear here for 90 days."
+            )
         }
     }
 
     // MARK: - Data Loading
 
-    private func loadData() async {
-        switch selectedTab {
-        case .created:
-            await loadCreatedEvents()
-        case .attending:
-            await loadAttendingEvents()
-        }
-    }
+    private func loadEvents(for filter: TimeFilter, forceRefresh: Bool = false) async {
+        if !forceRefresh, cache[filter] != nil { return }
 
-    private func loadCreatedEvents() async {
         isLoading = true
         error = nil
         defer { isLoading = false }
 
         do {
-            createdEvents = try await GraphQLClient.shared.fetchMyEvents()
-        } catch is CancellationError {
-            return
-        } catch {
-            self.error = error
-        }
-    }
+            let gqlTimeFilter: GraphQLClient.DashboardTimeFilter
+            switch filter {
+            case .upcoming: gqlTimeFilter = .upcoming
+            case .past: gqlTimeFilter = .past
+            case .archived: gqlTimeFilter = .archived
+            }
 
-    private func loadAttendingEvents() async {
-        isLoading = true
-        error = nil
-        defer { isLoading = false }
+            let result = try await GraphQLClient.shared.fetchDashboardEvents(
+                timeFilter: gqlTimeFilter
+            )
 
-        do {
-            attendingEvents = try await GraphQLClient.shared.fetchAttendingEvents()
+            events = result.events
+            filterCounts = result.filterCounts
+            cache[filter] = result.events
         } catch is CancellationError {
             return
         } catch {

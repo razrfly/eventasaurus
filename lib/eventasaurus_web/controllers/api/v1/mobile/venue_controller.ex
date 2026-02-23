@@ -56,7 +56,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.VenueController do
       end
 
     %{
-      name: venue.name || "Unknown Venue",
+      name: if(is_binary(venue.name) and String.trim(venue.name) != "", do: venue.name, else: "Unknown Venue"),
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,
@@ -84,7 +84,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.VenueController do
 
   defp serialize_event_venue(venue) do
     %{
-      name: venue.name || "Unknown Venue",
+      name: if(is_binary(venue.name) and String.trim(venue.name) != "", do: venue.name, else: "Unknown Venue"),
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,

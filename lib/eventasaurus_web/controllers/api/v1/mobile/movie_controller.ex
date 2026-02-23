@@ -110,7 +110,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     |> Enum.reject(fn group -> group.showtimes == [] end)
     # Sort: venues with upcoming screenings first, then by name
     |> Enum.sort_by(fn group ->
-      {if(group.upcoming_count > 0, do: 0, else: 1), group.venue.name}
+      {if(group.upcoming_count > 0, do: 0, else: 1), group.venue.name || "Unknown Venue"}
     end)
   end
 

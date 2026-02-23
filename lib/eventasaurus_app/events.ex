@@ -1549,6 +1549,7 @@ defmodule EventasaurusApp.Events do
           id: e.id,
           title: e.title,
           slug: e.slug,
+          tagline: e.tagline,
           description: e.description,
           start_at: e.start_at,
           ends_at: e.ends_at,

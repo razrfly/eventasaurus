@@ -39,6 +39,10 @@ struct ProfileView: View {
             } message: {
                 Text(signOutErrorMessage)
             }
+            .onDisappear {
+                signOutTask?.cancel()
+                signOutTask = nil
+            }
         }
     }
 
@@ -74,10 +78,6 @@ struct ProfileView: View {
             }
         }
         .buttonStyle(.bordered)
-        .onDisappear {
-            signOutTask?.cancel()
-            signOutTask = nil
-        }
     }
 
     private func profileContent(_ profile: GQLUser) -> some View {

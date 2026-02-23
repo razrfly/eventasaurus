@@ -58,7 +58,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.ContainerController do
 
   defp serialize_venue(venue) do
     %{
-      name: venue.name || "Unknown Venue",
+      name: if(is_binary(venue.name) and String.trim(venue.name) != "", do: venue.name, else: "Unknown Venue"),
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,

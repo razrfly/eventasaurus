@@ -9,6 +9,7 @@ defmodule EventasaurusWeb.Schema.Types do
   import_types(EventasaurusWeb.Schema.Types.Plan)
   import_types(EventasaurusWeb.Schema.Types.ParticipantSuggestion)
   import_types(EventasaurusWeb.Schema.Types.Poll)
+  import_types(EventasaurusWeb.Schema.Types.Dashboard)
 
   if Mix.env() in [:dev, :test] do
     import_types(EventasaurusWeb.Schema.Types.Dev)

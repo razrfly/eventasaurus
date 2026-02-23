@@ -115,13 +115,34 @@ extension Event {
 }
 
 struct EventSource: Codable, Identifiable {
-    var id: String { "\(name ?? "unknown")::\(url ?? "")" }
+    let id: String
     let name: String?
     let logoUrl: String?
     let url: String?
 
     var displayName: String {
         name ?? "Unknown Source"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, logoUrl, url
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        logoUrl = try container.decodeIfPresent(String.self, forKey: .logoUrl)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+
+        if let apiId = try container.decodeIfPresent(String.self, forKey: .id), !apiId.isEmpty {
+            id = apiId
+        } else if let url, !url.isEmpty {
+            id = url
+        } else if let name, !name.isEmpty {
+            id = name
+        } else {
+            id = UUID().uuidString
+        }
     }
 }
 

@@ -30,4 +30,16 @@ defmodule EventasaurusWeb.Schema.Types.Enums do
     value(:interested)
     value(:not_going)
   end
+
+  enum :dashboard_time_filter do
+    value(:upcoming)
+    value(:past)
+    value(:archived)
+  end
+
+  enum :dashboard_ownership_filter do
+    value(:all)
+    value(:created)
+    value(:participating)
+  end
 end

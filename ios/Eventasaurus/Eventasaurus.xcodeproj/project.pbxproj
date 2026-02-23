@@ -88,6 +88,11 @@
 		FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86142150038F49A64DEA51BF /* EventasaurusApp.swift */; };
 		FBA9A374B4037E16F25071A5 /* DS.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD30792FDFA411234460F16 /* DS.swift */; };
 		FE2EEDD88330BA075A5E9CC3 /* EventCardGridItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1375920877D214004606FDE /* EventCardGridItem.swift */; };
+		2123E7FC33EBD07E2870B818 /* DashboardCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1BA4514D9DB4F28018EF68C /* DashboardCardView.swift */; };
+		67893B29335ACDE1909445A6 /* DashboardCompactRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E056BE65729317DF763F96A7 /* DashboardCompactRow.swift */; };
+		1463CB1C08DF8CD9508895FD /* DashboardEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8254395294D1E747780846E5 /* DashboardEvent.swift */; };
+		B5A2B3E38F2C465E6C28253A /* EventRoleBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 380F3DF2F7B1F80B8BBAA409 /* EventRoleBadge.swift */; };
+		F2E1D0C9B8A7F6E5D4C3B2A1 /* EnvironmentBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* EnvironmentBadge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -186,6 +191,11 @@
 		FD46770CC3F41864DFC21903 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FDAC37A111C3255FF5F29365 /* ManageHistoryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageHistoryTab.swift; sourceTree = "<group>"; };
 		FF6EC223F595A37DD515F75C /* DevEnvironmentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevEnvironmentService.swift; sourceTree = "<group>"; };
+		B1BA4514D9DB4F28018EF68C /* DashboardCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardCardView.swift; sourceTree = "<group>"; };
+		E056BE65729317DF763F96A7 /* DashboardCompactRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardCompactRow.swift; sourceTree = "<group>"; };
+		8254395294D1E747780846E5 /* DashboardEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardEvent.swift; sourceTree = "<group>"; };
+		380F3DF2F7B1F80B8BBAA409 /* EventRoleBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventRoleBadge.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* EnvironmentBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentBadge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -237,6 +247,7 @@
 				B00D7EE8F08AF3A44C650AAC /* Category.swift */,
 				6BB47C16D87C32293A6F3BA5 /* City.swift */,
 				C4018BC55B1749574B7AB9FD /* ContainerDetail.swift */,
+				8254395294D1E747780846E5 /* DashboardEvent.swift */,
 				1D910507C20A4079D0F6753F /* Event.swift */,
 				A4DF61B2734C3263F75F7D04 /* EventDestination.swift */,
 				B6D85366408C4A3E79AE6BAD /* MovieDetail.swift */,
@@ -296,6 +307,16 @@
 			path = EventasaurusTests;
 			sourceTree = "<group>";
 		};
+		4A19EB43964DE3DA41BEF30E /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				B1BA4514D9DB4F28018EF68C /* DashboardCardView.swift */,
+				E056BE65729317DF763F96A7 /* DashboardCompactRow.swift */,
+				380F3DF2F7B1F80B8BBAA409 /* EventRoleBadge.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
 		C09E30AC18D7C10DDC4ADF99 /* Manage */ = {
 			isa = PBXGroup;
 			children = (
@@ -353,6 +374,7 @@
 				CC4178960CCD0BB521477ED2 /* EventEditView.swift */,
 				B35F1A39494A33D157DD9BE8 /* EventManageView.swift */,
 				7B05D65CE187A5EE31364A6C /* ExternalLinkButton.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* EnvironmentBadge.swift */,
 				973CC9AD642345A3ED7B6F24 /* FiltersSheet.swift */,
 				CCC601A146E33CBE05DCD517 /* FlowLayout.swift */,
 				44A0DA4DB7CF2300D99929B9 /* InviteGuestsSheet.swift */,
@@ -373,6 +395,7 @@
 				62F489520C7562F9CE109FD9 /* VenueDetailView.swift */,
 				90BC383D7C38EF029AA1C1D4 /* VenueMapCard.swift */,
 				38BAE24FBAAB1D6E0746B447 /* VenueSearchSheet.swift */,
+				4A19EB43964DE3DA41BEF30E /* Dashboard */,
 				C09E30AC18D7C10DDC4ADF99 /* Manage */,
 				31B32CCAD225FDEE0DC93BB5 /* Voting */,
 			);
@@ -497,6 +520,10 @@
 				5C306B9FDABE275011FFD069 /* ContainerDetailView.swift in Sources */,
 				69C72F0A0750335F65C8C746 /* ContentView.swift in Sources */,
 				FBA9A374B4037E16F25071A5 /* DS.swift in Sources */,
+				2123E7FC33EBD07E2870B818 /* DashboardCardView.swift in Sources */,
+				67893B29335ACDE1909445A6 /* DashboardCompactRow.swift in Sources */,
+				1463CB1C08DF8CD9508895FD /* DashboardEvent.swift in Sources */,
+				B5A2B3E38F2C465E6C28253A /* EventRoleBadge.swift in Sources */,
 				809FDCB3AE6C735ADD4E490B /* Date+RoundTo30.swift in Sources */,
 				A86659603D108CB53AE196CD /* DatePicker30Min.swift in Sources */,
 				A97F7AD0E3832205EA3C76E5 /* DesignShowcaseView.swift in Sources */,
@@ -518,6 +545,7 @@
 				2EFA6923E7A922942DA1B27E /* EventManageView.swift in Sources */,
 				FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */,
 				5F9EDBF3905059495F205F03 /* ExternalLinkButton.swift in Sources */,
+				F2E1D0C9B8A7F6E5D4C3B2A1 /* EnvironmentBadge.swift in Sources */,
 				4EBB879F991F4C4B79747AB8 /* FiltersSheet.swift in Sources */,
 				757C275F111D45C240AFAAEA /* FlowLayout.swift in Sources */,
 				5255001398205FFA081CBECE /* GlassButtonStyles.swift in Sources */,

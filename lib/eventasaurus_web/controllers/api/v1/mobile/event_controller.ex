@@ -24,6 +24,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   @valid_sort_orders ~w(asc desc)
   @accepted_locales ~w(en pl de fr es it nl pt ru uk cs sk hu ro bg hr sr sl)
 
+  @spec nearby(Plug.Conn.t(), map()) :: Plug.Conn.t()
   @doc """
   GET /api/v1/mobile/events/nearby?lat=X&lng=Y&radius=Z
 
@@ -105,6 +106,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     end
   end
 
+  @spec categories(Plug.Conn.t(), map()) :: Plug.Conn.t()
   @doc """
   GET /api/v1/mobile/categories
 
@@ -118,6 +120,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     })
   end
 
+  @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   @doc """
   GET /api/v1/mobile/events/:slug
 
@@ -390,8 +393,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     end
   end
 
+  @locale_priority ~w(en pl de fr es it nl pt ru uk cs sk hu ro bg hr sr sl)
+
   defp first_map_value(map) when map_size(map) > 0 do
-    map |> Map.values() |> List.first()
+    Enum.find_value(@locale_priority, fn locale -> Map.get(map, locale) end) ||
+      map |> Map.values() |> List.first()
   end
 
   defp first_map_value(_), do: nil
@@ -476,7 +482,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   defp serialize_venue(venue) do
     %{
-      name: venue.name || "Unknown Venue",
+      name: if(is_binary(venue.name) and String.trim(venue.name) != "", do: venue.name, else: "Unknown Venue"),
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,
