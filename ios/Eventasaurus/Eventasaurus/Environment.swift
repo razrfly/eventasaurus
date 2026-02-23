@@ -1,14 +1,10 @@
 import Foundation
 
 enum AppConfig {
-    #if targetEnvironment(simulator)
+    #if DEBUG
     /// Whether the app is running against production (set via Dev Settings, requires restart).
     static let useProductionServer: Bool = {
-        #if DEBUG
         return UserDefaults.standard.bool(forKey: "dev_use_production_server")
-        #else
-        return false
-        #endif
     }()
 
     static let apiBaseURL: URL = {
@@ -22,6 +18,18 @@ enum AppConfig {
     static let useProductionServer = true
     static let apiBaseURL = plistURL("APIBaseURLProd")
     static let clerkPublishableKey = plistString("ClerkPublishableKeyProd")
+    #endif
+
+    #if DEBUG
+    /// Human-readable environment name for UI display.
+    static var environmentName: String {
+        useProductionServer ? "Production" : "Development"
+    }
+
+    /// Host string for UI display.
+    static var environmentHost: String {
+        useProductionServer ? "wombie.com" : "localhost:4000"
+    }
     #endif
 
     private static func plistString(_ key: String) -> String {

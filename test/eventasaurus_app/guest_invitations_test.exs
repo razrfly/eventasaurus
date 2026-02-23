@@ -142,7 +142,7 @@ defmodule EventasaurusApp.GuestInvitationsTest do
       assert explanation.breakdown.frequency.tier == "good"
       assert explanation.breakdown.recency.tier == "recent"
       # Just check it's a valid recommendation
-      assert is_binary(explanation.recommendation)
+      assert explanation.recommendation in [:highly_recommended, :recommended, :suggested]
     end
   end
 end

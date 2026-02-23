@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var presentedSlug: String?
     #if DEBUG
     @State private var showDevPicker = false
+    @State private var showEnvironmentConfirm = false
     #endif
 
     private var isAuthenticated: Bool {
@@ -91,48 +92,201 @@ struct ContentView: View {
     }
     #endif
 
+    // MARK: - Signed-Out Screen
+
     private var signedOutView: some View {
-        VStack(spacing: DS.Spacing.xxl) {
-            Image(systemName: "calendar.badge.clock")
-                .font(.system(size: 60))
-                .foregroundStyle(.tint)
+        VStack(spacing: 0) {
+            #if DEBUG
+            environmentPill
+                .padding(.top, DS.Spacing.md)
+            #endif
 
-            Text("Wombie")
-                .font(DS.Typography.display)
+            Spacer()
 
-            Text("Sign in to see events near you")
-                .foregroundStyle(.secondary)
+            // Centered branding + sign in
+            VStack(spacing: DS.Spacing.xxl) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.tint)
 
-            Button("Sign In") {
-                showAuth = true
+                Text("Wombie")
+                    .font(DS.Typography.display)
+
+                Text("Sign in to see events near you")
+                    .foregroundStyle(.secondary)
+
+                Button("Sign In") {
+                    showAuth = true
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+
+            Spacer()
 
             #if DEBUG
-            if !AppConfig.useProductionServer {
-                Divider()
-                    .padding(.top, DS.Spacing.lg)
-
-                VStack(spacing: DS.Spacing.md) {
-                    Text("DEV MODE")
-                        .font(.caption.bold())
-                        .foregroundStyle(.orange)
-
-                    Button("Quick Login as Test User") {
-                        showDevPicker = true
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.orange)
-                }
-                .sheet(isPresented: $showDevPicker) {
-                    DevUserPickerView()
-                }
-            }
+            devToolsSection
+                .padding(.bottom, DS.Spacing.lg)
             #endif
         }
-        .padding(DS.Spacing.xl)
+        .padding(.horizontal, DS.Spacing.xl)
+        #if DEBUG
+        .sheet(isPresented: $showDevPicker) {
+            DevUserPickerView()
+        }
+        .confirmationDialog(
+            environmentConfirmTitle,
+            isPresented: $showEnvironmentConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(environmentConfirmAction, role: environmentConfirmRole) {
+                let envService = DevEnvironmentService.shared
+                envService.setProduction(!envService.isRunningProduction)
+                exit(0)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(environmentConfirmMessage)
+        }
+        #endif
     }
+
+    // MARK: - Environment Pill & Dev Tools (DEBUG only)
+
+    #if DEBUG
+    private var environmentPill: some View {
+        Button {
+            showEnvironmentConfirm = true
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Circle()
+                    .fill(AppConfig.useProductionServer ? .red : .green)
+                    .frame(width: 8, height: 8)
+
+                Text(AppConfig.environmentName)
+                    .font(DS.Typography.captionBold)
+
+                Text("·")
+                    .foregroundStyle(.secondary)
+
+                Text(AppConfig.environmentHost)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(.ultraThinMaterial, in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var devToolsSection: some View {
+        VStack(spacing: DS.Spacing.md) {
+            if AppConfig.useProductionServer {
+                // Production mode — no dev tools
+                Divider()
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text("PRODUCTION MODE")
+                        .font(DS.Typography.captionBold)
+                        .foregroundStyle(.red)
+                }
+
+                Text("Connected to live server. Dev tools disabled.")
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            } else {
+                // Development mode — inline quick-login
+                Divider()
+                Text("DEV TOOLS")
+                    .font(DS.Typography.captionBold)
+                    .foregroundStyle(.orange)
+
+                inlineQuickLoginUsers
+            }
+        }
+    }
+
+    private var inlineQuickLoginUsers: some View {
+        VStack(spacing: DS.Spacing.xs) {
+            let devAuth = DevAuthService.shared
+
+            if devAuth.isLoadingUsers {
+                ProgressView()
+                    .controlSize(.small)
+            } else if let users = devAuth.users {
+                let flattened = flattenedUsers(users, limit: 5)
+                ForEach(flattened) { user in
+                    Button {
+                        devAuth.selectUser(id: user.id, name: user.name ?? user.email)
+                    } label: {
+                        HStack(spacing: DS.Spacing.md) {
+                            Image(systemName: "person.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(user.name ?? user.email)
+                                    .font(DS.Typography.body)
+                                Text(user.label)
+                                    .font(DS.Typography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, DS.Spacing.xs)
+                        .padding(.horizontal, DS.Spacing.md)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button("Show All Users") {
+                    showDevPicker = true
+                }
+                .font(DS.Typography.caption)
+                .tint(.orange)
+                .padding(.top, DS.Spacing.xs)
+            } else {
+                Text("Could not load dev users")
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .task {
+            await DevAuthService.shared.fetchUsers()
+        }
+    }
+
+    private func flattenedUsers(_ users: DevQuickLoginUsers, limit: Int) -> [DevUser] {
+        let all = users.personal + users.organizers + users.participants
+        return Array(all.prefix(limit))
+    }
+
+    private var environmentConfirmTitle: String {
+        AppConfig.useProductionServer
+            ? "Switch to Development?"
+            : "Switch to Production?"
+    }
+
+    private var environmentConfirmAction: String {
+        AppConfig.useProductionServer
+            ? "Switch to Development"
+            : "Switch to Production"
+    }
+
+    private var environmentConfirmRole: ButtonRole? {
+        AppConfig.useProductionServer ? nil : .destructive
+    }
+
+    private var environmentConfirmMessage: String {
+        if AppConfig.useProductionServer {
+            return "The app will quit and relaunch on localhost:4000. Dev auth will be available again."
+        } else {
+            return "The app will quit and relaunch on wombie.com. You'll need to sign in with real credentials."
+        }
+    }
+    #endif
 }
 
 #Preview("Signed Out") {

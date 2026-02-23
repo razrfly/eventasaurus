@@ -8,10 +8,6 @@ struct ProfileView: View {
     @State private var isLoading = true
     @State private var showSignOutError = false
     @State private var signOutErrorMessage = ""
-    #if DEBUG
-    @State private var showDevPicker = false
-    @State private var showEnvironmentConfirm = false
-    #endif
 
     var body: some View {
         NavigationStack {
@@ -26,45 +22,43 @@ struct ProfileView: View {
 
                 Spacer()
 
-                #if DEBUG
-                devSettingsSection
-                #else
-                signOutButton
-                #endif
+                VStack(spacing: DS.Spacing.lg) {
+                    #if DEBUG
+                    readOnlyEnvironmentIndicator
+                    #endif
+                    signOutButton
+                }
                 Spacer().frame(height: DS.Spacing.jumbo)
             }
             .padding(DS.Spacing.xl)
             .navigationTitle("Profile")
             .task { await loadProfile() }
-            #if DEBUG
-            .sheet(isPresented: $showDevPicker) {
-                DevUserPickerView()
-            }
-            #endif
             .alert("Sign Out Failed", isPresented: $showSignOutError) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(signOutErrorMessage)
             }
-            #if DEBUG
-            .confirmationDialog(
-                environmentConfirmTitle,
-                isPresented: $showEnvironmentConfirm,
-                titleVisibility: .visible
-            ) {
-                Button(environmentConfirmAction, role: environmentConfirmRole) {
-                    let envService = DevEnvironmentService.shared
-                    envService.setProduction(!envService.isRunningProduction)
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(environmentConfirmMessage)
-            }
-            #endif
         }
     }
 
     private var signOutButton: some View {
+        Group {
+            #if DEBUG
+            if DevAuthService.shared.isDevAuthActive {
+                Button("Exit Dev Mode", role: .destructive) {
+                    DevAuthService.shared.clearDevAuth()
+                }
+                .buttonStyle(.bordered)
+            } else {
+                clerkSignOutButton
+            }
+            #else
+            clerkSignOutButton
+            #endif
+        }
+    }
+
+    private var clerkSignOutButton: some View {
         Button("Sign Out", role: .destructive) {
             Task {
                 do {
@@ -144,94 +138,24 @@ struct ProfileView: View {
         isLoading = false
     }
 
-    // MARK: - Dev Settings (DEBUG only)
+    // MARK: - Read-Only Environment Indicator (DEBUG only)
 
     #if DEBUG
-    private var devSettingsSection: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            // Environment indicator
-            environmentStatusView
+    private var readOnlyEnvironmentIndicator: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Circle()
+                .fill(AppConfig.useProductionServer ? .red : .green)
+                .frame(width: 8, height: 8)
 
-            // Dev auth controls (only available on development server)
-            if !AppConfig.useProductionServer {
-                if DevAuthService.shared.isDevAuthActive {
-                    VStack(spacing: DS.Spacing.md) {
-                        Text("Dev Mode: \(DevAuthService.shared.selectedUserName ?? "Unknown")")
-                            .font(.caption.bold())
-                            .foregroundStyle(.orange)
+            Text(AppConfig.environmentName)
+                .font(DS.Typography.captionBold)
 
-                        Button("Switch Dev User") {
-                            showDevPicker = true
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.orange)
+            Text("·")
+                .foregroundStyle(.secondary)
 
-                        Button("Exit Dev Mode", role: .destructive) {
-                            DevAuthService.shared.clearDevAuth()
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                } else {
-                    signOutButton
-                }
-            } else {
-                signOutButton
-            }
-        }
-    }
-
-    private var environmentStatusView: some View {
-        let envService = DevEnvironmentService.shared
-
-        return VStack(spacing: DS.Spacing.sm) {
-            if AppConfig.useProductionServer {
-                Label("Production Server", systemImage: "server.rack")
-                    .font(.caption.bold())
-                    .foregroundStyle(.red)
-            } else {
-                Label("Development Server", systemImage: "laptopcomputer")
-                    .font(.caption.bold())
-                    .foregroundStyle(.green)
-            }
-
-            if envService.needsRestart {
-                Label("Restart app to apply", systemImage: "arrow.clockwise")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-            }
-
-            Button(AppConfig.useProductionServer ? "Switch to Development" : "Switch to Production") {
-                showEnvironmentConfirm = true
-            }
-            .buttonStyle(.bordered)
-            .tint(AppConfig.useProductionServer ? .green : .red)
-            .controlSize(.small)
-        }
-        .padding(DS.Spacing.md)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DS.Radius.md))
-    }
-
-    private var environmentConfirmTitle: String {
-        AppConfig.useProductionServer
-            ? "Switch to Development?"
-            : "Switch to Production?"
-    }
-
-    private var environmentConfirmAction: String {
-        AppConfig.useProductionServer
-            ? "Switch to Development"
-            : "Switch to Production"
-    }
-
-    private var environmentConfirmRole: ButtonRole? {
-        AppConfig.useProductionServer ? nil : .destructive
-    }
-
-    private var environmentConfirmMessage: String {
-        if AppConfig.useProductionServer {
-            return "This will connect to localhost:4000 on next restart. Dev auth will be available again."
-        } else {
-            return "This will connect to the live wombie.com server on next restart. Dev auth will be disabled — you'll need to sign in with real credentials."
+            Text("Sign out to switch")
+                .font(DS.Typography.caption)
+                .foregroundStyle(.secondary)
         }
     }
     #endif
