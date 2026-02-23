@@ -41,7 +41,7 @@ struct NearbyEventsSection: View {
             }
 
             if let venue = event.venue {
-                Text(venue.name)
+                Text(venue.displayName)
                     .font(DS.Typography.micro)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -58,7 +58,7 @@ struct NearbyEventsSection: View {
             parts.append(date.formatted(.dateTime.month(.abbreviated).day()))
         }
         if let venue = event.venue {
-            parts.append(venue.name)
+            parts.append(venue.displayName)
         }
         return parts.joined(separator: ", ")
     }

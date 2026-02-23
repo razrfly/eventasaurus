@@ -115,18 +115,26 @@ extension Event {
 }
 
 struct EventSource: Codable, Identifiable {
-    var id: String { "\(name)::\(url ?? "")" }
-    let name: String
+    var id: String { "\(name ?? "unknown")::\(url ?? "")" }
+    let name: String?
     let logoUrl: String?
     let url: String?
+
+    var displayName: String {
+        name ?? "Unknown Source"
+    }
 }
 
 struct Venue: Codable {
-    let name: String
+    let name: String?
     let slug: String?
     let address: String?
     let lat: Double?
     let lng: Double?
+
+    var displayName: String {
+        name ?? "Unknown Venue"
+    }
 }
 
 struct Meta: Codable {

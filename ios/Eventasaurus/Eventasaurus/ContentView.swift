@@ -142,7 +142,6 @@ struct ContentView: View {
             Button(environmentConfirmAction, role: environmentConfirmRole) {
                 let envService = DevEnvironmentService.shared
                 envService.setProduction(!envService.isRunningProduction)
-                exit(0)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -158,24 +157,10 @@ struct ContentView: View {
         Button {
             showEnvironmentConfirm = true
         } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                Circle()
-                    .fill(AppConfig.useProductionServer ? .red : .green)
-                    .frame(width: 8, height: 8)
-
-                Text(AppConfig.environmentName)
-                    .font(DS.Typography.captionBold)
-
-                Text("·")
-                    .foregroundStyle(.secondary)
-
-                Text(AppConfig.environmentHost)
-                    .font(DS.Typography.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(.ultraThinMaterial, in: Capsule())
+            EnvironmentBadge(subtitle: AppConfig.environmentHost)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(.ultraThinMaterial, in: Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -254,13 +239,21 @@ struct ContentView: View {
             }
         }
         .task {
-            await DevAuthService.shared.fetchUsers()
+            if DevAuthService.shared.users == nil {
+                await DevAuthService.shared.fetchUsers()
+            }
         }
     }
 
     private func flattenedUsers(_ users: DevQuickLoginUsers, limit: Int) -> [DevUser] {
         let all = users.personal + users.organizers + users.participants
-        return Array(all.prefix(limit))
+        var seen = Set<String>()
+        let unique = all.filter { user in
+            guard !seen.contains(user.id) else { return false }
+            seen.insert(user.id)
+            return true
+        }
+        return Array(unique.prefix(limit))
     }
 
     private var environmentConfirmTitle: String {

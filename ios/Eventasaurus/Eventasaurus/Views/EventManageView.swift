@@ -228,11 +228,7 @@ struct EventManageView: View {
     private func refreshEvent() async {
         do {
             event = try await GraphQLClient.shared.fetchMyEvent(slug: event.slug)
-            if event.status == .polling || event.status == .threshold {
-                polls = (try? await GraphQLClient.shared.fetchEventPolls(slug: event.slug)) ?? []
-            } else {
-                polls = []
-            }
+            polls = (try? await GraphQLClient.shared.fetchEventPolls(slug: event.slug)) ?? []
             // Trigger guest list reload so pull-to-refresh updates participants
             guestRefreshID = UUID()
         } catch {

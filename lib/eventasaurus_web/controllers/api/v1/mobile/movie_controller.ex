@@ -173,7 +173,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
   defp serialize_venue_group(group, now) do
     %{
       venue: %{
-        name: group.venue.name,
+        name: group.venue.name || "Unknown Venue",
         address: group.venue.address,
         lat: group.venue.latitude,
         lng: group.venue.longitude

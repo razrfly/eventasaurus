@@ -141,8 +141,8 @@ defmodule EventasaurusApp.GuestInvitationsTest do
       assert explanation.total_score == scored.total_score
       assert explanation.breakdown.frequency.tier == "good"
       assert explanation.breakdown.recency.tier == "recent"
-      # Just check it's a valid recommendation
-      assert explanation.recommendation in [:highly_recommended, :recommended, :suggested]
+      # participation_count: 5 → frequency 0.8, 45-day recency → 0.8, total = 0.80 → :highly_recommended
+      assert explanation.recommendation == :highly_recommended
     end
   end
 end

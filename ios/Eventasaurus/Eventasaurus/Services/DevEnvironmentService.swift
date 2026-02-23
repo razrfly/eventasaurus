@@ -25,7 +25,7 @@ final class DevEnvironmentService {
     }
 
     private init() {
-        self.isProductionSelected = UserDefaults.standard.bool(forKey: "dev_use_production_server")
+        self.isProductionSelected = defaults.bool(forKey: key)
     }
 
     /// Toggle the environment. Clears dev auth when switching to production.

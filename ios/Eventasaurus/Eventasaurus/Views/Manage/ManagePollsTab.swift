@@ -62,7 +62,7 @@ struct ManagePollsTab: View {
 
     @ViewBuilder
     private var emptyState: some View {
-        if eventStatus == .polling || eventStatus == .threshold {
+        if canCreatePoll {
             EmptyStateView(
                 icon: "chart.bar",
                 title: "No Polls Yet",
@@ -71,8 +71,8 @@ struct ManagePollsTab: View {
         } else {
             EmptyStateView(
                 icon: "chart.bar",
-                title: "Polls Unavailable",
-                message: "Polls are available for events in polling or threshold status."
+                title: "No Polls",
+                message: "No polls have been created for this event."
             )
         }
     }

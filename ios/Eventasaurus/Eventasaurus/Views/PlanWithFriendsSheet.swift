@@ -94,7 +94,7 @@ struct PlanWithFriendsSheet: View {
                     .font(DS.Typography.bodyMedium)
                     .lineLimit(2)
                 if let venue = event.venue {
-                    Text(venue.name)
+                    Text(venue.displayName)
                         .font(DS.Typography.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -123,7 +123,7 @@ struct MovieDetailView: View {
             NavigationLink(value: EventDestination.event(slug: venueGroup.eventSlug)) {
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     HStack {
-                        Text(venueGroup.venue.name)
+                        Text(venueGroup.venue.displayName)
                             .font(DS.Typography.bodyBold)
                         Spacer()
                         Image(systemName: "chevron.right")
