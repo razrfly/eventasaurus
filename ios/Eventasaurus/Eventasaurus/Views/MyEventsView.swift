@@ -97,6 +97,7 @@ struct MyEventsView: View {
             }
             .sheet(isPresented: $showCreateSheet) {
                 EventCreateView { _ in
+                    cache = [:]
                     refreshID = UUID()
                 }
             }
@@ -336,7 +337,7 @@ struct MyEventsView: View {
         defer { isLoading = false }
 
         do {
-            let gqlTimeFilter: GraphQLClient.DashboardTimeFilter
+            let gqlTimeFilter: DashboardTimeFilter
             switch filter {
             case .upcoming: gqlTimeFilter = .upcoming
             case .past: gqlTimeFilter = .past

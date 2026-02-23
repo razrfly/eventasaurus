@@ -39,6 +39,16 @@ enum AppConfig {
     }
     #endif
 
+    /// Resolves an image path to a full URL.
+    /// Handles both absolute URLs (returned as-is) and relative paths (resolved against apiBaseURL).
+    static func resolvedImageURL(_ path: String?) -> URL? {
+        guard let path, !path.isEmpty else { return nil }
+        if path.hasPrefix("http://") || path.hasPrefix("https://") {
+            return URL(string: path)
+        }
+        return URL(string: path, relativeTo: apiBaseURL)
+    }
+
     private static func plistString(_ key: String) -> String {
         guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String, !value.isEmpty else {
             fatalError("\(key) not configured in Info.plist")

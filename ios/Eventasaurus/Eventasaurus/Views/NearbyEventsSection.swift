@@ -23,7 +23,7 @@ struct NearbyEventsSection: View {
     private func nearbyEventCard(_ event: Event) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             CachedImage(
-                url: event.coverImageUrl.flatMap { URL(string: $0) },
+                url: AppConfig.resolvedImageURL(event.coverImageUrl),
                 height: DS.ImageSize.carouselItem,
                 cornerRadius: DS.Radius.md
             )

@@ -13,7 +13,7 @@ struct DashboardCompactRow: View {
             EventRoleBadge(role: event.role)
         }
         .padding(DS.Spacing.lg)
-        .background(Color(.systemBackground))
+        .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
         .opacity(isPast ? 0.6 : 1.0)
     }
@@ -22,7 +22,7 @@ struct DashboardCompactRow: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let urlStr = event.coverImageUrl, let url = URL(string: urlStr) {
+        if let url = AppConfig.resolvedImageURL(event.coverImageUrl) {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
@@ -75,7 +75,7 @@ struct DashboardCompactRow: View {
                 }
 
                 if let venue = event.venue {
-                    Text(venue.name)
+                    Text(venue.name ?? "Unknown Venue")
                         .font(DS.Typography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

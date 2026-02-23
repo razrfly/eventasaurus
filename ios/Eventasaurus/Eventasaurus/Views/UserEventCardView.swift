@@ -10,7 +10,7 @@ struct UserEventCardView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             // Cover image with status badge
             ZStack(alignment: .topLeading) {
-                if let url = event.coverImageUrl.flatMap({ URL(string: $0) }) {
+                if let url = AppConfig.resolvedImageURL(event.coverImageUrl) {
                     AsyncImage(url: url) { image in
                         image
                             .resizable()

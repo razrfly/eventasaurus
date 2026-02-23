@@ -8,7 +8,7 @@ struct EventCardGridItem: View {
             // Cover image with badges — taller aspect for grid
             ZStack(alignment: .topLeading) {
                 CachedImage(
-                    url: event.coverImageUrl.flatMap { URL(string: $0) },
+                    url: AppConfig.resolvedImageURL(event.coverImageUrl),
                     height: DS.ImageSize.gridCover,
                     placeholderIcon: event.isGroup ? "square.stack" : "calendar"
                 )

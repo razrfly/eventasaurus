@@ -126,7 +126,7 @@ struct EventManageView: View {
 
     @ViewBuilder
     private func coverImage(for event: UserEvent) -> some View {
-        if let url = event.coverImageUrl.flatMap({ URL(string: $0) }) {
+        if let url = AppConfig.resolvedImageURL(event.coverImageUrl) {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
@@ -183,19 +183,9 @@ struct EventManageView: View {
         .font(DS.Typography.captionBold)
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
-        .background(statusColor(for: event).opacity(0.15))
-        .foregroundStyle(statusColor(for: event))
+        .background(event.status.color.opacity(0.15))
+        .foregroundStyle(event.status.color)
         .clipShape(Capsule())
-    }
-
-    private func statusColor(for event: UserEvent) -> Color {
-        switch event.status {
-        case .draft: return .orange
-        case .confirmed: return .green
-        case .canceled: return .red
-        case .polling: return .blue
-        case .threshold: return .purple
-        }
     }
 
     private func visibilityPill(for event: UserEvent) -> some View {
@@ -269,12 +259,7 @@ struct EventManageView: View {
 
     private func loadEvent() async {
         do {
-            event = try await GraphQLClient.shared.fetchMyEvent(slug: slug)
-            do {
-                polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
-            } catch {
-                // Leave existing polls unchanged on failure
-            }
+            try await fetchEventAndPolls()
             isInitialLoading = false
         } catch {
             self.error = error
@@ -284,15 +269,19 @@ struct EventManageView: View {
 
     private func refreshEvent() async {
         do {
-            event = try await GraphQLClient.shared.fetchMyEvent(slug: slug)
-            do {
-                polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
-            } catch {
-                // Leave existing polls unchanged on failure
-            }
+            try await fetchEventAndPolls()
             guestRefreshID = UUID()
         } catch {
             self.error = error
+        }
+    }
+
+    private func fetchEventAndPolls() async throws {
+        event = try await GraphQLClient.shared.fetchMyEvent(slug: slug)
+        do {
+            polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
+        } catch {
+            // Leave existing polls unchanged on failure
         }
     }
 

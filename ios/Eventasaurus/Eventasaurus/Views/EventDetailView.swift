@@ -61,7 +61,7 @@ struct EventDetailView: View {
                 // Edge-to-edge hero image
                 if event.coverImageUrl != nil {
                     CachedImage(
-                        url: event.coverImageUrl.flatMap { URL(string: $0) },
+                        url: AppConfig.resolvedImageURL(event.coverImageUrl),
                         height: DS.ImageSize.hero,
                         cornerRadius: 0
                     )

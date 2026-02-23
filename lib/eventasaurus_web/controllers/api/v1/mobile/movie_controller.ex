@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
   alias EventasaurusApp.Images.MovieImages
   alias EventasaurusApp.Repo
   alias Eventasaurus.CDN
+  alias EventasaurusWeb.Helpers.VenueHelpers
 
   import Ecto.Query
 
@@ -110,7 +111,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     |> Enum.reject(fn group -> group.showtimes == [] end)
     # Sort: venues with upcoming screenings first, then by name
     |> Enum.sort_by(fn group ->
-      {if(group.upcoming_count > 0, do: 0, else: 1), group.venue.name || "Unknown Venue"}
+      venue_name = VenueHelpers.venue_display_name(group.venue.name)
+      {if(group.upcoming_count > 0, do: 0, else: 1), venue_name}
     end)
   end
 
@@ -173,7 +175,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
   defp serialize_venue_group(group, now) do
     %{
       venue: %{
-        name: group.venue.name || "Unknown Venue",
+        name: if(is_binary(group.venue.name) and String.trim(group.venue.name) != "", do: group.venue.name, else: "Unknown Venue"),
         address: group.venue.address,
         lat: group.venue.latitude,
         lng: group.venue.longitude

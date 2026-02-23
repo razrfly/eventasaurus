@@ -13,6 +13,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Helpers.SourceAttribution
   alias Eventasaurus.CDN
+  alias EventasaurusWeb.Helpers.VenueHelpers
 
   require Logger
 
@@ -393,10 +394,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     end
   end
 
-  @locale_priority ~w(en pl de fr es it nl pt ru uk cs sk hu ro bg hr sr sl)
-
   defp first_map_value(map) when map_size(map) > 0 do
-    Enum.find_value(@locale_priority, fn locale -> Map.get(map, locale) end) ||
+    Enum.find_value(@accepted_locales, fn locale -> Map.get(map, locale) end) ||
       map |> Map.values() |> List.first()
   end
 
@@ -482,7 +481,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   defp serialize_venue(venue) do
     %{
-      name: if(is_binary(venue.name) and String.trim(venue.name) != "", do: venue.name, else: "Unknown Venue"),
+      name: VenueHelpers.venue_display_name(venue.name),
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,

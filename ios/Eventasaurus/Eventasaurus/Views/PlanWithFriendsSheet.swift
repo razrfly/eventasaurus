@@ -82,7 +82,7 @@ struct PlanWithFriendsSheet: View {
     private var eventHeader: some View {
         HStack(spacing: DS.Spacing.lg) {
             CachedImage(
-                url: event.coverImageUrl.flatMap { URL(string: $0) },
+                url: AppConfig.resolvedImageURL(event.coverImageUrl),
                 height: DS.ImageSize.thumbnail,
                 cornerRadius: DS.Radius.md,
                 placeholderIcon: "calendar"
