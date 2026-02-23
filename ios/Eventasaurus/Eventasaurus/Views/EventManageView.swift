@@ -4,8 +4,10 @@ import SwiftUI
 /// Shows hero header + tabbed management interface.
 struct EventManageView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var event: UserEvent
+    @State private var event: UserEvent?
+    @State private var slug: String
     @State private var isLoading = false
+    @State private var isInitialLoading: Bool
     @State private var showEditSheet = false
     @State private var showInviteSheet = false
     @State private var showOrganizerSearch = false
@@ -18,36 +20,71 @@ struct EventManageView: View {
 
     init(event: UserEvent, onChanged: (() -> Void)? = nil) {
         _event = State(initialValue: event)
+        _slug = State(initialValue: event.slug)
+        _isInitialLoading = State(initialValue: false)
+        self.onChanged = onChanged
+    }
+
+    /// Slug-based init — loads the event data on appear.
+    init(slug: String, onChanged: (() -> Void)? = nil) {
+        _event = State(initialValue: nil)
+        _slug = State(initialValue: slug)
+        _isInitialLoading = State(initialValue: true)
         self.onChanged = onChanged
     }
 
     var body: some View {
+        Group {
+            if let event {
+                eventContent(event)
+            } else if isInitialLoading {
+                ProgressView("Loading event...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Event Not Found",
+                    message: error?.localizedDescription ?? "Could not load this event.",
+                    actionTitle: "Try Again",
+                    action: { Task { await loadEvent() } }
+                )
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            if isInitialLoading {
+                await loadEvent()
+            } else {
+                await refreshEvent()
+            }
+        }
+    }
+
+    // MARK: - Main Content
+
+    @ViewBuilder
+    private func eventContent(_ event: UserEvent) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // MARK: Hero Header
                 VStack(alignment: .leading, spacing: DS.Spacing.xxl) {
-                    coverImage
-                    headerSection
+                    coverImage(for: event)
+                    headerSection(for: event)
                 }
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.bottom, DS.Spacing.lg)
 
-                // MARK: Tab Bar
                 ManageTabBar(selectedTab: $selectedTab)
 
-                // MARK: Tab Content
-                tabContent
+                tabContent(for: event)
                     .padding(.bottom, DS.Spacing.xxl)
             }
         }
         .navigationTitle(event.title)
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit") { showEditSheet = true }
             }
         }
-        .task { await refreshEvent() }
         .refreshable { await refreshEvent() }
         .alert("Error", isPresented: Binding(
             get: { error != nil },
@@ -61,7 +98,7 @@ struct EventManageView: View {
             EventEditView(
                 event: event,
                 onUpdated: { updated in
-                    event = updated
+                    self.event = updated
                     onChanged?()
                 },
                 onDeleted: {
@@ -79,7 +116,7 @@ struct EventManageView: View {
             }
         }
         .sheet(isPresented: $showOrganizerSearch) {
-            OrganizerSearchSheet(slug: event.slug) {
+            OrganizerSearchSheet(slug: slug) {
                 await refreshEvent()
             }
         }
@@ -88,7 +125,7 @@ struct EventManageView: View {
     // MARK: - Cover Image
 
     @ViewBuilder
-    private var coverImage: some View {
+    private func coverImage(for event: UserEvent) -> some View {
         if let url = event.coverImageUrl.flatMap({ URL(string: $0) }) {
             AsyncImage(url: url) { phase in
                 switch phase {
@@ -119,11 +156,11 @@ struct EventManageView: View {
 
     // MARK: - Header
 
-    private var headerSection: some View {
+    private func headerSection(for event: UserEvent) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.md) {
-                statusPill
-                visibilityPill
+                statusPill(for: event)
+                visibilityPill(for: event)
                 Spacer()
             }
 
@@ -138,7 +175,7 @@ struct EventManageView: View {
         }
     }
 
-    private var statusPill: some View {
+    private func statusPill(for event: UserEvent) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: event.status.icon)
             Text(event.status.displayName)
@@ -146,12 +183,12 @@ struct EventManageView: View {
         .font(DS.Typography.captionBold)
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
-        .background(statusColor.opacity(0.15))
-        .foregroundStyle(statusColor)
+        .background(statusColor(for: event).opacity(0.15))
+        .foregroundStyle(statusColor(for: event))
         .clipShape(Capsule())
     }
 
-    private var statusColor: Color {
+    private func statusColor(for event: UserEvent) -> Color {
         switch event.status {
         case .draft: return .orange
         case .confirmed: return .green
@@ -161,7 +198,7 @@ struct EventManageView: View {
         }
     }
 
-    private var visibilityPill: some View {
+    private func visibilityPill(for event: UserEvent) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: event.visibility.icon)
             Text(event.visibility.displayName)
@@ -177,11 +214,16 @@ struct EventManageView: View {
     // MARK: - Tab Content
 
     @ViewBuilder
-    private var tabContent: some View {
+    private func tabContent(for event: UserEvent) -> some View {
+        let eventBinding = Binding<UserEvent>(
+            get: { self.event ?? event },
+            set: { self.event = $0 }
+        )
+
         switch selectedTab {
         case .overview:
             ManageOverviewTab(
-                event: $event,
+                event: eventBinding,
                 polls: polls,
                 isLoading: isLoading,
                 onEdit: { showEditSheet = true },
@@ -209,7 +251,7 @@ struct EventManageView: View {
         case .polls:
             ManagePollsTab(
                 polls: polls,
-                slug: event.slug,
+                slug: slug,
                 eventId: event.id,
                 eventStatus: event.status,
                 onRefresh: { await refreshEvent() }
@@ -225,11 +267,29 @@ struct EventManageView: View {
 
     // MARK: - Actions
 
+    private func loadEvent() async {
+        do {
+            event = try await GraphQLClient.shared.fetchMyEvent(slug: slug)
+            do {
+                polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
+            } catch {
+                // Leave existing polls unchanged on failure
+            }
+            isInitialLoading = false
+        } catch {
+            self.error = error
+            isInitialLoading = false
+        }
+    }
+
     private func refreshEvent() async {
         do {
-            event = try await GraphQLClient.shared.fetchMyEvent(slug: event.slug)
-            polls = (try? await GraphQLClient.shared.fetchEventPolls(slug: event.slug)) ?? []
-            // Trigger guest list reload so pull-to-refresh updates participants
+            event = try await GraphQLClient.shared.fetchMyEvent(slug: slug)
+            do {
+                polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
+            } catch {
+                // Leave existing polls unchanged on failure
+            }
             guestRefreshID = UUID()
         } catch {
             self.error = error
@@ -239,7 +299,7 @@ struct EventManageView: View {
     private func removeOrganizer(userId: String) async {
         isLoading = true
         do {
-            try await GraphQLClient.shared.removeOrganizer(slug: event.slug, userId: userId)
+            try await GraphQLClient.shared.removeOrganizer(slug: slug, userId: userId)
             await refreshEvent()
         } catch {
             self.error = error
@@ -250,7 +310,7 @@ struct EventManageView: View {
     private func publishEvent() async {
         isLoading = true
         do {
-            event = try await GraphQLClient.shared.publishEvent(slug: event.slug)
+            event = try await GraphQLClient.shared.publishEvent(slug: slug)
             onChanged?()
         } catch {
             self.error = error
@@ -261,7 +321,7 @@ struct EventManageView: View {
     private func cancelEvent() async {
         isLoading = true
         do {
-            event = try await GraphQLClient.shared.cancelEvent(slug: event.slug)
+            event = try await GraphQLClient.shared.cancelEvent(slug: slug)
             onChanged?()
         } catch {
             self.error = error

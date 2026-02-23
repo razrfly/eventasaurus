@@ -181,34 +181,40 @@ final class APIClient {
         return data
     }
 
+    #if DEBUG
+    private func logDecodingError<T>(_ error: Error, data: Data, url: URL, type: T.Type) {
+        print("[APIClient] Decoding \(type) from \(url.lastPathComponent) failed:")
+        if let decodingError = error as? DecodingError {
+            switch decodingError {
+            case .keyNotFound(let key, let context):
+                print("  Key '\(key.stringValue)' not found: \(context.debugDescription)")
+                print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+            case .valueNotFound(let valueType, let context):
+                print("  Value of type '\(valueType)' not found: \(context.debugDescription)")
+                print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+            case .typeMismatch(let mismatchType, let context):
+                print("  Type mismatch for '\(mismatchType)': \(context.debugDescription)")
+                print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+            case .dataCorrupted(let context):
+                print("  Data corrupted: \(context.debugDescription)")
+                print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+            @unknown default:
+                print("  Unknown decoding error: \(decodingError)")
+            }
+        }
+        if let json = String(data: data, encoding: .utf8) {
+            print("  Raw JSON: \(json.prefix(2000))")
+        }
+    }
+    #endif
+
     private func request<T: Decodable>(url: URL) async throws -> T {
         let data = try await performRequest(URLRequest(url: url))
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
             #if DEBUG
-            print("[APIClient] Decoding \(T.self) from \(url.lastPathComponent) failed:")
-            if let decodingError = error as? DecodingError {
-                switch decodingError {
-                case .keyNotFound(let key, let context):
-                    print("  Key '\(key.stringValue)' not found: \(context.debugDescription)")
-                    print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
-                case .valueNotFound(let type, let context):
-                    print("  Value of type '\(type)' not found: \(context.debugDescription)")
-                    print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
-                case .typeMismatch(let type, let context):
-                    print("  Type mismatch for '\(type)': \(context.debugDescription)")
-                    print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
-                case .dataCorrupted(let context):
-                    print("  Data corrupted: \(context.debugDescription)")
-                    print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
-                @unknown default:
-                    print("  Unknown decoding error: \(decodingError)")
-                }
-            }
-            if let json = String(data: data, encoding: .utf8) {
-                print("  Raw JSON: \(json.prefix(2000))")
-            }
+            logDecodingError(error, data: data, url: url, type: T.self)
             #endif
             throw APIError.decodingError(error)
         }
@@ -224,6 +230,9 @@ final class APIClient {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
+            #if DEBUG
+            logDecodingError(error, data: data, url: url, type: T.self)
+            #endif
             throw APIError.decodingError(error)
         }
     }
@@ -236,6 +245,9 @@ final class APIClient {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
+            #if DEBUG
+            logDecodingError(error, data: data, url: url, type: T.self)
+            #endif
             throw APIError.decodingError(error)
         }
     }

@@ -29,7 +29,7 @@ enum AppConfig {
     /// Host string for UI display, derived from apiBaseURL.
     static var environmentHost: String {
         let url = apiBaseURL
-        if let host = url.host {
+        if let host = url.host(percentEncoded: false) {
             if let port = url.port, ![80, 443].contains(port) {
                 return "\(host):\(port)"
             }

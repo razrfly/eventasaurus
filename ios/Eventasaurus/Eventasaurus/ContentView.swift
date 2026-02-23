@@ -142,6 +142,7 @@ struct ContentView: View {
             Button(environmentConfirmAction, role: environmentConfirmRole) {
                 let envService = DevEnvironmentService.shared
                 envService.setProduction(!envService.isRunningProduction)
+                exit(0)
             }
             Button("Cancel", role: .cancel) {}
         } message: {

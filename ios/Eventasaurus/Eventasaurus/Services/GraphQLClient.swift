@@ -114,6 +114,53 @@ final class GraphQLClient {
         return result.attendingEvents
     }
 
+    // MARK: - Dashboard
+
+    enum DashboardTimeFilter: String {
+        case upcoming = "UPCOMING"
+        case past = "PAST"
+        case archived = "ARCHIVED"
+    }
+
+    enum DashboardOwnershipFilter: String {
+        case all = "ALL"
+        case created = "CREATED"
+        case participating = "PARTICIPATING"
+    }
+
+    func fetchDashboardEvents(
+        timeFilter: DashboardTimeFilter = .upcoming,
+        ownershipFilter: DashboardOwnershipFilter = .all,
+        limit: Int = 50
+    ) async throws -> DashboardEventsResult {
+        let result: GQLDashboardEventsResponse = try await execute(
+            query: """
+            query DashboardEvents($timeFilter: DashboardTimeFilter, $ownershipFilter: DashboardOwnershipFilter, $limit: Int) {
+                dashboardEvents(timeFilter: $timeFilter, ownershipFilter: $ownershipFilter, limit: $limit) {
+                    events {
+                        id slug title tagline description
+                        startsAt endsAt timezone
+                        status coverImageUrl isVirtual
+                        userRole userStatus canManage
+                        participantCount
+                        venue { id name address latitude longitude }
+                        createdAt updatedAt
+                    }
+                    filterCounts {
+                        upcoming past archived created participating
+                    }
+                }
+            }
+            """,
+            variables: [
+                "timeFilter": timeFilter.rawValue,
+                "ownershipFilter": ownershipFilter.rawValue,
+                "limit": limit
+            ]
+        )
+        return result.dashboardEvents
+    }
+
     // MARK: - Event Mutations
 
     func createEvent(input: CreateEventInput) async throws -> MutationResult<UserEvent> {
