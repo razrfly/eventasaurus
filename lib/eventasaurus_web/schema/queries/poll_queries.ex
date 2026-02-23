@@ -11,5 +11,12 @@ defmodule EventasaurusWeb.Schema.Queries.PollQueries do
       middleware(Authenticate)
       resolve(&PollResolver.event_polls/3)
     end
+
+    @desc "Get detailed voting statistics for a poll."
+    field :poll_voting_stats, :poll_voting_stats do
+      arg(:poll_id, non_null(:id))
+      middleware(Authenticate)
+      resolve(&PollResolver.poll_voting_stats/3)
+    end
   end
 end

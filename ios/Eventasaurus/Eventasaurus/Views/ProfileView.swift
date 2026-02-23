@@ -43,50 +43,44 @@ struct ProfileView: View {
                         }
                         .buttonStyle(.bordered)
                     }
-                    .sheet(isPresented: $showDevPicker) {
-                        DevUserPickerView()
-                    }
                 } else {
-                    Button("Sign Out", role: .destructive) {
-                        Task {
-                            do {
-                                try await clerk.auth.signOut()
-                            } catch is CancellationError {
-                                // Ignore cancellation
-                            } catch {
-                                signOutErrorMessage = error.localizedDescription
-                                showSignOutError = true
-                            }
-                        }
-                    }
-                    .buttonStyle(.bordered)
+                    signOutButton
                 }
                 #else
-                Button("Sign Out", role: .destructive) {
-                    Task {
-                        do {
-                            try await clerk.auth.signOut()
-                        } catch is CancellationError {
-                            // Ignore cancellation
-                        } catch {
-                            signOutErrorMessage = error.localizedDescription
-                            showSignOutError = true
-                        }
-                    }
-                }
-                .buttonStyle(.bordered)
+                signOutButton
                 #endif
                 Spacer().frame(height: DS.Spacing.jumbo)
             }
             .padding(DS.Spacing.xl)
             .navigationTitle("Profile")
             .task { await loadProfile() }
+            #if DEBUG
+            .sheet(isPresented: $showDevPicker) {
+                DevUserPickerView()
+            }
+            #endif
             .alert("Sign Out Failed", isPresented: $showSignOutError) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(signOutErrorMessage)
             }
         }
+    }
+
+    private var signOutButton: some View {
+        Button("Sign Out", role: .destructive) {
+            Task {
+                do {
+                    try await clerk.auth.signOut()
+                } catch is CancellationError {
+                    // Ignore cancellation
+                } catch {
+                    signOutErrorMessage = error.localizedDescription
+                    showSignOutError = true
+                }
+            }
+        }
+        .buttonStyle(.bordered)
     }
 
     private func profileContent(_ profile: GQLUser) -> some View {

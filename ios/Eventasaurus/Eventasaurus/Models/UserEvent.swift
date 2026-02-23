@@ -457,6 +457,86 @@ struct GQLVoteOnPollResponse: Codable {
     let voteOnPoll: GQLSuccessResult
 }
 
+// Phase 2: Clear votes
+struct GQLClearPollVotesResponse: Codable {
+    let clearMyPollVotes: GQLPollIdResponse?
+}
+
+// Phase 3: Create option
+struct GQLCreatePollOptionResponse: Codable {
+    let createPollOption: GQLPollIdResponse?
+}
+
+// Phase 4: CRUD responses
+struct GQLPollIdResponse: Codable {
+    let id: String
+}
+
+struct GQLCreatePollResponse: Codable {
+    let createPoll: GQLPollIdResponse?
+}
+
+struct GQLUpdatePollResponse: Codable {
+    let updatePoll: GQLPollIdResponse?
+}
+
+struct GQLDeletePollResponse: Codable {
+    let deletePoll: GQLSuccessResult
+}
+
+struct GQLTransitionPollPhaseResponse: Codable {
+    let transitionPollPhase: GQLPollPhaseResponse?
+}
+
+struct GQLPollPhaseResponse: Codable {
+    let id: String
+    let phase: String
+}
+
+struct GQLDeletePollOptionResponse: Codable {
+    let deletePollOption: GQLSuccessResult
+}
+
+// Phase 5: Voting stats
+struct GQLPollVotingStatsResponse: Codable {
+    let pollVotingStats: PollVotingStats
+}
+
+struct PollVotingStats: Codable {
+    let pollId: String
+    let pollTitle: String
+    let votingSystem: String
+    let phase: String
+    let totalUniqueVoters: Int
+    let options: [PollOptionStats]
+}
+
+struct PollOptionStats: Codable, Identifiable {
+    var id: String { optionId }
+    let optionId: String
+    let optionTitle: String
+    let optionDescription: String?
+    let tally: PollTally
+}
+
+struct PollTally: Codable {
+    // Common
+    let total: Int?
+    // Binary
+    let yes: Int?
+    let maybe: Int?
+    let no: Int?
+    // Approval
+    let selected: Int?
+    let percentage: Double?
+    // Star
+    let averageScore: Double?
+    let scoreDistribution: String?
+    // Ranked
+    let averageRank: Double?
+    let firstPlaceCount: Int?
+}
+
 // MARK: - Event Participant (Organizer View)
 
 struct EventParticipant: Codable, Identifiable {

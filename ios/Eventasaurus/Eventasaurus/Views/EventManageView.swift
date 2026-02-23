@@ -203,15 +203,16 @@ struct EventManageView: View {
                 onParticipantsChanged: {
                     Task { await refreshEvent() }
                     onChanged?()
-                },
-                refreshTrigger: guestRefreshID
+                }
             )
 
         case .polls:
             ManagePollsTab(
                 polls: polls,
                 slug: event.slug,
-                eventStatus: event.status
+                eventId: event.id,
+                eventStatus: event.status,
+                onRefresh: { await refreshEvent() }
             )
 
         case .insights:

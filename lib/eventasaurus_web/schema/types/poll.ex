@@ -93,4 +93,38 @@ defmodule EventasaurusWeb.Schema.Types.Poll do
     field(:success, non_null(:boolean))
     field(:errors, list_of(non_null(:input_error)))
   end
+
+  object :poll_voting_stats do
+    field(:poll_id, non_null(:id))
+    field(:poll_title, non_null(:string))
+    field(:voting_system, non_null(:string))
+    field(:phase, non_null(:string))
+    field(:total_unique_voters, non_null(:integer))
+    field(:options, non_null(list_of(non_null(:poll_option_stats))))
+  end
+
+  object :poll_option_stats do
+    field(:option_id, non_null(:id))
+    field(:option_title, non_null(:string))
+    field(:option_description, :string)
+    field(:tally, non_null(:poll_tally))
+  end
+
+  object :poll_tally do
+    # Common fields
+    field(:total, :integer)
+    # Binary voting
+    field(:yes, :integer)
+    field(:maybe, :integer)
+    field(:no, :integer)
+    # Approval voting
+    field(:selected, :integer)
+    field(:percentage, :float)
+    # Star voting
+    field(:average_score, :float)
+    field(:score_distribution, :string)
+    # Ranked voting
+    field(:average_rank, :float)
+    field(:first_place_count, :integer)
+  end
 end

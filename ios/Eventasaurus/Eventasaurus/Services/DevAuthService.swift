@@ -1,7 +1,7 @@
 #if DEBUG
 import Foundation
 
-@Observable
+@MainActor @Observable
 final class DevAuthService {
     static let shared = DevAuthService()
 

@@ -487,6 +487,147 @@ final class GraphQLClient {
         }
     }
 
+    // Phase 2: Clear votes for re-voting
+    func clearMyPollVotes(pollId: String) async throws {
+        let _: GQLClearPollVotesResponse = try await execute(
+            query: """
+            mutation ClearMyPollVotes($pollId: ID!) {
+                clearMyPollVotes(pollId: $pollId) { id }
+            }
+            """,
+            variables: ["pollId": pollId]
+        )
+    }
+
+    // Phase 3: Suggest a new option
+    func createPollOption(pollId: String, title: String, description: String? = nil) async throws {
+        var variables: [String: Any] = ["pollId": pollId, "title": title]
+        if let description { variables["description"] = description }
+
+        let _: GQLCreatePollOptionResponse = try await execute(
+            query: """
+            mutation CreatePollOption($pollId: ID!, $title: String!, $description: String) {
+                createPollOption(pollId: $pollId, title: $title, description: $description) { id }
+            }
+            """,
+            variables: variables
+        )
+    }
+
+    // Phase 4: Create poll
+    func createPoll(eventId: String, title: String, votingSystem: String, description: String? = nil, votingDeadline: Date? = nil) async throws {
+        var variables: [String: Any] = ["eventId": eventId, "title": title, "votingSystem": votingSystem]
+        if let description { variables["description"] = description }
+        if let votingDeadline {
+            let formatter = ISO8601DateFormatter()
+            variables["votingDeadline"] = formatter.string(from: votingDeadline)
+        }
+
+        let _: GQLCreatePollResponse = try await execute(
+            query: """
+            mutation CreatePoll($eventId: ID!, $title: String!, $votingSystem: String!, $description: String, $votingDeadline: DateTime) {
+                createPoll(eventId: $eventId, title: $title, votingSystem: $votingSystem, description: $description, votingDeadline: $votingDeadline) { id }
+            }
+            """,
+            variables: variables
+        )
+    }
+
+    // Phase 4: Update poll
+    func updatePoll(pollId: String, title: String? = nil, description: String? = nil, votingDeadline: Date? = nil) async throws {
+        var variables: [String: Any] = ["pollId": pollId]
+        if let title { variables["title"] = title }
+        if let description { variables["description"] = description }
+        if let votingDeadline {
+            let formatter = ISO8601DateFormatter()
+            variables["votingDeadline"] = formatter.string(from: votingDeadline)
+        }
+
+        let _: GQLUpdatePollResponse = try await execute(
+            query: """
+            mutation UpdatePoll($pollId: ID!, $title: String, $description: String, $votingDeadline: DateTime) {
+                updatePoll(pollId: $pollId, title: $title, description: $description, votingDeadline: $votingDeadline) { id }
+            }
+            """,
+            variables: variables
+        )
+    }
+
+    // Phase 4: Delete poll
+    func deletePoll(pollId: String) async throws {
+        let result: GQLDeletePollResponse = try await execute(
+            query: """
+            mutation DeletePoll($pollId: ID!) {
+                deletePoll(pollId: $pollId) {
+                    success
+                    errors { field message }
+                }
+            }
+            """,
+            variables: ["pollId": pollId]
+        )
+        let mutation = result.deletePoll
+        if !mutation.success {
+            let errors = mutation.errors ?? []
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+    }
+
+    // Phase 4: Transition poll phase
+    func transitionPollPhase(pollId: String, phase: String) async throws {
+        let _: GQLTransitionPollPhaseResponse = try await execute(
+            query: """
+            mutation TransitionPollPhase($pollId: ID!, $phase: String!) {
+                transitionPollPhase(pollId: $pollId, phase: $phase) { id phase }
+            }
+            """,
+            variables: ["pollId": pollId, "phase": phase]
+        )
+    }
+
+    // Phase 4: Delete poll option
+    func deletePollOption(optionId: String) async throws {
+        let result: GQLDeletePollOptionResponse = try await execute(
+            query: """
+            mutation DeletePollOption($optionId: ID!) {
+                deletePollOption(optionId: $optionId) {
+                    success
+                    errors { field message }
+                }
+            }
+            """,
+            variables: ["optionId": optionId]
+        )
+        let mutation = result.deletePollOption
+        if !mutation.success {
+            let errors = mutation.errors ?? []
+            throw GraphQLMutationError.validationErrors(errors)
+        }
+    }
+
+    // Phase 5: Fetch poll voting stats
+    func fetchPollStats(pollId: String) async throws -> PollVotingStats {
+        let result: GQLPollVotingStatsResponse = try await execute(
+            query: """
+            query PollVotingStats($pollId: ID!) {
+                pollVotingStats(pollId: $pollId) {
+                    pollId pollTitle votingSystem phase totalUniqueVoters
+                    options {
+                        optionId optionTitle optionDescription
+                        tally {
+                            total yes maybe no selected percentage
+                            averageScore scoreDistribution
+                            averageRank firstPlaceCount
+                        }
+                    }
+                }
+            }
+            """,
+            variables: ["pollId": pollId]
+        )
+        return result.pollVotingStats
+    }
+
     // MARK: - Organizer Management
 
     func addOrganizer(slug: String, email: String) async throws {
@@ -619,17 +760,7 @@ final class GraphQLClient {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        #if DEBUG
-        if DevAuthService.shared.isDevAuthActive, let userId = DevAuthService.shared.selectedUserId {
-            request.setValue(userId, forHTTPHeaderField: "X-Dev-User-Id")
-        } else if let token = try? await Clerk.shared.auth.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        #else
-        if let token = try? await Clerk.shared.auth.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        #endif
+        await applyAuthHeaders(to: &request)
 
         let query = """
         mutation UploadImage($file: Upload!) {
@@ -701,6 +832,20 @@ final class GraphQLClient {
     }
     #endif
 
+    // MARK: - Auth Headers
+
+    private func applyAuthHeaders(to request: inout URLRequest) async {
+        #if DEBUG
+        if DevAuthService.shared.isDevAuthActive, let userId = DevAuthService.shared.selectedUserId {
+            request.setValue(userId, forHTTPHeaderField: "X-Dev-User-Id")
+            return
+        }
+        #endif
+        if let token = try? await Clerk.shared.auth.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+    }
+
     // MARK: - Core Execute
 
     private func execute<T: Decodable>(
@@ -712,17 +857,7 @@ final class GraphQLClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        #if DEBUG
-        if DevAuthService.shared.isDevAuthActive, let userId = DevAuthService.shared.selectedUserId {
-            request.setValue(userId, forHTTPHeaderField: "X-Dev-User-Id")
-        } else if let token = try? await Clerk.shared.auth.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        #else
-        if let token = try? await Clerk.shared.auth.getToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        #endif
+        await applyAuthHeaders(to: &request)
 
         var body: [String: Any] = ["query": query]
         if !variables.isEmpty {

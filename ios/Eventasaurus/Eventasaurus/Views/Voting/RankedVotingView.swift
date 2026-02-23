@@ -122,6 +122,19 @@ struct RankedVotingView: View {
                 }
                 .padding(.vertical, DS.Spacing.xs)
             }
+
+            Button {
+                Task { await clearAndRevote() }
+            } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "arrow.counterclockwise")
+                    Text("Re-rank")
+                }
+                .font(DS.Typography.caption)
+                .foregroundStyle(Color.accentColor)
+            }
+            .buttonStyle(.plain)
+            .disabled(isVoting)
         }
         .cardStyle()
     }
@@ -150,11 +163,30 @@ struct RankedVotingView: View {
         }
     }
 
+    private func clearAndRevote() async {
+        isVoting = true
+        error = nil
+        do {
+            try await GraphQLClient.shared.clearMyPollVotes(pollId: poll.id)
+        } catch {
+            self.error = error.localizedDescription
+            isVoting = false
+            return
+        }
+        hasSubmitted = false
+        await refreshPoll()
+        initializeOrder()
+        isVoting = false
+    }
+
     private func submitRanking() async {
         isVoting = true
         error = nil
 
         do {
+            // Clear any existing votes first so retries after partial failure are idempotent
+            try await GraphQLClient.shared.clearMyPollVotes(pollId: poll.id)
+
             for (index, option) in orderedOptions.enumerated() {
                 try await GraphQLClient.shared.voteOnPoll(
                     pollId: poll.id,

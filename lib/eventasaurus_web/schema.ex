@@ -15,7 +15,10 @@ defmodule EventasaurusWeb.Schema do
     import_fields(:venue_queries)
     import_fields(:poll_queries)
     import_fields(:user_queries)
-    import_fields(:dev_queries)
+
+    if Mix.env() in [:dev, :test] do
+      import_fields(:dev_queries)
+    end
   end
 
   mutation do
