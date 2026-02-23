@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PollDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     let slug: String
     let isOrganizer: Bool
     @State private var localPoll: EventPoll
@@ -285,13 +286,13 @@ struct PollDetailView: View {
                         .foregroundStyle(isMyVote ? Color.accentColor : .primary)
 
                     if total > 0 {
-                        HStack(spacing: 2) {
+                        HStack(spacing: 1) {
                             voteBar(count: opt.tally.yes ?? 0, total: total, color: .green, label: "Yes")
                             voteBar(count: opt.tally.maybe ?? 0, total: total, color: .orange, label: "Maybe")
                             voteBar(count: opt.tally.no ?? 0, total: total, color: .red, label: "No")
                         }
-                        .frame(height: 20)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .frame(height: 24)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
 
                         HStack(spacing: DS.Spacing.md) {
                             voteLegend(color: .green, label: "Yes", count: opt.tally.yes ?? 0)
@@ -422,14 +423,14 @@ struct PollDetailView: View {
 
     // MARK: - Helper Views
 
+    @ViewBuilder
     private func voteBar(count: Int, total: Int, color: Color, label: String) -> some View {
-        let fraction = total > 0 ? CGFloat(count) / CGFloat(total) : 0
-        return color
-            .frame(maxWidth: fraction > 0 ? .infinity : 0)
-            .frame(maxWidth: fraction > 0 ? nil : 0)
-            .scaleEffect(x: fraction, y: 1, anchor: .leading)
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel("\(label): \(count)")
+        if count > 0 {
+            color
+                .frame(width: nil)
+                .layoutPriority(Double(count))
+                .accessibilityLabel("\(label): \(count)")
+        }
     }
 
     private func voteLegend(color: Color, label: String, count: Int) -> some View {
@@ -464,6 +465,8 @@ struct PollDetailView: View {
         isPerformingAction = true
         do {
             try await GraphQLClient.shared.deletePoll(pollId: localPoll.id)
+            isPerformingAction = false
+            dismiss()
         } catch {
             self.error = error.localizedDescription
             isPerformingAction = false

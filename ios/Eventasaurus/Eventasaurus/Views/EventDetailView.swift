@@ -307,6 +307,15 @@ struct EventDetailView: View {
                 .buttonStyle(.plain)
             }
         }
+        .onAppear {
+            Task {
+                do {
+                    polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
+                } catch {
+                    // Keep existing polls on refresh failure
+                }
+            }
+        }
     }
 
     // MARK: - Data Loading

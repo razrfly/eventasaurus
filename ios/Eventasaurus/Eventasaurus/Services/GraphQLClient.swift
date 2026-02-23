@@ -836,7 +836,8 @@ final class GraphQLClient {
 
     private func applyAuthHeaders(to request: inout URLRequest) async {
         #if DEBUG
-        if DevAuthService.shared.isDevAuthActive, let userId = DevAuthService.shared.selectedUserId {
+        let devAuth = await MainActor.run { (DevAuthService.shared.isDevAuthActive, DevAuthService.shared.selectedUserId) }
+        if devAuth.0, let userId = devAuth.1 {
             request.setValue(userId, forHTTPHeaderField: "X-Dev-User-Id")
             return
         }
