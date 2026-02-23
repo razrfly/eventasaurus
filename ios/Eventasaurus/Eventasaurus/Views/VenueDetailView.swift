@@ -28,7 +28,7 @@ struct VenueDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 // Cover image
-                if let urlString = data.venue.coverImageUrl, let url = URL(string: urlString) {
+                if let url = AppConfig.resolvedImageURL(data.venue.coverImageUrl) {
                     CachedImage(
                         url: url,
                         height: DS.ImageSize.hero,

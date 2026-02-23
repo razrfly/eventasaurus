@@ -116,18 +116,6 @@ final class GraphQLClient {
 
     // MARK: - Dashboard
 
-    enum DashboardTimeFilter: String {
-        case upcoming = "UPCOMING"
-        case past = "PAST"
-        case archived = "ARCHIVED"
-    }
-
-    enum DashboardOwnershipFilter: String {
-        case all = "ALL"
-        case created = "CREATED"
-        case participating = "PARTICIPATING"
-    }
-
     func fetchDashboardEvents(
         timeFilter: DashboardTimeFilter = .upcoming,
         ownershipFilter: DashboardOwnershipFilter = .all,

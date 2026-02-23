@@ -66,7 +66,6 @@ struct ProfileView: View {
     private var clerkSignOutButton: some View {
         Button("Sign Out", role: .destructive) {
             signOutTask = Task {
-                defer { signOutTask = nil }
                 do {
                     try await clerk.auth.signOut()
                 } catch is CancellationError {

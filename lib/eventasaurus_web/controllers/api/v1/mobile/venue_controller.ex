@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.VenueController do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusWeb.Helpers.VenueHelpers
 
   @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, %{"slug" => slug}) do
@@ -56,7 +57,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.VenueController do
       end
 
     %{
-      name: if(is_binary(venue.name) and String.trim(venue.name) != "", do: venue.name, else: "Unknown Venue"),
+      name: VenueHelpers.venue_display_name(venue.name),
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,
@@ -84,7 +85,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.VenueController do
 
   defp serialize_event_venue(venue) do
     %{
-      name: if(is_binary(venue.name) and String.trim(venue.name) != "", do: venue.name, else: "Unknown Venue"),
+      name: VenueHelpers.venue_display_name(venue.name),
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,

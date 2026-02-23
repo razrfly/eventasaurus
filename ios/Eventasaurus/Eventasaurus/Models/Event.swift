@@ -141,7 +141,16 @@ struct EventSource: Codable, Identifiable {
         } else if let name, !name.isEmpty {
             id = name
         } else {
-            id = UUID().uuidString
+            // Deterministic fallback: derive from stable fields so repeated decodes
+            // produce the same identity instead of a random UUID each time.
+            let stableKey = [url, name, logoUrl].compactMap { $0 }.joined(separator: "|")
+            if stableKey.isEmpty {
+                id = "source_unknown"
+            } else {
+                var hasher = Hasher()
+                hasher.combine(stableKey)
+                id = "source_\(abs(hasher.finalize()))"
+            }
         }
     }
 }

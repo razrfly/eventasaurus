@@ -4,7 +4,9 @@ defmodule EventasaurusWeb.Api.V1.Mobile.ContainerController do
   alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusWeb.Helpers.SourceAttribution
+  alias EventasaurusWeb.Helpers.VenueHelpers
 
+  @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, %{"slug" => slug}) do
     case PublicEventContainers.get_container_by_slug(slug) do
       nil ->
@@ -58,7 +60,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.ContainerController do
 
   defp serialize_venue(venue) do
     %{
-      name: if(is_binary(venue.name) and String.trim(venue.name) != "", do: venue.name, else: "Unknown Venue"),
+      name: VenueHelpers.venue_display_name(venue.name),
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,

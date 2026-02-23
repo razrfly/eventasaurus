@@ -6,10 +6,13 @@ defmodule EventasaurusWeb.Resolvers.DashboardResolver do
 
   alias EventasaurusApp.Events
 
+  @max_limit 100
+
+  @spec dashboard_events(any(), map(), map()) :: {:ok, map()} | {:error, term()}
   def dashboard_events(_parent, args, %{context: %{current_user: user}}) do
     time_filter = args[:time_filter] || :upcoming
     ownership_filter = args[:ownership_filter] || :all
-    limit = args[:limit] || 50
+    limit = min(args[:limit] || 50, @max_limit)
 
     events = fetch_events(user, time_filter, ownership_filter, limit)
     filter_counts = Events.get_dashboard_filter_counts(user)
@@ -34,9 +37,10 @@ defmodule EventasaurusWeb.Resolvers.DashboardResolver do
   end
 
   # For archived, use the deleted events query and transform to match shape
-  defp fetch_events(user, :archived, _ownership_filter, _limit) do
+  defp fetch_events(user, :archived, _ownership_filter, limit) do
     user
     |> Events.list_deleted_events_by_user()
+    |> Enum.take(limit)
     |> Enum.map(&transform_archived_event/1)
   end
 
@@ -68,20 +72,7 @@ defmodule EventasaurusWeb.Resolvers.DashboardResolver do
 
   # Transform a full Event struct from list_deleted_events_by_user
   defp transform_archived_event(%{} = event) do
-    venue =
-      case event.venue do
-        %{id: id} when not is_nil(id) ->
-          %{
-            id: to_string(id),
-            name: event.venue.name,
-            address: event.venue.address,
-            latitude: event.venue.latitude,
-            longitude: event.venue.longitude
-          }
-
-        _ ->
-          nil
-      end
+    venue = transform_venue(event.venue)
 
     %{
       id: to_string(event.id),
@@ -112,7 +103,7 @@ defmodule EventasaurusWeb.Resolvers.DashboardResolver do
   defp transform_venue(%{} = v) do
     %{
       id: to_string(v.id),
-      name: v.name,
+      name: v[:name] || "",
       address: v[:address],
       latitude: v[:latitude],
       longitude: v[:longitude]
@@ -120,6 +111,14 @@ defmodule EventasaurusWeb.Resolvers.DashboardResolver do
   end
 
   defp to_utc_datetime(%DateTime{} = dt), do: dt
-  defp to_utc_datetime(%NaiveDateTime{} = ndt), do: DateTime.from_naive!(ndt, "Etc/UTC")
+
+  defp to_utc_datetime(%NaiveDateTime{} = ndt) do
+    case DateTime.from_naive(ndt, "Etc/UTC") do
+      {:ok, dt} -> dt
+      {:ambiguous, dt, _} -> dt
+      :error -> DateTime.utc_now()
+    end
+  end
+
   defp to_utc_datetime(nil), do: nil
 end

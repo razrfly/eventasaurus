@@ -9,12 +9,7 @@ struct EventRoleBadge: View {
             Image(systemName: icon)
             Text(role.displayName)
         }
-        .font(DS.Typography.badge)
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.xs)
-        .background(color.opacity(0.15))
-        .foregroundStyle(color)
-        .clipShape(Capsule())
+        .badgeStyle(backgroundColor: color.opacity(0.15), foregroundColor: color)
     }
 
     private var icon: String {

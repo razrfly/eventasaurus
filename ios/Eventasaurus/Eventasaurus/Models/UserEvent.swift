@@ -95,6 +95,16 @@ enum EventStatus: String, Codable, CaseIterable {
         case .canceled: return "xmark.circle"
         }
     }
+
+    var color: Color {
+        switch self {
+        case .draft: return .orange
+        case .confirmed: return .green
+        case .canceled: return .red
+        case .polling: return .blue
+        case .threshold: return .purple
+        }
+    }
 }
 
 enum EventVisibility: String, Codable, CaseIterable {

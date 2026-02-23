@@ -19,7 +19,7 @@ struct DashboardCardView: View {
     @ViewBuilder
     private var coverImage: some View {
         ZStack(alignment: .topLeading) {
-            if let urlStr = event.coverImageUrl, let url = URL(string: urlStr) {
+            if let url = AppConfig.resolvedImageURL(event.coverImageUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -44,7 +44,7 @@ struct DashboardCardView: View {
                 Text(event.status.displayName)
             }
             .font(DS.Typography.badge)
-            .badgeStyle(backgroundColor: statusColor.opacity(DS.Opacity.badge))
+            .badgeStyle(backgroundColor: event.status.color.opacity(DS.Opacity.badge), foregroundColor: event.status.color)
             .padding(DS.Spacing.md)
         }
     }
@@ -88,7 +88,7 @@ struct DashboardCardView: View {
             }
 
             if let venue = event.venue {
-                Label(venue.name, systemImage: "mappin")
+                Label(venue.name ?? "Unknown Venue", systemImage: "mappin")
                     .font(DS.Typography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -110,15 +110,4 @@ struct DashboardCardView: View {
         }
     }
 
-    // MARK: - Helpers
-
-    private var statusColor: Color {
-        switch event.status {
-        case .draft: return .orange
-        case .confirmed: return .green
-        case .canceled: return .red
-        case .polling: return .blue
-        case .threshold: return .purple
-        }
-    }
 }

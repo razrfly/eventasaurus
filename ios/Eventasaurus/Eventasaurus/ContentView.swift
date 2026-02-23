@@ -275,9 +275,9 @@ struct ContentView: View {
 
     private var environmentConfirmMessage: String {
         if AppConfig.useProductionServer {
-            return "The app will quit and relaunch on localhost:4000. Dev auth will be available again."
+            return "The app will quit. Reopen manually to connect to localhost:4000. Dev auth will be available again."
         } else {
-            return "The app will quit and relaunch on wombie.com. You'll need to sign in with real credentials."
+            return "The app will quit. Reopen manually to connect to wombie.com. You'll need to sign in with real credentials."
         }
     }
     #endif

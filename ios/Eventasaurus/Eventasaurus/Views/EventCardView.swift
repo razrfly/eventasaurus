@@ -8,7 +8,7 @@ struct EventCardView: View {
             // Cover image with badges
             ZStack(alignment: .topLeading) {
                 CachedImage(
-                    url: event.coverImageUrl.flatMap { URL(string: $0) },
+                    url: AppConfig.resolvedImageURL(event.coverImageUrl),
                     height: DS.ImageSize.cardCover,
                     placeholderIcon: event.isGroup ? "square.stack" : "calendar"
                 )

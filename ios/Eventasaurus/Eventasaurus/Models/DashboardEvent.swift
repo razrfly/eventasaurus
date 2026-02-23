@@ -1,5 +1,19 @@
 import Foundation
 
+// MARK: - Dashboard Filters
+
+enum DashboardTimeFilter: String {
+    case upcoming = "UPCOMING"
+    case past = "PAST"
+    case archived = "ARCHIVED"
+}
+
+enum DashboardOwnershipFilter: String {
+    case all = "ALL"
+    case created = "CREATED"
+    case participating = "PARTICIPATING"
+}
+
 // MARK: - Dashboard Event Model
 
 struct DashboardEvent: Codable, Identifiable, Hashable {
@@ -35,7 +49,7 @@ struct DashboardEvent: Codable, Identifiable, Hashable {
 
 struct DashboardVenue: Codable, Hashable {
     let id: String
-    let name: String
+    let name: String?
     let address: String?
     let latitude: Double?
     let longitude: Double?
@@ -72,7 +86,7 @@ extension DashboardEvent {
         case "declined":
             return .notGoing
         default:
-            return .going
+            return .notGoing
         }
     }
 }
