@@ -8,10 +8,29 @@ struct StarVotingView: View {
 
     @State private var selectedScores: [String: Int] = [:]
 
+    private var hasAnyVotes: Bool {
+        guard let votes = poll.myVotes else { return false }
+        return !votes.isEmpty
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             ForEach(poll.options) { option in
                 optionCard(option)
+            }
+            if hasAnyVotes {
+                Button {
+                    Task { await clearAndRevote() }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "arrow.counterclockwise")
+                        Text("Change Ratings")
+                    }
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .disabled(isVoting)
             }
         }
     }
@@ -131,6 +150,21 @@ struct StarVotingView: View {
             return
         }
 
+        await refreshPoll()
+        isVoting = false
+    }
+
+    private func clearAndRevote() async {
+        isVoting = true
+        error = nil
+        do {
+            try await GraphQLClient.shared.clearMyPollVotes(pollId: poll.id)
+        } catch {
+            self.error = error.localizedDescription
+            isVoting = false
+            return
+        }
+        selectedScores = [:]
         await refreshPoll()
         isVoting = false
     }

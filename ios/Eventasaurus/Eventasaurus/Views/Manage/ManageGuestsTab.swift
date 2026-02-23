@@ -5,7 +5,7 @@ struct ManageGuestsTab: View {
     let event: UserEvent
     var onInvite: () -> Void
     var onParticipantsChanged: () -> Void
-    var refreshTrigger: UUID = UUID()
+    let refreshTrigger: UUID = UUID()
 
     @State private var participants: [EventParticipant] = []
     @State private var isLoading = true
@@ -152,7 +152,6 @@ struct ManageGuestsTab: View {
                 ForEach(filteredParticipants) { participant in
                     NavigationLink {
                         ParticipantDetailView(event: event, participant: participant) {
-                            Task { await loadParticipants() }
                             onParticipantsChanged()
                         }
                     } label: {

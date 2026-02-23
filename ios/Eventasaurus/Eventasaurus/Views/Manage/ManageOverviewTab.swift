@@ -11,7 +11,7 @@ struct ManageOverviewTab: View {
     var onPublish: () -> Void
     var onCancel: () -> Void
     var onRemoveOrganizer: (String) -> Void
-    var onParticipantsChanged: () -> Void
+    var onParticipantsChanged: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxl) {

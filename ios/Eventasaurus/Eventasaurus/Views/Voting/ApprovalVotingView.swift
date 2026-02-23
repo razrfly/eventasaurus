@@ -6,10 +6,30 @@ struct ApprovalVotingView: View {
     @Binding var isVoting: Bool
     @Binding var error: String?
 
+    private var hasAnyApprovals: Bool {
+        guard let votes = poll.myVotes else { return false }
+        return !votes.isEmpty
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             ForEach(poll.options) { option in
                 optionRow(option)
+            }
+            if hasAnyApprovals {
+                Button {
+                    Task { await clearAndRevote() }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "arrow.counterclockwise")
+                        Text("Change Votes")
+                    }
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .disabled(isVoting)
+                .padding(.top, DS.Spacing.xs)
             }
         }
     }
@@ -85,6 +105,20 @@ struct ApprovalVotingView: View {
             return
         }
 
+        await refreshPoll()
+        isVoting = false
+    }
+
+    private func clearAndRevote() async {
+        isVoting = true
+        error = nil
+        do {
+            try await GraphQLClient.shared.clearMyPollVotes(pollId: poll.id)
+        } catch {
+            self.error = error.localizedDescription
+            isVoting = false
+            return
+        }
         await refreshPoll()
         isVoting = false
     }

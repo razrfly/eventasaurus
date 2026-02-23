@@ -550,6 +550,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     end
   end
 
+  defp add_attendance_info(serialized, _event, nil) do
+    Map.merge(serialized, %{attendance_status: nil, is_attending: false, attendee_count: 0})
+  end
+
   defp add_attendance_info(serialized, event, user) do
     participant = Events.get_event_participant_by_event_and_user(event, user)
 

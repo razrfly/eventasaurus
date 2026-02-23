@@ -15,6 +15,9 @@ struct EventDetailView: View {
     @State private var existingPlan: GQLPlan?
     @State private var planSheetEvent: Event?
 
+    // Polls state
+    @State private var polls: [EventPoll] = []
+
     var body: some View {
         Group {
             if isLoading {
@@ -115,6 +118,12 @@ struct EventDetailView: View {
                     if let description = event.description, !description.isEmpty {
                         Text(description)
                             .font(DS.Typography.prose)
+                    }
+
+                    // Polls section
+                    if !polls.isEmpty {
+                        Divider()
+                        pollsSection
                     }
 
                     // Ticket link
@@ -272,6 +281,34 @@ struct EventDetailView: View {
         }
     }
 
+    // MARK: - Polls Section
+
+    private var pollsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack {
+                Text("Polls")
+                    .font(DS.Typography.bodyBold)
+                Spacer()
+                Text("\(polls.count)")
+                    .font(DS.Typography.captionBold)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .background(Color.secondary.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+
+            ForEach(polls) { poll in
+                NavigationLink {
+                    PollDetailView(poll: poll, slug: slug)
+                } label: {
+                    PollCardView(poll: poll, slug: slug)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     // MARK: - Data Loading
 
     private func loadEvent() async {
@@ -292,6 +329,15 @@ struct EventDetailView: View {
             } catch {
                 #if DEBUG
                 print("[EventDetailView] Failed to fetch plan for \(slug): \(error)")
+                #endif
+            }
+
+            // Load polls
+            do {
+                polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
+            } catch {
+                #if DEBUG
+                print("[EventDetailView] Failed to fetch polls for \(slug): \(error)")
                 #endif
             }
         } catch is CancellationError {

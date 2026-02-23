@@ -85,6 +85,8 @@
 		C9D0E1F201B4C5D6E7F8A9B0 /* ManageHistoryTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D0E1F2A3B4C5D6E7F8A9B0 /* ManageHistoryTab.swift */; };
 		DA1B2C3D4E5F6A7B8C9D0E02 /* DevAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1B2C3D4E5F6A7B8C9D0E01 /* DevAuthService.swift */; };
 		DA1B2C3D4E5F6A7B8C9D0E04 /* DevUserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1B2C3D4E5F6A7B8C9D0E03 /* DevUserPickerView.swift */; };
+		AA1B2C3D4E5F6A7B8C9D0E05 /* PollCreateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C3D4E5F6A7B8C9D0E06 /* PollCreateSheet.swift */; };
+		AA1B2C3D4E5F6A7B8C9D0E07 /* SuggestOptionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C3D4E5F6A7B8C9D0E08 /* SuggestOptionSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -180,6 +182,8 @@
 		C9D0E1F2A3B4C5D6E7F8A9B0 /* ManageHistoryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageHistoryTab.swift; sourceTree = "<group>"; };
 		DA1B2C3D4E5F6A7B8C9D0E01 /* DevAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevAuthService.swift; sourceTree = "<group>"; };
 		DA1B2C3D4E5F6A7B8C9D0E03 /* DevUserPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevUserPickerView.swift; sourceTree = "<group>"; };
+		AA1B2C3D4E5F6A7B8C9D0E06 /* PollCreateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollCreateSheet.swift; sourceTree = "<group>"; };
+		AA1B2C3D4E5F6A7B8C9D0E08 /* SuggestOptionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestOptionSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -311,6 +315,7 @@
 				A7B8C9D0E1F2A3B4C5D6E7F8 /* ManagePollsTab.swift */,
 				B8C9D0E1F2A3B4C5D6E7F8A9 /* ManageInsightsTab.swift */,
 				C9D0E1F2A3B4C5D6E7F8A9B0 /* ManageHistoryTab.swift */,
+				AA1B2C3D4E5F6A7B8C9D0E06 /* PollCreateSheet.swift */,
 			);
 			path = Manage;
 			sourceTree = "<group>";
@@ -322,6 +327,7 @@
 				4B2C3D4E5F6A7B8C9D0E1F22 /* BinaryVotingView.swift */,
 				6D4E5F6A7B8C9D0E1F2A3B44 /* RankedVotingView.swift */,
 				7E5F6A7B8C9D0E1F2A3B4C55 /* StarVotingView.swift */,
+				AA1B2C3D4E5F6A7B8C9D0E08 /* SuggestOptionSheet.swift */,
 			);
 			path = Voting;
 			sourceTree = "<group>";
@@ -549,6 +555,8 @@
 				A7B8C9D001F2A3B4C5D6E7F8 /* ManagePollsTab.swift in Sources */,
 				B8C9D0E101A3B4C5D6E7F8A9 /* ManageInsightsTab.swift in Sources */,
 				C9D0E1F201B4C5D6E7F8A9B0 /* ManageHistoryTab.swift in Sources */,
+				AA1B2C3D4E5F6A7B8C9D0E05 /* PollCreateSheet.swift in Sources */,
+				AA1B2C3D4E5F6A7B8C9D0E07 /* SuggestOptionSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
