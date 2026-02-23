@@ -122,10 +122,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   Returns event details by slug. Checks both public events and user-created events.
   """
-  def show(conn, %{"slug" => slug}) do
+  def show(conn, %{"slug" => slug} = params) do
     user = conn.assigns.user
+    language = params["language"] || "en"
 
-    case find_event_by_slug(slug) do
+    case find_event_by_slug(slug, language) do
       {:public, event} ->
         json(conn, %{
           event: serialize_public_event_detail(event) |> add_attendance_info(slug, user)
@@ -336,7 +337,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   # --- Private helpers ---
 
-  defp find_event_by_slug(slug) do
+  defp find_event_by_slug(slug, language) do
     case PublicEvents.get_by_slug(slug) do
       %{} = event ->
         # Preload sources, movies, and venue for cover image resolution and attribution
@@ -346,8 +347,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         event =
           Map.merge(event, %{
             cover_image_url: PublicEventsEnhanced.get_cover_image_url(event),
-            display_title: get_localized_field(event.title_translations, event.title),
-            display_description: get_source_description(event.sources)
+            display_title: get_localized_field(event.title_translations, event.title, language),
+            display_description: get_source_description(event.sources, language)
           })
 
         {:public, event}
@@ -360,29 +361,17 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     end
   end
 
-  defp get_localized_field(nil, fallback), do: fallback
-  defp get_localized_field(translations, fallback) when is_map(translations) do
-    translations["en"] || fallback
+  defp get_localized_field(nil, fallback, _language), do: fallback
+  defp get_localized_field(translations, fallback, language) when is_map(translations) do
+    translations[language] || translations["en"] || fallback
   end
-  defp get_localized_field(_, fallback), do: fallback
+  defp get_localized_field(_, fallback, _language), do: fallback
 
-  defp get_source_description(sources) do
-    sources
-    |> Enum.sort_by(fn source ->
-      priority = case source.metadata do
-        %{"priority" => p} when is_integer(p) -> p
-        _ -> 10
-      end
-      ts = case source.last_seen_at do
-        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
-        _ -> 9_223_372_036_854_775_807
-      end
-      {priority, ts}
-    end)
-    |> case do
+  defp get_source_description(sources, language) do
+    case get_sorted_sources(sources) do
       [source | _] ->
         case source.description_translations do
-          translations when is_map(translations) -> translations["en"]
+          translations when is_map(translations) -> translations[language] || translations["en"]
           _ -> nil
         end
       _ -> nil
