@@ -24,9 +24,6 @@ struct PollDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 header
-                if isOrganizer {
-                    adminControls
-                }
                 votingSection
                 if let error {
                     Text(error)
@@ -39,13 +36,56 @@ struct PollDetailView: View {
         .navigationTitle(localPoll.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if canSuggest {
-                ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                if canSuggest {
                     Button {
                         showSuggestSheet = true
                     } label: {
                         Image(systemName: "plus.circle")
                     }
+                }
+
+                if isOrganizer {
+                    Menu {
+                        // Phase transitions
+                        if localPoll.phase == "list_building" {
+                            Button {
+                                Task { await transitionPhase(to: "voting_only") }
+                            } label: {
+                                Label("Start Voting", systemImage: "play.fill")
+                            }
+                            Button {
+                                Task { await transitionPhase(to: "voting_with_suggestions") }
+                            } label: {
+                                Label("Voting + Suggestions", systemImage: "text.bubble")
+                            }
+                        } else if localPoll.phase == "voting_with_suggestions" {
+                            Button {
+                                Task { await transitionPhase(to: "voting_only") }
+                            } label: {
+                                Label("Lock Suggestions", systemImage: "lock")
+                            }
+                        }
+
+                        if localPoll.phase != "closed" {
+                            Button {
+                                Task { await transitionPhase(to: "closed") }
+                            } label: {
+                                Label("Close Poll", systemImage: "stop.fill")
+                            }
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            showDeleteConfirmation = true
+                        } label: {
+                            Label("Delete Poll", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .disabled(isPerformingAction)
                 }
             }
         }
@@ -128,56 +168,6 @@ struct PollDetailView: View {
         case "list_building": return .orange
         default: return .blue
         }
-    }
-
-    // MARK: - Admin Controls (Phase 4)
-
-    private var adminControls: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // Phase transition buttons
-            HStack(spacing: DS.Spacing.sm) {
-                if localPoll.phase == "list_building" {
-                    phaseButton(label: "Start Voting", phase: "voting_only", color: .blue)
-                    phaseButton(label: "Voting + Suggestions", phase: "voting_with_suggestions", color: .blue)
-                } else if localPoll.phase == "voting_with_suggestions" {
-                    phaseButton(label: "Lock Suggestions", phase: "voting_only", color: .blue)
-                    phaseButton(label: "Close Poll", phase: "closed", color: .secondary)
-                } else if localPoll.phase == "voting_only" {
-                    phaseButton(label: "Close Poll", phase: "closed", color: .secondary)
-                }
-            }
-
-            // Delete button
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "trash")
-                    Text("Delete Poll")
-                }
-                .font(DS.Typography.caption)
-            }
-            .disabled(isPerformingAction)
-        }
-        .padding(DS.Spacing.md)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(DS.Radius.md)
-    }
-
-    private func phaseButton(label: String, phase: String, color: Color) -> some View {
-        Button {
-            Task { await transitionPhase(to: phase) }
-        } label: {
-            Text(label)
-                .font(DS.Typography.captionMedium)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(color.opacity(0.15))
-                .foregroundStyle(color)
-                .cornerRadius(DS.Radius.sm)
-        }
-        .buttonStyle(.plain)
-        .disabled(isPerformingAction)
     }
 
     // MARK: - Voting Section
