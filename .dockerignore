@@ -56,3 +56,9 @@ erl_crash.dump
 # MCP server caches and local tooling
 /.playwright-mcp/
 /.taskmaster/
+
+# iOS app (not deployed to Fly)
+/ios/
+
+# Documentation (not needed in production image)
+/docs/

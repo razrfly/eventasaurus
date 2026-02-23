@@ -51,23 +51,45 @@ struct ContentView: View {
     }
 
     private var mainTabView: some View {
-        TabView {
-            DiscoverView()
-                .tabItem {
-                    Label("Discover", systemImage: "magnifyingglass")
-                }
+        VStack(spacing: 0) {
+            #if DEBUG
+            if AppConfig.useProductionServer {
+                productionBanner
+            }
+            #endif
 
-            MyEventsView()
-                .tabItem {
-                    Label("My Events", systemImage: "calendar")
-                }
+            TabView {
+                DiscoverView()
+                    .tabItem {
+                        Label("Discover", systemImage: "magnifyingglass")
+                    }
 
-            ProfileView()
-                .tabItem {
-                    Label("Profile", systemImage: "person")
-                }
+                MyEventsView()
+                    .tabItem {
+                        Label("My Events", systemImage: "calendar")
+                    }
+
+                ProfileView()
+                    .tabItem {
+                        Label("Profile", systemImage: "person")
+                    }
+            }
         }
     }
+
+    #if DEBUG
+    private var productionBanner: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text("PRODUCTION SERVER")
+        }
+        .font(.caption2.bold())
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 3)
+        .background(.red)
+    }
+    #endif
 
     private var signedOutView: some View {
         VStack(spacing: DS.Spacing.xxl) {
@@ -88,22 +110,24 @@ struct ContentView: View {
             .controlSize(.large)
 
             #if DEBUG
-            Divider()
-                .padding(.top, DS.Spacing.lg)
+            if !AppConfig.useProductionServer {
+                Divider()
+                    .padding(.top, DS.Spacing.lg)
 
-            VStack(spacing: DS.Spacing.md) {
-                Text("DEV MODE")
-                    .font(.caption.bold())
-                    .foregroundStyle(.orange)
+                VStack(spacing: DS.Spacing.md) {
+                    Text("DEV MODE")
+                        .font(.caption.bold())
+                        .foregroundStyle(.orange)
 
-                Button("Quick Login as Test User") {
-                    showDevPicker = true
+                    Button("Quick Login as Test User") {
+                        showDevPicker = true
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.orange)
                 }
-                .buttonStyle(.bordered)
-                .tint(.orange)
-            }
-            .sheet(isPresented: $showDevPicker) {
-                DevUserPickerView()
+                .sheet(isPresented: $showDevPicker) {
+                    DevUserPickerView()
+                }
             }
             #endif
         }

@@ -10,6 +10,7 @@ struct ProfileView: View {
     @State private var signOutErrorMessage = ""
     #if DEBUG
     @State private var showDevPicker = false
+    @State private var showEnvironmentConfirm = false
     #endif
 
     var body: some View {
@@ -26,26 +27,7 @@ struct ProfileView: View {
                 Spacer()
 
                 #if DEBUG
-                if DevAuthService.shared.isDevAuthActive {
-                    VStack(spacing: DS.Spacing.md) {
-                        Text("Dev Mode: \(DevAuthService.shared.selectedUserName ?? "Unknown")")
-                            .font(.caption.bold())
-                            .foregroundStyle(.orange)
-
-                        Button("Switch Dev User") {
-                            showDevPicker = true
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.orange)
-
-                        Button("Exit Dev Mode", role: .destructive) {
-                            DevAuthService.shared.clearDevAuth()
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                } else {
-                    signOutButton
-                }
+                devSettingsSection
                 #else
                 signOutButton
                 #endif
@@ -64,6 +46,21 @@ struct ProfileView: View {
             } message: {
                 Text(signOutErrorMessage)
             }
+            #if DEBUG
+            .confirmationDialog(
+                environmentConfirmTitle,
+                isPresented: $showEnvironmentConfirm,
+                titleVisibility: .visible
+            ) {
+                Button(environmentConfirmAction, role: environmentConfirmRole) {
+                    let envService = DevEnvironmentService.shared
+                    envService.setProduction(!envService.isRunningProduction)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(environmentConfirmMessage)
+            }
+            #endif
         }
     }
 
@@ -146,4 +143,96 @@ struct ProfileView: View {
         }
         isLoading = false
     }
+
+    // MARK: - Dev Settings (DEBUG only)
+
+    #if DEBUG
+    private var devSettingsSection: some View {
+        VStack(spacing: DS.Spacing.lg) {
+            // Environment indicator
+            environmentStatusView
+
+            // Dev auth controls (only available on development server)
+            if !AppConfig.useProductionServer {
+                if DevAuthService.shared.isDevAuthActive {
+                    VStack(spacing: DS.Spacing.md) {
+                        Text("Dev Mode: \(DevAuthService.shared.selectedUserName ?? "Unknown")")
+                            .font(.caption.bold())
+                            .foregroundStyle(.orange)
+
+                        Button("Switch Dev User") {
+                            showDevPicker = true
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.orange)
+
+                        Button("Exit Dev Mode", role: .destructive) {
+                            DevAuthService.shared.clearDevAuth()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                } else {
+                    signOutButton
+                }
+            } else {
+                signOutButton
+            }
+        }
+    }
+
+    private var environmentStatusView: some View {
+        let envService = DevEnvironmentService.shared
+
+        return VStack(spacing: DS.Spacing.sm) {
+            if AppConfig.useProductionServer {
+                Label("Production Server", systemImage: "server.rack")
+                    .font(.caption.bold())
+                    .foregroundStyle(.red)
+            } else {
+                Label("Development Server", systemImage: "laptopcomputer")
+                    .font(.caption.bold())
+                    .foregroundStyle(.green)
+            }
+
+            if envService.needsRestart {
+                Label("Restart app to apply", systemImage: "arrow.clockwise")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+
+            Button(AppConfig.useProductionServer ? "Switch to Development" : "Switch to Production") {
+                showEnvironmentConfirm = true
+            }
+            .buttonStyle(.bordered)
+            .tint(AppConfig.useProductionServer ? .green : .red)
+            .controlSize(.small)
+        }
+        .padding(DS.Spacing.md)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DS.Radius.md))
+    }
+
+    private var environmentConfirmTitle: String {
+        AppConfig.useProductionServer
+            ? "Switch to Development?"
+            : "Switch to Production?"
+    }
+
+    private var environmentConfirmAction: String {
+        AppConfig.useProductionServer
+            ? "Switch to Development"
+            : "Switch to Production"
+    }
+
+    private var environmentConfirmRole: ButtonRole? {
+        AppConfig.useProductionServer ? nil : .destructive
+    }
+
+    private var environmentConfirmMessage: String {
+        if AppConfig.useProductionServer {
+            return "This will connect to localhost:4000 on next restart. Dev auth will be available again."
+        } else {
+            return "This will connect to the live wombie.com server on next restart. Dev auth will be disabled — you'll need to sign in with real credentials."
+        }
+    }
+    #endif
 }

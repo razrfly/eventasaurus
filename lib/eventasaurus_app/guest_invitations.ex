@@ -310,11 +310,9 @@ defmodule EventasaurusApp.GuestInvitations do
 
   defp get_recommendation(total_score) do
     cond do
-      total_score >= 0.8 -> "highly_recommended"
-      total_score >= 0.6 -> "recommended"
-      total_score >= 0.4 -> "consider"
-      total_score >= 0.2 -> "low_priority"
-      true -> "not_recommended"
+      total_score >= 0.7 -> :highly_recommended
+      total_score >= 0.4 -> :recommended
+      true -> :suggested
     end
   end
 end
