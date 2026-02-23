@@ -12,7 +12,7 @@ defmodule EventasaurusWeb.Helpers.VenueHelpers do
 
   def venue_display_name(name, fallback) when is_binary(name) do
     trimmed = String.trim(name)
-    if trimmed != "", do: name, else: fallback
+    if trimmed != "", do: trimmed, else: fallback
   end
 
   def venue_display_name(_name, fallback), do: fallback

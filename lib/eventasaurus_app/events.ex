@@ -881,8 +881,9 @@ defmodule EventasaurusApp.Events do
   Returns the list of soft-deleted events where the user is an organizer.
   Only returns events deleted within the last 90 days that can be restored.
   """
-  def list_deleted_events_by_user(%User{} = user) do
+  def list_deleted_events_by_user(%User{} = user, opts \\ []) do
     ninety_days_ago = DateTime.utc_now() |> DateTime.add(-90, :day)
+    limit = opts[:limit]
 
     query =
       from(e in Event,
@@ -895,6 +896,8 @@ defmodule EventasaurusApp.Events do
         preload: [:users, :venue, :tickets],
         order_by: [desc: e.deleted_at]
       )
+
+    query = if limit, do: from(q in query, limit: ^limit), else: query
 
     Repo.all(query)
   end
