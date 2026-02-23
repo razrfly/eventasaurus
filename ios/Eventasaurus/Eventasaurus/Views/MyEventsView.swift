@@ -15,18 +15,11 @@ struct MyEventsView: View {
         case pending = "Pending"
     }
 
-    enum ViewMode: String {
-        case compact, card
-    }
-
     // MARK: - State
 
     @State private var timeFilter: TimeFilter = .upcoming
     @State private var roleFilter: RoleFilter = .all
-    @State private var viewMode: ViewMode = {
-        let saved = UserDefaults.standard.string(forKey: "myEventsViewMode")
-        return ViewMode(rawValue: saved ?? "") ?? .card
-    }()
+    @State private var viewMode: EventViewMode = EventViewMode.load(key: "myEventsViewMode", default: .card)
     @State private var events: [DashboardEvent] = []
     @State private var filterCounts: DashboardFilterCounts?
     @State private var isLoading = false
@@ -92,9 +85,6 @@ struct MyEventsView: View {
                     Task { await loadEvents(for: newValue) }
                 }
             }
-            .onChange(of: viewMode) { _, newValue in
-                UserDefaults.standard.set(newValue.rawValue, forKey: "myEventsViewMode")
-            }
             .sheet(isPresented: $showCreateSheet) {
                 EventCreateView { _ in
                     cache = [:]
@@ -155,13 +145,7 @@ struct MyEventsView: View {
     }
 
     private var viewModeToggle: some View {
-        Button {
-            withAnimation(DS.Animation.fast) {
-                viewMode = viewMode == .compact ? .card : .compact
-            }
-        } label: {
-            Image(systemName: viewMode == .compact ? "rectangle.grid.1x2" : "list.bullet")
-        }
+        ViewModeToggle(mode: $viewMode, persistKey: "myEventsViewMode")
     }
 
     private var roleFilterMenu: some View {
@@ -206,6 +190,8 @@ struct MyEventsView: View {
 
     // MARK: - Event List
 
+    private let gridColumns = [GridItem(.flexible()), GridItem(.flexible())]
+
     private var eventList: some View {
         ScrollView {
             if timeFilter == .archived {
@@ -215,16 +201,26 @@ struct MyEventsView: View {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                 ForEach(groupedEvents, id: \.key) { section in
                     Section {
-                        LazyVStack(spacing: viewMode == .compact ? DS.Spacing.xs : DS.Spacing.xl) {
-                            ForEach(section.events) { event in
-                                NavigationLink(value: event) {
-                                    if viewMode == .compact {
-                                        DashboardCompactRow(event: event, isPast: isPast)
-                                    } else {
-                                        DashboardCardView(event: event, isPast: isPast)
+                        Group {
+                            switch viewMode {
+                            case .compact, .card:
+                                LazyVStack(spacing: viewMode == .compact ? DS.Spacing.xs : DS.Spacing.xl) {
+                                    ForEach(section.events) { event in
+                                        NavigationLink(value: event) {
+                                            dashboardCard(for: event)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
-                                .buttonStyle(.plain)
+                            case .grid:
+                                LazyVGrid(columns: gridColumns, spacing: DS.Spacing.lg) {
+                                    ForEach(section.events) { event in
+                                        NavigationLink(value: event) {
+                                            dashboardCard(for: event)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
                             }
                         }
                         .padding(.horizontal, DS.Spacing.xl)
@@ -232,6 +228,78 @@ struct MyEventsView: View {
                     } header: {
                         sectionHeader(for: section.key)
                     }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func dashboardCard(for event: DashboardEvent) -> some View {
+        switch viewMode {
+        case .compact:
+            EventCompactRow(event: event, isPast: isPast) {
+                EventRoleBadge(role: event.role)
+            }
+
+        case .card:
+            EventStandardCard(event: event, isPast: isPast) {
+                // Cover: status badge
+                HStack {
+                    DashboardBadges.statusBadge(event.status)
+                    Spacer()
+                }
+            } subtitleContent: {
+                if let tagline = event.tagline, !tagline.isEmpty {
+                    Text(tagline)
+                        .font(DS.Typography.bodyItalic)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if let startsAt = event.startsAt {
+                    Label {
+                        Text(startsAt, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+                    } icon: {
+                        Image(systemName: "clock")
+                    }
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                if let venue = event.venue {
+                    Label(venue.name ?? "Unknown Venue", systemImage: "mappin")
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else if event.isVirtual {
+                    Label("Online", systemImage: "video")
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } bottomRow: {
+                HStack {
+                    if let count = event.displayParticipantCount {
+                        Label("\(count)", systemImage: "person.2")
+                            .font(DS.Typography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    EventRoleBadge(role: event.role)
+                }
+            }
+
+        case .grid:
+            EventGridCard(event: event, isPast: isPast) {
+                // Cover: status badge
+                HStack {
+                    DashboardBadges.statusBadge(event.status)
+                    Spacer()
+                }
+            } subtitleContent: {
+                if let startsAt = event.startsAt {
+                    Text(startsAt, format: .dateTime.month(.abbreviated).day())
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
