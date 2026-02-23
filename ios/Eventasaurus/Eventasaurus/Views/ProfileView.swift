@@ -8,6 +8,7 @@ struct ProfileView: View {
     @State private var isLoading = true
     @State private var showSignOutError = false
     @State private var signOutErrorMessage = ""
+    @State private var signOutTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -60,7 +61,8 @@ struct ProfileView: View {
 
     private var clerkSignOutButton: some View {
         Button("Sign Out", role: .destructive) {
-            Task {
+            signOutTask = Task {
+                defer { signOutTask = nil }
                 do {
                     try await clerk.auth.signOut()
                 } catch is CancellationError {
@@ -72,6 +74,10 @@ struct ProfileView: View {
             }
         }
         .buttonStyle(.bordered)
+        .onDisappear {
+            signOutTask?.cancel()
+            signOutTask = nil
+        }
     }
 
     private func profileContent(_ profile: GQLUser) -> some View {
@@ -142,21 +148,7 @@ struct ProfileView: View {
 
     #if DEBUG
     private var readOnlyEnvironmentIndicator: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Circle()
-                .fill(AppConfig.useProductionServer ? .red : .green)
-                .frame(width: 8, height: 8)
-
-            Text(AppConfig.environmentName)
-                .font(DS.Typography.captionBold)
-
-            Text("·")
-                .foregroundStyle(.secondary)
-
-            Text("Sign out to switch")
-                .font(DS.Typography.caption)
-                .foregroundStyle(.secondary)
-        }
+        EnvironmentBadge(subtitle: "Sign out to switch")
     }
     #endif
 }

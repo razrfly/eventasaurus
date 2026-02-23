@@ -43,10 +43,14 @@ struct VenueScreenings: Codable, Identifiable {
 }
 
 struct ScreeningVenue: Codable {
-    let name: String
+    let name: String?
     let address: String?
     let lat: Double?
     let lng: Double?
+
+    var displayName: String {
+        name ?? "Unknown Venue"
+    }
 }
 
 struct Showtime: Codable {

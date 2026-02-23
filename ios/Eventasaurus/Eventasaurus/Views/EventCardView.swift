@@ -52,7 +52,7 @@ struct EventCardView: View {
 
                 // Venue for regular events
                 if let venue = event.venue {
-                    Label(venue.name, systemImage: "mappin")
+                    Label(venue.displayName, systemImage: "mappin")
                         .font(DS.Typography.body)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -70,7 +70,7 @@ struct EventCardView: View {
             parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
         }
         if let venue = event.venue {
-            parts.append(venue.name)
+            parts.append(venue.displayName)
         }
         if let subtitle = event.subtitle {
             parts.append(subtitle)

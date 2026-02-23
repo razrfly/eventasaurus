@@ -31,7 +31,7 @@ struct SourceAttributionSection: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text(source.name)
+            Text(source.displayName)
                 .font(DS.Typography.body)
 
             Spacer()

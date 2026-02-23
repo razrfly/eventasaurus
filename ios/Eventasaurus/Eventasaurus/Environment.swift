@@ -26,9 +26,16 @@ enum AppConfig {
         useProductionServer ? "Production" : "Development"
     }
 
-    /// Host string for UI display.
+    /// Host string for UI display, derived from apiBaseURL.
     static var environmentHost: String {
-        useProductionServer ? "wombie.com" : "localhost:4000"
+        let url = apiBaseURL
+        if let host = url.host {
+            if let port = url.port, ![80, 443].contains(port) {
+                return "\(host):\(port)"
+            }
+            return host
+        }
+        return useProductionServer ? "wombie.com" : "localhost:4000"
     }
     #endif
 

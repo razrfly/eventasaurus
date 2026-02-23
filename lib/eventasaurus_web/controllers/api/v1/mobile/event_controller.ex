@@ -22,6 +22,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   @valid_sort_fields ~w(starts_at title popularity relevance)
   @valid_sort_orders ~w(asc desc)
+  @accepted_locales ~w(en pl de fr es it nl pt ru uk cs sk hu ro bg hr sr sl)
 
   @doc """
   GET /api/v1/mobile/events/nearby?lat=X&lng=Y&radius=Z
@@ -124,23 +125,29 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   """
   def show(conn, %{"slug" => slug} = params) do
     user = conn.assigns.user
-    language = params["language"] || "en"
 
-    case find_event_by_slug(slug, language) do
-      {:public, event} ->
-        json(conn, %{
-          event: serialize_public_event_detail(event) |> add_attendance_info(slug, user)
-        })
+    with {:ok, language} <- validate_language(params["language"]) do
+      case find_event_by_slug(slug, language) do
+        {:ok, {:public, event}} ->
+          json(conn, %{
+            event: serialize_public_event_detail(event, language) |> add_attendance_info(slug, user)
+          })
 
-      {:user, event} ->
-        json(conn, %{
-          event: serialize_user_event_detail(event, user) |> add_attendance_info(event, user)
-        })
+        {:ok, {:user, event}} ->
+          json(conn, %{
+            event: serialize_user_event_detail(event, user) |> add_attendance_info(event, user)
+          })
 
-      :not_found ->
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "not_found", message: "Event not found"})
+      end
+    else
+      {:error, :invalid_locale} ->
         conn
-        |> put_status(:not_found)
-        |> json(%{error: "not_found", message: "Event not found"})
+        |> put_status(:bad_request)
+        |> json(%{error: "invalid_params", message: "language: unsupported locale"})
     end
   end
 
@@ -351,12 +358,12 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
             display_description: get_source_description(event.sources, language)
           })
 
-        {:public, event}
+        {:ok, {:public, event}}
 
       nil ->
         case Events.get_event_by_slug(slug) do
-          %{} = event -> {:user, event}
-          nil -> :not_found
+          %{} = event -> {:ok, {:user, event}}
+          nil -> {:error, :not_found}
         end
     end
   end
@@ -371,12 +378,27 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     case get_sorted_sources(sources) do
       [source | _] ->
         case source.description_translations do
-          translations when is_map(translations) -> translations[language] || translations["en"]
-          _ -> nil
+          translations when is_map(translations) ->
+            translations[language] || translations["en"] || first_map_value(translations)
+
+          _ ->
+            nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
+
+  defp first_map_value(map) when map_size(map) > 0 do
+    map |> Map.values() |> List.first()
+  end
+
+  defp first_map_value(_), do: nil
+
+  defp validate_language(nil), do: {:ok, "en"}
+  defp validate_language(lang) when lang in @accepted_locales, do: {:ok, lang}
+  defp validate_language(_), do: {:error, :invalid_locale}
 
   defp serialize_category(cat) do
     %{
@@ -401,9 +423,9 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     }
   end
 
-  defp serialize_public_event_detail(event) do
+  defp serialize_public_event_detail(event, language) do
     nearby_events =
-      PublicEvents.get_nearby_activities_with_fallback(event, display_count: 4, language: "en")
+      PublicEvents.get_nearby_activities_with_fallback(event, display_count: 4, language: language)
 
     serialize_public_event(event)
     |> Map.merge(%{
@@ -454,7 +476,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   defp serialize_venue(venue) do
     %{
-      name: venue.name,
+      name: venue.name || "Unknown Venue",
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,

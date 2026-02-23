@@ -94,7 +94,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.SourceController do
 
   defp serialize_venue(venue) do
     %{
-      name: venue.name,
+      name: venue.name || "Unknown Venue",
       slug: venue.slug,
       address: venue.address,
       lat: venue.latitude,

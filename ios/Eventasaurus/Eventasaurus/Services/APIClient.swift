@@ -186,6 +186,30 @@ final class APIClient {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
+            #if DEBUG
+            print("[APIClient] Decoding \(T.self) from \(url.lastPathComponent) failed:")
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    print("  Key '\(key.stringValue)' not found: \(context.debugDescription)")
+                    print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+                case .valueNotFound(let type, let context):
+                    print("  Value of type '\(type)' not found: \(context.debugDescription)")
+                    print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+                case .typeMismatch(let type, let context):
+                    print("  Type mismatch for '\(type)': \(context.debugDescription)")
+                    print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+                case .dataCorrupted(let context):
+                    print("  Data corrupted: \(context.debugDescription)")
+                    print("  Path: \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+                @unknown default:
+                    print("  Unknown decoding error: \(decodingError)")
+                }
+            }
+            if let json = String(data: data, encoding: .utf8) {
+                print("  Raw JSON: \(json.prefix(2000))")
+            }
+            #endif
             throw APIError.decodingError(error)
         }
     }

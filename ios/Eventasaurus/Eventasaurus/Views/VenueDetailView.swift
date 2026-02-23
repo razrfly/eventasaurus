@@ -39,7 +39,7 @@ struct VenueDetailView: View {
 
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                     // Venue name
-                    Text(data.venue.name)
+                    Text(data.venue.displayName)
                         .font(DS.Typography.title)
 
                     // Address & location
@@ -72,7 +72,7 @@ struct VenueDetailView: View {
                     // Map card
                     if let lat = data.venue.lat, let lng = data.venue.lng {
                         VenueMapCard(
-                            name: data.venue.name,
+                            name: data.venue.displayName,
                             address: data.venue.address,
                             lat: lat,
                             lng: lng

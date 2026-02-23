@@ -134,7 +134,7 @@ struct EventDetailView: View {
 
                     // Venue map
                     if let venue = event.venue, let lat = venue.lat, let lng = venue.lng {
-                        VenueMapCard(name: venue.name, address: venue.address, lat: lat, lng: lng)
+                        VenueMapCard(name: venue.displayName, address: venue.address, lat: lat, lng: lng)
                     }
 
                     // Source attribution
@@ -163,7 +163,7 @@ struct EventDetailView: View {
                 Label {
                     VStack(alignment: .leading) {
                         HStack(spacing: DS.Spacing.xs) {
-                            Text(venue.name)
+                            Text(venue.displayName)
                                 .font(DS.Typography.body)
                             Image(systemName: "chevron.right")
                                 .font(DS.Typography.micro)
@@ -183,7 +183,7 @@ struct EventDetailView: View {
         } else {
             Label {
                 VStack(alignment: .leading) {
-                    Text(venue.name)
+                    Text(venue.displayName)
                         .font(DS.Typography.body)
                     if let address = venue.address {
                         Text(address)
