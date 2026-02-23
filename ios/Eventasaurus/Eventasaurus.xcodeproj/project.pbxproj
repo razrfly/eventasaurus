@@ -72,6 +72,12 @@
 		A1B2C3D401F6A7B8C9D0E1F2 /* Date+RoundTo30.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* Date+RoundTo30.swift */; };
 		B2C3D4E501A7B8C9D0E1F2A3 /* DatePicker30Min.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* DatePicker30Min.swift */; };
 		C3D4E5F601B8C9A0D1E2F3B4 /* URL+Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6A7B8C9A0D1E2F3B4 /* URL+Event.swift */; };
+		D4E5F6A701C9D0E1F2A3B4C5 /* ManageTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* ManageTabBar.swift */; };
+		E5F6A7B801D0E1F2A3B4C5D7 /* ManageOverviewTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F6A7B8C9D0E1F2A3B4C5D7 /* ManageOverviewTab.swift */; };
+		F6A7B8C901E1F2A3B4C5D6E7 /* ManageGuestsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* ManageGuestsTab.swift */; };
+		A7B8C9D001F2A3B4C5D6E7F8 /* ManagePollsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B8C9D0E1F2A3B4C5D6E7F8 /* ManagePollsTab.swift */; };
+		B8C9D0E101A3B4C5D6E7F8A9 /* ManageInsightsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C9D0E1F2A3B4C5D6E7F8A9 /* ManageInsightsTab.swift */; };
+		C9D0E1F201B4C5D6E7F8A9B0 /* ManageHistoryTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D0E1F2A3B4C5D6E7F8A9B0 /* ManageHistoryTab.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -154,6 +160,12 @@
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* Date+RoundTo30.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+RoundTo30.swift"; sourceTree = "<group>"; };
 		B2C3D4E5F6A7B8C9D0E1F2A3 /* DatePicker30Min.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatePicker30Min.swift; sourceTree = "<group>"; };
 		C3D4E5F6A7B8C9A0D1E2F3B4 /* URL+Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URL+Event.swift"; sourceTree = "<group>"; };
+		D4E5F6A7B8C9D0E1F2A3B4C5 /* ManageTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageTabBar.swift; sourceTree = "<group>"; };
+		E5F6A7B8C9D0E1F2A3B4C5D7 /* ManageOverviewTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageOverviewTab.swift; sourceTree = "<group>"; };
+		F6A7B8C9D0E1F2A3B4C5D6E7 /* ManageGuestsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageGuestsTab.swift; sourceTree = "<group>"; };
+		A7B8C9D0E1F2A3B4C5D6E7F8 /* ManagePollsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagePollsTab.swift; sourceTree = "<group>"; };
+		B8C9D0E1F2A3B4C5D6E7F8A9 /* ManageInsightsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageInsightsTab.swift; sourceTree = "<group>"; };
+		C9D0E1F2A3B4C5D6E7F8A9B0 /* ManageHistoryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageHistoryTab.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -275,9 +287,23 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		D0E1F2A3B4C5D6E7F8A9B0C1 /* Manage */ = {
+			isa = PBXGroup;
+			children = (
+				D4E5F6A7B8C9D0E1F2A3B4C5 /* ManageTabBar.swift */,
+				E5F6A7B8C9D0E1F2A3B4C5D7 /* ManageOverviewTab.swift */,
+				F6A7B8C9D0E1F2A3B4C5D6E7 /* ManageGuestsTab.swift */,
+				A7B8C9D0E1F2A3B4C5D6E7F8 /* ManagePollsTab.swift */,
+				B8C9D0E1F2A3B4C5D6E7F8A9 /* ManageInsightsTab.swift */,
+				C9D0E1F2A3B4C5D6E7F8A9B0 /* ManageHistoryTab.swift */,
+			);
+			path = Manage;
+			sourceTree = "<group>";
+		};
 		E586B0DE55D592CB4360C162 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				D0E1F2A3B4C5D6E7F8A9B0C1 /* Manage */,
 				1DD58E490FBBFABB4DCA5D90 /* CachedImage.swift */,
 				F4DE3C0EF2D3E76B3F2D326E /* CastCarousel.swift */,
 				1B1C65EA3CEB181EA47B1CA7 /* CityPickerView.swift */,
@@ -481,6 +507,12 @@
 				DC581E0753A15CDF03AD5CF5 /* VenueMapCard.swift in Sources */,
 				345EB3C4A22ABD7B06E50961 /* VenueSearchSheet.swift in Sources */,
 				7F5A8CADA10CE6A138F69901 /* ViewModifiers.swift in Sources */,
+				D4E5F6A701C9D0E1F2A3B4C5 /* ManageTabBar.swift in Sources */,
+				E5F6A7B801D0E1F2A3B4C5D7 /* ManageOverviewTab.swift in Sources */,
+				F6A7B8C901E1F2A3B4C5D6E7 /* ManageGuestsTab.swift in Sources */,
+				A7B8C9D001F2A3B4C5D6E7F8 /* ManagePollsTab.swift in Sources */,
+				B8C9D0E101A3B4C5D6E7F8A9 /* ManageInsightsTab.swift in Sources */,
+				C9D0E1F201B4C5D6E7F8A9B0 /* ManageHistoryTab.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
