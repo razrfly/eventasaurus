@@ -256,7 +256,7 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
               if Map.has_key?(tally, :score_distribution) and is_map(tally.score_distribution) do
                 case Jason.encode(tally.score_distribution) do
                   {:ok, json} -> Map.put(tally, :score_distribution, json)
-                  {:error, _} -> tally
+                  {:error, _} -> Map.put(tally, :score_distribution, nil)
                 end
               else
                 tally

@@ -17,6 +17,7 @@ struct EventDetailView: View {
 
     // Polls state
     @State private var polls: [EventPoll] = []
+    @State private var pollRefreshID = UUID()
 
     var body: some View {
         Group {
@@ -301,19 +302,19 @@ struct EventDetailView: View {
             ForEach(polls) { poll in
                 NavigationLink {
                     PollDetailView(poll: poll, slug: slug)
+                        .onDisappear { pollRefreshID = UUID() }
                 } label: {
                     PollCardView(poll: poll, slug: slug)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .onAppear {
-            Task {
-                do {
-                    polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
-                } catch {
-                    // Keep existing polls on refresh failure
-                }
+        .task(id: pollRefreshID) {
+            guard !isLoading else { return }
+            do {
+                polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
+            } catch {
+                // Keep existing polls on refresh failure
             }
         }
     }
