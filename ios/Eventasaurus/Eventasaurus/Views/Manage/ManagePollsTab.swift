@@ -10,7 +10,12 @@ struct ManagePollsTab: View {
         if !polls.isEmpty {
             VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 ForEach(polls) { poll in
-                    PollCardView(poll: poll, slug: slug)
+                    NavigationLink {
+                        PollDetailView(poll: poll, slug: slug)
+                    } label: {
+                        PollCardView(poll: poll, slug: slug)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, DS.Spacing.xl)

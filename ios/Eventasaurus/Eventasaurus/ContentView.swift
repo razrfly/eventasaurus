@@ -8,12 +8,23 @@ struct ContentView: View {
     @Binding var deepLinkSlug: String?
     /// Local copy so sheet content stays stable during the dismiss animation.
     @State private var presentedSlug: String?
+    #if DEBUG
+    @State private var showDevPicker = false
+    #endif
+
+    private var isAuthenticated: Bool {
+        #if DEBUG
+        return clerk.user != nil || DevAuthService.shared.isDevAuthActive
+        #else
+        return clerk.user != nil
+        #endif
+    }
 
     var body: some View {
         Group {
             if !clerk.isLoaded {
                 ProgressView("Loading...")
-            } else if clerk.user != nil {
+            } else if isAuthenticated {
                 mainTabView
             } else {
                 signedOutView
@@ -75,6 +86,26 @@ struct ContentView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+
+            #if DEBUG
+            Divider()
+                .padding(.top, DS.Spacing.lg)
+
+            VStack(spacing: DS.Spacing.md) {
+                Text("DEV MODE")
+                    .font(.caption.bold())
+                    .foregroundStyle(.orange)
+
+                Button("Quick Login as Test User") {
+                    showDevPicker = true
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
+            }
+            .sheet(isPresented: $showDevPicker) {
+                DevUserPickerView()
+            }
+            #endif
         }
         .padding(DS.Spacing.xl)
     }

@@ -455,7 +455,7 @@ final class GraphQLClient {
                     id title description
                     pollType votingSystem phase votingDeadline
                     options { id title description voteCount averageScore }
-                    myVotes { id optionId score }
+                    myVotes { id optionId score voteValue voteRank }
                 }
             }
             """,
@@ -464,14 +464,15 @@ final class GraphQLClient {
         return result.eventPolls
     }
 
-    func voteOnPoll(pollId: String, optionId: String, score: Int? = nil) async throws {
+    func voteOnPoll(pollId: String, optionId: String, score: Int? = nil, voteValue: String? = nil) async throws {
         var variables: [String: Any] = ["pollId": pollId, "optionId": optionId]
         if let score { variables["score"] = score }
+        if let voteValue { variables["voteValue"] = voteValue }
 
         let result: GQLVoteOnPollResponse = try await execute(
             query: """
-            mutation VoteOnPoll($pollId: ID!, $optionId: ID!, $score: Int) {
-                voteOnPoll(pollId: $pollId, optionId: $optionId, score: $score) {
+            mutation VoteOnPoll($pollId: ID!, $optionId: ID!, $score: Int, $voteValue: String) {
+                voteOnPoll(pollId: $pollId, optionId: $optionId, score: $score, voteValue: $voteValue) {
                     success
                     errors { field message }
                 }
@@ -618,9 +619,17 @@ final class GraphQLClient {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
+        #if DEBUG
+        if DevAuthService.shared.isDevAuthActive, let userId = DevAuthService.shared.selectedUserId {
+            request.setValue(userId, forHTTPHeaderField: "X-Dev-User-Id")
+        } else if let token = try? await Clerk.shared.auth.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        #else
         if let token = try? await Clerk.shared.auth.getToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        #endif
 
         let query = """
         mutation UploadImage($file: Upload!) {
@@ -673,6 +682,25 @@ final class GraphQLClient {
         return url
     }
 
+    // MARK: - Dev Auth (DEBUG only)
+
+    #if DEBUG
+    func fetchDevQuickLoginUsers() async throws -> DevQuickLoginUsers {
+        let result: GQLDevQuickLoginUsersResponse = try await execute(
+            query: """
+            query DevQuickLoginUsers {
+                devQuickLoginUsers {
+                    personal { id name email label }
+                    organizers { id name email label }
+                    participants { id name email label }
+                }
+            }
+            """
+        )
+        return result.devQuickLoginUsers
+    }
+    #endif
+
     // MARK: - Core Execute
 
     private func execute<T: Decodable>(
@@ -684,9 +712,17 @@ final class GraphQLClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
+        #if DEBUG
+        if DevAuthService.shared.isDevAuthActive, let userId = DevAuthService.shared.selectedUserId {
+            request.setValue(userId, forHTTPHeaderField: "X-Dev-User-Id")
+        } else if let token = try? await Clerk.shared.auth.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        #else
         if let token = try? await Clerk.shared.auth.getToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        #endif
 
         var body: [String: Any] = ["query": query]
         if !variables.isEmpty {
