@@ -11,6 +11,7 @@ struct ManageOverviewTab: View {
     var onPublish: () -> Void
     var onCancel: () -> Void
     var onRemoveOrganizer: (String) -> Void
+    var onParticipantsChanged: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxl) {
@@ -168,7 +169,7 @@ struct ManageOverviewTab: View {
     private var statsSection: some View {
         HStack(spacing: DS.Spacing.xl) {
             NavigationLink {
-                ParticipantListView(event: event) {}
+                ParticipantListView(event: event) { onParticipantsChanged() }
             } label: {
                 statItem(
                     icon: "person.2.fill",

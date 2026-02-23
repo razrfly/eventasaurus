@@ -86,6 +86,7 @@ struct ManageTabBar: View {
             .foregroundStyle(isActive ? Color.accentColor : .secondary)
             .frame(minWidth: 64)
             .contentShape(Rectangle())
+            .accessibilityAddTraits(isActive ? .isSelected : [])
         }
         .buttonStyle(.plain)
     }
