@@ -155,7 +155,8 @@ final class APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         #if DEBUG
-        if DevAuthService.shared.isDevAuthActive, let userId = DevAuthService.shared.selectedUserId {
+        let devAuth = await MainActor.run { (DevAuthService.shared.isDevAuthActive, DevAuthService.shared.selectedUserId) }
+        if devAuth.0, let userId = devAuth.1 {
             request.setValue(userId, forHTTPHeaderField: "X-Dev-User-Id")
         } else if let token = try? await Clerk.shared.auth.getToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

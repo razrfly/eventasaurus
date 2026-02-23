@@ -31,8 +31,6 @@ struct ManagePollsTab: View {
             }
 
             if canCreatePoll {
-                Spacer()
-
                 Button {
                     showCreateSheet = true
                 } label: {

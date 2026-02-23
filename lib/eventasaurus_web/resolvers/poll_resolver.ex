@@ -62,9 +62,17 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
       nil ->
         {:error, "Poll not found"}
 
+      %{phase: "closed"} ->
+        {:error, "Cannot clear votes on a closed poll"}
+
       poll ->
-        {:ok, _count} = Events.clear_user_poll_votes(poll, user)
-        {:ok, reload_poll(poll.id)}
+        case Events.clear_user_poll_votes(poll, user) do
+          {:ok, _count} ->
+            {:ok, reload_poll(poll.id)}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 
@@ -155,6 +163,9 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
 
         {:error, %Ecto.Changeset{} = changeset} ->
           {:error, format_changeset_message(changeset)}
+
+        {:error, reason} ->
+          {:error, reason}
       end
     else
       nil -> {:error, "Poll not found"}
@@ -243,7 +254,10 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
 
             tally =
               if Map.has_key?(tally, :score_distribution) and is_map(tally.score_distribution) do
-                Map.put(tally, :score_distribution, Jason.encode!(tally.score_distribution))
+                case Jason.encode(tally.score_distribution) do
+                  {:ok, json} -> Map.put(tally, :score_distribution, json)
+                  {:error, _} -> tally
+                end
               else
                 tally
               end
@@ -258,16 +272,20 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
   # MARK: - Private helpers
 
   defp reload_poll(poll_id) do
-    poll = Events.get_poll(poll_id)
+    case Events.get_poll(poll_id) do
+      nil ->
+        nil
 
-    ordered_options =
-      from(po in EventasaurusApp.Events.PollOption,
-        where: po.poll_id == ^poll.id and po.status == "active" and is_nil(po.deleted_at),
-        order_by: [asc: po.order_index, asc: po.inserted_at],
-        preload: [:suggested_by, :votes]
-      )
+      poll ->
+        ordered_options =
+          from(po in EventasaurusApp.Events.PollOption,
+            where: po.poll_id == ^poll.id and po.status == "active" and is_nil(po.deleted_at),
+            order_by: [asc: po.order_index, asc: po.inserted_at],
+            preload: [:suggested_by, :votes]
+          )
 
-    Repo.preload(poll, [poll_options: ordered_options], force: true)
+        Repo.preload(poll, [poll_options: ordered_options], force: true)
+    end
   end
 
   defp format_changeset_message(%Ecto.Changeset{} = changeset) do
