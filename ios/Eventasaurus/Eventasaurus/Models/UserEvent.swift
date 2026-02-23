@@ -443,6 +443,8 @@ struct PollVote: Codable, Identifiable {
     let id: String
     let optionId: String
     let score: Int?
+    let voteValue: String?
+    let voteRank: Int?
 }
 
 // MARK: - Poll Response Wrappers

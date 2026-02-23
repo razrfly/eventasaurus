@@ -55,6 +55,14 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
     end
   end
 
+  defp build_vote_data("binary", %{vote_value: value}) when value in ~w(yes maybe no) do
+    {:ok, %{vote_value: value, voted_at: DateTime.utc_now()}}
+  end
+
+  defp build_vote_data("binary", %{vote_value: invalid}) do
+    {:error, "Invalid binary vote value: #{inspect(invalid)}. Must be yes, maybe, or no"}
+  end
+
   defp build_vote_data("binary", _args) do
     {:ok, %{vote_value: "yes", voted_at: DateTime.utc_now()}}
   end

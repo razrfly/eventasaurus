@@ -61,7 +61,9 @@ defmodule EventasaurusWeb.Schema.Types.Poll do
                 %{
                   id: vote.id,
                   option_id: vote.poll_option_id,
-                  score: vote.vote_numeric && Decimal.to_integer(vote.vote_numeric)
+                  score: vote.vote_numeric && Decimal.to_integer(vote.vote_numeric),
+                  vote_value: vote.vote_value,
+                  vote_rank: vote.vote_rank
                 }
               end)
 
@@ -83,6 +85,8 @@ defmodule EventasaurusWeb.Schema.Types.Poll do
     field(:id, non_null(:id))
     field(:option_id, non_null(:id))
     field(:score, :integer)
+    field(:vote_value, :string)
+    field(:vote_rank, :integer)
   end
 
   object :vote_result do

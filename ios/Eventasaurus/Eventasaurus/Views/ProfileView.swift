@@ -8,6 +8,9 @@ struct ProfileView: View {
     @State private var isLoading = true
     @State private var showSignOutError = false
     @State private var signOutErrorMessage = ""
+    #if DEBUG
+    @State private var showDevPicker = false
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -22,6 +25,43 @@ struct ProfileView: View {
 
                 Spacer()
 
+                #if DEBUG
+                if DevAuthService.shared.isDevAuthActive {
+                    VStack(spacing: DS.Spacing.md) {
+                        Text("Dev Mode: \(DevAuthService.shared.selectedUserName ?? "Unknown")")
+                            .font(.caption.bold())
+                            .foregroundStyle(.orange)
+
+                        Button("Switch Dev User") {
+                            showDevPicker = true
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.orange)
+
+                        Button("Exit Dev Mode", role: .destructive) {
+                            DevAuthService.shared.clearDevAuth()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .sheet(isPresented: $showDevPicker) {
+                        DevUserPickerView()
+                    }
+                } else {
+                    Button("Sign Out", role: .destructive) {
+                        Task {
+                            do {
+                                try await clerk.auth.signOut()
+                            } catch is CancellationError {
+                                // Ignore cancellation
+                            } catch {
+                                signOutErrorMessage = error.localizedDescription
+                                showSignOutError = true
+                            }
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+                #else
                 Button("Sign Out", role: .destructive) {
                     Task {
                         do {
@@ -35,7 +75,8 @@ struct ProfileView: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                .padding(.bottom, DS.Spacing.jumbo)
+                #endif
+                Spacer().frame(height: DS.Spacing.jumbo)
             }
             .padding(DS.Spacing.xl)
             .navigationTitle("Profile")

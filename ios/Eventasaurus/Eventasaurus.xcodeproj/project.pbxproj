@@ -58,26 +58,33 @@
 		C4CC1545D06F5E4B12FD782C /* Environment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 553070896AD7C26A7D88B83C /* Environment.swift */; };
 		D13B76AF79665F15544ED551 /* City.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BB47C16D87C32293A6F3BA5 /* City.swift */; };
 		D22FC6F459DBB44FC1A1C682 /* PollCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38F2EFA8C301B1288801C416 /* PollCardView.swift */; };
+		E3A1B2C3D4E5F6A7B8C9D011 /* PollDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A1B2C3D4E5F6A7B8C9D0E11 /* PollDetailView.swift */; };
 		D356EE2811CCA7538B969F18 /* SourceDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5113ACA5E844AA082B95D82F /* SourceDetail.swift */; };
 		D4FDFE920221381C961396FC /* EventDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */; };
 		D577F3F99A409AC4E9EBC795 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29DB2240AAF684CE1A11E249 /* LocationManager.swift */; };
 		DBCCCB04C953FC3B590FB802 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A60E8B52121B630D8E34C9 /* APIClient.swift */; };
 		DC581E0753A15CDF03AD5CF5 /* VenueMapCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90BC383D7C38EF029AA1C1D4 /* VenueMapCard.swift */; };
 		DE6D0309991E94B825D168A1 /* MovieDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D85366408C4A3E79AE6BAD /* MovieDetail.swift */; };
+		F4B2C3D4E5F6A7B8C9D0E122 /* BinaryVotingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B2C3D4E5F6A7B8C9D0E1F22 /* BinaryVotingView.swift */; };
 		F52F70B2CB2DC354E20D331F /* VenueDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62F489520C7562F9CE109FD9 /* VenueDetailView.swift */; };
 		F9F47629233C0F15F102E088 /* ParticipantListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9C1EC4FE4F1A755EDFFFE47 /* ParticipantListView.swift */; };
 		FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86142150038F49A64DEA51BF /* EventasaurusApp.swift */; };
 		FBA9A374B4037E16F25071A5 /* DS.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD30792FDFA411234460F16 /* DS.swift */; };
 		FE2EEDD88330BA075A5E9CC3 /* EventCardGridItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1375920877D214004606FDE /* EventCardGridItem.swift */; };
+		A5C3D4E5F6A7B8C9D0E1F233 /* ApprovalVotingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3D4E5F6A7B8C9D0E1F2A33 /* ApprovalVotingView.swift */; };
 		A1B2C3D401F6A7B8C9D0E1F2 /* Date+RoundTo30.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* Date+RoundTo30.swift */; };
+		B6D4E5F6A7B8C9D0E1F2A344 /* RankedVotingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D4E5F6A7B8C9D0E1F2A3B44 /* RankedVotingView.swift */; };
 		B2C3D4E501A7B8C9D0E1F2A3 /* DatePicker30Min.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* DatePicker30Min.swift */; };
 		C3D4E5F601B8C9A0D1E2F3B4 /* URL+Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6A7B8C9A0D1E2F3B4 /* URL+Event.swift */; };
+		C7E5F6A7B8C9D0E1F2A3B455 /* StarVotingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E5F6A7B8C9D0E1F2A3B4C55 /* StarVotingView.swift */; };
 		D4E5F6A701C9D0E1F2A3B4C5 /* ManageTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* ManageTabBar.swift */; };
 		E5F6A7B801D0E1F2A3B4C5D7 /* ManageOverviewTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F6A7B8C9D0E1F2A3B4C5D7 /* ManageOverviewTab.swift */; };
 		F6A7B8C901E1F2A3B4C5D6E7 /* ManageGuestsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* ManageGuestsTab.swift */; };
 		A7B8C9D001F2A3B4C5D6E7F8 /* ManagePollsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B8C9D0E1F2A3B4C5D6E7F8 /* ManagePollsTab.swift */; };
 		B8C9D0E101A3B4C5D6E7F8A9 /* ManageInsightsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C9D0E1F2A3B4C5D6E7F8A9 /* ManageInsightsTab.swift */; };
 		C9D0E1F201B4C5D6E7F8A9B0 /* ManageHistoryTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D0E1F2A3B4C5D6E7F8A9B0 /* ManageHistoryTab.swift */; };
+		DA1B2C3D4E5F6A7B8C9D0E02 /* DevAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1B2C3D4E5F6A7B8C9D0E01 /* DevAuthService.swift */; };
+		DA1B2C3D4E5F6A7B8C9D0E04 /* DevUserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1B2C3D4E5F6A7B8C9D0E03 /* DevUserPickerView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -107,6 +114,7 @@
 		32EE50586323BDEE1394F9A7 /* SourceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDetailView.swift; sourceTree = "<group>"; };
 		38BAE24FBAAB1D6E0746B447 /* VenueSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueSearchSheet.swift; sourceTree = "<group>"; };
 		38F2EFA8C301B1288801C416 /* PollCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollCardView.swift; sourceTree = "<group>"; };
+		3A1B2C3D4E5F6A7B8C9D0E11 /* PollDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollDetailView.swift; sourceTree = "<group>"; };
 		4067D79830D923AC5F89BE18 /* EventasaurusTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = EventasaurusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		43A60E8B52121B630D8E34C9 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		441EE8FDBC09FDA3917032BF /* SectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionHeader.swift; sourceTree = "<group>"; };
@@ -115,19 +123,23 @@
 		A7B3C4D5E6F809120ABCDE02 /* OrganizerSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizerSearchSheet.swift; sourceTree = "<group>"; };
 		452D6129D87692BB949FC654 /* UserEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserEvent.swift; sourceTree = "<group>"; };
 		4AAF0EF0E711979E18C9F3C9 /* EventCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCreateView.swift; sourceTree = "<group>"; };
+		4B2C3D4E5F6A7B8C9D0E1F22 /* BinaryVotingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryVotingView.swift; sourceTree = "<group>"; };
 		4C1602B14DEDFC56DC6FE864 /* DesignShowcaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignShowcaseView.swift; sourceTree = "<group>"; };
 		4C18EDAF9ED74D47FD98366E /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		5113ACA5E844AA082B95D82F /* SourceDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDetail.swift; sourceTree = "<group>"; };
 		553070896AD7C26A7D88B83C /* Environment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Environment.swift; sourceTree = "<group>"; };
+		5C3D4E5F6A7B8C9D0E1F2A33 /* ApprovalVotingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalVotingView.swift; sourceTree = "<group>"; };
 		62F489520C7562F9CE109FD9 /* VenueDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueDetailView.swift; sourceTree = "<group>"; };
 		67A1ECA61FCC5D45BBDD14B0 /* Eventasaurus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Eventasaurus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B38EBAA7DA99D66A454CAF5 /* EventCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCardView.swift; sourceTree = "<group>"; };
 		6BB47C16D87C32293A6F3BA5 /* City.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = City.swift; sourceTree = "<group>"; };
+		6D4E5F6A7B8C9D0E1F2A3B44 /* RankedVotingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankedVotingView.swift; sourceTree = "<group>"; };
 		6F09B4234829F37AACF41EEE /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		6F8CAF663FAEA3C6C4C47FDD /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		74DE54496EE549F58B31CC75 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		7698F185FC82CD339022E8AB /* GraphQLClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphQLClient.swift; sourceTree = "<group>"; };
 		7B05D65CE187A5EE31364A6C /* ExternalLinkButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalLinkButton.swift; sourceTree = "<group>"; };
+		7E5F6A7B8C9D0E1F2A3B4C55 /* StarVotingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarVotingView.swift; sourceTree = "<group>"; };
 		86142150038F49A64DEA51BF /* EventasaurusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventasaurusApp.swift; sourceTree = "<group>"; };
 		8D7053A8B6FE98152743B2B0 /* DiceBearAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiceBearAvatar.swift; sourceTree = "<group>"; };
 		90BC383D7C38EF029AA1C1D4 /* VenueMapCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueMapCard.swift; sourceTree = "<group>"; };
@@ -166,6 +178,8 @@
 		A7B8C9D0E1F2A3B4C5D6E7F8 /* ManagePollsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagePollsTab.swift; sourceTree = "<group>"; };
 		B8C9D0E1F2A3B4C5D6E7F8A9 /* ManageInsightsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageInsightsTab.swift; sourceTree = "<group>"; };
 		C9D0E1F2A3B4C5D6E7F8A9B0 /* ManageHistoryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageHistoryTab.swift; sourceTree = "<group>"; };
+		DA1B2C3D4E5F6A7B8C9D0E01 /* DevAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevAuthService.swift; sourceTree = "<group>"; };
+		DA1B2C3D4E5F6A7B8C9D0E03 /* DevUserPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevUserPickerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -238,6 +252,7 @@
 			isa = PBXGroup;
 			children = (
 				43A60E8B52121B630D8E34C9 /* APIClient.swift */,
+				DA1B2C3D4E5F6A7B8C9D0E01 /* DevAuthService.swift */,
 				7698F185FC82CD339022E8AB /* GraphQLClient.swift */,
 				29DB2240AAF684CE1A11E249 /* LocationManager.swift */,
 				C339BAB5638C170BEC455EA4 /* MapKitSearchService.swift */,
@@ -300,14 +315,27 @@
 			path = Manage;
 			sourceTree = "<group>";
 		};
+		8F6A7B8C9D0E1F2A3B4C5D66 /* Voting */ = {
+			isa = PBXGroup;
+			children = (
+				5C3D4E5F6A7B8C9D0E1F2A33 /* ApprovalVotingView.swift */,
+				4B2C3D4E5F6A7B8C9D0E1F22 /* BinaryVotingView.swift */,
+				6D4E5F6A7B8C9D0E1F2A3B44 /* RankedVotingView.swift */,
+				7E5F6A7B8C9D0E1F2A3B4C55 /* StarVotingView.swift */,
+			);
+			path = Voting;
+			sourceTree = "<group>";
+		};
 		E586B0DE55D592CB4360C162 /* Views */ = {
 			isa = PBXGroup;
 			children = (
 				D0E1F2A3B4C5D6E7F8A9B0C1 /* Manage */,
+				8F6A7B8C9D0E1F2A3B4C5D66 /* Voting */,
 				1DD58E490FBBFABB4DCA5D90 /* CachedImage.swift */,
 				F4DE3C0EF2D3E76B3F2D326E /* CastCarousel.swift */,
 				1B1C65EA3CEB181EA47B1CA7 /* CityPickerView.swift */,
 				081FD2937E6D0FDD44D61D4C /* ContainerDetailView.swift */,
+				DA1B2C3D4E5F6A7B8C9D0E03 /* DevUserPickerView.swift */,
 				8D7053A8B6FE98152743B2B0 /* DiceBearAvatar.swift */,
 				74DE54496EE549F58B31CC75 /* DiscoverView.swift */,
 				C183EE4658C8B84F380A1DD9 /* EmailChipInput.swift */,
@@ -329,6 +357,7 @@
 				F9C1EC4FE4F1A755EDFFFE47 /* ParticipantListView.swift */,
 				2C053782CA24EDE6B1DE7FBB /* PlanWithFriendsSheet.swift */,
 				38F2EFA8C301B1288801C416 /* PollCardView.swift */,
+				3A1B2C3D4E5F6A7B8C9D0E11 /* PollDetailView.swift */,
 				09081158264711B776E3A8C3 /* ProfileView.swift */,
 				08B4300EF32363EE8C563181 /* RatingPill.swift */,
 				2E1ABA80C5F5B0F47CB19B2A /* SourceAttributionSection.swift */,
@@ -451,6 +480,8 @@
 				B2C3D4E501A7B8C9D0E1F2A3 /* DatePicker30Min.swift in Sources */,
 				C3D4E5F601B8C9A0D1E2F3B4 /* URL+Event.swift in Sources */,
 				DBCCCB04C953FC3B590FB802 /* APIClient.swift in Sources */,
+				A5C3D4E5F6A7B8C9D0E1F233 /* ApprovalVotingView.swift in Sources */,
+				F4B2C3D4E5F6A7B8C9D0E122 /* BinaryVotingView.swift in Sources */,
 				3EA0FF93E892E00FA88F1789 /* CachedImage.swift in Sources */,
 				C1CD3752540DFD2C5ABF8059 /* CastCarousel.swift in Sources */,
 				C2BD2D2E89F78781BA82DA07 /* Category.swift in Sources */,
@@ -461,6 +492,8 @@
 				69C72F0A0750335F65C8C746 /* ContentView.swift in Sources */,
 				FBA9A374B4037E16F25071A5 /* DS.swift in Sources */,
 				A97F7AD0E3832205EA3C76E5 /* DesignShowcaseView.swift in Sources */,
+				DA1B2C3D4E5F6A7B8C9D0E02 /* DevAuthService.swift in Sources */,
+				DA1B2C3D4E5F6A7B8C9D0E04 /* DevUserPickerView.swift in Sources */,
 				2D34D393D59C9DED446B36AD /* DiceBearAvatar.swift in Sources */,
 				66BE87A517CC95E227F35C2B /* DiscoverView.swift in Sources */,
 				97FD68A3ED88FC53DEFA7725 /* EmailChipInput.swift in Sources */,
@@ -494,12 +527,15 @@
 				F9F47629233C0F15F102E088 /* ParticipantListView.swift in Sources */,
 				19FF44634ACFF7B843530B5A /* PlanWithFriendsSheet.swift in Sources */,
 				D22FC6F459DBB44FC1A1C682 /* PollCardView.swift in Sources */,
+				E3A1B2C3D4E5F6A7B8C9D011 /* PollDetailView.swift in Sources */,
 				19223F6C75CFFC1107FAEA8C /* ProfileView.swift in Sources */,
 				63EDA81DDAF6EC9311F9DFCD /* RatingPill.swift in Sources */,
+				B6D4E5F6A7B8C9D0E1F2A344 /* RankedVotingView.swift in Sources */,
 				0298CA05E7727190054E5FE6 /* SectionHeader.swift in Sources */,
 				C3B10B57D6D14E8610548AD8 /* SourceAttributionSection.swift in Sources */,
 				D356EE2811CCA7538B969F18 /* SourceDetail.swift in Sources */,
 				78A2F277877C5F1C7D079700 /* SourceDetailView.swift in Sources */,
+				C7E5F6A7B8C9D0E1F2A3B455 /* StarVotingView.swift in Sources */,
 				5030F718C801A39577A42E01 /* UserEvent.swift in Sources */,
 				3B9CDEC3692A99BF1356530B /* UserEventCardView.swift in Sources */,
 				7F4C58AB9D95E8665583F71E /* VenueDetail.swift in Sources */,

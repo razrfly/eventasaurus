@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.Schema.Mutations.PollMutations do
       arg(:poll_id, non_null(:id))
       arg(:option_id, non_null(:id))
       arg(:score, :integer)
+      arg(:vote_value, :string)
       middleware(Authenticate)
       resolve(&PollResolver.vote_on_poll/3)
     end

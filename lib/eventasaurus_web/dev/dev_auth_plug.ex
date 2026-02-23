@@ -27,7 +27,40 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
       if conn.assigns[:readonly_session] do
         conn
       else
-        call_with_session(conn)
+        # Check header-based auth first (stateless, for iOS dev mode),
+        # then fall through to session-based auth
+        case check_header_auth(conn) do
+          %Plug.Conn{} = conn -> conn
+          nil -> call_with_session(conn)
+        end
+      end
+    end
+
+    # Check for X-Dev-User-Id header (stateless auth for iOS dev mode)
+    defp check_header_auth(conn) do
+      case get_req_header(conn, "x-dev-user-id") do
+        [user_id_str | _] ->
+          case Integer.parse(user_id_str) do
+            {user_id, ""} ->
+              case Repo.replica().get(User, user_id) do
+                nil ->
+                  Logger.warning("DEV: X-Dev-User-Id header with unknown user #{user_id}")
+                  nil
+
+                user ->
+                  Logger.debug("DEV: Header auth for user #{user.email} (ID: #{user.id})")
+
+                  conn
+                  |> assign(:auth_user, user)
+                  |> assign(:dev_mode_auth, true)
+              end
+
+            _ ->
+              nil
+          end
+
+        [] ->
+          nil
       end
     end
 
