@@ -143,13 +143,22 @@ struct EventSource: Codable, Identifiable {
         } else {
             // Deterministic fallback: derive from stable fields so repeated decodes
             // produce the same identity instead of a random UUID each time.
-            let stableKey = [url, name, logoUrl].compactMap { $0 }.joined(separator: "|")
+            // In this branch url and name are guaranteed nil or empty, so only
+            // logoUrl can contribute meaningful data.
+            let stableKey = [url, name, logoUrl]
+                .compactMap { $0?.isEmpty == false ? $0 : nil }
+                .joined(separator: "|")
             if stableKey.isEmpty {
                 id = "source_unknown"
             } else {
-                var hasher = Hasher()
-                hasher.combine(stableKey)
-                id = "source_\(abs(hasher.finalize()))"
+                // FNV-1a 64-bit hash — deterministic across process launches
+                // (unlike Swift.Hasher which is seeded per-process).
+                var hash: UInt64 = 14695981039346656037
+                for byte in stableKey.utf8 {
+                    hash ^= UInt64(byte)
+                    hash &*= 1099511628211
+                }
+                id = "source_\(hash)"
             }
         }
     }

@@ -39,8 +39,7 @@ defmodule EventasaurusWeb.Resolvers.DashboardResolver do
   # For archived, use the deleted events query and transform to match shape
   defp fetch_events(user, :archived, _ownership_filter, limit) do
     user
-    |> Events.list_deleted_events_by_user()
-    |> Enum.take(limit)
+    |> Events.list_deleted_events_by_user(limit: limit)
     |> Enum.map(&transform_archived_event/1)
   end
 
@@ -103,10 +102,10 @@ defmodule EventasaurusWeb.Resolvers.DashboardResolver do
   defp transform_venue(%{} = v) do
     %{
       id: to_string(v.id),
-      name: v[:name] || "",
-      address: v[:address],
-      latitude: v[:latitude],
-      longitude: v[:longitude]
+      name: Map.get(v, :name) || "",
+      address: Map.get(v, :address),
+      latitude: Map.get(v, :latitude),
+      longitude: Map.get(v, :longitude)
     }
   end
 
@@ -116,7 +115,8 @@ defmodule EventasaurusWeb.Resolvers.DashboardResolver do
     case DateTime.from_naive(ndt, "Etc/UTC") do
       {:ok, dt} -> dt
       {:ambiguous, dt, _} -> dt
-      :error -> DateTime.utc_now()
+      {:gap, dt, _} -> dt
+      {:error, _reason} -> DateTime.utc_now()
     end
   end
 

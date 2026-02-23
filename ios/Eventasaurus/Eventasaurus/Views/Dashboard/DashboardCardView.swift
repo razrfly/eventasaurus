@@ -43,7 +43,6 @@ struct DashboardCardView: View {
                 Image(systemName: event.status.icon)
                 Text(event.status.displayName)
             }
-            .font(DS.Typography.badge)
             .badgeStyle(backgroundColor: event.status.color.opacity(DS.Opacity.badge), foregroundColor: event.status.color)
             .padding(DS.Spacing.md)
         }

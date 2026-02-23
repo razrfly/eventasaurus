@@ -175,7 +175,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
   defp serialize_venue_group(group, now) do
     %{
       venue: %{
-        name: if(is_binary(group.venue.name) and String.trim(group.venue.name) != "", do: group.venue.name, else: "Unknown Venue"),
+        name: VenueHelpers.venue_display_name(group.venue.name),
         address: group.venue.address,
         lat: group.venue.latitude,
         lng: group.venue.longitude

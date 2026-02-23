@@ -46,7 +46,7 @@ enum AppConfig {
         if path.hasPrefix("http://") || path.hasPrefix("https://") {
             return URL(string: path)
         }
-        return URL(string: path, relativeTo: apiBaseURL)
+        return URL(string: path, relativeTo: apiBaseURL)?.absoluteURL
     }
 
     private static func plistString(_ key: String) -> String {

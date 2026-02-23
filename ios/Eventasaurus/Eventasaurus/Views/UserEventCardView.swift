@@ -109,18 +109,7 @@ struct UserEventCardView: View {
             Image(systemName: event.status.icon)
             Text(event.status.displayName)
         }
-        .font(DS.Typography.badge)
-        .badgeStyle(backgroundColor: statusColor.opacity(DS.Opacity.badge))
-    }
-
-    private var statusColor: Color {
-        switch event.status {
-        case .draft: return .orange
-        case .confirmed: return .green
-        case .canceled: return .red
-        case .polling: return .blue
-        case .threshold: return .purple
-        }
+        .badgeStyle(backgroundColor: event.status.color.opacity(DS.Opacity.badge), foregroundColor: event.status.color)
     }
 
     private var visibilityBadge: some View {
