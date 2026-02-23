@@ -227,22 +227,32 @@ struct DiscoverView: View {
 
     private var filterChips: some View {
         VStack(spacing: DS.Spacing.md) {
-            // Category chips
+            // Category browse chips — 2-row horizontal grid
             if !categories.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.md) {
-                        ForEach(categories) { cat in
-                            if let catId = cat.numericId {
-                                CategoryChip(
-                                    category: cat,
-                                    isSelected: selectedCategories.contains(catId)
-                                ) {
-                                    toggleCategory(catId)
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    Text("Browse by Category")
+                        .font(DS.Typography.captionBold)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, DS.Spacing.xl)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHGrid(
+                            rows: [GridItem(.fixed(44)), GridItem(.fixed(44))],
+                            spacing: DS.Spacing.md
+                        ) {
+                            ForEach(categories) { cat in
+                                if let catId = cat.numericId {
+                                    CategoryBrowseChip(
+                                        category: cat,
+                                        isSelected: selectedCategories.contains(catId)
+                                    ) {
+                                        toggleCategory(catId)
+                                    }
                                 }
                             }
                         }
+                        .padding(.horizontal, DS.Spacing.xl)
                     }
-                    .padding(.horizontal, DS.Spacing.xl)
                 }
             }
 
@@ -533,21 +543,43 @@ struct DiscoverView: View {
 
 // MARK: - Chip Views
 
-struct CategoryChip: View {
+struct CategoryBrowseChip: View {
     let category: Category
     let isSelected: Bool
     let action: () -> Void
 
+    private var accentColor: Color { category.resolvedColor }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: DS.Spacing.xs) {
-                if let icon = category.icon {
-                    Text(icon)
-                }
+            HStack(spacing: DS.Spacing.md) {
+                // Icon square
+                RoundedRectangle(cornerRadius: DS.Radius.md)
+                    .fill(accentColor.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                    .overlay {
+                        Text(category.icon ?? "📅")
+                            .font(.system(size: 16))
+                    }
+
                 Text(category.name)
                     .font(DS.Typography.captionMedium)
+                    .foregroundStyle(isSelected ? accentColor : .primary)
+                    .lineLimit(1)
             }
-            .chipStyle(isSelected: isSelected)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .fill(isSelected ? accentColor.opacity(0.12) : Color(.systemGray6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .strokeBorder(
+                        isSelected ? accentColor : Color(.systemGray4),
+                        lineWidth: isSelected ? 2 : 0.5
+                    )
+            )
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)

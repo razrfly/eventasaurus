@@ -211,17 +211,16 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
                               <label for={"suggestion-#{suggestion.user_id}"} class="font-medium text-gray-900 cursor-pointer">
                                 <%= suggestion.name %>
                               </label>
-                              <%= if suggestion.recommendation_level != "not_recommended" do %>
+                              <%= if suggestion.recommendation_level != :suggested do %>
                                 <span class={[
                                   "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
                                   case suggestion.recommendation_level do
-                                    "highly_recommended" -> "bg-green-100 text-green-800"
-                                    "recommended" -> "bg-blue-100 text-blue-800"
-                                    "somewhat_recommended" -> "bg-yellow-100 text-yellow-800"
+                                    :highly_recommended -> "bg-green-100 text-green-800"
+                                    :recommended -> "bg-blue-100 text-blue-800"
                                     _ -> "bg-gray-100 text-gray-800"
                                   end
                                 ]}>
-                                  <%= String.replace(suggestion.recommendation_level, "_", " ") |> String.capitalize() %>
+                                  <%= String.replace(to_string(suggestion.recommendation_level), "_", " ") |> String.capitalize() %>
                                 </span>
                               <% end %>
                             </div>

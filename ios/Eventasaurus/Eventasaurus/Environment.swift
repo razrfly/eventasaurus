@@ -2,9 +2,24 @@ import Foundation
 
 enum AppConfig {
     #if targetEnvironment(simulator)
-    static let apiBaseURL = plistURL("APIBaseURL")
-    static let clerkPublishableKey = plistString("ClerkPublishableKey")
+    /// Whether the app is running against production (set via Dev Settings, requires restart).
+    static let useProductionServer: Bool = {
+        #if DEBUG
+        return UserDefaults.standard.bool(forKey: "dev_use_production_server")
+        #else
+        return false
+        #endif
+    }()
+
+    static let apiBaseURL: URL = {
+        useProductionServer ? plistURL("APIBaseURLProd") : plistURL("APIBaseURL")
+    }()
+
+    static let clerkPublishableKey: String = {
+        useProductionServer ? plistString("ClerkPublishableKeyProd") : plistString("ClerkPublishableKey")
+    }()
     #else
+    static let useProductionServer = true
     static let apiBaseURL = plistURL("APIBaseURLProd")
     static let clerkPublishableKey = plistString("ClerkPublishableKeyProd")
     #endif

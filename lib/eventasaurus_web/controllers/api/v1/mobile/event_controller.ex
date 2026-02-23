@@ -339,8 +339,17 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   defp find_event_by_slug(slug) do
     case PublicEvents.get_by_slug(slug) do
       %{} = event ->
-        # Preload sources (with their source assoc) for ticket URL and attribution
-        event = Repo.preload(event, sources: [:source])
+        # Preload sources, movies, and venue for cover image resolution and attribution
+        event = Repo.preload(event, [sources: [:source], movies: [], venue: [city_ref: :country]])
+
+        # Populate virtual fields that preload_with_sources normally sets
+        event =
+          Map.merge(event, %{
+            cover_image_url: PublicEventsEnhanced.get_cover_image_url(event),
+            display_title: get_localized_field(event.title_translations, event.title),
+            display_description: get_source_description(event.sources)
+          })
+
         {:public, event}
 
       nil ->
@@ -348,6 +357,35 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
           %{} = event -> {:user, event}
           nil -> :not_found
         end
+    end
+  end
+
+  defp get_localized_field(nil, fallback), do: fallback
+  defp get_localized_field(translations, fallback) when is_map(translations) do
+    translations["en"] || fallback
+  end
+  defp get_localized_field(_, fallback), do: fallback
+
+  defp get_source_description(sources) do
+    sources
+    |> Enum.sort_by(fn source ->
+      priority = case source.metadata do
+        %{"priority" => p} when is_integer(p) -> p
+        _ -> 10
+      end
+      ts = case source.last_seen_at do
+        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+        _ -> 9_223_372_036_854_775_807
+      end
+      {priority, ts}
+    end)
+    |> case do
+      [source | _] ->
+        case source.description_translations do
+          translations when is_map(translations) -> translations["en"]
+          _ -> nil
+        end
+      _ -> nil
     end
   end
 

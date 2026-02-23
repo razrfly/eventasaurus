@@ -115,13 +115,12 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
                           <label for={"participant-#{participant.user_id}"} class="font-medium text-gray-900 cursor-pointer">
                             <%= participant.name || participant.username %>
                           </label>
-                          <%= if Map.get(participant, :recommendation_level) && participant.recommendation_level != "not_recommended" do %>
+                          <%= if Map.get(participant, :recommendation_level) && participant.recommendation_level != :suggested do %>
                             <span class={[
                               "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
                               case participant.recommendation_level do
-                                "highly_recommended" -> "bg-green-100 text-green-800"
-                                "recommended" -> "bg-blue-100 text-blue-800"
-                                "somewhat_recommended" -> "bg-yellow-100 text-yellow-800"
+                                :highly_recommended -> "bg-green-100 text-green-800"
+                                :recommended -> "bg-blue-100 text-blue-800"
                                 _ -> "bg-gray-100 text-gray-800"
                               end
                             ]}>
