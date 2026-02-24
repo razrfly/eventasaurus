@@ -54,10 +54,10 @@ enum DiscoverBadges {
     private static func groupBadgeContent(for event: Event, compact: Bool) -> (String, String)? {
         switch event.type {
         case "movie_group":
-            guard let count = event.screeningCount else { return nil }
+            guard let count = event.screeningCount, count > 0 else { return nil }
             return ("film", compact ? "\(count)" : "\(count) screening\(count == 1 ? "" : "s")")
         case "event_group":
-            guard let count = event.eventCount else { return nil }
+            guard let count = event.eventCount, count > 0 else { return nil }
             return ("rectangle.stack", compact ? "\(count)" : "\(count) event\(count == 1 ? "" : "s")")
         case "container_group":
             let label = event.containerType ?? "festival"
