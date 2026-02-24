@@ -54,9 +54,18 @@ struct Event: Codable, Identifiable, Hashable {
     // Categories — API returns rich objects for list endpoints, strings for detail
     let categories: [Category]?
 
+    /// Whether this item is a movie group (aggregated screenings across venues).
+    var isMovieGroup: Bool { type == "movie_group" }
+
     /// Whether this item is an aggregated group (movie stack, event group, etc.)
     var isGroup: Bool {
-        type == "movie_group" || type == "event_group" || type == "container_group"
+        isMovieGroup || type == "event_group" || type == "container_group"
+    }
+
+    /// Whether this movie group has usable TMDB metadata (rating, runtime, or genres).
+    var hasTmdbData: Bool {
+        guard isMovieGroup else { return false }
+        return (voteAverage ?? 0) > 0 || (runtime ?? 0) >= 30 || !(genres ?? []).isEmpty
     }
 
     /// Primary category (first in the list)
@@ -203,20 +212,11 @@ extension Event: EventDisplayable {
         guard isGroup else { return nil }
 
         // Movie groups with TMDB data: view renders SF Symbol metadata instead
-        if type == "movie_group" {
-            let hasTmdbData = (voteAverage ?? 0) > 0 || (runtime ?? 0) >= 30 || !(genres ?? []).isEmpty
+        if isMovieGroup {
             if hasTmdbData { return nil }
-
             // No TMDB data — fall back to tagline or counts
             if let tag = tagline, !tag.isEmpty { return tag }
-            var fallback: [String] = []
-            if let count = screeningCount, count > 0 {
-                fallback.append("\(count) showtime\(count == 1 ? "" : "s")")
-            }
-            if let count = venueCount, count > 0 {
-                fallback.append("at \(count) venue\(count == 1 ? "" : "s")")
-            }
-            return fallback.isEmpty ? subtitle : fallback.joined(separator: " · ")
+            return showtimeVenueSummary ?? subtitle
         }
 
         var parts: [String] = []
@@ -232,31 +232,31 @@ extension Event: EventDisplayable {
     // MARK: - Movie TMDB Properties
 
     var displayMovieRating: Double? {
-        guard type == "movie_group", let rating = voteAverage, rating > 0 else { return nil }
+        guard isMovieGroup, let rating = voteAverage, rating > 0 else { return nil }
         return rating
     }
 
     var displayMovieRuntime: Int? {
-        guard type == "movie_group", let mins = runtime, mins >= 30 else { return nil }
+        guard isMovieGroup, let mins = runtime, mins >= 30 else { return nil }
         return mins
     }
 
     var displayMovieGenres: String? {
-        guard type == "movie_group", let movieGenres = genres, !movieGenres.isEmpty else { return nil }
+        guard isMovieGroup, let movieGenres = genres, !movieGenres.isEmpty else { return nil }
         return movieGenres.prefix(2).joined(separator: ", ")
     }
 
     /// Secondary line for movie groups: tagline if available, otherwise screening counts
     /// when TMDB metadata is already shown as the primary line.
     var displayCompactTagline: String? {
-        guard type == "movie_group" else { return nil }
-        let hasTmdbData = (voteAverage ?? 0) > 0 || (runtime ?? 0) >= 30 || !(genres ?? []).isEmpty
-        guard hasTmdbData else { return nil }
-
-        // Prefer tagline if available
+        guard isMovieGroup, hasTmdbData else { return nil }
         if let tag = tagline, !tag.isEmpty { return tag }
+        return showtimeVenueSummary
+    }
 
-        // Otherwise show screening/venue counts as secondary info
+    /// Showtime/venue count summary (e.g. "3 showtimes · at 3 venues"). Reused by
+    /// `displayCompactMetadata` (fallback) and `displayCompactTagline` (secondary line).
+    private var showtimeVenueSummary: String? {
         var parts: [String] = []
         if let count = screeningCount, count > 0 {
             parts.append("\(count) showtime\(count == 1 ? "" : "s")")
