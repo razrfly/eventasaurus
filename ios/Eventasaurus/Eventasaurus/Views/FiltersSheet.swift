@@ -117,10 +117,6 @@ struct FiltersSheet: View {
                     Text(icon)
                 }
 
-                Circle()
-                    .fill(item.color)
-                    .frame(width: DS.ImageSize.categoryDot, height: DS.ImageSize.categoryDot)
-
                 Text(item.name)
                     .foregroundStyle(.primary)
 

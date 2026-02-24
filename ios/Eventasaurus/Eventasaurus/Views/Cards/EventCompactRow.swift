@@ -58,8 +58,25 @@ struct EventCompactRow<Item: EventDisplayable, TrailingBadge: View>: View {
                 .font(DS.Typography.bodyMedium)
                 .lineLimit(2)
 
-            // Line 4: clock + time · mappin + venue
-            metadataLine
+            // Line 4: clock + time · mappin + venue, movie TMDB data, or group metadata
+            if event.displayStartsAt != nil || event.displayVenueName != nil {
+                metadataLine
+            } else if event.displayMovieRating != nil || event.displayMovieRuntime != nil || event.displayMovieGenres != nil {
+                movieMetadataLine
+            } else if let metadata = event.displayCompactMetadata {
+                Text(metadata)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Line 5 (optional): tagline for movies with TMDB data
+            if let tag = event.displayCompactTagline {
+                Text(tag)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .italic()
+            }
         }
     }
 
@@ -75,7 +92,7 @@ struct EventCompactRow<Item: EventDisplayable, TrailingBadge: View>: View {
                 if let startsAt = event.displayStartsAt {
                     HStack(spacing: DS.Spacing.xxs) {
                         Image(systemName: "clock")
-                        Text(startsAt, format: .dateTime.hour().minute())
+                        Text(startsAt.smartEventFormat())
                     }
                     .font(DS.Typography.caption)
                     .foregroundStyle(.secondary)
@@ -96,6 +113,59 @@ struct EventCompactRow<Item: EventDisplayable, TrailingBadge: View>: View {
                     .font(DS.Typography.caption)
                     .foregroundStyle(.secondary)
                 }
+            }
+        }
+    }
+
+    // MARK: - Movie Metadata Line
+
+    @ViewBuilder
+    private var movieMetadataLine: some View {
+        let hasRating = event.displayMovieRating != nil
+        let hasRuntime = event.displayMovieRuntime != nil
+        let hasGenres = event.displayMovieGenres != nil
+
+        HStack(spacing: DS.Spacing.xs) {
+            if let rating = event.displayMovieRating {
+                HStack(spacing: DS.Spacing.xxs) {
+                    Image(systemName: "popcorn.fill")
+                    Text(rating.truncatingRemainder(dividingBy: 1) == 0
+                         ? String(format: "%.0f", rating)
+                         : String(format: "%.1f", rating))
+                }
+                .font(DS.Typography.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            if hasRating && (hasRuntime || hasGenres) {
+                Text("\u{00B7}")
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let mins = event.displayMovieRuntime {
+                HStack(spacing: DS.Spacing.xxs) {
+                    Image(systemName: "hourglass")
+                    Text("\(mins) min")
+                }
+                .font(DS.Typography.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            if hasRuntime && hasGenres {
+                Text("\u{00B7}")
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let genreText = event.displayMovieGenres {
+                HStack(spacing: DS.Spacing.xxs) {
+                    Image(systemName: "theatermasks.fill")
+                    Text(genreText)
+                        .lineLimit(1)
+                }
+                .font(DS.Typography.caption)
+                .foregroundStyle(.secondary)
             }
         }
     }

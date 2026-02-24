@@ -35,6 +35,12 @@ struct Event: Codable, Identifiable, Hashable {
     let subtitle: String?
     let containerType: String?
 
+    // Movie group metadata (from TMDB)
+    let runtime: Int?
+    let voteAverage: Double?
+    let genres: [String]?
+    let tagline: String?
+
     // Detail-only fields
     let description: String?
     let attendeeCount: Int?
@@ -83,6 +89,7 @@ extension Event {
     enum CodingKeys: String, CodingKey {
         case slug, title, startsAt, endsAt, coverImageUrl, type, venue
         case screeningCount, eventCount, venueCount, subtitle, containerType
+        case runtime, voteAverage, genres, tagline
         case description, attendeeCount, isAttending, attendanceStatus, status, categories
         case ticketUrl, sources, nearbyEvents
     }
@@ -101,6 +108,10 @@ extension Event {
         venueCount = try container.decodeIfPresent(Int.self, forKey: .venueCount)
         subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
         containerType = try container.decodeIfPresent(String.self, forKey: .containerType)
+        runtime = try container.decodeIfPresent(Int.self, forKey: .runtime)
+        voteAverage = try container.decodeIfPresent(Double.self, forKey: .voteAverage)
+        genres = try container.decodeIfPresent([String].self, forKey: .genres)
+        tagline = try container.decodeIfPresent(String.self, forKey: .tagline)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         attendeeCount = try container.decodeIfPresent(Int.self, forKey: .attendeeCount)
         isAttending = try container.decodeIfPresent(Bool.self, forKey: .isAttending)
@@ -187,6 +198,74 @@ extension Event: EventDisplayable {
     var displayParticipantCount: Int? { attendeeCount }
     var displayPrimaryCategoryIcon: String? { primaryCategory?.icon }
     var displayPrimaryCategoryName: String? { primaryCategory?.name }
+
+    var displayCompactMetadata: String? {
+        guard isGroup else { return nil }
+
+        // Movie groups with TMDB data: view renders SF Symbol metadata instead
+        if type == "movie_group" {
+            let hasTmdbData = (voteAverage ?? 0) > 0 || (runtime ?? 0) >= 30 || !(genres ?? []).isEmpty
+            if hasTmdbData { return nil }
+
+            // No TMDB data — fall back to tagline or counts
+            if let tag = tagline, !tag.isEmpty { return tag }
+            var fallback: [String] = []
+            if let count = screeningCount, count > 0 {
+                fallback.append("\(count) showtime\(count == 1 ? "" : "s")")
+            }
+            if let count = venueCount, count > 0 {
+                fallback.append("at \(count) venue\(count == 1 ? "" : "s")")
+            }
+            return fallback.isEmpty ? subtitle : fallback.joined(separator: " · ")
+        }
+
+        var parts: [String] = []
+        if type == "event_group", let count = eventCount, count > 0 {
+            parts.append("\(count) event\(count == 1 ? "" : "s")")
+        }
+        if let count = venueCount, count > 0 {
+            parts.append("at \(count) venue\(count == 1 ? "" : "s")")
+        }
+        return parts.isEmpty ? subtitle : parts.joined(separator: " · ")
+    }
+
+    // MARK: - Movie TMDB Properties
+
+    var displayMovieRating: Double? {
+        guard type == "movie_group", let rating = voteAverage, rating > 0 else { return nil }
+        return rating
+    }
+
+    var displayMovieRuntime: Int? {
+        guard type == "movie_group", let mins = runtime, mins >= 30 else { return nil }
+        return mins
+    }
+
+    var displayMovieGenres: String? {
+        guard type == "movie_group", let movieGenres = genres, !movieGenres.isEmpty else { return nil }
+        return movieGenres.prefix(2).joined(separator: ", ")
+    }
+
+    /// Secondary line for movie groups: tagline if available, otherwise screening counts
+    /// when TMDB metadata is already shown as the primary line.
+    var displayCompactTagline: String? {
+        guard type == "movie_group" else { return nil }
+        let hasTmdbData = (voteAverage ?? 0) > 0 || (runtime ?? 0) >= 30 || !(genres ?? []).isEmpty
+        guard hasTmdbData else { return nil }
+
+        // Prefer tagline if available
+        if let tag = tagline, !tag.isEmpty { return tag }
+
+        // Otherwise show screening/venue counts as secondary info
+        var parts: [String] = []
+        if let count = screeningCount, count > 0 {
+            parts.append("\(count) showtime\(count == 1 ? "" : "s")")
+        }
+        if let count = venueCount, count > 0 {
+            parts.append("at \(count) venue\(count == 1 ? "" : "s")")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 }
 
 struct Venue: Codable, Hashable {
