@@ -30,6 +30,7 @@
 		5030F718C801A39577A42E01 /* UserEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452D6129D87692BB949FC654 /* UserEvent.swift */; };
 		5219488FAF33352A349D2566 /* DashboardEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73968BAF70CC92876D97C6AE /* DashboardEvent.swift */; };
 		5255001398205FFA081CBECE /* GlassButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23239257453EA681CC7A9039 /* GlassButtonStyles.swift */; };
+		FB1A2B3C4D5E6F7A8B9C0D1E /* FullBleedNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1B2C3D4E5F6A7B8C9D0E2F /* FullBleedNavigation.swift */; };
 		BB2C3D4E5F6A7B8C9D0E1F2A /* DramaticHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C3D4E5F6A7B8C9D0E1F /* DramaticHero.swift */; };
 		DD4E5F6A7B8C9D0E1F2A3B4C /* HeroOverlayCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3D4E5F6A7B8C9D0E1F2A3B /* HeroOverlayCard.swift */; };
 		52A58D13B462AE8D451C8B9E /* DevAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29CE61BD2C91FF075FDA21BF /* DevAuthService.swift */; };
@@ -127,6 +128,7 @@
 		1D910507C20A4079D0F6753F /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
 		1DD58E490FBBFABB4DCA5D90 /* CachedImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedImage.swift; sourceTree = "<group>"; };
 		23239257453EA681CC7A9039 /* GlassButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassButtonStyles.swift; sourceTree = "<group>"; };
+		FA1B2C3D4E5F6A7B8C9D0E2F /* FullBleedNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullBleedNavigation.swift; sourceTree = "<group>"; };
 		AA1B2C3D4E5F6A7B8C9D0E1F /* DramaticHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DramaticHero.swift; sourceTree = "<group>"; };
 		CC3D4E5F6A7B8C9D0E1F2A3B /* HeroOverlayCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroOverlayCard.swift; sourceTree = "<group>"; };
 		29CE61BD2C91FF075FDA21BF /* DevAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevAuthService.swift; sourceTree = "<group>"; };
@@ -364,6 +366,7 @@
 				4C1602B14DEDFC56DC6FE864 /* DesignShowcaseView.swift */,
 				CAD30792FDFA411234460F16 /* DS.swift */,
 				6F8CAF663FAEA3C6C4C47FDD /* EmptyStateView.swift */,
+				FA1B2C3D4E5F6A7B8C9D0E2F /* FullBleedNavigation.swift */,
 				23239257453EA681CC7A9039 /* GlassButtonStyles.swift */,
 				CC3D4E5F6A7B8C9D0E1F2A3B /* HeroOverlayCard.swift */,
 				D043E01AB25A48B1B9450405 /* GlassCard.swift */,
@@ -447,6 +450,7 @@
 				4E4DF31DE954567A5C7FEA8A /* Sources */,
 				959AE15A1F080A039DC7D004 /* Resources */,
 				72E6612B34DDED6B631CD635 /* Frameworks */,
+				A1B2C3D4E5F60001BLDNUM01 /* Auto-Increment Build Number */,
 			);
 			buildRules = (
 			);
@@ -577,6 +581,7 @@
 				5F9EDBF3905059495F205F03 /* ExternalLinkButton.swift in Sources */,
 				4EBB879F991F4C4B79747AB8 /* FiltersSheet.swift in Sources */,
 				757C275F111D45C240AFAAEA /* FlowLayout.swift in Sources */,
+				FB1A2B3C4D5E6F7A8B9C0D1E /* FullBleedNavigation.swift in Sources */,
 				5255001398205FFA081CBECE /* GlassButtonStyles.swift in Sources */,
 				BB2C3D4E5F6A7B8C9D0E1F2A /* DramaticHero.swift in Sources */,
 				DD4E5F6A7B8C9D0E1F2A3B4C /* HeroOverlayCard.swift in Sources */,
@@ -633,6 +638,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A1B2C3D4E5F60001BLDNUM01 /* Auto-Increment Build Number */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Auto-Increment Build Number";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Auto-increment build number with timestamp on Release (Archive) builds\nif [ \"$CONFIGURATION\" = \"Release\" ]; then\n    buildNumber=$(date +%Y%m%d%H%M)\n    /usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $buildNumber\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n    echo \"Build number set to $buildNumber\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXTargetDependency section */
 		D1D8AB739CB47403DCAEA667 /* PBXTargetDependency */ = {
@@ -814,7 +836,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wombie.app;
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -838,7 +860,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wombie.app;
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;

@@ -69,6 +69,9 @@ struct Event: Decodable, Identifiable, Hashable {
     var movieCityId: Int? { _detail?.movieCityId }
     var occurrences: EventOccurrences? { _detail?.occurrences }
 
+    /// Whether this event is a user-created internal event (supports RSVP).
+    var isInternalEvent: Bool { type == "user" }
+
     /// Whether this item is a movie group (aggregated screenings across venues).
     var isMovieGroup: Bool { type == "movie_group" }
 
@@ -232,11 +235,17 @@ struct EventOccurrences: Codable {
 }
 
 struct EventShowtime: Codable, Identifiable {
-    var id: String { "\(date)_\(time ?? "")_\(label ?? "")" }
+    var id: String { "\(date)_\(time ?? "")_\(label ?? "")_\(externalId ?? "")" }
     let date: String
     let time: String?
     let label: String?
     let externalId: String?
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime]
+        return f
+    }()
 
     /// Extract format from label (e.g., "IMAX 2D Napisy PL" → "IMAX", "2D Dubbed" → "2D")
     var format: String? {
@@ -253,9 +262,7 @@ struct EventShowtime: Codable, Identifiable {
     var isUpcoming: Bool {
         guard let time else { return false }
         let isoString = "\(date)T\(time):00"
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime]
-        guard let dt = formatter.date(from: isoString) else { return false }
+        guard let dt = Self.isoFormatter.date(from: isoString) else { return false }
         return dt > Date()
     }
 }

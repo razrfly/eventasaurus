@@ -22,8 +22,7 @@ struct SourceDetailView: View {
                 )
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .fullBleedNavigation()
         .onAppear { selectedCityId = cityId }
         .task(id: selectedCityId) {
             await loadSource()
@@ -128,9 +127,9 @@ struct SourceDetailView: View {
         let theme = dsTheme(for: source.domains?.first)
 
         return ZStack(alignment: .bottomLeading) {
-            // Gradient background — extended to fill under nav bar
+            // Gradient background
             theme.gradient
-                .frame(height: DS.ImageSize.sourceBanner + 60)
+                .frame(height: DS.ImageSize.sourceBanner)
 
             // Content overlay
             HStack(spacing: DS.Spacing.lg) {

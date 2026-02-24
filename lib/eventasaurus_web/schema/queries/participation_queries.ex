@@ -6,6 +6,13 @@ defmodule EventasaurusWeb.Schema.Queries.ParticipationQueries do
   alias EventasaurusWeb.Schema.Middleware.Authenticate
 
   object :participation_queries do
+    @desc "Get a single event by slug as a participant (no organizer requirement)."
+    field :event_as_participant, :event do
+      arg(:slug, non_null(:string))
+      middleware(Authenticate)
+      resolve(&ParticipationResolver.event_as_participant/3)
+    end
+
     @desc "List events the current user is attending (upcoming)."
     field :attending_events, non_null(list_of(non_null(:event))) do
       arg(:limit, :integer)

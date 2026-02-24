@@ -22,8 +22,7 @@ struct MovieDetailView: View {
                 )
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .fullBleedNavigation()
         .task { await loadMovie() }
     }
 

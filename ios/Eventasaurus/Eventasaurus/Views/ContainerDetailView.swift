@@ -20,8 +20,7 @@ struct ContainerDetailView: View {
                 )
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .fullBleedNavigation()
         .task { await loadContainer() }
     }
 
@@ -90,7 +89,7 @@ struct ContainerDetailView: View {
                         }
                     }
                     .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.top, DS.Spacing.xl)
+                    .padding(.top, DS.Spacing.fullBleedNavClearance)
                 }
 
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {

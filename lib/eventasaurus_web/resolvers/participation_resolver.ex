@@ -10,6 +10,13 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
   alias EventasaurusWeb.Schema.Helpers.RsvpStatus
   import EventasaurusWeb.Resolvers.Helpers, only: [format_changeset_errors: 1]
 
+  def event_as_participant(_parent, %{slug: slug}, _resolution) do
+    case Events.get_event_by_slug(slug) do
+      nil -> {:error, "NOT_FOUND"}
+      event -> {:ok, event}
+    end
+  end
+
   def attending_events(_parent, args, %{context: %{current_user: user}}) do
     opts = [
       upcoming: true,

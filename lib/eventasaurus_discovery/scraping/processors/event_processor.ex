@@ -2017,13 +2017,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   # Timezone-aware version: shift to local timezone before extracting date
   defp format_date_only(%DateTime{} = dt, timezone) when is_binary(timezone) do
-    dt
-    |> DateTime.shift_zone!(timezone)
-    |> DateTime.to_date()
-    |> Date.to_string()
-  rescue
-    ArgumentError ->
-      dt |> DateTime.to_date() |> Date.to_string()
+    case DateTime.shift_zone(dt, timezone) do
+      {:ok, shifted} ->
+        shifted |> DateTime.to_date() |> Date.to_string()
+
+      {:error, reason} ->
+        Logger.warning("Timezone shift failed for #{timezone}: #{inspect(reason)}, falling back to UTC")
+        dt |> DateTime.to_date() |> Date.to_string()
+    end
   end
 
   defp format_date_only(%DateTime{} = dt, _), do: format_date_only(dt)
@@ -2036,19 +2037,20 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     # Convert to local timezone before extracting time
     # This ensures occurrence times show local time, not UTC
-    dt
-    |> DateTime.shift_zone!(timezone)
-    |> DateTime.to_time()
-    |> Time.to_string()
-    # HH:MM format
-    |> String.slice(0..4)
-  rescue
-    # If timezone shift fails, fall back to UTC time extraction
-    ArgumentError ->
-      dt
-      |> DateTime.to_time()
-      |> Time.to_string()
-      |> String.slice(0..4)
+    case DateTime.shift_zone(dt, timezone) do
+      {:ok, shifted} ->
+        shifted
+        |> DateTime.to_time()
+        |> Time.to_string()
+        |> String.slice(0..4)
+
+      {:error, reason} ->
+        Logger.warning("Timezone shift failed for #{timezone}: #{inspect(reason)}, falling back to UTC")
+        dt
+        |> DateTime.to_time()
+        |> Time.to_string()
+        |> String.slice(0..4)
+    end
   end
 
   # Resolve timezone from a venue's city association
@@ -2064,7 +2066,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     TimezoneUtils.get_city_timezone(venue.city_ref)
   rescue
-    _ -> nil
+    e in Ecto.QueryError ->
+      Logger.warning("Failed to resolve venue timezone (query error): #{Exception.message(e)}")
+      nil
+
+    e in ArgumentError ->
+      Logger.warning("Failed to resolve venue timezone (invalid data): #{Exception.message(e)}")
+      nil
   end
 
   # Resolve timezone from a parent event's venue
