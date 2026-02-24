@@ -43,6 +43,7 @@ struct DiscoverView: View {
 
     // Filters sheet
     @State private var showFilters = false
+    @State private var isDateControlVisible = true
     @State private var radiusKm: Double = {
         let saved = UserDefaults.standard.double(forKey: "discoverRadiusKm")
         return saved > 0 ? saved : 50
@@ -88,8 +89,11 @@ struct DiscoverView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Filter chips — always visible, outside the scrollable event list
-                filterChips
+                // Date filter — hides while scrolling on iOS 18+
+                if isDateControlVisible {
+                    filterChips
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
 
                 // Event content
                 Group {
@@ -165,6 +169,7 @@ struct DiscoverView: View {
                 }
             }
             .searchable(text: $searchText, prompt: "Search events...")
+            .searchMinimized()
             .onSubmit(of: .search) {
                 Task { await loadEvents() }
             }
@@ -228,90 +233,96 @@ struct DiscoverView: View {
     // MARK: - Filter Chips
 
     private var filterChips: some View {
-        VStack(spacing: DS.Spacing.md) {
-            // Date range: segmented picker + overflow menu
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Text("Sort by Date")
-                    .font(DS.Typography.captionBold)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, DS.Spacing.xl)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text("Sort by Date")
+                .font(DS.Typography.captionBold)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, DS.Spacing.xl)
 
-                HStack(spacing: DS.Spacing.md) {
-                    Picker("Date range", selection: Binding<SegmentedDateRange>(
-                        get: { activeSegment ?? .all },
-                        set: { newValue in
+            HStack(spacing: DS.Spacing.md) {
+                Picker("Date range", selection: Binding<SegmentedDateRange>(
+                    get: { activeSegment ?? .all },
+                    set: { newValue in
+                        withAnimation(DS.Animation.fast) {
+                            selectedDateRange = newValue.apiValue
+                        }
+                        Task { await loadEvents() }
+                    }
+                )) {
+                    ForEach(SegmentedDateRange.allCases, id: \.self) { segment in
+                        segmentLabel(segment)
+                            .tag(segment)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .opacity(isOverflowDateActive ? 0.5 : 1)
+
+                Menu {
+                    ForEach(Self.overflowDateRanges, id: \.value) { range in
+                        Button {
                             withAnimation(DS.Animation.fast) {
-                                selectedDateRange = newValue.apiValue
+                                selectedDateRange = range.value
                             }
                             Task { await loadEvents() }
-                        }
-                    )) {
-                        ForEach(SegmentedDateRange.allCases, id: \.self) { segment in
-                            segmentLabel(segment)
-                                .tag(segment)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .opacity(isOverflowDateActive ? 0.5 : 1)
-
-                    Menu {
-                        ForEach(Self.overflowDateRanges, id: \.value) { range in
-                            Button {
-                                withAnimation(DS.Animation.fast) {
-                                    selectedDateRange = range.value
-                                }
-                                Task { await loadEvents() }
-                            } label: {
-                                Label {
-                                    overflowMenuLabel(range.label, value: range.value)
-                                } icon: {
-                                    if selectedDateRange == range.value {
-                                        Image(systemName: "checkmark")
-                                    }
+                        } label: {
+                            Label {
+                                overflowMenuLabel(range.label, value: range.value)
+                            } icon: {
+                                if selectedDateRange == range.value {
+                                    Image(systemName: "checkmark")
                                 }
                             }
                         }
-                    } label: {
-                        Image(systemName: isOverflowDateActive ? "calendar.circle.fill" : "calendar.circle")
-                            .font(.title2)
-                            .foregroundStyle(isOverflowDateActive ? .primary : .secondary)
                     }
-                    .accessibilityLabel("More date ranges")
-                    .accessibilityValue(overflowAccessibilityValue)
+                } label: {
+                    Image(systemName: isOverflowDateActive ? "calendar.circle.fill" : "calendar.circle")
+                        .font(.title2)
+                        .foregroundStyle(isOverflowDateActive ? .primary : .secondary)
                 }
-                .padding(.horizontal, DS.Spacing.xl)
+                .accessibilityLabel("More date ranges")
+                .accessibilityValue(overflowAccessibilityValue)
             }
+            .padding(.horizontal, DS.Spacing.xl)
+        }
+        .padding(.vertical, DS.Spacing.md)
+    }
 
-            // Category browse chips — 2-row horizontal grid
-            if !categories.isEmpty {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    Text("Browse by Category")
-                        .font(DS.Typography.captionBold)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, DS.Spacing.xl)
+    // MARK: - Category Browse Section (scrollable)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHGrid(
-                            rows: [GridItem(.fixed(44)), GridItem(.fixed(44))],
-                            spacing: DS.Spacing.md
-                        ) {
-                            ForEach(categories) { cat in
-                                if let catId = cat.numericId {
-                                    CategoryBrowseChip(
-                                        category: cat,
-                                        isSelected: selectedCategories.contains(catId)
-                                    ) {
-                                        toggleCategory(catId)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.xl)
+    @ViewBuilder
+    private var categoryBrowseSection: some View {
+        if !categories.isEmpty {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Text("Browse by Category")
+                    .font(DS.Typography.captionBold)
+                    .foregroundStyle(.secondary)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                        categoryChipRow(from: 0)
+                        categoryChipRow(from: 1)
+                    }
+                }
+            }
+            .padding(.bottom, DS.Spacing.md)
+        }
+    }
+
+    @ViewBuilder
+    private func categoryChipRow(from startIndex: Int) -> some View {
+        let rowCategories = stride(from: startIndex, to: categories.count, by: 2).map { categories[$0] }
+        HStack(spacing: DS.Spacing.md) {
+            ForEach(rowCategories) { cat in
+                if let catId = cat.numericId {
+                    CategoryBrowseChip(
+                        category: cat,
+                        isSelected: selectedCategories.contains(catId)
+                    ) {
+                        toggleCategory(catId)
                     }
                 }
             }
         }
-        .padding(.vertical, DS.Spacing.md)
     }
 
     /// Get the count for a given date range value
@@ -358,6 +369,8 @@ struct DiscoverView: View {
     private var eventList: some View {
         ScrollView {
             VStack(spacing: 0) {
+                categoryBrowseSection
+
                 // Pagination info
                 if totalCount > 0 {
                     HStack {
@@ -388,6 +401,7 @@ struct DiscoverView: View {
             }
             .padding(DS.Spacing.xl)
         }
+        .modifier(ScrollAwareFilterModifier(isDateControlVisible: $isDateControlVisible))
     }
 
     @ViewBuilder
@@ -677,6 +691,47 @@ struct DiscoverView: View {
             let country = UserDefaults.standard.string(forKey: Self.cityCountryKey)
             let countryCode = UserDefaults.standard.string(forKey: Self.cityCountryCodeKey)
             selectedCity = City(id: cityId, name: name, slug: slug, latitude: nil, longitude: nil, timezone: nil, country: country, countryCode: countryCode, eventCount: nil)
+        }
+    }
+}
+
+// MARK: - Scroll-Aware Filter Modifier
+
+private struct ScrollAwareFilterModifier: ViewModifier {
+    @Binding var isDateControlVisible: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+                .onScrollPhaseChange { _, newPhase in
+                    switch newPhase {
+                    case .tracking:
+                        withAnimation(DS.Animation.fast) {
+                            isDateControlVisible = false
+                        }
+                    case .idle:
+                        withAnimation(DS.Animation.fast) {
+                            isDateControlVisible = true
+                        }
+                    default:
+                        break
+                    }
+                }
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - Search Minimize (iOS 26+)
+
+fileprivate extension View {
+    @ViewBuilder
+    func searchMinimized() -> some View {
+        if #available(iOS 26.0, *) {
+            self.searchToolbarBehavior(.minimize)
+        } else {
+            self
         }
     }
 }
