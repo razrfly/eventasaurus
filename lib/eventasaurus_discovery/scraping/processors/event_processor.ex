@@ -20,6 +20,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Scraping.Processors.EventImageCaching
   alias Eventasaurus.Discovery.OccurrenceValidator
+  alias EventasaurusWeb.Utils.TimezoneUtils
+  alias EventasaurusDiscovery.Locations.City
   alias Ecto.Multi
 
   import Ecto.Query
@@ -96,9 +98,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         process_venue(normalized, source_id)
       end)
       |> Multi.run(:event, fn _repo, %{venue: venue} ->
+        # Inject venue timezone into normalized data so occurrence times are stored as local time
+        timezone = resolve_venue_timezone(venue)
+        data = if timezone, do: Map.put(normalized, :venue_timezone, timezone), else: normalized
+
         # find_or_create_event returns {:ok, event, action} but Ecto.Multi expects {:ok, value}
         # Wrap the result as {:ok, {event, action}} to satisfy Multi callback contract
-        case find_or_create_event(normalized, venue, source_id) do
+        case find_or_create_event(data, venue, source_id) do
           {:ok, event, action} -> {:ok, {event, action}}
           {:error, _reason} = error -> error
         end
@@ -486,8 +492,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp build_occurrence_structure("exhibition", data) do
+    timezone = extract_timezone(data) || "Etc/UTC"
+
     date_entry = %{
-      "date" => format_date_only(data.start_at),
+      "date" => format_date_only(data.start_at, timezone),
       "time" => format_time_only(data.start_at, data),
       "external_id" => data.external_id
     }
@@ -495,7 +503,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     # Add end_date for exhibitions if available
     date_entry =
       if data.ends_at do
-        Map.put(date_entry, "end_date", format_date_only(data.ends_at))
+        Map.put(date_entry, "end_date", format_date_only(data.ends_at, timezone))
       else
         date_entry
       end
@@ -523,8 +531,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp build_occurrence_structure("recurring", data) do
+    timezone = extract_timezone(data) || "Etc/UTC"
+
     date_entry = %{
-      "date" => format_date_only(data.start_at),
+      "date" => format_date_only(data.start_at, timezone),
       "time" => format_time_only(data.start_at, data),
       "external_id" => data.external_id
     }
@@ -561,8 +571,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp build_occurrence_structure("explicit", data) do
+    timezone = extract_timezone(data) || "Etc/UTC"
+
     date_entry = %{
-      "date" => format_date_only(data.start_at),
+      "date" => format_date_only(data.start_at, timezone),
       "time" => format_time_only(data.start_at, data),
       "external_id" => data.external_id
     }
@@ -1883,9 +1895,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       end
     else
       # Explicit-type occurrence - add to dates array
-      # Create new date entry
+      # Resolve timezone for correct local date/time storage
+      timezone =
+        extract_timezone(new_occurrence) ||
+          resolve_parent_event_timezone(parent_event) ||
+          "Etc/UTC"
+
+      # Create new date entry with timezone-aware date
       new_date = %{
-        "date" => format_date_only(new_occurrence.start_at),
+        "date" => format_date_only(new_occurrence.start_at, timezone),
         "time" => format_time_only(new_occurrence.start_at, new_occurrence)
       }
 
@@ -1997,6 +2015,19 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp format_date_only(_), do: nil
 
+  # Timezone-aware version: shift to local timezone before extracting date
+  defp format_date_only(%DateTime{} = dt, timezone) when is_binary(timezone) do
+    dt
+    |> DateTime.shift_zone!(timezone)
+    |> DateTime.to_date()
+    |> Date.to_string()
+  rescue
+    ArgumentError ->
+      dt |> DateTime.to_date() |> Date.to_string()
+  end
+
+  defp format_date_only(%DateTime{} = dt, _), do: format_date_only(dt)
+
   # Format time with timezone awareness (2-arity version)
   defp format_time_only(%DateTime{} = dt, event_data)
        when is_map(event_data) or is_nil(event_data) do
@@ -2020,8 +2051,41 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       |> String.slice(0..4)
   end
 
+  # Resolve timezone from a venue's city association
+  defp resolve_venue_timezone(nil), do: nil
+  defp resolve_venue_timezone(%{city_id: nil}), do: nil
+
+  defp resolve_venue_timezone(%{city_id: _city_id} = venue) do
+    venue =
+      case venue do
+        %{city_ref: %City{}} -> venue
+        _ -> Repo.preload(venue, city_ref: :country)
+      end
+
+    TimezoneUtils.get_city_timezone(venue.city_ref)
+  rescue
+    _ -> nil
+  end
+
+  # Resolve timezone from a parent event's venue
+  defp resolve_parent_event_timezone(parent_event) do
+    case parent_event do
+      %{venue_id: venue_id} when not is_nil(venue_id) ->
+        venue = Repo.get(EventasaurusApp.Venues.Venue, venue_id)
+
+        if venue do
+          resolve_venue_timezone(venue)
+        else
+          nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
   # Extract timezone from event data hierarchy
-  # Priority: recurrence_rule > metadata > default
+  # Priority: recurrence_rule > venue_timezone > metadata > default
   defp extract_timezone(nil), do: nil
 
   defp extract_timezone(data) when is_map(data) do
@@ -2030,11 +2094,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       data[:recurrence_rule] && data[:recurrence_rule]["timezone"] ->
         data[:recurrence_rule]["timezone"]
 
-      # Priority 2: metadata timezone (for all events)
+      # Priority 2: venue-derived timezone (injected by process_event_atomically)
+      is_binary(data[:venue_timezone]) ->
+        data[:venue_timezone]
+
+      # Priority 3: metadata timezone (for all events)
       data[:metadata] && data[:metadata]["timezone"] ->
         data[:metadata]["timezone"]
 
-      # Priority 3: metadata timezone (string key fallback)
+      # Priority 4: metadata timezone (string key fallback)
       data["metadata"] && data["metadata"]["timezone"] ->
         data["metadata"]["timezone"]
 

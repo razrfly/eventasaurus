@@ -1,6 +1,6 @@
 import Foundation
 
-struct SourceDetailResponse: Codable {
+struct SourceDetailResponse: Decodable {
     let source: SourceInfo
     let events: [Event]
     let availableCities: [SourceCity]?

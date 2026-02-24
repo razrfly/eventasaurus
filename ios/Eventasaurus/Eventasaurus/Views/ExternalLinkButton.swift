@@ -11,7 +11,6 @@ struct ExternalLinkButton: View {
                 .font(DS.Typography.bodyBold)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
+        .buttonStyle(.glassSecondary)
     }
 }

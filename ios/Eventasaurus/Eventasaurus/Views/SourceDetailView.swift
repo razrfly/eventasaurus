@@ -23,6 +23,7 @@ struct SourceDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear { selectedCityId = cityId }
         .task(id: selectedCityId) {
             await loadSource()
@@ -34,12 +35,6 @@ struct SourceDetailView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 // Themed hero card
                 sourceHero(data.source)
-
-                // Website link
-                if let websiteUrl = data.source.websiteUrl, let url = URL(string: websiteUrl) {
-                    ExternalLinkButton(title: "Visit Website", url: url, icon: "globe")
-                        .padding(.horizontal, DS.Spacing.xl)
-                }
 
                 // City filter pills
                 if let cities = data.availableCities, cities.count > 1 {
@@ -91,6 +86,18 @@ struct SourceDetailView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            if let websiteUrl = data.source.websiteUrl, let url = URL(string: websiteUrl) {
+                GlassActionBar {
+                    Link(destination: url) {
+                        Label("Visit Website", systemImage: "globe")
+                            .font(DS.Typography.bodyBold)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glassPrimary)
+                }
+            }
+        }
     }
 
     private func cityPicker(_ cities: [SourceCity]) -> some View {
@@ -101,7 +108,7 @@ struct SourceDetailView: View {
                     selectedCityId = nil
                 } label: {
                     Text("All Cities")
-                        .chipStyle(isSelected: selectedCityId == nil)
+                        .glassChipStyle(isSelected: selectedCityId == nil)
                 }
 
                 ForEach(cities) { city in
@@ -109,7 +116,7 @@ struct SourceDetailView: View {
                         selectedCityId = city.id
                     } label: {
                         Text(city.name)
-                            .chipStyle(isSelected: selectedCityId == city.id)
+                            .glassChipStyle(isSelected: selectedCityId == city.id)
                     }
                 }
             }
@@ -121,9 +128,9 @@ struct SourceDetailView: View {
         let theme = dsTheme(for: source.domains?.first)
 
         return ZStack(alignment: .bottomLeading) {
-            // Gradient background
+            // Gradient background — extended to fill under nav bar
             theme.gradient
-                .frame(height: DS.ImageSize.sourceBanner)
+                .frame(height: DS.ImageSize.sourceBanner + 60)
 
             // Content overlay
             HStack(spacing: DS.Spacing.lg) {
@@ -157,6 +164,7 @@ struct SourceDetailView: View {
             .glassBackground(cornerRadius: DS.Radius.lg)
             .padding(DS.Spacing.md)
         }
+        .ignoresSafeArea(edges: .top)
     }
 
     private func dsTheme(for domain: String?) -> DS.DomainTheme {

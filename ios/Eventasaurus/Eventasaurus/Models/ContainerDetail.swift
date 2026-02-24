@@ -1,6 +1,6 @@
 import Foundation
 
-struct ContainerDetailResponse: Codable {
+struct ContainerDetailResponse: Decodable {
     let container: ContainerInfo
     let events: [Event]
 }

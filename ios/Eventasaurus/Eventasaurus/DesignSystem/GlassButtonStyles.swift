@@ -42,6 +42,28 @@ struct GlassIconButtonStyle: ButtonStyle {
     }
 }
 
+/// Tinted glass button for stateful actions (RSVP, Plan with Friends).
+/// When active, a colored fill sits behind the glass; when inactive, plain glass.
+/// The tint is clipped to a Capsule to avoid visible rectangular edges behind the glass effect.
+struct GlassTintedButtonStyle: ButtonStyle {
+    let tintColor: Color
+    let isActive: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(DS.Typography.bodyMedium)
+            .padding(.horizontal, DS.Spacing.xl)
+            .padding(.vertical, DS.Spacing.md)
+            .background(
+                isActive ? tintColor.opacity(DS.Opacity.tintedBackground) : tintColor.opacity(0.05),
+                in: Capsule()
+            )
+            .foregroundStyle(isActive ? tintColor : tintColor.opacity(0.6))
+            .glassBackground(cornerRadius: DS.Radius.full, interactive: true)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+    }
+}
+
 extension ButtonStyle where Self == GlassPrimaryButtonStyle {
     static var glassPrimary: GlassPrimaryButtonStyle { .init() }
 }
@@ -52,6 +74,12 @@ extension ButtonStyle where Self == GlassSecondaryButtonStyle {
 
 extension ButtonStyle where Self == GlassIconButtonStyle {
     static var glassIcon: GlassIconButtonStyle { .init() }
+}
+
+extension ButtonStyle where Self == GlassTintedButtonStyle {
+    static func glassTinted(_ color: Color, isActive: Bool) -> GlassTintedButtonStyle {
+        .init(tintColor: color, isActive: isActive)
+    }
 }
 
 #Preview("Glass Buttons") {

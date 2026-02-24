@@ -21,54 +21,74 @@ struct VenueDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .task { await loadVenue() }
     }
 
     private func venueContent(_ data: VenueDetailResponse) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
-                // Cover image
-                if let url = AppConfig.resolvedImageURL(data.venue.coverImageUrl) {
-                    CachedImage(
-                        url: url,
-                        height: DS.ImageSize.hero,
-                        cornerRadius: 0,
+                // Hero with overlaid name/address/city
+                if AppConfig.resolvedImageURL(data.venue.coverImageUrl) != nil {
+                    DramaticHero(
+                        imageURL: AppConfig.resolvedImageURL(data.venue.coverImageUrl),
                         placeholderIcon: "building.2"
-                    )
+                    ) {
+                        HeroOverlayCard {
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                Text(data.venue.displayName)
+                                    .font(DS.Typography.title)
+                                    .foregroundStyle(.white)
+
+                                if let address = data.venue.address, !address.isEmpty {
+                                    Label {
+                                        Text(address)
+                                    } icon: {
+                                        Image(systemName: "mappin.and.ellipse")
+                                    }
+                                    .font(DS.Typography.body)
+                                    .foregroundStyle(.white.opacity(0.9))
+                                }
+
+                                if let cityName = data.venue.cityName {
+                                    Label {
+                                        if let country = data.venue.country {
+                                            Text("\(cityName), \(country)")
+                                        } else {
+                                            Text(cityName)
+                                        }
+                                    } icon: {
+                                        Image(systemName: "globe")
+                                    }
+                                    .font(DS.Typography.body)
+                                    .foregroundStyle(.white.opacity(0.9))
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // No-image fallback: inline title
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text(data.venue.displayName)
+                            .font(DS.Typography.title)
+
+                        if let address = data.venue.address, !address.isEmpty {
+                            Label(address, systemImage: "mappin.and.ellipse")
+                                .font(DS.Typography.body)
+                        }
+
+                        if let cityName = data.venue.cityName {
+                            let location = data.venue.country.map { "\(cityName), \($0)" } ?? cityName
+                            Label(location, systemImage: "globe")
+                                .font(DS.Typography.body)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.top, DS.Spacing.xl)
                 }
 
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // Venue name
-                    Text(data.venue.displayName)
-                        .font(DS.Typography.title)
-
-                    // Address & location
-                    if let address = data.venue.address, !address.isEmpty {
-                        Label {
-                            Text(address)
-                                .font(DS.Typography.body)
-                        } icon: {
-                            Image(systemName: "mappin.and.ellipse")
-                        }
-                    }
-
-                    // City & country
-                    if let cityName = data.venue.cityName {
-                        Label {
-                            if let country = data.venue.country {
-                                Text("\(cityName), \(country)")
-                                    .font(DS.Typography.body)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text(cityName)
-                                    .font(DS.Typography.body)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "globe")
-                        }
-                    }
-
                     // Map card
                     if let lat = data.venue.lat, let lng = data.venue.lng {
                         VenueMapCard(

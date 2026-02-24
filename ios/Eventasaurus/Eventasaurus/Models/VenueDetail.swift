@@ -1,6 +1,6 @@
 import Foundation
 
-struct VenueDetailResponse: Codable {
+struct VenueDetailResponse: Decodable {
     let venue: VenueInfo
     let events: [Event]
 }

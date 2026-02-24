@@ -30,6 +30,8 @@
 		5030F718C801A39577A42E01 /* UserEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452D6129D87692BB949FC654 /* UserEvent.swift */; };
 		5219488FAF33352A349D2566 /* DashboardEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73968BAF70CC92876D97C6AE /* DashboardEvent.swift */; };
 		5255001398205FFA081CBECE /* GlassButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23239257453EA681CC7A9039 /* GlassButtonStyles.swift */; };
+		BB2C3D4E5F6A7B8C9D0E1F2A /* DramaticHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C3D4E5F6A7B8C9D0E1F /* DramaticHero.swift */; };
+		DD4E5F6A7B8C9D0E1F2A3B4C /* HeroOverlayCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3D4E5F6A7B8C9D0E1F2A3B /* HeroOverlayCard.swift */; };
 		52A58D13B462AE8D451C8B9E /* DevAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29CE61BD2C91FF075FDA21BF /* DevAuthService.swift */; };
 		54D10366B2B79CDD10621C1E /* EnvironmentBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8BC404C3C27475A3C47081 /* EnvironmentBadge.swift */; };
 		5C306B9FDABE275011FFD069 /* ContainerDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081FD2937E6D0FDD44D61D4C /* ContainerDetailView.swift */; };
@@ -96,6 +98,7 @@
 		F9F47629233C0F15F102E088 /* ParticipantListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9C1EC4FE4F1A755EDFFFE47 /* ParticipantListView.swift */; };
 		FA54CB49C4C0EF312F71D7D8 /* EventasaurusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86142150038F49A64DEA51BF /* EventasaurusApp.swift */; };
 		FBA9A374B4037E16F25071A5 /* DS.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD30792FDFA411234460F16 /* DS.swift */; };
+		E6B2A8D3C0F1E4057B6A2D8C /* ScreeningScheduleSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A3B9C2D1E4F5068A7B3C9D /* ScreeningScheduleSection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -124,6 +127,8 @@
 		1D910507C20A4079D0F6753F /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
 		1DD58E490FBBFABB4DCA5D90 /* CachedImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedImage.swift; sourceTree = "<group>"; };
 		23239257453EA681CC7A9039 /* GlassButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassButtonStyles.swift; sourceTree = "<group>"; };
+		AA1B2C3D4E5F6A7B8C9D0E1F /* DramaticHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DramaticHero.swift; sourceTree = "<group>"; };
+		CC3D4E5F6A7B8C9D0E1F2A3B /* HeroOverlayCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroOverlayCard.swift; sourceTree = "<group>"; };
 		29CE61BD2C91FF075FDA21BF /* DevAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevAuthService.swift; sourceTree = "<group>"; };
 		29DB2240AAF684CE1A11E249 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		2ACCC9B258D507FA559AB1C0 /* EventBadgeHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBadgeHelpers.swift; sourceTree = "<group>"; };
@@ -202,6 +207,7 @@
 		FD46770CC3F41864DFC21903 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FDAC37A111C3255FF5F29365 /* ManageHistoryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageHistoryTab.swift; sourceTree = "<group>"; };
 		FF6EC223F595A37DD515F75C /* DevEnvironmentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevEnvironmentService.swift; sourceTree = "<group>"; };
+		F7A3B9C2D1E4F5068A7B3C9D /* ScreeningScheduleSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreeningScheduleSection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -354,10 +360,12 @@
 			isa = PBXGroup;
 			children = (
 				32131700DBD0F47D79C54995 /* DatePicker30Min.swift */,
+				AA1B2C3D4E5F6A7B8C9D0E1F /* DramaticHero.swift */,
 				4C1602B14DEDFC56DC6FE864 /* DesignShowcaseView.swift */,
 				CAD30792FDFA411234460F16 /* DS.swift */,
 				6F8CAF663FAEA3C6C4C47FDD /* EmptyStateView.swift */,
 				23239257453EA681CC7A9039 /* GlassButtonStyles.swift */,
+				CC3D4E5F6A7B8C9D0E1F2A3B /* HeroOverlayCard.swift */,
 				D043E01AB25A48B1B9450405 /* GlassCard.swift */,
 				9B4475BE562F544ADD835239 /* LoadingSkeleton.swift */,
 				441EE8FDBC09FDA3917032BF /* SectionHeader.swift */,
@@ -406,6 +414,7 @@
 				02CC8404C49B6FFBE584BC24 /* PollDetailView.swift */,
 				09081158264711B776E3A8C3 /* ProfileView.swift */,
 				08B4300EF32363EE8C563181 /* RatingPill.swift */,
+				F7A3B9C2D1E4F5068A7B3C9D /* ScreeningScheduleSection.swift */,
 				2E1ABA80C5F5B0F47CB19B2A /* SourceAttributionSection.swift */,
 				32EE50586323BDEE1394F9A7 /* SourceDetailView.swift */,
 				62F489520C7562F9CE109FD9 /* VenueDetailView.swift */,
@@ -569,6 +578,8 @@
 				4EBB879F991F4C4B79747AB8 /* FiltersSheet.swift in Sources */,
 				757C275F111D45C240AFAAEA /* FlowLayout.swift in Sources */,
 				5255001398205FFA081CBECE /* GlassButtonStyles.swift in Sources */,
+				BB2C3D4E5F6A7B8C9D0E1F2A /* DramaticHero.swift in Sources */,
+				DD4E5F6A7B8C9D0E1F2A3B4C /* HeroOverlayCard.swift in Sources */,
 				86B8CB7F418727A11F632ECB /* GlassCard.swift in Sources */,
 				5D4E5CD10455E4CD962EFEDE /* GraphQLClient.swift in Sources */,
 				AF576D6AF232BADDBE4E3440 /* InviteGuestsSheet.swift in Sources */,
@@ -596,6 +607,7 @@
 				13FA0B2CDDE24360D395A85E /* RankedVotingView.swift in Sources */,
 				63EDA81DDAF6EC9311F9DFCD /* RatingPill.swift in Sources */,
 				0298CA05E7727190054E5FE6 /* SectionHeader.swift in Sources */,
+				E6B2A8D3C0F1E4057B6A2D8C /* ScreeningScheduleSection.swift in Sources */,
 				C3B10B57D6D14E8610548AD8 /* SourceAttributionSection.swift in Sources */,
 				D356EE2811CCA7538B969F18 /* SourceDetail.swift in Sources */,
 				78A2F277877C5F1C7D079700 /* SourceDetailView.swift in Sources */,

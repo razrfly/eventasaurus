@@ -23,6 +23,7 @@ struct MovieDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .task { await loadMovie() }
     }
 
@@ -33,22 +34,11 @@ struct MovieDetailView: View {
                 heroImage(data.movie)
 
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // Title + year + rating
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(data.movie.title)
-                            .font(DS.Typography.title)
-
-                        if let releaseDate = data.movie.releaseDate,
-                           let year = releaseDate.split(separator: "-").first {
-                            Text("(\(year))")
-                                .font(DS.Typography.titleSecondary)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        if let rating = data.movie.voteAverage {
+                    // Rating pill (title+year now in hero overlay)
+                    if let rating = data.movie.voteAverage {
+                        HStack {
                             RatingPill(rating: rating)
+                            Spacer()
                         }
                     }
 
@@ -119,25 +109,15 @@ struct MovieDetailView: View {
 
     private func venueCard(_ venueGroup: VenueScreenings) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            // Venue header
-            NavigationLink(value: EventDestination.event(slug: venueGroup.eventSlug)) {
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    HStack {
-                        Text(venueGroup.venue.displayName)
-                            .font(DS.Typography.bodyBold)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(DS.Typography.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    if let address = venueGroup.venue.address {
-                        Text(address)
-                            .font(DS.Typography.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            // Venue header — links to venue detail page
+            if let venueSlug = venueGroup.venue.slug {
+                NavigationLink(value: EventDestination.venue(slug: venueSlug)) {
+                    venueCardHeader(venueGroup, showChevron: true)
                 }
+                .buttonStyle(.plain)
+            } else {
+                venueCardHeader(venueGroup, showChevron: false)
             }
-            .buttonStyle(.plain)
 
             // Upcoming showtimes
             let upcoming = venueGroup.showtimes.filter(\.isUpcoming)
@@ -171,6 +151,26 @@ struct MovieDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private func venueCardHeader(_ venueGroup: VenueScreenings, showChevron: Bool) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            HStack {
+                Text(venueGroup.venue.displayName)
+                    .font(DS.Typography.bodyBold)
+                Spacer()
+                if showChevron {
+                    Image(systemName: "chevron.right")
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            if let address = venueGroup.venue.address {
+                Text(address)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     private func showtimesByDate(_ showtimes: [Showtime]) -> some View {
         let byDate = Dictionary(grouping: showtimes, by: \.date)
         let sortedDates = byDate.keys.sorted()
@@ -192,28 +192,27 @@ struct MovieDetailView: View {
     }
 
     private func showtimePill(_ showtime: Showtime) -> some View {
-        HStack(spacing: DS.Spacing.xs) {
-            Text(showtime.datetime, format: .dateTime.hour().minute())
-                .font(DS.Typography.bodyBold)
-            if let format = showtime.format {
-                Text(format.uppercased())
-                    .font(DS.Typography.badge)
-                    .padding(.horizontal, DS.Spacing.xs)
-                    .padding(.vertical, 1)
-                    .background(formatColor(format).opacity(0.15))
-                    .foregroundStyle(formatColor(format))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xs))
+        NavigationLink(value: EventDestination.event(slug: showtime.eventSlug ?? "")) {
+            HStack(spacing: DS.Spacing.xs) {
+                Text(showtime.datetime, format: .dateTime.hour().minute())
+                    .font(DS.Typography.bodyBold)
+                if let format = showtime.format {
+                    Text(format.uppercased())
+                        .font(DS.Typography.badge)
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .padding(.vertical, 1)
+                        .background(formatColor(format).opacity(0.15))
+                        .foregroundStyle(formatColor(format))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xs))
+                }
             }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+            .glassBackground(cornerRadius: DS.Radius.md, interactive: showtime.isUpcoming)
+            .opacity(showtime.isUpcoming ? 1.0 : 0.7)
+            .accessibilityElement(children: .combine)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
-        .background(showtime.isUpcoming ? Color.accentColor.opacity(DS.Opacity.tintedBackground) : DS.Colors.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .stroke(showtime.isUpcoming ? Color.accentColor.opacity(DS.Opacity.overlay) : DS.Colors.fillSecondary, lineWidth: 0.5)
-        )
-        .accessibilityElement(children: .combine)
+        .buttonStyle(.plain)
     }
 
     private func formatColor(_ format: String) -> Color {
@@ -249,35 +248,61 @@ struct MovieDetailView: View {
             if let backdropUrl = movie.backdropUrl {
                 CachedImage(
                     url: URL(string: backdropUrl),
-                    height: DS.ImageSize.hero,
+                    height: DS.ImageSize.heroMovie,
                     cornerRadius: 0,
                     placeholderIcon: "film"
                 )
                 .clipped()
-
-                // Poster overlay
-                if let posterUrl = movie.posterUrl {
-                    CachedImage(
-                        url: URL(string: posterUrl),
-                        height: DS.ImageSize.posterOverlaySize.height,
-                        cornerRadius: DS.Radius.md,
-                        placeholderIcon: "film"
+                .overlay(alignment: .bottom) {
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.2), .black.opacity(DS.Opacity.heroGradient)],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
-                    .frame(width: DS.ImageSize.posterOverlaySize.width)
-                    .padding(DS.Spacing.xs)
-                    .glassBackground(cornerRadius: DS.Radius.lg)
-                    .padding(.leading, DS.Spacing.xl)
-                    .padding(.bottom, -DS.Spacing.xxl)
+                    .frame(height: DS.ImageSize.heroMovie * 3 / 4)
                 }
+
+                // Poster + title overlay
+                HStack(alignment: .bottom, spacing: DS.Spacing.lg) {
+                    if let posterUrl = movie.posterUrl {
+                        CachedImage(
+                            url: URL(string: posterUrl),
+                            height: DS.ImageSize.posterOverlaySize.height,
+                            cornerRadius: DS.Radius.md,
+                            placeholderIcon: "film"
+                        )
+                        .frame(width: DS.ImageSize.posterOverlaySize.width)
+                        .padding(DS.Spacing.xs)
+                        .glassBackground(cornerRadius: DS.Radius.lg)
+                    }
+
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text(movie.title)
+                            .font(DS.Typography.title)
+                            .foregroundStyle(.white)
+
+                        if let releaseDate = movie.releaseDate,
+                           let year = releaseDate.split(separator: "-").first {
+                            Text("(\(year))")
+                                .font(DS.Typography.titleSecondary)
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, DS.Spacing.xl)
+                .padding(.bottom, DS.Spacing.lg)
             } else if let posterUrl = movie.posterUrl {
                 CachedImage(
                     url: URL(string: posterUrl),
-                    height: DS.ImageSize.hero,
+                    height: DS.ImageSize.heroMovie,
                     cornerRadius: 0,
                     placeholderIcon: "film"
                 )
             }
         }
+        .ignoresSafeArea(edges: .top)
     }
 
     // MARK: - External Links
@@ -343,7 +368,7 @@ struct MovieDetailView: View {
                     .font(DS.Typography.micro)
                     .foregroundStyle(.secondary)
             }
-            .chipStyle(isSelected: isSelected)
+            .glassChipStyle(isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(label), \(count) showtimes")

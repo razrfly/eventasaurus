@@ -97,7 +97,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
       showtimes =
         events
-        |> Enum.flat_map(&extract_occurrences(&1))
+        |> Enum.flat_map(fn event ->
+          extract_occurrences(event)
+          |> Enum.map(&Map.put(&1, :event_slug, event.slug))
+        end)
         |> Enum.sort_by(& &1.datetime, DateTime)
 
       %{
@@ -176,6 +179,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     %{
       venue: %{
         name: VenueHelpers.venue_display_name(group.venue.name),
+        slug: group.venue.slug,
         address: group.venue.address,
         lat: group.venue.latitude,
         lng: group.venue.longitude
@@ -190,7 +194,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
             label: s.label,
             format: extract_format(s.label),
             datetime: s.datetime,
-            is_upcoming: DateTime.compare(s.datetime, now) == :gt
+            is_upcoming: DateTime.compare(s.datetime, now) == :gt,
+            event_slug: s.event_slug
           }
         end)
     }
