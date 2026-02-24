@@ -43,6 +43,20 @@ struct UserEvent: Codable, Identifiable, Hashable {
     }
 }
 
+// MARK: - EventDisplayable
+
+extension UserEvent: EventDisplayable {
+    var displaySlug: String { slug }
+    var displayTitle: String { title }
+    var displayTagline: String? { tagline }
+    var displayStartsAt: Date? { startsAt }
+    var displayEndsAt: Date? { endsAt }
+    var displayCoverImageUrl: String? { coverImageUrl }
+    var displayVenueName: String? { isVirtual ? "Virtual Event" : venue?.name }
+    var displayIsVirtual: Bool { isVirtual }
+    var displayParticipantCount: Int? { participantCount > 0 ? participantCount : nil }
+}
+
 struct UserEventVenue: Codable, Hashable, Identifiable {
     let id: String
     let name: String

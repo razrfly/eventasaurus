@@ -9,7 +9,16 @@ struct EventDetailResponse: Codable {
     let event: Event
 }
 
-struct Event: Codable, Identifiable {
+struct Event: Codable, Identifiable, Hashable {
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(slug)
+    }
+
+    static func == (lhs: Event, rhs: Event) -> Bool {
+        lhs.slug == rhs.slug
+    }
+
     var id: String { slug }
     let slug: String
     let title: String
@@ -164,7 +173,21 @@ struct EventSource: Codable, Identifiable {
     }
 }
 
-struct Venue: Codable {
+// MARK: - EventDisplayable
+
+extension Event: EventDisplayable {
+    var displaySlug: String { slug }
+    var displayTitle: String { title }
+    var displayTagline: String? { subtitle }
+    var displayStartsAt: Date? { startsAt }
+    var displayEndsAt: Date? { endsAt }
+    var displayCoverImageUrl: String? { coverImageUrl }
+    var displayVenueName: String? { venue?.displayName }
+    var displayIsVirtual: Bool { false }
+    var displayParticipantCount: Int? { attendeeCount }
+}
+
+struct Venue: Codable, Hashable {
     let name: String?
     let slug: String?
     let address: String?

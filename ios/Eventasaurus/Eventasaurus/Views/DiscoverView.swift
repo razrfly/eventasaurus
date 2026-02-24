@@ -1,9 +1,5 @@
 import SwiftUI
 
-enum ViewMode: String {
-    case list, grid
-}
-
 struct DiscoverView: View {
     @State private var events: [Event] = []
     @State private var isLoading = false
@@ -42,11 +38,8 @@ struct DiscoverView: View {
     @State private var dateRangeCounts: [String: Int] = [:]
     @State private var allEventsCount: Int = 0
 
-    // View mode (grid/list)
-    @State private var viewMode: ViewMode = {
-        let saved = UserDefaults.standard.string(forKey: "discoverViewMode")
-        return ViewMode(rawValue: saved ?? "") ?? .list
-    }()
+    // View mode (compact/card/grid)
+    @State private var viewMode: EventViewMode = EventViewMode.load(key: "discoverViewMode", default: .compact)
 
     // Filters sheet
     @State private var showFilters = false
@@ -133,15 +126,7 @@ struct DiscoverView: View {
                 }
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    // Grid/List toggle
-                    Button {
-                        viewMode = viewMode == .list ? .grid : .list
-                        UserDefaults.standard.set(viewMode.rawValue, forKey: "discoverViewMode")
-                    } label: {
-                        Image(systemName: viewMode == .list ? "square.grid.2x2" : "list.bullet")
-                            .font(DS.Typography.body)
-                    }
-                    .accessibilityLabel(viewMode == .list ? "Switch to grid view" : "Switch to list view")
+                    ViewModeToggle(mode: $viewMode, persistKey: "discoverViewMode")
 
                     // Filters button
                     Button {
@@ -311,8 +296,8 @@ struct DiscoverView: View {
                 }
 
                 switch viewMode {
-                case .list:
-                    LazyVStack(spacing: DS.Spacing.xl) {
+                case .compact, .card:
+                    LazyVStack(spacing: viewMode == .compact ? DS.Spacing.xs : DS.Spacing.xl) {
                         eventItems
                     }
                 case .grid:
@@ -334,17 +319,89 @@ struct DiscoverView: View {
     private var eventItems: some View {
         ForEach(events) { event in
             NavigationLink(value: event.destination(cityId: selectedCity?.id)) {
-                switch viewMode {
-                case .list:
-                    EventCardView(event: event)
-                case .grid:
-                    EventCardGridItem(event: event)
-                }
+                discoverCard(for: event)
             }
             .buttonStyle(.plain)
             .onAppear {
                 if event.id == events.last?.id, hasMorePages, !isLoadingMore {
                     Task { await loadMoreEvents() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func discoverCard(for event: Event) -> some View {
+        switch viewMode {
+        case .compact:
+            EventCompactRow(event: event) {
+                // Trailing: group badge or time badge
+                if event.isGroup {
+                    DiscoverBadges.groupBadge(for: event, compact: true)
+                } else if let badge = event.timeBadgeText(compact: true) {
+                    DiscoverBadges.timeBadge(badge)
+                }
+            }
+
+        case .card:
+            EventStandardCard(event: event) {
+                // Cover badges
+                HStack {
+                    if let category = event.primaryCategory, !event.isGroup {
+                        DiscoverBadges.categoryBadge(category)
+                    }
+                    Spacer()
+                    if event.isGroup {
+                        DiscoverBadges.groupBadge(for: event)
+                    } else if let badge = event.timeBadgeText() {
+                        DiscoverBadges.timeBadge(badge)
+                    }
+                }
+            } subtitleContent: {
+                // Subtitle for groups, date+venue for regular events
+                if let subtitle = event.subtitle {
+                    Text(subtitle)
+                        .font(DS.Typography.body)
+                        .foregroundStyle(.secondary)
+                } else {
+                    if let date = event.startsAt {
+                        Text(date, style: .date)
+                            .font(DS.Typography.body)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let venue = event.venue {
+                        Label(venue.displayName, systemImage: "mappin")
+                            .font(DS.Typography.body)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+        case .grid:
+            EventGridCard(event: event) {
+                // Cover badges
+                HStack {
+                    if let category = event.primaryCategory, !event.isGroup {
+                        DiscoverBadges.categoryBadge(category)
+                    }
+                    Spacer()
+                    if event.isGroup {
+                        DiscoverBadges.groupBadge(for: event, compact: true)
+                    } else if let badge = event.timeBadgeText(compact: true) {
+                        DiscoverBadges.timeBadge(badge)
+                    }
+                }
+            } subtitleContent: {
+                if let date = event.startsAt, !event.isGroup {
+                    Text(date, style: .date)
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(.secondary)
+                } else if let subtitle = event.subtitle {
+                    Text(subtitle)
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
         }

@@ -96,7 +96,29 @@ struct ContainerDetailView: View {
                                 Section {
                                     ForEach(events) { event in
                                         NavigationLink(value: EventDestination.event(slug: event.slug)) {
-                                            EventCardView(event: event)
+                                            EventStandardCard(event: event) {
+                                                HStack {
+                                                    if let category = event.primaryCategory {
+                                                        DiscoverBadges.categoryBadge(category)
+                                                    }
+                                                    Spacer()
+                                                    if let badge = event.timeBadgeText() {
+                                                        DiscoverBadges.timeBadge(badge)
+                                                    }
+                                                }
+                                            } subtitleContent: {
+                                                if let date = event.startsAt {
+                                                    Text(date, style: .date)
+                                                        .font(DS.Typography.body)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                if let venue = event.venue {
+                                                    Label(venue.displayName, systemImage: "mappin")
+                                                        .font(DS.Typography.body)
+                                                        .foregroundStyle(.secondary)
+                                                        .lineLimit(1)
+                                                }
+                                            }
                                         }
                                         .buttonStyle(.plain)
                                     }

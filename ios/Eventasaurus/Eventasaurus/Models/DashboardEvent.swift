@@ -91,6 +91,20 @@ extension DashboardEvent {
     }
 }
 
+// MARK: - EventDisplayable
+
+extension DashboardEvent: EventDisplayable {
+    var displaySlug: String { slug }
+    var displayTitle: String { title }
+    var displayTagline: String? { tagline }
+    var displayStartsAt: Date? { startsAt }
+    var displayEndsAt: Date? { endsAt }
+    var displayCoverImageUrl: String? { coverImageUrl }
+    var displayVenueName: String? { isVirtual ? "Online" : venue?.name }
+    var displayIsVirtual: Bool { isVirtual }
+    var displayParticipantCount: Int? { participantCount > 0 ? participantCount : nil }
+}
+
 // MARK: - Filter Counts
 
 struct DashboardFilterCounts: Codable {
