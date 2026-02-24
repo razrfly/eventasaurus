@@ -1,5 +1,17 @@
 import SwiftUI
 
+// MARK: - Shared Helpers
+
+/// Status badge used by both Dashboard and UserEvent contexts.
+/// White text on status-colored background, matching Discover badge style.
+private func eventStatusBadge(_ status: EventStatus) -> some View {
+    HStack(spacing: DS.Spacing.xxs) {
+        Image(systemName: status.icon)
+        Text(status.displayName)
+    }
+    .badgeStyle(backgroundColor: status.color.opacity(DS.Opacity.badge))
+}
+
 // MARK: - Discover Badges
 
 /// Badge builders for the Discover tab (used with `Event` items).
@@ -42,10 +54,10 @@ enum DiscoverBadges {
     private static func groupBadgeContent(for event: Event, compact: Bool) -> (String, String)? {
         switch event.type {
         case "movie_group":
-            let count = event.screeningCount ?? 0
+            guard let count = event.screeningCount else { return nil }
             return ("film", compact ? "\(count)" : "\(count) screening\(count == 1 ? "" : "s")")
         case "event_group":
-            let count = event.eventCount ?? 0
+            guard let count = event.eventCount else { return nil }
             return ("rectangle.stack", compact ? "\(count)" : "\(count) event\(count == 1 ? "" : "s")")
         case "container_group":
             let label = event.containerType ?? "festival"
@@ -61,13 +73,8 @@ enum DiscoverBadges {
 /// Badge builders for the My Events / Dashboard tab (used with `DashboardEvent` items).
 enum DashboardBadges {
 
-    /// Status badge: white text on status-colored background, matching Discover badge style.
     static func statusBadge(_ status: EventStatus) -> some View {
-        HStack(spacing: DS.Spacing.xxs) {
-            Image(systemName: status.icon)
-            Text(status.displayName)
-        }
-        .badgeStyle(backgroundColor: status.color.opacity(DS.Opacity.badge))
+        eventStatusBadge(status)
     }
 }
 
@@ -76,13 +83,8 @@ enum DashboardBadges {
 /// Badge builders for `UserEvent` items (event management views).
 enum UserEventBadges {
 
-    /// Status badge: white text on status-colored background.
     static func statusBadge(_ status: EventStatus) -> some View {
-        HStack(spacing: DS.Spacing.xxs) {
-            Image(systemName: status.icon)
-            Text(status.displayName)
-        }
-        .badgeStyle(backgroundColor: status.color.opacity(DS.Opacity.badge))
+        eventStatusBadge(status)
     }
 
     /// Visibility badge.

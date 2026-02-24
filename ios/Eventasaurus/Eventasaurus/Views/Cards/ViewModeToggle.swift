@@ -17,6 +17,6 @@ struct ViewModeToggle: View {
         } label: {
             Image(systemName: mode.next.icon)
         }
-        .accessibilityLabel("Switch to \(mode.next.rawValue) view")
+        .accessibilityLabel("Switch to \(mode.next.rawValue.capitalized) view")
     }
 }

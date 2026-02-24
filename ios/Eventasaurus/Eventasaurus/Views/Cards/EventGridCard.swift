@@ -58,3 +58,14 @@ struct EventGridCard<Item: EventDisplayable, CoverBadges: View, SubtitleContent:
         return parts.joined(separator: ", ")
     }
 }
+
+// MARK: - Convenience Init (no badges)
+
+extension EventGridCard where CoverBadges == EmptyView, SubtitleContent == EmptyView {
+    init(event: Item, isPast: Bool? = nil) {
+        self.event = event
+        self.isPast = isPast
+        self.coverBadges = { EmptyView() }
+        self.subtitleContent = { EmptyView() }
+    }
+}

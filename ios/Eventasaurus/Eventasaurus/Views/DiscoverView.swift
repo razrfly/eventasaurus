@@ -51,12 +51,29 @@ struct DiscoverView: View {
     // Language
     @State private var language: String = UserDefaults.standard.string(forKey: "discoverLanguage") ?? "en"
 
-    private static let dateRanges: [(label: String, value: String?)] = [
-        ("All Events", nil),
-        ("Today", "today"),
+    private enum SegmentedDateRange: String, CaseIterable {
+        case all, today, thisWeek
+
+        var label: String {
+            switch self {
+            case .all: "All"
+            case .today: "Today"
+            case .thisWeek: "This Week"
+            }
+        }
+
+        var apiValue: String? {
+            switch self {
+            case .all: nil
+            case .today: "today"
+            case .thisWeek: "next_7_days"
+            }
+        }
+    }
+
+    private static let overflowDateRanges: [(label: String, value: String)] = [
         ("Tomorrow", "tomorrow"),
         ("This Weekend", "this_weekend"),
-        ("Next 7 Days", "next_7_days"),
         ("Next 30 Days", "next_30_days"),
         ("This Month", "this_month"),
         ("Next Month", "next_month"),
@@ -212,6 +229,59 @@ struct DiscoverView: View {
 
     private var filterChips: some View {
         VStack(spacing: DS.Spacing.md) {
+            // Date range: segmented picker + overflow menu
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Text("Sort by Date")
+                    .font(DS.Typography.captionBold)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, DS.Spacing.xl)
+
+                HStack(spacing: DS.Spacing.md) {
+                    Picker("Date range", selection: Binding<SegmentedDateRange>(
+                        get: { activeSegment ?? .all },
+                        set: { newValue in
+                            withAnimation(DS.Animation.fast) {
+                                selectedDateRange = newValue.apiValue
+                            }
+                            Task { await loadEvents() }
+                        }
+                    )) {
+                        ForEach(SegmentedDateRange.allCases, id: \.self) { segment in
+                            segmentLabel(segment)
+                                .tag(segment)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .opacity(isOverflowDateActive ? 0.5 : 1)
+
+                    Menu {
+                        ForEach(Self.overflowDateRanges, id: \.value) { range in
+                            Button {
+                                withAnimation(DS.Animation.fast) {
+                                    selectedDateRange = range.value
+                                }
+                                Task { await loadEvents() }
+                            } label: {
+                                Label {
+                                    overflowMenuLabel(range.label, value: range.value)
+                                } icon: {
+                                    if selectedDateRange == range.value {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: isOverflowDateActive ? "calendar.circle.fill" : "calendar.circle")
+                            .font(.title2)
+                            .foregroundStyle(isOverflowDateActive ? .primary : .secondary)
+                    }
+                    .accessibilityLabel("More date ranges")
+                    .accessibilityValue(overflowAccessibilityValue)
+                }
+                .padding(.horizontal, DS.Spacing.xl)
+            }
+
             // Category browse chips — 2-row horizontal grid
             if !categories.isEmpty {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -240,25 +310,6 @@ struct DiscoverView: View {
                     }
                 }
             }
-
-            // Date range chips
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.md) {
-                    ForEach(Self.dateRanges, id: \.label) { range in
-                        DateChip(
-                            label: range.label,
-                            count: countForDateRange(range.value),
-                            isSelected: selectedDateRange == range.value
-                        ) {
-                            withAnimation(DS.Animation.fast) {
-                                selectedDateRange = range.value
-                            }
-                            Task { await loadEvents() }
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.xl)
-            }
         }
         .padding(.vertical, DS.Spacing.md)
     }
@@ -270,6 +321,30 @@ struct DiscoverView: View {
         } else {
             return allEventsCount > 0 ? allEventsCount : (totalCount > 0 ? totalCount : nil)
         }
+    }
+
+    private func segmentLabel(_ segment: SegmentedDateRange) -> Text {
+        if let count = countForDateRange(segment.apiValue) {
+            Text("\(segment.label) (\(count))")
+        } else {
+            Text(segment.label)
+        }
+    }
+
+    @ViewBuilder
+    private func overflowMenuLabel(_ label: String, value: String) -> some View {
+        if let count = countForDateRange(value) {
+            Text("\(label) (\(count))")
+        } else {
+            Text(label)
+        }
+    }
+
+    private var overflowAccessibilityValue: String {
+        if let active = Self.overflowDateRanges.first(where: { $0.value == selectedDateRange }) {
+            return active.label
+        }
+        return "None selected"
     }
 
     // MARK: - Event List
@@ -538,6 +613,14 @@ struct DiscoverView: View {
 
     // MARK: - Filter Helpers
 
+    private var activeSegment: SegmentedDateRange? {
+        SegmentedDateRange.allCases.first { $0.apiValue == selectedDateRange }
+    }
+
+    private var isOverflowDateActive: Bool {
+        selectedDateRange != nil && activeSegment == nil
+    }
+
     private var hasActiveFilters: Bool {
         !selectedCategories.isEmpty || selectedDateRange != nil || !searchText.isEmpty
     }
@@ -641,37 +724,6 @@ struct CategoryBrowseChip: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(category.name)
-        .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-struct DateChip: View {
-    let label: String
-    var count: Int? = nil
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xs) {
-                Text(label)
-                    .font(DS.Typography.captionMedium)
-
-                if let count {
-                    Text("\(count)")
-                        .font(DS.Typography.badge)
-                        .padding(.horizontal, DS.Spacing.xs + 1)
-                        .padding(.vertical, 1)
-                        .background(isSelected ? Color.primary.opacity(DS.Opacity.overlay) : DS.Colors.fillSecondary)
-                        .clipShape(Capsule())
-                }
-            }
-            .chipStyle(isSelected: isSelected)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(count.map { String(localized: "\(label), \($0) events") } ?? label)
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

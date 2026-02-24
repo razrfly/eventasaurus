@@ -52,7 +52,7 @@ extension UserEvent: EventDisplayable {
     var displayStartsAt: Date? { startsAt }
     var displayEndsAt: Date? { endsAt }
     var displayCoverImageUrl: String? { coverImageUrl }
-    var displayVenueName: String? { isVirtual ? "Virtual Event" : venue?.name }
+    var displayVenueName: String? { isVirtual ? "Online" : venue?.name }
     var displayIsVirtual: Bool { isVirtual }
     var displayParticipantCount: Int? { participantCount > 0 ? participantCount : nil }
 }
