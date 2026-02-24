@@ -57,9 +57,9 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
     end
   end
 
-  @spec clear_my_votes(any(), %{poll_id: binary() | integer()}, %{context: %{current_user: Accounts.User.t() | nil}}) ::
+  @spec clear_my_votes(any(), %{poll_id: binary() | integer()}, %{context: %{current_user: Accounts.User.t()}}) ::
           {:ok, any()} | {:error, String.t()}
-  def clear_my_votes(_parent, %{poll_id: poll_id}, %{context: %{current_user: user}}) do
+  def clear_my_votes(_parent, %{poll_id: poll_id}, %{context: %{current_user: %Accounts.User{} = user}}) do
     case Events.get_poll(poll_id) do
       nil ->
         {:error, "Poll not found"}
@@ -73,6 +73,8 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
         {:ok, reload_poll(poll.id)}
     end
   end
+
+  def clear_my_votes(_parent, _args, _resolution), do: {:error, "Unauthorized"}
 
   # Phase 3: Create poll option (user suggestion)
   def create_poll_option(_parent, %{poll_id: poll_id, title: title} = args, %{
