@@ -23,7 +23,7 @@ extension EventDisplayable {
     var displayParticipantCount: Int? { nil }
 
     var displayIsPast: Bool {
-        guard let starts = displayStartsAt else { return false }
-        return starts < Date()
+        guard let date = displayEndsAt ?? displayStartsAt else { return false }
+        return date < Date()
     }
 }

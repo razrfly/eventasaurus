@@ -51,7 +51,7 @@ struct EventStandardCard<Item: EventDisplayable, CoverBadges: View, SubtitleCont
     private var accessibilityText: String {
         var parts = [event.displayTitle]
         if let date = event.displayStartsAt {
-            parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+            parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day().hour().minute()))
         }
         if let venue = event.displayVenueName {
             parts.append(venue)
