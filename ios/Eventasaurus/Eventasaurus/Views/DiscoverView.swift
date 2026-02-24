@@ -52,6 +52,9 @@ struct DiscoverView: View {
     // Language
     @State private var language: String = UserDefaults.standard.string(forKey: "discoverLanguage") ?? "en"
 
+    // Number of rows to interleave category chips across
+    private let categoryRowCount = 2
+
     private enum SegmentedDateRange: String, CaseIterable {
         case all, today, thisWeek
 
@@ -299,8 +302,9 @@ struct DiscoverView: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                        categoryChipRow(from: 0)
-                        categoryChipRow(from: 1)
+                        ForEach(0..<categoryRowCount, id: \.self) { row in
+                            categoryChipRow(from: row)
+                        }
                     }
                 }
             }
@@ -310,7 +314,7 @@ struct DiscoverView: View {
 
     @ViewBuilder
     private func categoryChipRow(from startIndex: Int) -> some View {
-        let rowCategories = stride(from: startIndex, to: categories.count, by: 2).map { categories[$0] }
+        let rowCategories = stride(from: startIndex, to: categories.count, by: categoryRowCount).compactMap { $0 < categories.count ? categories[$0] : nil }
         HStack(spacing: DS.Spacing.md) {
             ForEach(rowCategories) { cat in
                 if let catId = cat.numericId {
@@ -699,6 +703,10 @@ struct DiscoverView: View {
 
 private struct ScrollAwareFilterModifier: ViewModifier {
     @Binding var isDateControlVisible: Bool
+    @State private var hideTask: Task<Void, Never>?
+
+    /// Minimum scroll duration before hiding the date control, avoids rapid toggles from short taps/scrolls
+    private let debounceInterval: Duration = .milliseconds(150)
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
@@ -706,10 +714,17 @@ private struct ScrollAwareFilterModifier: ViewModifier {
                 .onScrollPhaseChange { _, newPhase in
                     switch newPhase {
                     case .tracking:
-                        withAnimation(DS.Animation.fast) {
-                            isDateControlVisible = false
+                        hideTask?.cancel()
+                        hideTask = Task {
+                            try? await Task.sleep(for: debounceInterval)
+                            guard !Task.isCancelled else { return }
+                            withAnimation(DS.Animation.fast) {
+                                isDateControlVisible = false
+                            }
                         }
                     case .idle:
+                        hideTask?.cancel()
+                        hideTask = nil
                         withAnimation(DS.Animation.fast) {
                             isDateControlVisible = true
                         }
@@ -726,6 +741,7 @@ private struct ScrollAwareFilterModifier: ViewModifier {
 // MARK: - Search Minimize (iOS 26+)
 
 fileprivate extension View {
+    /// Minimizes the search toolbar when available. searchToolbarBehavior(.minimize) requires iOS 26+.
     @ViewBuilder
     func searchMinimized() -> some View {
         if #available(iOS 26.0, *) {
