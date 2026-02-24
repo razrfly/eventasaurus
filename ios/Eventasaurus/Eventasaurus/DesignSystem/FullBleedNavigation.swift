@@ -26,6 +26,7 @@ private struct FullBleedNavigation<Trailing: View>: ViewModifier {
                             .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
                             .frame(width: 44, height: 44)
                     }
+                    .accessibilityLabel("Back")
                     .background(.ultraThinMaterial, in: Circle())
                     .contentShape(Circle())
 

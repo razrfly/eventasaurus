@@ -10,10 +10,19 @@ defmodule EventasaurusWeb.Resolvers.ParticipationResolver do
   alias EventasaurusWeb.Schema.Helpers.RsvpStatus
   import EventasaurusWeb.Resolvers.Helpers, only: [format_changeset_errors: 1]
 
-  def event_as_participant(_parent, %{slug: slug}, _resolution) do
+  @spec event_as_participant(any(), %{slug: String.t()}, Absinthe.Resolution.t()) ::
+          {:ok, Events.Event.t()} | {:error, String.t()}
+  def event_as_participant(_parent, %{slug: slug}, %{context: %{current_user: user}}) do
     case Events.get_event_by_slug(slug) do
-      nil -> {:error, "NOT_FOUND"}
-      event -> {:ok, event}
+      nil ->
+        {:error, "NOT_FOUND"}
+
+      event ->
+        if Events.user_is_participant?(event, user) or Events.user_is_organizer?(event, user) do
+          {:ok, event}
+        else
+          {:error, "NOT_FOUND"}
+        end
     end
   end
 

@@ -215,8 +215,8 @@ struct EventDetailView: View {
             if event.isInternalEvent && rsvpStatus == nil && event.isUpcoming {
                 // Internal event, no RSVP yet — show Going/Interested
                 rsvpActionBar
-            } else if !event.isInternalEvent && event.isUpcoming {
-                // Public event — show Plan with Friends
+            } else if !event.isInternalEvent && event.isUpcoming && existingPlan == nil {
+                // Public event, no plan yet — show Plan with Friends
                 publicEventActionBar
             }
         }
@@ -314,21 +314,21 @@ struct EventDetailView: View {
                 Button {
                     Task { await toggleStatus(.going) }
                 } label: {
-                    Label("Going", systemImage: rsvpStatus == .going ? "checkmark.circle.fill" : "checkmark.circle")
+                    Label("Going", systemImage: "checkmark.circle")
                         .font(DS.Typography.bodyMedium)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glassTinted(DS.Colors.going, isActive: rsvpStatus == .going))
+                .buttonStyle(.glassTinted(DS.Colors.going, isActive: false))
                 .disabled(isUpdatingStatus)
 
                 Button {
                     Task { await toggleStatus(.interested) }
                 } label: {
-                    Label("Interested", systemImage: rsvpStatus == .interested ? "star.fill" : "star")
+                    Label("Interested", systemImage: "star")
                         .font(DS.Typography.bodyMedium)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glassTinted(DS.Colors.interested, isActive: rsvpStatus == .interested))
+                .buttonStyle(.glassTinted(DS.Colors.interested, isActive: false))
                 .disabled(isUpdatingStatus)
             }
         }
@@ -450,19 +450,11 @@ struct EventDetailView: View {
                 }
             }
 
-            // Load existing plan via GraphQL (non-fatal)
-            do {
-                existingPlan = try await GraphQLClient.shared.fetchMyPlan(slug: slug)
-            } catch {
-                // silent
-            }
-
-            // Load polls (non-fatal)
-            do {
-                polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
-            } catch {
-                // silent
-            }
+            // Load plan and polls in parallel (both non-fatal)
+            async let planTask = GraphQLClient.shared.fetchMyPlan(slug: slug)
+            async let pollsTask = GraphQLClient.shared.fetchEventPolls(slug: slug)
+            existingPlan = try? await planTask
+            polls = (try? await pollsTask) ?? []
         } catch is CancellationError {
             return
         } catch {
@@ -475,6 +467,7 @@ struct EventDetailView: View {
         let previousCount = attendeeCount
 
         isUpdatingStatus = true
+        defer { isUpdatingStatus = false }
         withAnimation(DS.Animation.spring) {
             if rsvpStatus == status {
                 rsvpStatus = nil
@@ -501,7 +494,6 @@ struct EventDetailView: View {
                 attendeeCount = previousCount
             }
         }
-        isUpdatingStatus = false
     }
 
 }
