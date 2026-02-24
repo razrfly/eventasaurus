@@ -13,6 +13,8 @@ protocol EventDisplayable: Identifiable, Hashable {
     var displayIsVirtual: Bool { get }
     var displayParticipantCount: Int? { get }
     var displayIsPast: Bool { get }
+    var displayPrimaryCategoryIcon: String? { get }
+    var displayPrimaryCategoryName: String? { get }
 }
 
 // MARK: - Defaults
@@ -21,6 +23,8 @@ extension EventDisplayable {
     var displayTagline: String? { nil }
     var displayIsVirtual: Bool { false }
     var displayParticipantCount: Int? { nil }
+    var displayPrimaryCategoryIcon: String? { nil }
+    var displayPrimaryCategoryName: String? { nil }
 
     var displayIsPast: Bool {
         guard let date = displayEndsAt ?? displayStartsAt else { return false }
