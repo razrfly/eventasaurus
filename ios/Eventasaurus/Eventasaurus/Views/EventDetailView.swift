@@ -33,19 +33,19 @@ struct EventDetailView: View {
                 )
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
+        .fullBleedNavigation {
             if let event, let shareURL = URL.event(slug: slug) {
-                ToolbarItem(placement: .primaryAction) {
-                    ShareLink(
-                        item: shareURL,
-                        subject: Text(event.title),
-                        message: Text(event.description ?? event.title)
-                    ) {
-                        Image(systemName: "square.and.arrow.up")
-                    }
+                ShareLink(
+                    item: shareURL,
+                    subject: Text(event.title),
+                    message: Text(event.description ?? event.title)
+                ) {
+                    Image(systemName: "square.and.arrow.up")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
                 }
+                .buttonStyle(GlassIconButtonStyle())
             }
         }
         .task { await loadEvent() }
@@ -111,7 +111,7 @@ struct EventDetailView: View {
                         }
                     }
                     .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.top, DS.Spacing.xl)
+                    .padding(.top, DS.Spacing.fullBleedNavClearance)
                 }
 
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
@@ -138,8 +138,19 @@ struct EventDetailView: View {
                         .buttonStyle(.glassSecondary)
                     }
 
-                    // Plan with Friends
-                    planWithFriendsSection(for: event)
+                    // RSVP indicator (internal events with existing RSVP)
+                    if event.isInternalEvent, let status = rsvpStatus {
+                        if event.isUpcoming {
+                            compactRsvpIndicator(status: status)
+                        } else {
+                            pastRsvpIndicator(status: status)
+                        }
+                    }
+
+                    // Plan with Friends (inline — only for public events with existing plan)
+                    if !event.isInternalEvent, existingPlan != nil {
+                        planWithFriendsSection(for: event)
+                    }
 
                     // Categories
                     if let categories = event.categories, !categories.isEmpty {
@@ -201,28 +212,12 @@ struct EventDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            GlassActionBar {
-                HStack(spacing: DS.Spacing.lg) {
-                    Button {
-                        Task { await toggleStatus(.going) }
-                    } label: {
-                        Label("Going", systemImage: rsvpStatus == .going ? "checkmark.circle.fill" : "checkmark.circle")
-                            .font(DS.Typography.bodyMedium)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glassTinted(DS.Colors.going, isActive: rsvpStatus == .going))
-                    .disabled(isUpdatingStatus)
-
-                    Button {
-                        Task { await toggleStatus(.interested) }
-                    } label: {
-                        Label("Interested", systemImage: rsvpStatus == .interested ? "star.fill" : "star")
-                            .font(DS.Typography.bodyMedium)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glassTinted(DS.Colors.interested, isActive: rsvpStatus == .interested))
-                    .disabled(isUpdatingStatus)
-                }
+            if event.isInternalEvent && rsvpStatus == nil && event.isUpcoming {
+                // Internal event, no RSVP yet — show Going/Interested
+                rsvpActionBar
+            } else if !event.isInternalEvent && event.isUpcoming {
+                // Public event — show Plan with Friends
+                publicEventActionBar
             }
         }
     }
@@ -311,6 +306,88 @@ struct EventDetailView: View {
         }
     }
 
+    // MARK: - Action Bars
+
+    private var rsvpActionBar: some View {
+        GlassActionBar {
+            HStack(spacing: DS.Spacing.lg) {
+                Button {
+                    Task { await toggleStatus(.going) }
+                } label: {
+                    Label("Going", systemImage: rsvpStatus == .going ? "checkmark.circle.fill" : "checkmark.circle")
+                        .font(DS.Typography.bodyMedium)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassTinted(DS.Colors.going, isActive: rsvpStatus == .going))
+                .disabled(isUpdatingStatus)
+
+                Button {
+                    Task { await toggleStatus(.interested) }
+                } label: {
+                    Label("Interested", systemImage: rsvpStatus == .interested ? "star.fill" : "star")
+                        .font(DS.Typography.bodyMedium)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassTinted(DS.Colors.interested, isActive: rsvpStatus == .interested))
+                .disabled(isUpdatingStatus)
+            }
+        }
+    }
+
+    private var publicEventActionBar: some View {
+        GlassActionBar {
+            Button {
+                if let event { planSheetEvent = event }
+            } label: {
+                Label("Plan with Friends", systemImage: "person.2.badge.plus")
+                    .font(DS.Typography.bodyMedium)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassTinted(DS.Colors.plan, isActive: false))
+        }
+    }
+
+    // MARK: - RSVP Indicators
+
+    private func compactRsvpIndicator(status: RsvpStatus) -> some View {
+        HStack {
+            Image(systemName: status == .going ? "checkmark.circle.fill" : "star.fill")
+                .foregroundStyle(status == .going ? DS.Colors.going : DS.Colors.interested)
+            Text(status == .going ? "You're going" : "You're interested")
+                .font(DS.Typography.bodyMedium)
+            Spacer()
+            Menu {
+                Button { Task { await toggleStatus(.going) } } label: {
+                    Label("Going", systemImage: "checkmark.circle")
+                }
+                Button { Task { await toggleStatus(.interested) } } label: {
+                    Label("Interested", systemImage: "star")
+                }
+                Button(role: .destructive) { Task { await toggleStatus(status) } } label: {
+                    Label("Remove RSVP", systemImage: "xmark.circle")
+                }
+            } label: {
+                Text("Change")
+                    .font(DS.Typography.captionMedium)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(DS.Spacing.lg)
+        .glassBackground(cornerRadius: DS.Radius.md)
+    }
+
+    private func pastRsvpIndicator(status: RsvpStatus) -> some View {
+        HStack {
+            Image(systemName: status == .going ? "checkmark.circle.fill" : "star.fill")
+                .foregroundStyle(status == .going ? DS.Colors.going : DS.Colors.interested)
+            Text(status == .going ? "You went" : "You were interested")
+                .font(DS.Typography.bodyMedium)
+                .foregroundStyle(.secondary)
+        }
+        .padding(DS.Spacing.lg)
+        .glassBackground(cornerRadius: DS.Radius.md)
+    }
+
     // MARK: - Polls Section
 
     private var pollsSection: some View {
@@ -354,29 +431,37 @@ struct EventDetailView: View {
         do {
             let loaded = try await APIClient.shared.fetchEventDetail(slug: slug)
             event = loaded
-
-            // Map REST attendance status to RsvpStatus enum
-            if let status = loaded.attendanceStatus {
-                rsvpStatus = RsvpStatus(restStatus: status)
-            }
             attendeeCount = loaded.attendeeCount ?? 0
 
-            // Load existing plan via GraphQL
+            // For internal events, get RSVP status from GraphQL (REST doesn't have it)
+            if loaded.isInternalEvent {
+                do {
+                    let userEvent = try await GraphQLClient.shared.fetchEventAsAttendee(slug: slug)
+                    rsvpStatus = userEvent.myRsvpStatus
+                    attendeeCount = userEvent.participantCount
+                } catch {
+                    // Non-fatal: event loaded from REST, just missing RSVP status
+                    if let status = loaded.attendanceStatus {
+                        rsvpStatus = RsvpStatus(restStatus: status)
+                    }
+                    #if DEBUG
+                    print("[EventDetailView] GraphQL RSVP fetch failed for \(slug): \(error)")
+                    #endif
+                }
+            }
+
+            // Load existing plan via GraphQL (non-fatal)
             do {
                 existingPlan = try await GraphQLClient.shared.fetchMyPlan(slug: slug)
             } catch {
-                #if DEBUG
-                print("[EventDetailView] Failed to fetch plan for \(slug): \(error)")
-                #endif
+                // silent
             }
 
-            // Load polls
+            // Load polls (non-fatal)
             do {
                 polls = try await GraphQLClient.shared.fetchEventPolls(slug: slug)
             } catch {
-                #if DEBUG
-                print("[EventDetailView] Failed to fetch polls for \(slug): \(error)")
-                #endif
+                // silent
             }
         } catch is CancellationError {
             return

@@ -29,6 +29,10 @@ enum DS {
         static let xxxl: CGFloat = 24
         /// 32pt — screen-level vertical padding
         static let jumbo: CGFloat = 32
+        /// 52pt — clearance for custom nav overlay (44pt button + 8pt padding)
+        static let fullBleedNavClearance: CGFloat = 52
+        /// 60pt — extra height to extend hero gradients under the nav bar
+        static let navBarOverlap: CGFloat = 60
     }
 
     // MARK: - Corner Radius
@@ -204,6 +208,18 @@ enum DS {
         static let darkOverlay: Double = 0.7
         /// Stronger gradient for text legibility over hero images
         static let heroGradient: Double = 0.75
+    }
+
+    // MARK: - Date Formatting
+
+    enum DateFormatting {
+        /// ISO date parser (yyyy-MM-dd) shared across views
+        static let isoDate: DateFormatter = {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.dateFormat = "yyyy-MM-dd"
+            return f
+        }()
     }
 
     // MARK: - Glass

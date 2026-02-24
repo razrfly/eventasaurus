@@ -189,11 +189,13 @@ enum RsvpStatus: String, Codable, CaseIterable {
         }
     }
 
-    /// Initialize from REST API attendance status strings.
+    /// Initialize from REST/GraphQL attendance status strings.
+    /// Matches the same values used by DashboardEvent.role.
     init?(restStatus: String) {
         switch restStatus {
-        case "accepted": self = .going
-        case "interested": self = .interested
+        case "accepted", "confirmed", "confirmed_with_order": self = .going
+        case "interested", "pending": self = .interested
+        case "declined": self = .notGoing
         default: return nil
         }
     }
@@ -318,6 +320,10 @@ struct GQLMyEventsResponse: Codable {
 
 struct GQLMyEventResponse: Codable {
     let myEvent: UserEvent
+}
+
+struct GQLEventAsParticipantResponse: Codable {
+    let eventAsParticipant: UserEvent
 }
 
 struct GQLAttendingEventsResponse: Codable {

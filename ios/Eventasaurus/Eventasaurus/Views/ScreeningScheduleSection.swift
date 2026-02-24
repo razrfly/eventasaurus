@@ -47,14 +47,15 @@ struct ScreeningScheduleSection: View {
                                 selectedDate = date
                             }
                         } label: {
+                            let isSelected = activeDate == date
                             VStack(spacing: DS.Spacing.xxs) {
                                 Text(dayLabel(date))
                                     .font(DS.Typography.captionBold)
                                 Text("\(upcomingCount) show\(upcomingCount == 1 ? "" : "s")")
                                     .font(DS.Typography.micro)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(isSelected ? .white : .secondary)
                             }
-                            .glassChipStyle(isSelected: activeDate == date)
+                            .glassChipStyle(isSelected: isSelected)
                         }
                         .buttonStyle(.plain)
                     }
@@ -70,7 +71,7 @@ struct ScreeningScheduleSection: View {
             }
 
             // Showtimes for selected date
-            if let activeDate, let times = Dictionary(grouping: showtimes, by: \.date)[activeDate] {
+            if let activeDate, let times = showtimesByDate.first(where: { $0.0 == activeDate })?.1 {
                 let byFormat = groupByFormat(times)
                 ForEach(byFormat, id: \.0) { format, formatTimes in
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -115,13 +116,6 @@ struct ScreeningScheduleSection: View {
         return grouped.sorted { ($0.key ?? "zzz") < ($1.key ?? "zzz") }
     }
 
-    private static let isoDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
     private static let dayLabelFormatter: DateFormatter = {
         let f = DateFormatter()
         f.setLocalizedDateFormatFromTemplate("EEE d")
@@ -135,14 +129,14 @@ struct ScreeningScheduleSection: View {
     }()
 
     private func dayLabel(_ isoDate: String) -> String {
-        guard let date = Self.isoDateFormatter.date(from: isoDate) else { return isoDate }
+        guard let date = DS.DateFormatting.isoDate.date(from: isoDate) else { return isoDate }
         if Calendar.current.isDateInToday(date) { return "Today" }
         if Calendar.current.isDateInTomorrow(date) { return "Tomorrow" }
         return Self.dayLabelFormatter.string(from: date)
     }
 
     private func formatDate(_ isoDate: String) -> String {
-        guard let date = Self.isoDateFormatter.date(from: isoDate) else { return isoDate }
+        guard let date = DS.DateFormatting.isoDate.date(from: isoDate) else { return isoDate }
         return Self.displayDateFormatter.string(from: date)
     }
 }

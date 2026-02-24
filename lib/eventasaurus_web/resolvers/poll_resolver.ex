@@ -66,8 +66,13 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
         {:error, "Cannot clear votes on a closed poll"}
 
       poll ->
-        {:ok, _count} = Events.clear_user_poll_votes(poll, user)
-        {:ok, reload_poll(poll.id)}
+        case Events.clear_user_poll_votes(poll, user) do
+          {:ok, _count} ->
+            {:ok, reload_poll(poll.id)}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 

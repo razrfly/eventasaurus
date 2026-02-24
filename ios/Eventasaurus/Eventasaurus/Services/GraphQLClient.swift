@@ -97,6 +97,21 @@ final class GraphQLClient {
         return result.myEvent
     }
 
+    /// Fetch event as a participant (no organizer requirement) — safe for all authenticated users.
+    func fetchEventAsAttendee(slug: String) async throws -> UserEvent {
+        let result: GQLEventAsParticipantResponse = try await execute(
+            query: """
+            query EventAsParticipant($slug: String!) {
+                eventAsParticipant(slug: $slug) {
+                    \(Self.eventFields)
+                }
+            }
+            """,
+            variables: ["slug": slug]
+        )
+        return result.eventAsParticipant
+    }
+
     func fetchAttendingEvents(limit: Int? = nil) async throws -> [UserEvent] {
         var variables: [String: Any] = [:]
         if let limit { variables["limit"] = limit }
