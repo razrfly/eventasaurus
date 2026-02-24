@@ -121,51 +121,33 @@ struct EventCompactRow<Item: EventDisplayable, TrailingBadge: View>: View {
 
     @ViewBuilder
     private var movieMetadataLine: some View {
-        let hasRating = event.displayMovieRating != nil
-        let hasRuntime = event.displayMovieRuntime != nil
-        let hasGenres = event.displayMovieGenres != nil
+        let segments: [(icon: String, text: String)] = [
+            event.displayMovieRating.map { rating in
+                let formatted = rating.truncatingRemainder(dividingBy: 1) == 0
+                    ? String(format: "%.0f", rating)
+                    : String(format: "%.1f", rating)
+                return ("popcorn.fill", formatted)
+            },
+            event.displayMovieRuntime.map { ("hourglass", "\($0) min") },
+            event.displayMovieGenres.map { ("theatermasks.fill", $0) }
+        ].compactMap { $0 }
 
-        HStack(spacing: DS.Spacing.xs) {
-            if let rating = event.displayMovieRating {
-                HStack(spacing: DS.Spacing.xxs) {
-                    Image(systemName: "popcorn.fill")
-                    Text(rating.truncatingRemainder(dividingBy: 1) == 0
-                         ? String(format: "%.0f", rating)
-                         : String(format: "%.1f", rating))
-                }
-                .font(DS.Typography.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            if hasRating && (hasRuntime || hasGenres) {
-                Text("\u{00B7}")
+        if !segments.isEmpty {
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                    if index > 0 {
+                        Text("\u{00B7}")
+                            .font(DS.Typography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: DS.Spacing.xxs) {
+                        Image(systemName: segment.icon)
+                        Text(segment.text)
+                            .lineLimit(1)
+                    }
                     .font(DS.Typography.caption)
                     .foregroundStyle(.secondary)
-            }
-
-            if let mins = event.displayMovieRuntime {
-                HStack(spacing: DS.Spacing.xxs) {
-                    Image(systemName: "hourglass")
-                    Text("\(mins) min")
                 }
-                .font(DS.Typography.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            if hasRuntime && hasGenres {
-                Text("\u{00B7}")
-                    .font(DS.Typography.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let genreText = event.displayMovieGenres {
-                HStack(spacing: DS.Spacing.xxs) {
-                    Image(systemName: "theatermasks.fill")
-                    Text(genreText)
-                        .lineLimit(1)
-                }
-                .font(DS.Typography.caption)
-                .foregroundStyle(.secondary)
             }
         }
     }
@@ -184,6 +166,24 @@ struct EventCompactRow<Item: EventDisplayable, TrailingBadge: View>: View {
         if let venue = event.displayVenueName {
             parts.append(venue)
         }
+
+        // Movie group metadata for VoiceOver (rating, runtime, genres, tagline)
+        if let rating = event.displayMovieRating {
+            let formatted = rating.truncatingRemainder(dividingBy: 1) == 0
+                ? String(format: "%.0f", rating)
+                : String(format: "%.1f", rating)
+            parts.append("rated \(formatted) out of 10")
+        }
+        if let runtime = event.displayMovieRuntime {
+            parts.append("\(runtime) minutes")
+        }
+        if let genres = event.displayMovieGenres, !genres.isEmpty {
+            parts.append(genres)
+        }
+        if let tagline = event.displayCompactTagline, !tagline.isEmpty {
+            parts.append(tagline)
+        }
+
         return parts.joined(separator: ", ")
     }
 }
