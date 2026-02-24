@@ -388,8 +388,12 @@ struct DiscoverView: View {
                 }
 
                 switch viewMode {
-                case .compact, .card:
-                    LazyVStack(spacing: viewMode == .compact ? DS.Spacing.xs : DS.Spacing.xl) {
+                case .compact:
+                    LazyVStack(spacing: 0) {
+                        compactEventItems
+                    }
+                case .card:
+                    LazyVStack(spacing: DS.Spacing.xl) {
                         eventItems
                     }
                 case .grid:
@@ -419,6 +423,28 @@ struct DiscoverView: View {
                 if event.id == events.last?.id, hasMorePages, !isLoadingMore {
                     Task { await loadMoreEvents() }
                 }
+            }
+        }
+    }
+
+    /// Compact rows with indented dividers between them.
+    @ViewBuilder
+    private var compactEventItems: some View {
+        ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
+            NavigationLink(value: event.destination(cityId: selectedCity?.id)) {
+                discoverCard(for: event)
+            }
+            .buttonStyle(.plain)
+            .onAppear {
+                if event.id == events.last?.id, hasMorePages, !isLoadingMore {
+                    Task { await loadMoreEvents() }
+                }
+            }
+
+            // Divider between rows, indented past thumbnail
+            if index < events.count - 1 {
+                Divider()
+                    .padding(.leading, DS.Spacing.lg + DS.ImageSize.thumbnail + DS.Spacing.lg)
             }
         }
     }

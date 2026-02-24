@@ -185,6 +185,8 @@ extension Event: EventDisplayable {
     var displayVenueName: String? { venue?.displayName }
     var displayIsVirtual: Bool { false }
     var displayParticipantCount: Int? { attendeeCount }
+    var displayPrimaryCategoryIcon: String? { primaryCategory?.icon }
+    var displayPrimaryCategoryName: String? { primaryCategory?.name }
 }
 
 struct Venue: Codable, Hashable {
