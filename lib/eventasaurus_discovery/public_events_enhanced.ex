@@ -2182,11 +2182,12 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   # Extract vote_average from movie metadata (stored by TMDB sync)
-  defp extract_vote_average(%{"vote_average" => v}) when is_number(v) and v > 0, do: v
+  # Always coerce to float to match AggregatedMovieGroup.movie_vote_average spec (float() | nil)
+  defp extract_vote_average(%{"vote_average" => v}) when is_number(v) and v > 0, do: v / 1
 
   defp extract_vote_average(%{"tmdb_data" => %{"vote_average" => v}})
        when is_number(v) and v > 0,
-       do: v
+       do: v / 1
 
   defp extract_vote_average(_), do: nil
 

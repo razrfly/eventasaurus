@@ -10,9 +10,8 @@ enum EventDestination: Hashable {
 
 extension Event {
     func destination(cityId: Int?) -> EventDestination {
+        if isMovieGroup { return .movieGroup(slug: slug, cityId: cityId) }
         switch type {
-        case "movie_group":
-            return .movieGroup(slug: slug, cityId: cityId)
         case "event_group":
             return .eventGroup(slug: slug, cityId: cityId)
         case "container_group":
