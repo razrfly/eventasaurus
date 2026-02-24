@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
   require Logger
   import Ecto.Query
 
+  alias EventasaurusApp.Accounts
   alias EventasaurusApp.Events
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Resolvers.Helpers
@@ -56,7 +57,8 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
     end
   end
 
-  # Phase 2: Clear votes for re-voting
+  @spec clear_my_votes(any(), %{poll_id: binary() | integer()}, %{context: %{current_user: Accounts.User.t() | nil}}) ::
+          {:ok, any()} | {:error, String.t()}
   def clear_my_votes(_parent, %{poll_id: poll_id}, %{context: %{current_user: user}}) do
     case Events.get_poll(poll_id) do
       nil ->
@@ -66,13 +68,9 @@ defmodule EventasaurusWeb.Resolvers.PollResolver do
         {:error, "Cannot clear votes on a closed poll"}
 
       poll ->
-        case Events.clear_user_poll_votes(poll, user) do
-          {:ok, _count} ->
-            {:ok, reload_poll(poll.id)}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
+        # clear_user_poll_votes/2 always returns {:ok, count}
+        {:ok, _count} = Events.clear_user_poll_votes(poll, user)
+        {:ok, reload_poll(poll.id)}
     end
   end
 

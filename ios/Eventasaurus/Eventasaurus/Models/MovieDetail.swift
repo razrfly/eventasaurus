@@ -49,14 +49,21 @@ struct ScreeningVenue: Codable, Identifiable {
     let lat: Double?
     let lng: Double?
 
+    // Stable in-memory unique ID (not persisted via Codable)
+    private let _uuid = UUID()
+
     var id: String {
         if let slug, !slug.isEmpty { return slug }
         if let name, !name.isEmpty { return name }
-        return displayName
+        return "\(displayName)_\(_uuid.uuidString)"
     }
 
     var displayName: String {
         name ?? "Unknown Venue"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name, slug, address, lat, lng
     }
 }
 
