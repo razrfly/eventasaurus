@@ -307,7 +307,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       venue: nil,
       screening_count: group.screening_count,
       venue_count: group.venue_count,
-      subtitle: AggregatedMovieGroup.description(group)
+      subtitle: AggregatedMovieGroup.description(group),
+      runtime: group.movie_runtime,
+      vote_average: group.movie_vote_average,
+      genres: group.movie_genres,
+      tagline: group.movie_tagline
     }
   end
 

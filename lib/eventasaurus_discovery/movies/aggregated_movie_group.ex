@@ -15,6 +15,10 @@ defmodule EventasaurusDiscovery.Movies.AggregatedMovieGroup do
           movie_backdrop_url: String.t() | nil,
           movie_poster_url: String.t() | nil,
           movie_release_date: Date.t() | nil,
+          movie_runtime: integer() | nil,
+          movie_vote_average: float() | nil,
+          movie_genres: list(String.t()),
+          movie_tagline: String.t() | nil,
           city_id: integer(),
           city: map(),
           screening_count: integer(),
@@ -30,12 +34,16 @@ defmodule EventasaurusDiscovery.Movies.AggregatedMovieGroup do
     :movie_backdrop_url,
     :movie_poster_url,
     :movie_release_date,
+    :movie_runtime,
+    :movie_vote_average,
+    :movie_tagline,
     :city_id,
     :city,
     :screening_count,
     :venue_count,
     :categories,
-    :earliest_starts_at
+    :earliest_starts_at,
+    movie_genres: []
   ]
 
   @doc """

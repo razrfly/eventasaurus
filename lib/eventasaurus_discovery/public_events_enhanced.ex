@@ -2163,6 +2163,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           movie_backdrop_url: movie.backdrop_url,
           movie_poster_url: movie.poster_url,
           movie_release_date: movie.release_date,
+          movie_runtime: movie.runtime,
+          movie_vote_average: extract_vote_average(movie.metadata),
+          movie_genres: extract_genres(movie.metadata),
+          movie_tagline: extract_tagline(movie.metadata),
           city_id: city_id,
           city: canonical_city,
           screening_count: length(events),
@@ -2176,6 +2180,31 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       nil
     end
   end
+
+  # Extract vote_average from movie metadata (stored by TMDB sync)
+  defp extract_vote_average(%{"vote_average" => v}) when is_number(v) and v > 0, do: v
+
+  defp extract_vote_average(%{"tmdb_data" => %{"vote_average" => v}})
+       when is_number(v) and v > 0,
+       do: v
+
+  defp extract_vote_average(_), do: nil
+
+  # Extract genre names from movie metadata
+  defp extract_genres(%{"genres" => genres}) when is_list(genres) do
+    Enum.map(genres, fn
+      %{"name" => name} -> name
+      name when is_binary(name) -> name
+      _ -> nil
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp extract_genres(_), do: []
+
+  # Extract tagline from movie metadata
+  defp extract_tagline(%{"tagline" => t}) when is_binary(t) and t != "", do: t
+  defp extract_tagline(_), do: nil
 
   # Build container aggregated groups from events that belong to containers
   defp build_container_aggregated_groups(events) do
