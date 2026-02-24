@@ -44,14 +44,12 @@ struct VenueMapCard: View {
                     Label("Directions", systemImage: "arrow.triangle.turn.up.right.circle.fill")
                         .font(DS.Typography.bodyBold)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(.glassSecondary)
                 .accessibilityHint("Opens Maps with directions")
             }
         }
         .padding(DS.Spacing.lg)
-        .background(DS.Colors.surfaceTertiary)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
+        .glassBackground(cornerRadius: DS.Radius.xl)
     }
 
     private func openDirections() {

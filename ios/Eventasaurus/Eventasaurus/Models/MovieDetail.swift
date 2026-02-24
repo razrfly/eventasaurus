@@ -44,6 +44,7 @@ struct VenueScreenings: Codable, Identifiable {
 
 struct ScreeningVenue: Codable {
     let name: String?
+    let slug: String?
     let address: String?
     let lat: Double?
     let lng: Double?
@@ -60,5 +61,6 @@ struct Showtime: Codable {
     let format: String?
     let datetime: Date
     let isUpcoming: Bool
+    let eventSlug: String?
 }
 

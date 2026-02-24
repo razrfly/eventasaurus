@@ -436,12 +436,25 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     nearby_events =
       PublicEvents.get_nearby_activities_with_fallback(event, display_count: 4, language: language)
 
+    movie_slug = case event.movies do
+      [movie | _] when not is_nil(movie) -> movie.slug
+      _ -> nil
+    end
+
+    city_id = case event.venue do
+      %{city_ref: %{id: id}} when not is_nil(id) -> id
+      _ -> nil
+    end
+
     serialize_public_event(event)
     |> Map.merge(%{
       description: event.display_description,
       ticket_url: get_primary_source_ticket_url(event),
       sources: serialize_sources(event),
-      nearby_events: Enum.map(nearby_events, &serialize_public_event/1)
+      nearby_events: Enum.map(nearby_events, &serialize_public_event/1),
+      movie_group_slug: movie_slug,
+      movie_city_id: city_id,
+      occurrences: event.occurrences
     })
   end
 

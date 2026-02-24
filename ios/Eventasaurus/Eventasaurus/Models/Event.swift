@@ -1,15 +1,24 @@
 import Foundation
 
-struct EventsResponse: Codable {
+/// Wrapper that silently skips elements that fail to decode in arrays.
+/// Usage: `[SafeDecodable<MyType>].compactMap(\.value)`
+struct SafeDecodable<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws {
+        value = try? T(from: decoder)
+    }
+}
+
+struct EventsResponse: Decodable {
     let events: [Event]
     let meta: Meta
 }
 
-struct EventDetailResponse: Codable {
+struct EventDetailResponse: Decodable {
     let event: Event
 }
 
-struct Event: Codable, Identifiable, Hashable {
+struct Event: Decodable, Identifiable, Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(slug)
@@ -41,21 +50,30 @@ struct Event: Codable, Identifiable, Hashable {
     let genres: [String]?
     let tagline: String?
 
-    // Detail-only fields
-    let description: String?
-    let attendeeCount: Int?
-    let isAttending: Bool?
-    let attendanceStatus: String?
-    let status: String?
-    let ticketUrl: String?
-    let sources: [EventSource]?
-    let nearbyEvents: [Event]?
-
     // Categories — API returns rich objects for list endpoints, strings for detail
     let categories: [Category]?
 
+    // Detail-only fields stored on the heap to keep Event small enough for
+    // SwiftUI's deeply nested view builder copies (prevents stack overflow).
+    private let _detail: _DetailStorage?
+
+    var description: String? { _detail?.description }
+    var attendeeCount: Int? { _detail?.attendeeCount }
+    var isAttending: Bool? { _detail?.isAttending }
+    var attendanceStatus: String? { _detail?.attendanceStatus }
+    var status: String? { _detail?.status }
+    var ticketUrl: String? { _detail?.ticketUrl }
+    var sources: [EventSource]? { _detail?.sources }
+    var nearbyEvents: [Event]? { _detail?.nearbyEvents }
+    var movieGroupSlug: String? { _detail?.movieGroupSlug }
+    var movieCityId: Int? { _detail?.movieCityId }
+    var occurrences: EventOccurrences? { _detail?.occurrences }
+
     /// Whether this item is a movie group (aggregated screenings across venues).
     var isMovieGroup: Bool { type == "movie_group" }
+
+    /// Whether this event is a movie screening (has showtimes in occurrences).
+    var isMovieScreening: Bool { movieGroupSlug != nil && occurrences?.dates?.isEmpty == false }
 
     /// Whether this item is an aggregated group (movie stack, event group, etc.)
     var isGroup: Bool {
@@ -92,6 +110,46 @@ struct Event: Codable, Identifiable, Hashable {
     }
 }
 
+// MARK: - Detail Storage (heap-allocated to keep Event struct small)
+
+extension Event {
+    /// Heap-allocated storage for fields only used in detail views.
+    /// Reduces Event's inline size so SwiftUI view builders don't overflow the stack
+    /// when copying Event through deeply nested generic type chains.
+    final class _DetailStorage {
+        let description: String?
+        let attendeeCount: Int?
+        let isAttending: Bool?
+        let attendanceStatus: String?
+        let status: String?
+        let ticketUrl: String?
+        let sources: [EventSource]?
+        let nearbyEvents: [Event]?
+        let movieGroupSlug: String?
+        let movieCityId: Int?
+        let occurrences: EventOccurrences?
+
+        init(
+            description: String?, attendeeCount: Int?, isAttending: Bool?,
+            attendanceStatus: String?, status: String?, ticketUrl: String?,
+            sources: [EventSource]?, nearbyEvents: [Event]?,
+            movieGroupSlug: String?, movieCityId: Int?, occurrences: EventOccurrences?
+        ) {
+            self.description = description
+            self.attendeeCount = attendeeCount
+            self.isAttending = isAttending
+            self.attendanceStatus = attendanceStatus
+            self.status = status
+            self.ticketUrl = ticketUrl
+            self.sources = sources
+            self.nearbyEvents = nearbyEvents
+            self.movieGroupSlug = movieGroupSlug
+            self.movieCityId = movieCityId
+            self.occurrences = occurrences
+        }
+    }
+}
+
 // MARK: - Custom Decoder (handles categories as [Category] or [String])
 
 extension Event {
@@ -101,6 +159,7 @@ extension Event {
         case runtime, voteAverage, genres, tagline
         case description, attendeeCount, isAttending, attendanceStatus, status, categories
         case ticketUrl, sources, nearbyEvents
+        case movieGroupSlug, movieCityId, occurrences
     }
 
     init(from decoder: Decoder) throws {
@@ -121,14 +180,6 @@ extension Event {
         voteAverage = try container.decodeIfPresent(Double.self, forKey: .voteAverage)
         genres = try container.decodeIfPresent([String].self, forKey: .genres)
         tagline = try container.decodeIfPresent(String.self, forKey: .tagline)
-        description = try container.decodeIfPresent(String.self, forKey: .description)
-        attendeeCount = try container.decodeIfPresent(Int.self, forKey: .attendeeCount)
-        isAttending = try container.decodeIfPresent(Bool.self, forKey: .isAttending)
-        attendanceStatus = try container.decodeIfPresent(String.self, forKey: .attendanceStatus)
-        status = try container.decodeIfPresent(String.self, forKey: .status)
-        ticketUrl = try container.decodeIfPresent(String.self, forKey: .ticketUrl)
-        sources = try container.decodeIfPresent([EventSource].self, forKey: .sources)
-        nearbyEvents = try container.decodeIfPresent([Event].self, forKey: .nearbyEvents)
 
         // Handle categories as either [Category] (rich objects) or [String] (detail endpoint)
         if let richCategories = try? container.decodeIfPresent([Category].self, forKey: .categories) {
@@ -140,6 +191,72 @@ extension Event {
         } else {
             categories = nil
         }
+
+        // Decode detail-only fields into heap-allocated storage
+        let desc = try container.decodeIfPresent(String.self, forKey: .description)
+        let attCount = try container.decodeIfPresent(Int.self, forKey: .attendeeCount)
+        let isAtt = try container.decodeIfPresent(Bool.self, forKey: .isAttending)
+        let attStatus = try container.decodeIfPresent(String.self, forKey: .attendanceStatus)
+        let stat = try container.decodeIfPresent(String.self, forKey: .status)
+        let ticket = try container.decodeIfPresent(String.self, forKey: .ticketUrl)
+        let srcs = try container.decodeIfPresent([EventSource].self, forKey: .sources)
+        let mgSlug = try container.decodeIfPresent(String.self, forKey: .movieGroupSlug)
+        let mgCity = try container.decodeIfPresent(Int.self, forKey: .movieCityId)
+        let occ = try container.decodeIfPresent(EventOccurrences.self, forKey: .occurrences)
+
+        // Decode nearbyEvents resiliently — skip individual events that fail
+        let nearby: [Event]?
+        if let rawNearby = try? container.decodeIfPresent([SafeDecodable<Event>].self, forKey: .nearbyEvents) {
+            nearby = rawNearby.compactMap(\.value)
+        } else {
+            nearby = nil
+        }
+
+        // Only allocate detail storage if any detail field is non-nil
+        let hasDetail = desc != nil || attCount != nil || isAtt != nil || attStatus != nil
+            || stat != nil || ticket != nil || srcs != nil || nearby != nil
+            || mgSlug != nil || mgCity != nil || occ != nil
+        _detail = hasDetail ? _DetailStorage(
+            description: desc, attendeeCount: attCount, isAttending: isAtt,
+            attendanceStatus: attStatus, status: stat, ticketUrl: ticket,
+            sources: srcs, nearbyEvents: nearby,
+            movieGroupSlug: mgSlug, movieCityId: mgCity, occurrences: occ
+        ) : nil
+    }
+}
+
+// MARK: - Occurrences (Screening Schedule)
+
+struct EventOccurrences: Codable {
+    let dates: [EventShowtime]?
+}
+
+struct EventShowtime: Codable, Identifiable {
+    var id: String { "\(date)_\(time ?? "")_\(label ?? "")" }
+    let date: String
+    let time: String?
+    let label: String?
+    let externalId: String?
+
+    /// Extract format from label (e.g., "IMAX 2D Napisy PL" → "IMAX", "2D Dubbed" → "2D")
+    var format: String? {
+        guard let label else { return nil }
+        let upper = label.uppercased()
+        if upper.contains("IMAX") { return "IMAX" }
+        if upper.contains("4DX") { return "4DX" }
+        if upper.contains("3D") { return "3D" }
+        if upper.contains("2D") { return "2D" }
+        return nil
+    }
+
+    /// Whether this showtime is in the future
+    var isUpcoming: Bool {
+        guard let time else { return false }
+        let isoString = "\(date)T\(time):00"
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime]
+        guard let dt = formatter.date(from: isoString) else { return false }
+        return dt > Date()
     }
 }
 

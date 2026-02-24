@@ -34,6 +34,7 @@ struct EventDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             if let event, let shareURL = URL.event(slug: slug) {
                 ToolbarItem(placement: .primaryAction) {
@@ -58,37 +59,84 @@ struct EventDetailView: View {
     private func eventContent(_ event: Event) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
-                // Edge-to-edge hero image
+                // Hero with overlaid title/date/venue
                 if event.coverImageUrl != nil {
-                    CachedImage(
-                        url: AppConfig.resolvedImageURL(event.coverImageUrl),
-                        height: DS.ImageSize.hero,
-                        cornerRadius: 0
-                    )
+                    DramaticHero(imageURL: AppConfig.resolvedImageURL(event.coverImageUrl)) {
+                        HeroOverlayCard {
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                Text(event.title)
+                                    .font(DS.Typography.title)
+                                    .foregroundStyle(.white)
+
+                                if let date = event.startsAt {
+                                    Label {
+                                        Text(date, format: .dateTime.weekday(.wide).month(.wide).day().hour().minute())
+                                    } icon: {
+                                        Image(systemName: "calendar")
+                                    }
+                                    .font(DS.Typography.body)
+                                    .foregroundStyle(.white.opacity(0.9))
+                                }
+
+                                if let venue = event.venue {
+                                    Label {
+                                        Text(venue.displayName)
+                                    } icon: {
+                                        Image(systemName: "mappin.and.ellipse")
+                                    }
+                                    .font(DS.Typography.body)
+                                    .foregroundStyle(.white.opacity(0.9))
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // No-image fallback: inline title
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text(event.title)
+                            .font(DS.Typography.title)
+
+                        if let date = event.startsAt {
+                            Label {
+                                Text(date, format: .dateTime.weekday(.wide).month(.wide).day().hour().minute())
+                            } icon: {
+                                Image(systemName: "calendar")
+                            }
+                            .font(DS.Typography.body)
+                        }
+
+                        if let venue = event.venue {
+                            Label(venue.displayName, systemImage: "mappin.and.ellipse")
+                                .font(DS.Typography.body)
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.top, DS.Spacing.xl)
                 }
 
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // Title
-                    Text(event.title)
-                        .font(DS.Typography.title)
-
-                    // Date & time
-                    if let date = event.startsAt {
-                        Label {
-                            Text(date, format: .dateTime.weekday(.wide).month(.wide).day().hour().minute())
-                        } icon: {
-                            Image(systemName: "calendar")
-                        }
-                        .font(DS.Typography.body)
-                    }
-
-                    // Venue
+                    // Venue row (tap to navigate)
                     if let venue = event.venue {
                         venueRow(venue)
                     }
 
-                    // RSVP buttons
-                    rsvpButtons
+                    // Screening schedule (movie screening events)
+                    if let dates = event.occurrences?.dates, !dates.isEmpty {
+                        ScreeningScheduleSection(
+                            showtimes: dates,
+                            venueName: event.venue?.displayName
+                        )
+                    }
+
+                    // See All Screenings (movie screening events)
+                    if let movieSlug = event.movieGroupSlug {
+                        NavigationLink(value: EventDestination.movieGroup(slug: movieSlug, cityId: event.movieCityId)) {
+                            Label("See All Screenings", systemImage: "film.stack")
+                                .font(DS.Typography.bodyMedium)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glassSecondary)
+                    }
 
                     // Plan with Friends
                     planWithFriendsSection(for: event)
@@ -127,7 +175,7 @@ struct EventDetailView: View {
                         pollsSection
                     }
 
-                    // Ticket link
+                    // Ticket link (buried inline — not a primary CTA)
                     if let ticketUrl = event.ticketUrl, let url = URL(string: ticketUrl) {
                         ExternalLinkButton(title: "Get Tickets", url: url, icon: "ticket")
                     }
@@ -150,6 +198,31 @@ struct EventDetailView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.xl)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            GlassActionBar {
+                HStack(spacing: DS.Spacing.lg) {
+                    Button {
+                        Task { await toggleStatus(.going) }
+                    } label: {
+                        Label("Going", systemImage: rsvpStatus == .going ? "checkmark.circle.fill" : "checkmark.circle")
+                            .font(DS.Typography.bodyMedium)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glassTinted(DS.Colors.going, isActive: rsvpStatus == .going))
+                    .disabled(isUpdatingStatus)
+
+                    Button {
+                        Task { await toggleStatus(.interested) }
+                    } label: {
+                        Label("Interested", systemImage: rsvpStatus == .interested ? "star.fill" : "star")
+                            .font(DS.Typography.bodyMedium)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glassTinted(DS.Colors.interested, isActive: rsvpStatus == .interested))
+                    .disabled(isUpdatingStatus)
+                }
             }
         }
     }
@@ -197,47 +270,6 @@ struct EventDetailView: View {
         }
     }
 
-    // MARK: - RSVP Buttons
-
-    private var rsvpButtons: some View {
-        HStack(spacing: DS.Spacing.lg) {
-            Button {
-                Task { await toggleStatus(.going) }
-            } label: {
-                Label("Going", systemImage: rsvpStatus == .going ? "checkmark.circle.fill" : "checkmark.circle")
-                    .font(DS.Typography.bodyMedium)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .tint(rsvpStatus == .going ? DS.Colors.going : .secondary)
-            .disabled(isUpdatingStatus)
-            .accessibilityLabel("Going")
-            .accessibilityValue(rsvpStatus == .going ? "Selected" : "Not selected")
-            .accessibilityHint("Double tap to mark as going")
-
-            Button {
-                Task { await toggleStatus(.interested) }
-            } label: {
-                Label("Interested", systemImage: rsvpStatus == .interested ? "star.fill" : "star")
-                    .font(DS.Typography.bodyMedium)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .tint(rsvpStatus == .interested ? DS.Colors.interested : .secondary)
-            .disabled(isUpdatingStatus)
-            .accessibilityLabel("Interested")
-            .accessibilityValue(rsvpStatus == .interested ? "Selected" : "Not selected")
-            .accessibilityHint("Double tap to mark as interested")
-
-            if attendeeCount > 0 {
-                Text("\(attendeeCount) going")
-                    .font(DS.Typography.caption)
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
-            }
-        }
-    }
-
     // MARK: - Plan with Friends
 
     private func planWithFriendsSection(for event: Event) -> some View {
@@ -260,9 +292,7 @@ struct EventDetailView: View {
                         Text("View")
                             .font(DS.Typography.captionMedium)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(DS.Colors.plan)
-                    .controlSize(.small)
+                    .buttonStyle(.glassTinted(DS.Colors.plan, isActive: true))
                 }
                 .padding(DS.Spacing.lg)
                 .glassBackground(cornerRadius: DS.Radius.md)
@@ -275,8 +305,7 @@ struct EventDetailView: View {
                         .font(DS.Typography.bodyMedium)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .tint(DS.Colors.plan)
+                .buttonStyle(.glassTinted(DS.Colors.plan, isActive: false))
                 .accessibilityHint("Opens sheet to invite friends")
             }
         }
@@ -295,8 +324,7 @@ struct EventDetailView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, DS.Spacing.xxs)
-                    .background(Color.secondary.opacity(0.1))
-                    .clipShape(Capsule())
+                    .glassBackground(cornerRadius: DS.Radius.full)
             }
 
             ForEach(polls) { poll in

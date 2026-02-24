@@ -21,49 +21,79 @@ struct ContainerDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .task { await loadContainer() }
     }
 
     private func containerContent(_ data: ContainerDetailResponse) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
-                // Cover image
-                if let url = AppConfig.resolvedImageURL(data.container.coverImageUrl) {
-                    CachedImage(
-                        url: url,
-                        height: DS.ImageSize.hero,
-                        cornerRadius: 0,
+                // Hero with overlaid title/type/dates
+                if AppConfig.resolvedImageURL(data.container.coverImageUrl) != nil {
+                    DramaticHero(
+                        imageURL: AppConfig.resolvedImageURL(data.container.coverImageUrl),
                         placeholderIcon: "sparkles"
-                    )
-                }
+                    ) {
+                        HeroOverlayCard {
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                Text(data.container.title)
+                                    .font(DS.Typography.title)
+                                    .foregroundStyle(.white)
 
-                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // Title
-                    Text(data.container.title)
-                        .font(DS.Typography.title)
+                                HStack(spacing: DS.Spacing.md) {
+                                    Text(data.container.containerType.capitalized)
+                                        .font(DS.Typography.captionBold)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, DS.Spacing.lg)
+                                        .padding(.vertical, DS.Spacing.xs)
+                                        .clearGlassBackground(cornerRadius: DS.Radius.full)
 
-                    // Type badge + date range
-                    HStack(spacing: DS.Spacing.md) {
-                        Text(data.container.containerType.capitalized)
-                            .font(DS.Typography.captionBold)
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.xs)
-                            .background(.tint.opacity(DS.Opacity.tintedBackground))
-                            .clipShape(Capsule())
-
-                        if let start = data.container.startDate {
-                            if let end = data.container.endDate {
-                                Text("\(start, format: .dateTime.month(.abbreviated).day()) – \(end, format: .dateTime.month(.abbreviated).day())")
-                                    .font(DS.Typography.body)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text(start, format: .dateTime.month(.abbreviated).day())
-                                    .font(DS.Typography.body)
-                                    .foregroundStyle(.secondary)
+                                    if let start = data.container.startDate {
+                                        if let end = data.container.endDate {
+                                            Text("\(start, format: .dateTime.month(.abbreviated).day()) – \(end, format: .dateTime.month(.abbreviated).day())")
+                                                .font(DS.Typography.body)
+                                                .foregroundStyle(.white.opacity(0.9))
+                                        } else {
+                                            Text(start, format: .dateTime.month(.abbreviated).day())
+                                                .font(DS.Typography.body)
+                                                .foregroundStyle(.white.opacity(0.9))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
+                } else {
+                    // No-image fallback: inline title
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text(data.container.title)
+                            .font(DS.Typography.title)
 
+                        HStack(spacing: DS.Spacing.md) {
+                            Text(data.container.containerType.capitalized)
+                                .font(DS.Typography.captionBold)
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.vertical, DS.Spacing.xs)
+                                .glassBackground(cornerRadius: DS.Radius.full)
+
+                            if let start = data.container.startDate {
+                                if let end = data.container.endDate {
+                                    Text("\(start, format: .dateTime.month(.abbreviated).day()) – \(end, format: .dateTime.month(.abbreviated).day())")
+                                        .font(DS.Typography.body)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text(start, format: .dateTime.month(.abbreviated).day())
+                                        .font(DS.Typography.body)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.top, DS.Spacing.xl)
+                }
+
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                     // Description
                     if let description = data.container.description, !description.isEmpty {
                         Text(description)

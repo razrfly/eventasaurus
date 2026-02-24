@@ -77,6 +77,27 @@ extension View {
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
     }
+
+    /// Glass chip/pill selector — glass variant of chipStyle for detail views.
+    /// Selected: solid accent capsule with white text. Unselected: plain glass.
+    @ViewBuilder
+    func glassChipStyle(isSelected: Bool) -> some View {
+        if isSelected {
+            self
+                .font(DS.Typography.captionBold)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+                .foregroundStyle(.white)
+                .background(Color.accentColor, in: Capsule())
+        } else {
+            self
+                .font(DS.Typography.caption)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+                .foregroundStyle(.primary)
+                .glassBackground(cornerRadius: DS.Radius.full)
+        }
+    }
 }
 
 // MARK: - Card Modifier

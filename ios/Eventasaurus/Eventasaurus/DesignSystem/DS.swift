@@ -125,6 +125,10 @@ enum DS {
     enum ImageSize {
         /// Hero images on detail views — 220pt
         static let hero: CGFloat = 220
+        /// Taller hero for overlaid content — 300pt
+        static let heroLarge: CGFloat = 300
+        /// Movie hero with poster overlay — 320pt
+        static let heroMovie: CGFloat = 320
         /// Grid item covers — 200pt
         static let gridCover: CGFloat = 200
         /// Standard card covers — 160pt
@@ -198,6 +202,8 @@ enum DS {
         static let badge: Double = 0.9
         /// Semi-transparent dark badge backgrounds
         static let darkOverlay: Double = 0.7
+        /// Stronger gradient for text legibility over hero images
+        static let heroGradient: Double = 0.75
     }
 
     // MARK: - Glass
