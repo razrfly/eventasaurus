@@ -304,6 +304,9 @@ defmodule EventasaurusWeb.Components.Movies.ShowtimesByDay do
     end
   end
 
+  # Occurrence datetimes are already in local venue time (constructed via
+  # DateTime.new(date, time, timezone) from parsed occurrence data).
+  # No timezone conversion needed here — converting would double-shift.
   defp format_time(datetime) do
     Calendar.strftime(datetime, "%H:%M")
   end

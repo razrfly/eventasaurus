@@ -220,6 +220,7 @@ defmodule EventasaurusApp.Venues do
   Returns `{:error, changeset}` if the venue still has associated events
   (due to the RESTRICT foreign key constraint).
   """
+  @spec delete_venue(Venue.t()) :: {:ok, Venue.t()} | {:error, Ecto.Changeset.t()}
   def delete_venue(%Venue{} = venue) do
     venue
     |> Ecto.Changeset.change()
@@ -247,7 +248,11 @@ defmodule EventasaurusApp.Venues do
   def search_venues(name, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
 
-    from(v in Venue, where: ilike(v.name, ^"%#{name}%"), order_by: [asc: v.name, asc: v.id], limit: ^limit)
+    from(v in Venue,
+      where: ilike(v.name, ^"%#{name}%"),
+      order_by: [asc: v.name, asc: v.id],
+      limit: ^limit
+    )
     |> Repo.all()
   end
 

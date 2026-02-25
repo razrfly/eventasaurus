@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.VenueLive.Components.EventCard do
   Note: Simplified for public_events which don't have status/ticket fields.
   """
   use EventasaurusWeb, :html
+  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers, only: [format_local_datetime: 3]
 
   attr :event, :map, required: true, doc: "Event struct with preloaded associations"
   attr :class, :string, default: "", doc: "Additional CSS classes"
@@ -56,7 +57,7 @@ defmodule EventasaurusWeb.VenueLive.Components.EventCard do
                   d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              <span><%= format_date_time(@event.starts_at) %></span>
+              <span><%= format_date_time(@event) %></span>
             </div>
           </div>
         </div>
@@ -81,17 +82,13 @@ defmodule EventasaurusWeb.VenueLive.Components.EventCard do
 
   defp get_image_url(_), do: nil
 
-  defp format_date_time(nil), do: "Date TBD"
+  defp format_date_time(%{starts_at: nil}), do: "Date TBD"
 
-  defp format_date_time(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%B %d, %Y at %H:%M")
+  defp format_date_time(%{starts_at: starts_at, venue: venue}) do
+    format_local_datetime(starts_at, venue, :full)
   end
 
-  defp format_date_time(%NaiveDateTime{} = datetime) do
-    Calendar.strftime(datetime, "%B %d, %Y at %H:%M")
-  end
-
-  defp format_date_time(%Date{} = date) do
-    Calendar.strftime(date, "%B %d, %Y")
+  defp format_date_time(%{starts_at: starts_at}) do
+    format_local_datetime(starts_at, nil, :full)
   end
 end

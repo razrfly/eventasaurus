@@ -14,6 +14,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
   alias EventasaurusWeb.Components.Breadcrumbs
   alias EventasaurusWeb.Components.Activity.ContainerHeroCard
   alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, SourceAttribution}
+  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers, only: [format_local_datetime: 3]
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
 
   @impl true
@@ -189,11 +190,8 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
     Calendar.strftime(datetime, "%b %d, %Y")
   end
 
-  defp format_datetime(nil), do: "TBD"
-
-  defp format_datetime(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%b %d, %Y at %H:%M")
-  end
+  defp format_datetime(nil, _venue), do: "TBD"
+  defp format_datetime(datetime, venue), do: format_local_datetime(datetime, venue, :short)
 
   @impl true
   def render(assigns) do
@@ -384,7 +382,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
           <div class="mt-auto space-y-2">
             <div class="flex items-center text-sm text-gray-600">
               <Heroicons.calendar class="w-4 h-4 mr-2 flex-shrink-0" />
-              <span class="truncate"><%= format_datetime(@event.starts_at) %></span>
+              <span class="truncate"><%= format_datetime(@event.starts_at, @event.venue) %></span>
             </div>
 
             <%= if venue = @event.venue do %>
@@ -435,7 +433,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
             <div class="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
               <div class="flex items-center">
                 <Heroicons.calendar class="w-4 h-4 mr-1" />
-                <%= format_datetime(@event.starts_at) %>
+                <%= format_datetime(@event.starts_at, @event.venue) %>
               </div>
 
               <%= if venue = @event.venue do %>

@@ -94,7 +94,9 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   TTL: 30 minutes
   """
   def get_city_stats(city_slug, radius_km, compute_fn) when is_function(compute_fn, 0) do
-    if not enabled?(), do: compute_fn.(), else: do_get_city_stats(city_slug, radius_km, compute_fn)
+    if not enabled?(),
+      do: compute_fn.(),
+      else: do_get_city_stats(city_slug, radius_km, compute_fn)
   end
 
   defp do_get_city_stats(city_slug, radius_km, compute_fn) do
@@ -471,22 +473,27 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   The cached value includes metadata for staleness checking.
   """
   def put_base_events(city_slug, radius_km, data) do
-    cache_key = base_cache_key(city_slug, radius_km)
+    if not enabled?() do
+      Logger.debug("CityPageCache disabled, skipping base cache write for #{city_slug}")
+      :ok
+    else
+      cache_key = base_cache_key(city_slug, radius_km)
 
-    cache_value =
-      data
-      |> Map.put(:cached_at, DateTime.utc_now())
-      |> Map.put(:cache_type, :base)
+      cache_value =
+        data
+        |> Map.put(:cached_at, DateTime.utc_now())
+        |> Map.put(:cache_type, :base)
 
-    case Cachex.put(@cache_name, cache_key, cache_value, ttl: @base_cache_ttl_ms) do
-      {:ok, true} ->
-        event_count = length(Map.get(data, :events, []))
-        Logger.info("Base cache stored for city=#{city_slug}: #{event_count} events")
-        :ok
+      case Cachex.put(@cache_name, cache_key, cache_value, ttl: @base_cache_ttl_ms) do
+        {:ok, true} ->
+          event_count = length(Map.get(data, :events, []))
+          Logger.info("Base cache stored for city=#{city_slug}: #{event_count} events")
+          :ok
 
-      {:error, reason} ->
-        Logger.error("Failed to store base cache for #{city_slug}: #{inspect(reason)}")
-        {:error, reason}
+        {:error, reason} ->
+          Logger.error("Failed to store base cache for #{city_slug}: #{inspect(reason)}")
+          {:error, reason}
+      end
     end
   end
 
@@ -637,9 +644,15 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
     Cachex.clear(@cache_name)
   end
 
-  # Shared caching toggle — checked by both web (Cachex) and mobile API (MV fallback).
-  # Defaults to true (production). Set `config :eventasaurus, :enable_caching, false` to disable.
-  defp enabled? do
+  @doc """
+  Checks if caching is enabled.
+
+  Shared toggle — checked by web (Cachex), mobile API (MV fallback), and
+  cache refresh jobs. Defaults to true (production).
+
+  Set `config :eventasaurus, :enable_caching, false` to disable.
+  """
+  def enabled? do
     Application.get_env(:eventasaurus, :enable_caching, true)
   end
 end

@@ -924,7 +924,13 @@ defmodule EventasaurusApp.Venues.VenueDeduplication do
   end
 
   defp delete_venue(venue) do
-    Repo.delete(venue)
+    venue
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.foreign_key_constraint(:id,
+      name: "public_events_venue_id_fkey",
+      message: "cannot delete venue while events are associated with it"
+    )
+    |> Repo.delete()
   end
 
   # ===========================================================================
