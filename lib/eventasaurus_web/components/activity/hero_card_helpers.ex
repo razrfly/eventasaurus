@@ -15,24 +15,37 @@ defmodule EventasaurusWeb.Components.Activity.HeroCardHelpers do
   """
 
   @doc """
-  Formats a datetime for display in hero cards.
+  Formats a datetime for display in hero cards, converting to local venue timezone.
 
-  Returns nil if datetime is nil, otherwise formats using the provided format string.
+  When a venue is provided, converts from UTC to the venue's local timezone before formatting.
+  Returns nil if datetime is nil.
 
   ## Examples
 
-      iex> format_datetime(~U[2024-12-17 19:00:00Z], "%A, %B %d, %Y · %H:%M")
-      "Tuesday, December 17, 2024 · 19:00"
+      iex> format_datetime(~U[2024-12-17 19:00:00Z], venue, "%A, %B %d, %Y · %H:%M")
+      "Tuesday, December 17, 2024 · 20:00"  # CET venue
 
-      iex> format_datetime(nil, "%A, %B %d")
+      iex> format_datetime(nil, nil, "%A, %B %d")
       nil
   """
-  @spec format_datetime(DateTime.t() | NaiveDateTime.t() | nil, String.t()) :: String.t() | nil
-  def format_datetime(nil, _format), do: nil
+  @spec format_datetime(DateTime.t() | NaiveDateTime.t() | nil, map() | nil, String.t()) ::
+          String.t() | nil
+  def format_datetime(nil, _venue, _format), do: nil
 
-  def format_datetime(datetime, format) do
-    Calendar.strftime(datetime, format)
+  def format_datetime(datetime, venue, format) do
+    local_dt = to_local_datetime(datetime, venue)
+    Calendar.strftime(local_dt, format)
   end
+
+  defp to_local_datetime(%DateTime{} = datetime, %{} = venue) do
+    alias EventasaurusDiscovery.Helpers.TimezoneMapper
+    alias EventasaurusWeb.TimezoneHelpers
+
+    timezone = TimezoneMapper.get_timezone_for_venue(venue)
+    TimezoneHelpers.convert_to_timezone(datetime, timezone)
+  end
+
+  defp to_local_datetime(datetime, _venue), do: datetime
 
   @doc """
   Extracts the city name from a venue struct.

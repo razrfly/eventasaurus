@@ -192,7 +192,7 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
       # Use a minimal query instead of base_query since we only need starts_at
       events =
         from(e in "city_events_mv",
-          where: e.city_slug == ^city_slug,
+          where: e.city_slug == ^city_slug and not is_nil(e.event_slug),
           select: %{starts_at: e.starts_at}
         )
         |> Repo.replica().all()

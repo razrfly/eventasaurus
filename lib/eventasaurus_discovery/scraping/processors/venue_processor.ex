@@ -208,7 +208,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   defp normalize_venue_data(data) do
     # Normalize the venue name and clean UTF-8 after normalization
-    # Normalizer.normalize_text can corrupt UTF-8 with its regex operations
+    # Defense-in-depth: external data may arrive with invalid UTF-8
     raw_name = data[:name] || data["name"]
 
     normalized_name =

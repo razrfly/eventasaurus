@@ -285,7 +285,7 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
 
   # Build query opts for BASE cache (large page, no filters)
   # This fetches ~500 events covering ~30 days for in-memory filtering
-  defp build_base_query_opts(city_slug, radius_km) do
+  defp build_base_query_opts(city_slug, _radius_km) do
     alias EventasaurusDiscovery.Locations
 
     case Locations.get_city_by_slug(city_slug) do
@@ -293,13 +293,9 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
         raise "City not found: #{city_slug}"
 
       viewing_city ->
-        lat = if viewing_city.latitude, do: Decimal.to_float(viewing_city.latitude), else: nil
-        lng = if viewing_city.longitude, do: Decimal.to_float(viewing_city.longitude), else: nil
-
+        # Use city_id for exact city-boundary filtering (Issue #3673)
         %{
-          center_lat: lat,
-          center_lng: lng,
-          radius_km: radius_km,
+          city_id: viewing_city.id,
           sort_order: :asc,
           page_size: @base_page_size,
           page: 1,
@@ -311,16 +307,10 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
     end
   end
 
-  defp build_query_opts_for_city(viewing_city, radius_km, opts) do
-    # Extract coordinates for geographic filtering
-    lat = if viewing_city.latitude, do: Decimal.to_float(viewing_city.latitude), else: nil
-    lng = if viewing_city.longitude, do: Decimal.to_float(viewing_city.longitude), else: nil
-
-    # Build base query filters matching what city_live/index.ex passes
+  defp build_query_opts_for_city(viewing_city, _radius_km, opts) do
+    # Use city_id for exact city-boundary filtering (Issue #3673)
     query_filters = %{
-      center_lat: lat,
-      center_lng: lng,
-      radius_km: radius_km,
+      city_id: viewing_city.id,
       sort_order: :asc,
       page_size: opts[:page_size] || 30,
       page: opts[:page] || 1
