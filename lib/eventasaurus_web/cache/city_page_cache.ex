@@ -652,6 +652,7 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
 
   Set `config :eventasaurus, :enable_caching, false` to disable.
   """
+  @spec enabled?() :: boolean()
   def enabled? do
     Application.get_env(:eventasaurus, :enable_caching, true)
   end
