@@ -1180,9 +1180,12 @@ defmodule EventasaurusWeb.CityLive.Index do
         do: Keyword.put(opts, :aggregate, aggregate),
         else: opts
 
+    normalized_search =
+      filters[:search] |> to_string() |> String.trim()
+
     opts =
-      if filters[:search] && filters[:search] != "",
-        do: Keyword.put(opts, :search, filters[:search]),
+      if normalized_search != "",
+        do: Keyword.put(opts, :search, normalized_search),
         else: opts
 
     opts
