@@ -336,6 +336,7 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
       |> maybe_put(:start_date, opts[:start_date])
       |> maybe_put(:end_date, opts[:end_date])
       |> maybe_put(:show_past, opts[:show_past])
+      |> maybe_put(:search, opts[:search])
 
     # Build final query opts matching original city page behavior
     # IMPORTANT: Must return a Map (not keyword list) because aggregate_events uses is_map_key
@@ -372,6 +373,7 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
       {:start_date, v}, acc -> Map.put(acc, "start_date", v)
       {:end_date, v}, acc -> Map.put(acc, "end_date", v)
       {:show_past, v}, acc -> Map.put(acc, "show_past", v)
+      {:search, v}, acc -> Map.put(acc, "search", v)
       _, acc -> acc
     end)
   end
@@ -389,6 +391,7 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
     |> maybe_add_opt(args, "start_date", :start_date, &parse_datetime/1)
     |> maybe_add_opt(args, "end_date", :end_date, &parse_datetime/1)
     |> maybe_add_opt(args, "show_past", :show_past, & &1)
+    |> maybe_add_opt(args, "search", :search, & &1)
   end
 
   # Parse ISO8601 datetime or date-only string
@@ -438,6 +441,7 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
     |> maybe_add_opt_raw(args, "start_date", :start_date)
     |> maybe_add_opt_raw(args, "end_date", :end_date)
     |> maybe_add_opt_raw(args, "show_past", :show_past)
+    |> maybe_add_opt_raw(args, "search", :search)
   end
 
   # Add opt without transformation (keeps original value from args)
