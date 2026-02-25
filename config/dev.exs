@@ -3,10 +3,10 @@ import Config
 # Set environment
 config :eventasaurus, :environment, :dev
 
-# Shared caching toggle for both web (Cachex) and mobile API (MV fallback).
-# false = bypass all caches, always query the DB (useful for dev/debugging).
-# true  = enable caching (matches production behavior).
-config :eventasaurus, :enable_caching, false
+# Caching toggle: controls Cachex cache chain and debug pill visibility.
+# true  = enable caching + show cache status pill (matches production behavior).
+# false = bypass all caches, always query the DB directly.
+config :eventasaurus, :enable_caching, true
 
 # Configure Nx to use EXLA backend for ML operations (Issue #3213)
 # EXLA provides optimized CPU/GPU tensor operations for Bumblebee models

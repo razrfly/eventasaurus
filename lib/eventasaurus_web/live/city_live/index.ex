@@ -32,10 +32,6 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   @default_radius_km 50
 
-  # Debug mode: bypass cache and show data source comparison
-  # Enable with ?debug=true query param (dev environment only)
-  @debug_enabled Mix.env() == :dev
-
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
     case Locations.get_city_by_slug(city_slug) do
@@ -101,12 +97,9 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:show_filters, false)
            |> assign(:loading, true)
            |> assign(:events_loading, true)
-           # Debug mode for comparing data sources (dev only)
            |> assign(:debug_mode, false)
            |> assign(:debug_data, nil)
-           # Cache status pill visibility (compile-time dev check, Issue #3675)
-           |> assign(:debug_enabled, @debug_enabled)
-           # Cache status for dev debug pill (Issue #3675)
+           |> assign(:debug_enabled, caching_enabled?())
            |> assign(:cache_status, nil)
            |> assign(:total_events, 0)
            |> assign(:all_events_count, 0)
@@ -440,10 +433,10 @@ defmodule EventasaurusWeb.CityLive.Index do
     {:noreply, update(socket, :show_filters, &(!&1))}
   end
 
-  # Toggle debug comparison panel (dev only, Issue #3675)
+  # Toggle debug comparison panel (only when caching is enabled)
   @impl true
   def handle_event("toggle_debug", _params, socket) do
-    if @debug_enabled do
+    if caching_enabled?() do
       if socket.assigns.debug_mode do
         # Turning off — just hide the panel
         {:noreply, assign(socket, :debug_mode, false)}
@@ -1259,8 +1252,8 @@ defmodule EventasaurusWeb.CityLive.Index do
     page = parse_integer(params["page"]) || 1
     radius_km = parse_integer(params["radius"]) || socket.assigns.radius_km
 
-    # Debug mode: ?debug=true enables data source comparison (dev only)
-    debug_mode = @debug_enabled and parse_boolean(params["debug"])
+    # Debug mode: ?debug=true enables data source comparison (when caching is on)
+    debug_mode = caching_enabled?() and parse_boolean(params["debug"])
 
     if debug_mode do
       Logger.info("[DEBUG_MODE] Enabled for city page - will fetch comparison data")
@@ -1684,6 +1677,12 @@ defmodule EventasaurusWeb.CityLive.Index do
         # Determine which path we're using
         if CityPageFilters.can_use_base_cache?(filters) do
           case CityPageCache.get_base_events(city.slug, radius_km) do
+            {:ok, %{events: []} = _base_data} ->
+              %{
+                path: "base_cache_stale_empty",
+                note: "base cache returned empty events list — treating as stale"
+              }
+
             {:ok, base_data} ->
               result = CityPageFilters.filter_base_events(base_data, filters, page_opts)
 
@@ -1708,7 +1707,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     debug_data
     |> Map.put(:direct_query, direct_result)
     |> Map.put(:cachex_base, cache_result)
-    |> Map.put(:mv_fallback, %{status: :removed})
     |> Map.put(:current_path, current_result)
   end
 
