@@ -218,8 +218,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   defp can_use_fallback?(params) do
     fallback_enabled?() &&
+      empty_param?(params["radius"]) &&
       empty_param?(params["categories"]) &&
-      empty_param?(params["search"])
+      empty_param?(params["search"]) &&
+      empty_param?(params["sort_by"])
   end
 
   defp fallback_enabled? do
@@ -263,8 +265,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         offset = (page - 1) * per_page
         page_events = Enum.slice(events, offset, per_page)
 
-        # Convert date count keys from atoms to strings
-        string_date_counts = Map.new(date_counts, fn {k, v} -> {Atom.to_string(k), v} end)
+        # Convert date count keys to strings (atoms from CityEventsFallback)
+        string_date_counts = Map.new(date_counts, fn {k, v} -> {to_string(k), v} end)
 
         json(conn, %{
           events: Enum.map(page_events, &serialize_fallback_item/1),
@@ -314,8 +316,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   defp maybe_filter_fallback_by_date(events, _params), do: events
 
-  defp fallback_starts_at(%AggregatedMovieGroup{earliest_starts_at: dt}), do: dt
-  defp fallback_starts_at(%{starts_at: dt}), do: dt
+  defp fallback_starts_at(%AggregatedMovieGroup{earliest_starts_at: %DateTime{} = dt}), do: dt
+  defp fallback_starts_at(%{starts_at: %DateTime{} = dt}), do: dt
   defp fallback_starts_at(_), do: nil
 
   # --- Fallback serializers ---
