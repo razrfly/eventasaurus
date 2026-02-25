@@ -23,7 +23,6 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.JsonLd.CitySchema
   alias Eventasaurus.SocialCards.UrlBuilder
   alias EventasaurusWeb.Cache.CityPageCache
-  alias EventasaurusWeb.Cache.CityEventsFallback
   alias EventasaurusWeb.Telemetry.CityPageTelemetry
 
   import EventasaurusWeb.EventComponents
@@ -728,7 +727,7 @@ defmodule EventasaurusWeb.CityLive.Index do
         (radius: <%= @debug_data.radius_km %>km) at <%= Calendar.strftime(@debug_data.fetched_at, "%H:%M:%S") %>
       </p>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <!-- Direct Query -->
         <div class="bg-white p-4 rounded-lg shadow">
           <h3 class="font-semibold text-gray-800 mb-2">1. Direct Query</h3>
@@ -762,23 +761,9 @@ defmodule EventasaurusWeb.CityLive.Index do
           <% end %>
         </div>
 
-        <!-- MV Fallback -->
-        <div class="bg-white p-4 rounded-lg shadow">
-          <h3 class="font-semibold text-gray-800 mb-2">3. MV Fallback</h3>
-          <p class="text-xs text-gray-500 mb-2">city_events_mv (materialized view)</p>
-          <%= case @debug_data.mv_fallback.status do %>
-            <% :ok -> %>
-              <p class="text-2xl font-bold text-purple-600"><%= @debug_data.mv_fallback.event_count %> events</p>
-              <p class="text-sm text-gray-600">All events: <%= @debug_data.mv_fallback.all_events_count %></p>
-              <p class="text-xs text-gray-500"><%= @debug_data.mv_fallback.duration_ms %>ms</p>
-            <% :error -> %>
-              <p class="text-red-600">Error: <%= @debug_data.mv_fallback.error %></p>
-          <% end %>
-        </div>
-
         <!-- Current Path -->
         <div class="bg-white p-4 rounded-lg shadow">
-          <h3 class="font-semibold text-gray-800 mb-2">4. Current Path</h3>
+          <h3 class="font-semibold text-gray-800 mb-2">3. Current Path</h3>
           <p class="text-xs text-gray-500 mb-2"><%= @debug_data.current_path.path %></p>
           <%= if @debug_data.current_path[:event_count] do %>
             <p class="text-2xl font-bold text-indigo-600"><%= @debug_data.current_path.event_count %> events</p>
@@ -793,7 +778,7 @@ defmodule EventasaurusWeb.CityLive.Index do
       <!-- Sample Events Comparison -->
       <details class="mt-4">
         <summary class="cursor-pointer text-sm font-medium text-yellow-800">Show Sample Events</summary>
-        <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div>
             <h4 class="font-semibold">Direct Query:</h4>
             <%= if @debug_data.direct_query[:sample_events] do %>
@@ -812,19 +797,6 @@ defmodule EventasaurusWeb.CityLive.Index do
             <%= if @debug_data.cachex_base[:sample_events] do %>
               <ul class="list-disc pl-4">
                 <%= for event <- @debug_data.cachex_base.sample_events do %>
-                  <li>
-                    <%= event.title %>
-                    <%= if event.has_image, do: "📷", else: "❌" %>
-                  </li>
-                <% end %>
-              </ul>
-            <% end %>
-          </div>
-          <div>
-            <h4 class="font-semibold">MV Fallback:</h4>
-            <%= if @debug_data.mv_fallback[:sample_events] do %>
-              <ul class="list-disc pl-4">
-                <%= for event <- @debug_data.mv_fallback.sample_events do %>
                   <li>
                     <%= event.title %>
                     <%= if event.has_image, do: "📷", else: "❌" %>
@@ -1062,34 +1034,17 @@ defmodule EventasaurusWeb.CityLive.Index do
     end
   end
 
-  # Issue #3373: Get date counts from a consistent data source
+  # Get date counts from a consistent data source
   # Priority: 1. Base cache (same data source as events)
-  #           2. Materialized view fallback (guaranteed availability)
-  #           3. Separate date counts cache (last resort)
+  #           2. Live query via date counts cache
   defp get_date_counts_consistently(city_slug, radius_km, date_range_count_filters) do
     # Try base cache first (same data source as base cache path)
     case CityPageCache.get_base_events(city_slug, radius_km) do
       {:ok, base_data} when base_data.events != [] ->
         CityPageFilters.calculate_date_range_counts(base_data)
 
-      {:ok, %{events: []}} ->
-        # Issue #3490: Cache hit but EMPTY - try MV fallback for date counts
-        get_date_counts_from_fallback(city_slug, radius_km, date_range_count_filters)
-
-      {:miss, nil} ->
-        # Base cache not available - try materialized view fallback
-        get_date_counts_from_fallback(city_slug, radius_km, date_range_count_filters)
-    end
-  end
-
-  # Helper for getting date counts from fallback sources
-  defp get_date_counts_from_fallback(city_slug, radius_km, date_range_count_filters) do
-    case CityEventsFallback.get_date_counts(city_slug) do
-      {:ok, counts} ->
-        counts
-
-      {:error, _reason} ->
-        # Last resort: use separate cache (may be slightly stale)
+      _ ->
+        # Base cache miss or empty — fall back to live query
         CityPageCache.get_date_range_counts(
           city_slug,
           radius_km,
@@ -1721,33 +1676,7 @@ defmodule EventasaurusWeb.CityLive.Index do
           %{status: :error, error: Exception.message(e)}
       end
 
-    # 3. Materialized view fallback
-    fallback_result =
-      try do
-        start_time = System.monotonic_time(:millisecond)
-
-        case CityEventsFallback.get_all_events(city.slug) do
-          {:ok, fallback_data} ->
-            duration = System.monotonic_time(:millisecond) - start_time
-
-            %{
-              status: :ok,
-              event_count: length(fallback_data.events),
-              all_events_count: fallback_data.all_events_count,
-              from_fallback: fallback_data.from_fallback,
-              duration_ms: duration,
-              sample_events: Enum.take(fallback_data.events, 3) |> Enum.map(&event_summary/1)
-            }
-
-          {:error, reason} ->
-            %{status: :error, error: inspect(reason)}
-        end
-      rescue
-        e ->
-          %{status: :error, error: Exception.message(e)}
-      end
-
-    # 4. Current filter path (what the user is actually seeing)
+    # 3. Current filter path (what the user is actually seeing)
     current_result =
       try do
         page_opts = [page: filters[:page] || 1, page_size: filters[:page_size] || 30]
@@ -1766,20 +1695,7 @@ defmodule EventasaurusWeb.CityLive.Index do
               }
 
             {:miss, nil} ->
-              case CityEventsFallback.get_all_events(city.slug) do
-                {:ok, fallback_data} ->
-                  result = CityPageFilters.filter_base_events(fallback_data, filters, page_opts)
-
-                  %{
-                    path: "fallback_mv + in_memory_filter",
-                    event_count: length(result.events),
-                    total_count: result.total_count,
-                    all_events_count: result.all_events_count
-                  }
-
-                {:error, reason} ->
-                  %{path: "error", error: inspect(reason)}
-              end
+              %{path: "cache_miss", note: "base cache not populated"}
           end
         else
           %{path: "per_filter_cache (category/search active)", note: "skipped in debug"}
@@ -1792,7 +1708,7 @@ defmodule EventasaurusWeb.CityLive.Index do
     debug_data
     |> Map.put(:direct_query, direct_result)
     |> Map.put(:cachex_base, cache_result)
-    |> Map.put(:mv_fallback, fallback_result)
+    |> Map.put(:mv_fallback, %{status: :removed})
     |> Map.put(:current_path, current_result)
   end
 

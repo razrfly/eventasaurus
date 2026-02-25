@@ -271,31 +271,19 @@ defmodule Mix.Tasks.Cache.Diagnose do
     IO.puts("")
   end
 
-  defp display_mv_status(cities) do
+  defp display_mv_status(_cities) do
     IO.puts(IO.ANSI.green() <> "📦 Materialized View Status:" <> IO.ANSI.reset())
+    IO.puts("  NOTE: city_events_mv is no longer refreshed (Issue #3680).")
+    IO.puts("  The MV fallback path has been removed. All queries use the live pipeline.")
 
-    # Get total row count
+    # Still show row count as a read-only diagnostic
     total_count =
       case Repo.query("SELECT COUNT(*) FROM city_events_mv", []) do
         {:ok, %{rows: [[count]]}} -> count
-        _ -> "error"
+        _ -> "n/a"
       end
 
-    IO.puts("  - city_events_mv: #{format_number(total_count)} total rows")
-
-    # Get count per city
-    cities
-    |> Enum.take(10)
-    |> Enum.each(fn city ->
-      count =
-        case Repo.query("SELECT COUNT(*) FROM city_events_mv WHERE city_slug = $1", [city.slug]) do
-          {:ok, %{rows: [[c]]}} -> c
-          _ -> "error"
-        end
-
-      IO.puts("  - #{city.slug}: #{format_number(count)} events")
-    end)
-
+    IO.puts("  - city_events_mv: #{format_number(total_count)} total rows (stale, read-only)")
     IO.puts("")
   end
 
