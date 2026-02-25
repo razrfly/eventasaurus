@@ -235,7 +235,11 @@ config :eventasaurus, Oban,
        # Oban job sanitizer runs every 30 minutes (Issue #3172)
        # Detects and fixes corrupted jobs: zombies, priority blockers, stuck executing
        # See: lib/eventasaurus_app/workers/oban_job_sanitizer_worker.ex
-       {"*/30 * * * *", EventasaurusApp.Workers.ObanJobSanitizerWorker}
+       {"*/30 * * * *", EventasaurusApp.Workers.ObanJobSanitizerWorker},
+       # Refresh city_events_mv materialized view hourly at minute 15
+       # Provides sub-5ms fallback for city page when Cachex cache misses
+       # See: https://github.com/razrfly/eventasaurus/issues/3686
+       {"15 * * * *", EventasaurusWeb.Workers.RefreshCityEventsViewJob}
        # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]

@@ -151,6 +151,10 @@ defmodule Eventasaurus.Application do
         # Only in production to avoid noise in dev/test
         schedule_cache_warmup()
 
+        # Refresh materialized view on startup (Issue #3686)
+        # Ensures city_events_mv has fresh data before accepting traffic
+        ensure_materialized_view_populated()
+
         {:ok, pid}
 
       error ->
@@ -202,6 +206,16 @@ defmodule Eventasaurus.Application do
     end
   end
 
+  # Refresh city_events_mv materialized view on startup (Issue #3686)
+  # Ensures sub-5ms fallback data is fresh before the app accepts traffic
+  defp ensure_materialized_view_populated do
+    alias EventasaurusWeb.Cache.CityEventsMvInitializer
+    CityEventsMvInitializer.ensure_populated()
+  rescue
+    e ->
+      Logger.error("[Application] MV refresh failed on startup: #{inspect(e)}")
+  end
+
   # Schedule city page cache warmup on startup (Issue #3347 Phase 4)
   # Pre-warms cache for all discovery-enabled cities to prevent cold-start delays
   defp schedule_cache_warmup do
@@ -214,5 +228,4 @@ defmodule Eventasaurus.Application do
       Logger.debug("[CacheWarmup] Skipping cache warmup in #{env} environment")
     end
   end
-
 end
