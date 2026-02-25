@@ -444,13 +444,17 @@ defmodule EventasaurusWeb.CityLive.Index do
   # Toggle debug comparison panel (dev only, Issue #3675)
   @impl true
   def handle_event("toggle_debug", _params, socket) do
-    if socket.assigns.debug_mode do
-      # Turning off — just hide the panel
-      {:noreply, assign(socket, :debug_mode, false)}
+    if @debug_enabled do
+      if socket.assigns.debug_mode do
+        # Turning off — just hide the panel
+        {:noreply, assign(socket, :debug_mode, false)}
+      else
+        # Turning on — fetch comparison data then show
+        debug_data = fetch_debug_comparison(socket)
+        {:noreply, socket |> assign(:debug_mode, true) |> assign(:debug_data, debug_data)}
+      end
     else
-      # Turning on — fetch comparison data then show
-      debug_data = fetch_debug_comparison(socket)
-      {:noreply, socket |> assign(:debug_mode, true) |> assign(:debug_data, debug_data)}
+      {:noreply, socket}
     end
   end
 

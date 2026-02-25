@@ -6,7 +6,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.Normalizer do
   @doc """
   Normalizes text by trimming whitespace and removing excessive spaces.
   """
-  @spec normalize_text(String.t() | nil) :: String.t() | nil
+  @spec normalize_text(any()) :: String.t() | nil
   def normalize_text(nil), do: nil
 
   def normalize_text(text) when is_binary(text) do

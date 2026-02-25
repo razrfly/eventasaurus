@@ -57,6 +57,9 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       # Try fast path: MV fallback for pure lat/lng requests only (no city_id).
       # When city_id is available, skip MV — its movie-only aggregation produces
       # different counts than the web's full aggregation pipeline (Issue #3675).
+      # Performance note: city_id live queries use an indexed city_id lookup which
+      # is fast (~20-50ms) compared to radius-based spatial queries. The MV path
+      # (~5ms) is only materially faster for unfiltered lat/lng requests.
       result =
         if is_nil(city_id) and can_use_fallback?(params) do
           city_slug = resolve_city_slug(lat, lng, city_id)
@@ -69,13 +72,16 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         # Live query path: full aggregation (movies + source groups + containers)
         # Use city_id when available (exact city boundary match);
         # fall back to radius for pure lat/lng searches (Issue #3673)
+        language = params["language"] || "en"
+        query_start = System.monotonic_time(:millisecond)
+
         opts =
           if city_id do
             [
               city_id: city_id,
               page: page,
               page_size: per_page,
-              language: params["language"] || "en"
+              language: language
             ]
           else
             radius_km =
@@ -90,7 +96,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
               radius_km: radius_km,
               page: page,
               page_size: per_page,
-              language: params["language"] || "en"
+              language: language
             ]
           end
           |> maybe_add_browsing_city(city_id)
@@ -111,6 +117,23 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
         {items, total_count, all_count} =
           PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
+
+        query_ms = System.monotonic_time(:millisecond) - query_start
+
+        :telemetry.execute(
+          [:eventasaurus, :mobile_api, :nearby],
+          %{duration_ms: query_ms, event_count: total_count},
+          %{path: if(city_id, do: :city_id, else: :lat_lng), city_id: city_id}
+        )
+
+        if query_ms > 200 do
+          Logger.warning("Slow mobile nearby query",
+            path: if(city_id, do: "city_id", else: "lat_lng"),
+            city_id: city_id,
+            duration_ms: query_ms,
+            event_count: total_count
+          )
+        end
 
         # Compute date range counts for filter chips (efficient SQL COUNTs)
         # Thread the same radius used by the main query for consistency

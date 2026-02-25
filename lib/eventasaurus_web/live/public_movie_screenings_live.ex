@@ -25,17 +25,19 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   @impl true
   def mount(_params, session, socket) do
     # Get language from session (set by LanguagePlug), then connect params, then default to English
-    params = get_connect_params(socket) || %{}
+    params = if connected?(socket), do: get_connect_params(socket) || %{}, else: %{}
     language = session["language"] || params["locale"] || "en"
 
     # Get request URI for building absolute URLs (supports ngrok, localhost, production)
-    raw_uri = get_connect_info(socket, :uri)
-
     request_uri =
-      cond do
-        match?(%URI{}, raw_uri) -> raw_uri
-        is_binary(raw_uri) -> URI.parse(raw_uri)
-        true -> nil
+      if connected?(socket) do
+        case get_connect_info(socket, :uri) do
+          %URI{} = uri -> uri
+          raw when is_binary(raw) -> URI.parse(raw)
+          _ -> nil
+        end
+      else
+        nil
       end
 
     socket =
@@ -482,12 +484,16 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       end
 
     # Parse filter criteria from form
-    # Handle empty limit string to prevent String.to_integer("") crash
+    # Handle empty or non-numeric limit string safely
     limit =
       case params["limit"] do
         nil -> 10
         "" -> 10
-        value -> String.to_integer(value)
+        value ->
+          case Integer.parse(value) do
+            {n, _} -> n
+            :error -> 10
+          end
       end
 
     filter_criteria = %{
@@ -625,12 +631,16 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       end
 
     # Parse filter criteria from form
-    # Handle empty limit string to prevent String.to_integer("") crash
+    # Handle empty or non-numeric limit string safely
     limit =
       case params["limit"] do
         nil -> 10
         "" -> 10
-        value -> String.to_integer(value)
+        value ->
+          case Integer.parse(value) do
+            {n, _} -> n
+            :error -> 10
+          end
       end
 
     filter_criteria = %{
