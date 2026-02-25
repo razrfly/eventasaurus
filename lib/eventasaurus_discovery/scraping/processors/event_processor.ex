@@ -654,7 +654,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
         updated_dates =
           Enum.map(event.occurrences["dates"], fn date_entry ->
-            if date_entry["external_id"] == data.external_id do
+            if data.external_id not in [nil, ""] and
+                 date_entry["external_id"] == data.external_id do
               date_entry
               |> Map.put("date", corrected_date)
               |> Map.put("time", corrected_time)

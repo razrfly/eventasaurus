@@ -47,6 +47,7 @@ defmodule Mix.Tasks.Audit.TimeConsistency do
 
   @shortdoc "Audit time consistency for event occurrences"
 
+  @spec run([String.t()]) :: any()
   @impl Mix.Task
   def run(args) do
     Mix.Task.run("app.start")
@@ -148,17 +149,29 @@ defmodule Mix.Tasks.Audit.TimeConsistency do
 
     IO.puts("")
 
-    if total_fixed > 0 do
-      IO.puts(
-        IO.ANSI.green() <>
-          "Fixed #{total_fixed} events" <>
-          if(total_failed > 0,
-            do: " (#{total_failed} failed)",
-            else: ""
-          ) <> IO.ANSI.reset()
-      )
-    else
-      IO.puts("No mismatches to fix")
+    cond do
+      total_fixed > 0 ->
+        IO.puts(
+          IO.ANSI.green() <>
+            "Fixed #{total_fixed} events" <>
+            if(total_failed > 0,
+              do: " (#{total_failed} failed)",
+              else: ""
+            ) <> IO.ANSI.reset()
+        )
+
+      total_failed > 0 ->
+        IO.puts(
+          IO.ANSI.red() <>
+            "Failed to fix #{total_failed} mismatches" <>
+            IO.ANSI.reset()
+        )
+
+        IO.puts("")
+        System.halt(1)
+
+      true ->
+        IO.puts("No mismatches to fix")
     end
 
     IO.puts("")

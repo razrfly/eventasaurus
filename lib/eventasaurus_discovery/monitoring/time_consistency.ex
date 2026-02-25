@@ -36,7 +36,9 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
     * `:hours` - Lookback window in hours (default: 168)
     * `:limit` - Max events to check (default: 500)
     * `:from_datetime` - Override lookback with specific start time
+    * `:force_primary` - If true, read from primary DB instead of replica (default: false)
   """
+  @spec check(String.t() | atom(), keyword()) :: {:ok, map()}
   def check(source_slug, opts \\ []) do
     hours = Keyword.get(opts, :hours, @default_hours)
     limit = Keyword.get(opts, :limit, @default_limit)
@@ -44,8 +46,10 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
     from_datetime =
       Keyword.get(opts, :from_datetime, DateTime.add(DateTime.utc_now(), -hours, :hour))
 
+    force_primary = Keyword.get(opts, :force_primary, false)
+
     source_slug = normalize_slug(source_slug)
-    events = fetch_events(source_slug, from_datetime, limit)
+    events = fetch_events(source_slug, from_datetime, limit, force_primary)
 
     {checked, skipped} =
       Enum.reduce(events, {[], 0}, fn event, {checks, skip_count} ->
@@ -74,6 +78,7 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
   @doc """
   Check all sources. Returns `{:ok, [check_result]}`.
   """
+  @spec check_all(keyword()) :: {:ok, [map()]}
   def check_all(opts \\ []) do
     results =
       SourcePatterns.all_cli_keys()
@@ -97,9 +102,10 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
   Same as `check/2` plus:
     * `:dry_run` - If true, report what would change without writing (default: false)
   """
+  @spec fix(String.t() | atom(), keyword()) :: {:ok, map()}
   def fix(source_slug, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
-    {:ok, check_result} = check(source_slug, opts)
+    {:ok, check_result} = check(source_slug, Keyword.put(opts, :force_primary, true))
 
     fixed =
       check_result.mismatches
@@ -165,24 +171,28 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
   # Correct all date entries by shifting starts_at for each one.
   # For multi-occurrence events, we reconstruct each entry's local time
   # by finding the matching starts_at (from the date entry's external_id)
-  # or by using the event's starts_at as the reference.
+  # or by returning the entry unchanged when reconstruction fails.
   defp correct_all_dates(event, timezone) do
     Enum.map(event.occurrences["dates"], fn date_entry ->
       # Try to reconstruct the UTC datetime for this specific entry
-      utc_dt = reconstruct_utc_for_entry(date_entry, event)
+      case reconstruct_utc_for_entry(date_entry) do
+        {:ok, utc_dt} ->
+          case DateTime.shift_zone(utc_dt, timezone) do
+            {:ok, local_dt} ->
+              local_date = local_dt |> DateTime.to_date() |> Date.to_string()
 
-      case DateTime.shift_zone(utc_dt, timezone) do
-        {:ok, local_dt} ->
-          local_date = local_dt |> DateTime.to_date() |> Date.to_string()
+              local_time =
+                local_dt |> DateTime.to_time() |> Time.to_string() |> String.slice(0..4)
 
-          local_time =
-            local_dt |> DateTime.to_time() |> Time.to_string() |> String.slice(0..4)
+              date_entry
+              |> Map.put("date", local_date)
+              |> Map.put("time", local_time)
 
-          date_entry
-          |> Map.put("date", local_date)
-          |> Map.put("time", local_time)
+            {:error, _} ->
+              date_entry
+          end
 
-        {:error, _} ->
+        :error ->
           date_entry
       end
     end)
@@ -190,20 +200,21 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
 
   # Reconstruct the UTC datetime for a specific date entry.
   # The stored date/time is currently UTC (the bug), so we can parse it directly.
-  defp reconstruct_utc_for_entry(date_entry, event) do
+  # Returns {:ok, datetime} on success, :error when the entry can't be parsed.
+  defp reconstruct_utc_for_entry(date_entry) do
     date_str = date_entry["date"]
     time_str = date_entry["time"]
 
     if date_str && time_str do
       case {Date.from_iso8601(date_str), Time.from_iso8601(time_str <> ":00")} do
         {{:ok, date}, {:ok, time}} ->
-          DateTime.new!(date, time, "Etc/UTC")
+          {:ok, DateTime.new!(date, time, "Etc/UTC")}
 
         _ ->
-          event.starts_at
+          :error
       end
     else
-      event.starts_at
+      :error
     end
   end
 
@@ -212,6 +223,7 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
 
   The event must be preloaded with `venue: [city_ref: [country: _]]`.
   """
+  @spec check_event(map()) :: {:ok, map()} | :skip
   def check_event(event) do
     cond do
       is_nil(event.occurrences) ->
@@ -312,15 +324,15 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
     end
   end
 
-  defp fetch_events(source_slug, from_datetime, limit) do
-    events = do_fetch_events(source_slug, from_datetime, limit)
+  defp fetch_events(source_slug, from_datetime, limit, force_primary) do
+    events = do_fetch_events(source_slug, from_datetime, limit, force_primary)
 
     # Fallback: try underscore variant if no events found (handles week_pl edge case)
     if Enum.empty?(events) do
       underscore_slug = String.replace(source_slug, "-", "_")
 
       if underscore_slug != source_slug do
-        do_fetch_events(underscore_slug, from_datetime, limit)
+        do_fetch_events(underscore_slug, from_datetime, limit, force_primary)
       else
         []
       end
@@ -329,27 +341,33 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
     end
   end
 
-  defp do_fetch_events(source_slug, from_datetime, limit) do
-    from(pe in PublicEvent,
-      join: v in Venue,
-      on: pe.venue_id == v.id,
-      join: c in City,
-      on: v.city_id == c.id,
-      left_join: co in Country,
-      on: c.country_id == co.id,
-      join: pes in PublicEventSource,
-      on: pes.event_id == pe.id,
-      join: s in Source,
-      on: s.id == pes.source_id,
-      where: s.slug == ^source_slug,
-      where: pe.starts_at >= ^from_datetime,
-      where: not is_nil(pe.occurrences),
-      preload: [venue: {v, city_ref: {c, country: co}}],
-      distinct: pe.id,
-      limit: ^limit,
-      order_by: [desc: pe.starts_at]
-    )
-    |> Repo.replica().all()
+  defp do_fetch_events(source_slug, from_datetime, limit, force_primary) do
+    query =
+      from(pe in PublicEvent,
+        join: v in Venue,
+        on: pe.venue_id == v.id,
+        join: c in City,
+        on: v.city_id == c.id,
+        left_join: co in Country,
+        on: c.country_id == co.id,
+        join: pes in PublicEventSource,
+        on: pes.event_id == pe.id,
+        join: s in Source,
+        on: s.id == pes.source_id,
+        where: s.slug == ^source_slug,
+        where: pe.starts_at >= ^from_datetime,
+        where: not is_nil(pe.occurrences),
+        preload: [venue: {v, city_ref: {c, country: co}}],
+        distinct: pe.id,
+        limit: ^limit,
+        order_by: [desc: pe.starts_at]
+      )
+
+    if force_primary do
+      Repo.all(query)
+    else
+      Repo.replica().all(query)
+    end
   end
 
   defp normalize_slug(slug) do
