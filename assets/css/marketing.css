@@ -1,0 +1,98 @@
+/* Marketing page design tokens and scoped styles */
+/* Scoped under .marketing-page to avoid affecting existing pages */
+
+.marketing-page {
+  --m-font-display: 'Familjen Grotesk', sans-serif;
+  --m-font-body: 'Familjen Grotesk', sans-serif;
+
+  /* Spacing scale */
+  --m-section-padding: 5rem;
+  --m-section-padding-lg: 7rem;
+
+  /* Transition tokens */
+  --m-transition-base: 200ms ease;
+  --m-transition-slow: 400ms ease;
+}
+
+/* Heading font override within marketing pages */
+.marketing-page h1,
+.marketing-page h2,
+.marketing-page h3,
+.marketing-page h4 {
+  font-family: var(--m-font-display);
+}
+
+/* Scroll reveal animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(1.5rem);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.scroll-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Staggered reveal delays for grid children */
+.scroll-reveal-stagger > .scroll-reveal:nth-child(1) { transition-delay: 0ms; }
+.scroll-reveal-stagger > .scroll-reveal:nth-child(2) { transition-delay: 100ms; }
+.scroll-reveal-stagger > .scroll-reveal:nth-child(3) { transition-delay: 200ms; }
+.scroll-reveal-stagger > .scroll-reveal:nth-child(4) { transition-delay: 300ms; }
+.scroll-reveal-stagger > .scroll-reveal:nth-child(5) { transition-delay: 400ms; }
+.scroll-reveal-stagger > .scroll-reveal:nth-child(6) { transition-delay: 500ms; }
+.scroll-reveal-stagger > .scroll-reveal:nth-child(7) { transition-delay: 600ms; }
+.scroll-reveal-stagger > .scroll-reveal:nth-child(8) { transition-delay: 700ms; }
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .scroll-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .scroll-reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Marketing nav backdrop blur */
+.marketing-nav {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Anti-pattern strikethrough decoration */
+.anti-strike {
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.5);
+  text-decoration-thickness: 2px;
+}
+
+/* Concentric circles animation */
+.privacy-circles circle {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+/* Horizontal scroll for mobile story cards */
+.story-scroll {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.story-scroll > * {
+  scroll-snap-align: start;
+}

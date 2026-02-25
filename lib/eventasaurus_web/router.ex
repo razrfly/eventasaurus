@@ -22,6 +22,12 @@ defmodule EventasaurusWeb.Router do
       get "/cdn-test", Dev.CdnTestController, :index
     end
 
+    # Marketing rebrand preview pages (Issue #3688)
+    scope "/dev/marketing", EventasaurusWeb do
+      pipe_through :browser
+      get "/why", MarketingController, :why_wombie
+    end
+
     # Admin LiveView routes (dev - no auth, mirrors production paths)
     # Use live_session to apply admin layout to all LiveViews
     live_session :admin_dev,

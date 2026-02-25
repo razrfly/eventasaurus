@@ -25,6 +25,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.Cache.CityPageCache
   alias EventasaurusWeb.Cache.CityEventsFallback
   alias EventasaurusWeb.Cache.CityEventsMvInitializer
+  alias EventasaurusWeb.Cache.LiveQueryCircuitBreaker
   alias EventasaurusWeb.Telemetry.CityPageTelemetry
 
   import EventasaurusWeb.EventComponents
@@ -462,12 +463,52 @@ defmodule EventasaurusWeb.CityLive.Index do
       CityPageCache.clear_all()
 
       # Also refresh the MV so it has the freshest data
-      CityEventsMvInitializer.refresh_view()
+      try do
+        CityEventsMvInitializer.refresh_view()
+      rescue
+        e -> Logger.error("[DEBUG] MV refresh failed: #{Exception.message(e)}")
+      end
 
-      # Re-fetch events and debug data with fresh caches
-      # Note: fetch_events will miss cache, hit MV fallback or live query,
-      # then the cache auto-refill job runs in background
-      socket = fetch_events(socket)
+      # Re-fetch events via LIVE QUERY (bypass cache chain entirely for a clean comparison)
+      # This ensures the debug panel shows truly fresh data after flush
+      city = socket.assigns.city
+      filters = socket.assigns.filters
+      language = socket.assigns.language
+
+      query_filters =
+        Map.merge(filters, %{
+          language: language,
+          sort_order: filters[:sort_order] || :asc,
+          page_size: filters[:page_size] || 30,
+          page: filters[:page] || 1,
+          city_id: city.id
+        })
+
+      count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
+      date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
+
+      {events, total_count, all_events_count, date_counts, cache_status} =
+        do_live_query(city, query_filters, date_range_count_filters)
+
+      page = filters[:page] || 1
+      page_size = filters[:page_size] || 30
+      total_pages = ceil(total_count / page_size)
+
+      socket =
+        socket
+        |> assign(:events, events)
+        |> assign(:pagination, %Pagination{
+          entries: events,
+          page_number: page,
+          page_size: page_size,
+          total_entries: total_count,
+          total_pages: total_pages
+        })
+        |> assign(:total_events, total_count)
+        |> assign(:all_events_count, all_events_count)
+        |> assign(:date_range_counts, date_counts)
+        |> assign(:cache_status, cache_status)
+
       debug_data = fetch_debug_comparison(socket)
       {:noreply, assign(socket, :debug_data, debug_data)}
     else
@@ -718,8 +759,12 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp status_color(:hit), do: "bg-green-500"
   defp status_color(:miss), do: "bg-orange-500"
   defp status_color(:fallback), do: "bg-purple-500"
+  defp status_color(:mv_fallback), do: "bg-purple-500"
   defp status_color(:stale_empty), do: "bg-orange-500"
   defp status_color(:no_coords), do: "bg-red-500"
+  defp status_color(:degraded_mv), do: "bg-red-400"
+  defp status_color(:degraded_stale), do: "bg-red-400"
+  defp status_color(:degraded_empty), do: "bg-red-600"
   defp status_color(_), do: "bg-gray-400"
 
   defp status_label(:live_query), do: "LIVE QUERY"
@@ -727,8 +772,12 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp status_label(:hit), do: "HIT"
   defp status_label(:miss), do: "MISS"
   defp status_label(:fallback), do: "FALLBACK"
+  defp status_label(:mv_fallback), do: "MV FALLBACK"
   defp status_label(:stale_empty), do: "STALE-EMPTY"
   defp status_label(:no_coords), do: "NO COORDS"
+  defp status_label(:degraded_mv), do: "DEGRADED:MV"
+  defp status_label(:degraded_stale), do: "DEGRADED:STALE"
+  defp status_label(:degraded_empty), do: "DEGRADED:EMPTY"
   defp status_label(status), do: to_string(status) |> String.upcase()
 
   # Component: Debug Panel showing data source comparison
@@ -824,6 +873,25 @@ defmodule EventasaurusWeb.CityLive.Index do
         </div>
       </div>
 
+      <!-- Circuit Breaker Status -->
+      <div class="mt-4 bg-white p-4 rounded-lg shadow">
+        <h3 class="font-semibold text-gray-800 mb-2">Circuit Breaker</h3>
+        <% cb = @debug_data[:circuit_breaker] || %{} %>
+        <div class="flex items-center gap-3">
+          <span class={"inline-flex px-2 py-1 text-xs font-bold rounded-full " <> cb_badge_class(cb[:state])}>
+            <%= cb_state_label(cb[:state]) %>
+          </span>
+          <span class="text-sm text-gray-600">
+            Failures: <%= cb[:failure_count] || 0 %>/<%= cb[:failure_threshold] || 3 %>
+          </span>
+          <%= if cb[:last_failure_reason] do %>
+            <span class="text-xs text-red-600 truncate max-w-xs" title={cb[:last_failure_reason]}>
+              Last: <%= cb[:last_failure_reason] %>
+            </span>
+          <% end %>
+        </div>
+      </div>
+
       <!-- Sample Events Comparison -->
       <details class="mt-4">
         <summary class="cursor-pointer text-sm font-medium text-yellow-800">Show Sample Events</summary>
@@ -872,6 +940,17 @@ defmodule EventasaurusWeb.CityLive.Index do
     </div>
     """
   end
+
+  # Circuit breaker badge helpers for debug panel
+  defp cb_badge_class(:closed), do: "bg-green-100 text-green-800"
+  defp cb_badge_class(:open), do: "bg-red-100 text-red-800"
+  defp cb_badge_class(:half_open), do: "bg-yellow-100 text-yellow-800"
+  defp cb_badge_class(_), do: "bg-gray-100 text-gray-800"
+
+  defp cb_state_label(:closed), do: "CLOSED"
+  defp cb_state_label(:open), do: "OPEN"
+  defp cb_state_label(:half_open), do: "HALF_OPEN"
+  defp cb_state_label(_), do: "UNKNOWN"
 
   # Component: Filter Panel with radius selector
   # Uses shared EventListing components for radius and category selection
@@ -1074,7 +1153,12 @@ defmodule EventasaurusWeb.CityLive.Index do
     socket
   end
 
-  # Fetch events from per-filter cache (used for category/search filters or base cache miss)
+  # Fetch events from per-filter cache (used for category/search filters or base cache miss).
+  #
+  # On cache miss or empty cache, falls back to fetch_from_mv_fallback which returns
+  # UNFILTERED MV data. This is an intentional trade-off: prefer fast unfiltered results
+  # over waiting for a slower filtered live query. fetch_live_query will run asynchronously
+  # to refresh the cache with properly filtered results.
   defp fetch_from_filter_cache(
          city,
          radius_km,
@@ -1173,9 +1257,35 @@ defmodule EventasaurusWeb.CityLive.Index do
     end
   end
 
-  # Direct live query path — used when caching is OFF (Issue #3673)
-  # Runs the same aggregation pipeline as the mobile slow path for consistent counts
+  # Direct live query path — used when caching is OFF or as final fallback (Issue #3673)
+  # Wrapped with circuit breaker (Issue #3686 Phase 4): when the DB is slow/down,
+  # the circuit trips and we serve degraded data from the MV instead.
   defp fetch_live_query(city, query_filters, date_range_count_filters) do
+    case LiveQueryCircuitBreaker.allow_request?() do
+      :ok ->
+        try do
+          result = do_live_query(city, query_filters, date_range_count_filters)
+          LiveQueryCircuitBreaker.record_success()
+          result
+        rescue
+          e ->
+            LiveQueryCircuitBreaker.record_failure(Exception.message(e))
+
+            Logger.warning(
+              "[CityPage] Live query FAILED for #{city.slug}: #{Exception.message(e)} — serving degraded fallback"
+            )
+
+            serve_degraded_fallback(city)
+        end
+
+      {:circuit_open, :serve_fallback} ->
+        Logger.info("[CityPage] Circuit OPEN for #{city.slug} — serving degraded fallback")
+        serve_degraded_fallback(city)
+    end
+  end
+
+  # Actual live query execution (no circuit breaker wrapping)
+  defp do_live_query(city, query_filters, date_range_count_filters) do
     live_opts =
       query_filters
       |> Map.put(:aggregate, true)
@@ -1194,6 +1304,48 @@ defmodule EventasaurusWeb.CityLive.Index do
     )
 
     {events, total_count, all_events_count, date_counts, :live_query}
+  end
+
+  # Serve-stale-on-error: try MV fallback, then stale Cachex, then empty result
+  # Tagged as :degraded so the debug panel can surface this to developers
+  defp serve_degraded_fallback(city) do
+    # 1. Try MV fallback (sub-5ms)
+    case CityEventsFallback.get_events_with_counts(city.slug) do
+      {:ok, %{events: events} = data} when events != [] ->
+        :telemetry.execute(
+          [:eventasaurus, :fallback, :degraded],
+          %{system_time: System.system_time(:millisecond)},
+          %{source: :mv, city: city.slug}
+        )
+
+        {events, data.total_count, data.all_events_count, data.date_counts, :degraded_mv}
+
+      _ ->
+        # 2. Try stale Cachex entry (web only)
+        case CityPageCache.peek_base_events(city.slug, @default_radius_km) do
+          {:ok, %{events: events} = cached} when is_list(events) and events != [] ->
+            date_counts = CityPageFilters.calculate_date_range_counts(cached)
+
+            :telemetry.execute(
+              [:eventasaurus, :fallback, :degraded],
+              %{system_time: System.system_time(:millisecond)},
+              %{source: :stale_cache, city: city.slug}
+            )
+
+            {events, length(events), cached[:all_events_count] || length(events), date_counts,
+             :degraded_stale}
+
+          _ ->
+            # 3. Last resort: empty result
+            :telemetry.execute(
+              [:eventasaurus, :fallback, :degraded],
+              %{system_time: System.system_time(:millisecond)},
+              %{source: :empty, city: city.slug}
+            )
+
+            {[], 0, 0, %{}, :degraded_empty}
+        end
+    end
   end
 
   defp caching_enabled? do
@@ -1869,11 +2021,23 @@ defmodule EventasaurusWeb.CityLive.Index do
           %{status: :error, error: Exception.message(e)}
       end
 
+    # 5. Circuit breaker state (Issue #3686 Phase 4)
+    cb_state = LiveQueryCircuitBreaker.state()
+
+    cb_result = %{
+      state: cb_state[:state] || :closed,
+      failure_count: cb_state[:failure_count] || 0,
+      failure_threshold: cb_state[:failure_threshold] || 3,
+      cooldown_ms: cb_state[:cooldown_ms] || 30_000,
+      last_failure_reason: cb_state[:last_failure_reason]
+    }
+
     debug_data
     |> Map.put(:direct_query, direct_result)
     |> Map.put(:cachex_base, cache_result)
     |> Map.put(:mv_fallback, mv_result)
     |> Map.put(:current_path, current_result)
+    |> Map.put(:circuit_breaker, cb_result)
   end
 
   # Create a summary of an event for debug display

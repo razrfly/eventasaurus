@@ -16,10 +16,24 @@ module.exports = {
     extend: {
       colors: {
         brand: "#FD4F00",
+        oat: {
+          50:  '#FCFCF9',
+          100: '#F5F4EF',
+          200: '#EBEAE3',
+          300: '#DDDBD0',
+          400: '#B4B3A3',
+          500: '#8C8B78',
+          600: '#6F6E5F',
+          700: '#5D5C4F',
+          800: '#42413A',
+          900: '#34332E',
+          950: '#232322',
+        },
       },
       fontFamily: {
         'knewave': ['Knewave', 'cursive'],
         'orbitron': ['Orbitron', 'monospace'],
+        'familjen': ['"Familjen Grotesk"', 'sans-serif'],
       }
     },
   },

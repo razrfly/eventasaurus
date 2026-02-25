@@ -25,6 +25,7 @@ import { HealthTrendChart } from "./hooks/health_trend_chart";
 import VenuesMap from "./hooks/venues-map";
 import MapboxVenuesMap from "./hooks/mapbox-venues-map";
 import CountdownHooks from "./hooks/countdown-timer";
+import MarketingHooks from "./hooks/marketing_hooks";
 
 // Define LiveView hooks here
 import R2ImageUpload from "./r2_upload";
@@ -65,6 +66,7 @@ const ModularHooks = {
   ...PlacesHooks,
   ...DragDropHooks,
   ...CountdownHooks, // Countdown timer for threshold deadlines
+  ...MarketingHooks, // Scroll reveal for marketing pages
   ClerkAuthHandler, // Clerk auth handler
   AuthHandler: ClerkAuthHandler, // Active auth handler (Clerk)
   ClerkAuthUI, // Client-side auth UI hydration for CDN-cached pages
