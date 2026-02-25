@@ -149,12 +149,13 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
           :skip
 
         timezone ->
-          {corrected_dates, entry_failures} = correct_all_dates(event, timezone)
+          dates = event.occurrences["dates"] || []
+          {corrected_dates, entry_failures} = correct_all_dates(dates, timezone)
 
           if dry_run do
             {:ok, :dry_run}
           else
-            total_entries = length(event.occurrences["dates"])
+            total_entries = length(dates)
 
             if entry_failures == total_entries do
               {:error, :unparseable_occurrence_entries}
@@ -179,9 +180,9 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
   # by finding the matching starts_at (from the date entry's external_id)
   # or by returning the entry unchanged when reconstruction fails.
   # Returns {corrected_dates, failed_count} so callers can detect unparseable entries.
-  defp correct_all_dates(event, timezone) do
+  defp correct_all_dates(dates, timezone) do
     {entries, failed_count} =
-      Enum.map_reduce(event.occurrences["dates"], 0, fn date_entry, fails ->
+      Enum.map_reduce(dates, 0, fn date_entry, fails ->
         case reconstruct_utc_for_entry(date_entry) do
           {:ok, utc_dt} ->
             case DateTime.shift_zone(utc_dt, timezone) do
