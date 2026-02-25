@@ -4,12 +4,14 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.PublicEvents
   alias EventasaurusDiscovery.Categories
+  alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusApp.{Events, Repo}
   alias EventasaurusApp.Events.EventParticipant
+  alias EventasaurusWeb.Cache.CityEventsFallback
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Helpers.SourceAttribution
   alias Eventasaurus.CDN
@@ -18,7 +20,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   require Logger
 
   @default_radius_km 50
-  @default_per_page 20
+  @default_per_page 50
   @max_per_page 100
 
   @valid_sort_fields ~w(starts_at title popularity relevance)
@@ -49,56 +51,68 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   """
   def nearby(conn, params) do
     with {:ok, lat, lng, city_id} <- resolve_coordinates(params) do
-      radius_km =
-        case parse_float(params["radius"], "radius") do
-          {:ok, meters} -> meters / 1000
-          _ -> @default_radius_km
-        end
-
       page = parse_int(params["page"], 1)
       per_page = min(parse_int(params["per_page"], @default_per_page), @max_per_page)
 
-      opts =
-        [
-          center_lat: lat,
-          center_lng: lng,
-          radius_km: radius_km,
-          page: page,
-          page_size: per_page,
-          language: params["language"] || "en"
-        ]
-        |> maybe_add_browsing_city(city_id)
-        |> maybe_add_categories(params)
-        |> maybe_add_search(params)
-        |> maybe_add_date_range(params)
-        |> maybe_add_sort(params)
+      # Try fast path: materialized view fallback (production, no category/search filters)
+      result =
+        if can_use_fallback?(params) do
+          city_slug = resolve_city_slug(lat, lng, city_id)
+          if city_slug, do: serve_from_fallback(conn, city_slug, page, per_page, params)
+        end
 
-      # Fetch up to 500 events, aggregate, then paginate in-memory
-      # (matches the web pipeline — without this, DB pagination fetches only
-      # 20 events, leaving almost nothing to aggregate).
-      opts_for_aggregation =
-        opts
-        |> Keyword.put(:aggregate, true)
-        |> Keyword.put(:ignore_city_in_aggregation, true)
-        |> Map.new()
-        |> EventFilters.enrich_with_all_events_filters()
+      if result do
+        result
+      else
+        # Slow path: live query (dev/test, or category/search filters active)
+        radius_km =
+          case parse_float(params["radius"], "radius") do
+            {:ok, meters} -> meters / 1000
+            _ -> @default_radius_km
+          end
 
-      {items, total_count, all_count} =
-        PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
+        opts =
+          [
+            center_lat: lat,
+            center_lng: lng,
+            radius_km: radius_km,
+            page: page,
+            page_size: per_page,
+            language: params["language"] || "en"
+          ]
+          |> maybe_add_browsing_city(city_id)
+          |> maybe_add_categories(params)
+          |> maybe_add_search(params)
+          |> maybe_add_date_range(params)
+          |> maybe_add_sort(params)
 
-      # Compute date range counts for filter chips (efficient SQL COUNTs)
-      date_range_counts = compute_date_range_counts(lat, lng, radius_km, params)
+        # Fetch up to 500 events, aggregate, then paginate in-memory
+        # (matches the web pipeline — without this, DB pagination fetches only
+        # 20 events, leaving almost nothing to aggregate).
+        opts_for_aggregation =
+          opts
+          |> Keyword.put(:aggregate, true)
+          |> Keyword.put(:ignore_city_in_aggregation, true)
+          |> Map.new()
+          |> EventFilters.enrich_with_all_events_filters()
 
-      json(conn, %{
-        events: Enum.map(items, &serialize_item/1),
-        meta: %{
-          page: page,
-          per_page: per_page,
-          total_count: total_count,
-          all_events_count: all_count,
-          date_range_counts: date_range_counts
-        }
-      })
+        {items, total_count, all_count} =
+          PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
+
+        # Compute date range counts for filter chips (efficient SQL COUNTs)
+        date_range_counts = compute_date_range_counts(lat, lng, radius_km, params)
+
+        json(conn, %{
+          events: Enum.map(items, &serialize_item/1),
+          meta: %{
+            page: page,
+            per_page: per_page,
+            total_count: total_count,
+            all_events_count: all_count,
+            date_range_counts: date_range_counts
+          }
+        })
+      end
     else
       {:error, field, message} ->
         conn
@@ -198,6 +212,145 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
         acc
     end)
+  end
+
+  # --- Fallback path (materialized view) ---
+
+  defp can_use_fallback?(params) do
+    fallback_enabled?() &&
+      empty_param?(params["categories"]) &&
+      empty_param?(params["search"])
+  end
+
+  defp fallback_enabled? do
+    case Application.get_env(:eventasaurus, :mobile_api_fallback) do
+      true -> true
+      false -> false
+      nil -> Application.get_env(:eventasaurus, :environment) == :prod
+    end
+  end
+
+  defp empty_param?(nil), do: true
+  defp empty_param?(""), do: true
+  defp empty_param?(_), do: false
+
+  # Bridges lat/lng → city_slug for the MV fallback.
+  # Returns nil if no city found (signals: fall back to live query).
+  defp resolve_city_slug(_lat, _lng, city_id) when is_integer(city_id) do
+    case Repo.get(City, city_id) do
+      %City{slug: slug} -> slug
+      nil -> nil
+    end
+  end
+
+  defp resolve_city_slug(lat, lng, _city_id) do
+    case Locations.get_nearby_cities(lat, lng, limit: 1, radius_km: 100) do
+      [%City{slug: slug} | _] -> slug
+      _ -> nil
+    end
+  end
+
+  defp serve_from_fallback(conn, city_slug, page, per_page, params) do
+    # Get all events from fallback to handle date filtering + pagination correctly.
+    # The MV query is sub-5ms so fetching all is cheap.
+    case CityEventsFallback.get_events_with_counts(city_slug, page: 1, page_size: 100_000) do
+      {:ok, %{events: all_events, date_counts: date_counts}} ->
+        # Filter by date range if present
+        events = maybe_filter_fallback_by_date(all_events, params)
+        total_count = length(events)
+
+        # Paginate
+        offset = (page - 1) * per_page
+        page_events = Enum.slice(events, offset, per_page)
+
+        # Convert date count keys from atoms to strings
+        string_date_counts = Map.new(date_counts, fn {k, v} -> {Atom.to_string(k), v} end)
+
+        json(conn, %{
+          events: Enum.map(page_events, &serialize_fallback_item/1),
+          meta: %{
+            page: page,
+            per_page: per_page,
+            total_count: total_count,
+            all_events_count: total_count,
+            date_range_counts: string_date_counts
+          }
+        })
+
+      {:error, reason} ->
+        Logger.warning("Fallback query failed for #{city_slug}, falling back to live query",
+          reason: inspect(reason)
+        )
+
+        nil
+    end
+  end
+
+  defp maybe_filter_fallback_by_date(events, %{"date_range" => range}) when is_binary(range) do
+    case EventFilters.parse_quick_range(range) do
+      {:ok, :all} ->
+        events
+
+      {:ok, range_atom} ->
+        {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range_atom)
+        now = DateTime.utc_now()
+
+        Enum.filter(events, fn event ->
+          starts_at = fallback_starts_at(event)
+
+          cond do
+            is_nil(starts_at) -> false
+            DateTime.compare(starts_at, now) == :lt -> false
+            start_date && DateTime.compare(starts_at, start_date) == :lt -> false
+            end_date && DateTime.compare(starts_at, end_date) == :gt -> false
+            true -> true
+          end
+        end)
+
+      :error ->
+        events
+    end
+  end
+
+  defp maybe_filter_fallback_by_date(events, _params), do: events
+
+  defp fallback_starts_at(%AggregatedMovieGroup{earliest_starts_at: dt}), do: dt
+  defp fallback_starts_at(%{starts_at: dt}), do: dt
+  defp fallback_starts_at(_), do: nil
+
+  # --- Fallback serializers ---
+
+  defp serialize_fallback_item(%AggregatedMovieGroup{} = group), do: serialize_item(group)
+
+  defp serialize_fallback_item(event) when is_map(event) do
+    %{
+      slug: event.slug,
+      title: event[:display_title] || event.title,
+      starts_at: event.starts_at,
+      ends_at: event.ends_at,
+      cover_image_url: resolve_image_url(event.cover_image_url),
+      type: "public",
+      venue: serialize_fallback_venue(event.venue),
+      categories: serialize_fallback_category(event[:category])
+    }
+  end
+
+  defp serialize_fallback_venue(nil), do: nil
+
+  defp serialize_fallback_venue(venue) when is_map(venue) do
+    %{
+      name: VenueHelpers.venue_display_name(venue.name),
+      slug: venue.slug,
+      address: nil,
+      lat: venue.latitude,
+      lng: venue.longitude
+    }
+  end
+
+  defp serialize_fallback_category(nil), do: []
+
+  defp serialize_fallback_category(cat) when is_map(cat) do
+    [%{name: cat.name, slug: cat.slug, icon: nil, color: nil}]
   end
 
   # --- Coordinate resolution ---
