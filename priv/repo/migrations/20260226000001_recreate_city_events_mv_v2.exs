@@ -45,16 +45,16 @@ defmodule EventasaurusApp.Repo.Migrations.RecreateCityEventsMvV2 do
       cat.name AS category_name,
       cat.slug AS category_slug,
       -- Movie identification columns (for movie aggregation)
-      m.id AS movie_id,
-      m.title AS movie_title,
-      m.slug AS movie_slug,
-      m.release_date AS movie_release_date,
+      m.movie_id,
+      m.movie_title,
+      m.movie_slug,
+      m.movie_release_date,
       -- Movie detail columns (new in v2)
-      m.runtime AS movie_runtime,
-      m.metadata AS movie_metadata,
+      m.movie_runtime,
+      m.movie_metadata,
       -- Image columns
-      m.poster_url AS movie_poster_url,
-      m.backdrop_url AS movie_backdrop_url,
+      m.movie_poster_url,
+      m.movie_backdrop_url,
       primary_source.image_url AS source_image_url,
       -- Source aggregation columns (new in v2)
       primary_source.source_id AS source_id,
@@ -67,9 +67,23 @@ defmodule EventasaurusApp.Repo.Migrations.RecreateCityEventsMvV2 do
     JOIN cities c ON c.id = v.city_id
     LEFT JOIN public_event_categories pec ON pec.event_id = pe.id AND pec.is_primary = true
     LEFT JOIN categories cat ON cat.id = pec.category_id
-    -- Movie join: get first movie for this event (most events have 0 or 1 movie)
-    LEFT JOIN event_movies em ON em.event_id = pe.id
-    LEFT JOIN movies m ON m.id = em.movie_id
+    -- Movie join: get at most one movie per event to avoid duplicate rows
+    LEFT JOIN LATERAL (
+      SELECT
+        mov.id AS movie_id,
+        mov.title AS movie_title,
+        mov.slug AS movie_slug,
+        mov.release_date AS movie_release_date,
+        mov.runtime AS movie_runtime,
+        mov.metadata AS movie_metadata,
+        mov.poster_url AS movie_poster_url,
+        mov.backdrop_url AS movie_backdrop_url
+      FROM event_movies em
+      JOIN movies mov ON mov.id = em.movie_id
+      WHERE em.event_id = pe.id
+      ORDER BY mov.id ASC
+      LIMIT 1
+    ) AS m ON true
     -- Source info + image: get primary source with its image and aggregation config
     LEFT JOIN LATERAL (
       SELECT
@@ -166,21 +180,34 @@ defmodule EventasaurusApp.Repo.Migrations.RecreateCityEventsMvV2 do
       cat.name AS category_name,
       cat.slug AS category_slug,
       -- Movie identification columns
-      m.id AS movie_id,
-      m.title AS movie_title,
-      m.slug AS movie_slug,
-      m.release_date AS movie_release_date,
+      m.movie_id,
+      m.movie_title,
+      m.movie_slug,
+      m.movie_release_date,
       -- Image columns
-      m.poster_url AS movie_poster_url,
-      m.backdrop_url AS movie_backdrop_url,
+      m.movie_poster_url,
+      m.movie_backdrop_url,
       primary_source.image_url AS source_image_url
     FROM public_events pe
     JOIN venues v ON v.id = pe.venue_id
     JOIN cities c ON c.id = v.city_id
     LEFT JOIN public_event_categories pec ON pec.event_id = pe.id AND pec.is_primary = true
     LEFT JOIN categories cat ON cat.id = pec.category_id
-    LEFT JOIN event_movies em ON em.event_id = pe.id
-    LEFT JOIN movies m ON m.id = em.movie_id
+    -- Movie join: get at most one movie per event to avoid duplicate rows
+    LEFT JOIN LATERAL (
+      SELECT
+        mov.id AS movie_id,
+        mov.title AS movie_title,
+        mov.slug AS movie_slug,
+        mov.release_date AS movie_release_date,
+        mov.poster_url AS movie_poster_url,
+        mov.backdrop_url AS movie_backdrop_url
+      FROM event_movies em
+      JOIN movies mov ON mov.id = em.movie_id
+      WHERE em.event_id = pe.id
+      ORDER BY mov.id ASC
+      LIMIT 1
+    ) AS m ON true
     LEFT JOIN LATERAL (
       SELECT pes.image_url
       FROM public_event_sources pes

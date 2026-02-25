@@ -41,7 +41,7 @@ defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
 
   require Logger
 
-  alias EventasaurusApp.JobRepo
+  alias EventasaurusWeb.Cache.CityEventsMv
 
   @doc """
   Refreshes the materialized view on startup.
@@ -104,22 +104,7 @@ defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
   Used for health checks and debugging.
   """
   @spec get_row_count() :: {:ok, non_neg_integer()} | {:error, term()}
-  def get_row_count do
-    case JobRepo.query(
-           "SELECT COUNT(*) FROM city_events_mv",
-           [],
-           timeout: :timer.seconds(30)
-         ) do
-      {:ok, %{rows: [[count]]}} ->
-        {:ok, count}
-
-      {:error, %Postgrex.Error{postgres: %{code: :undefined_table}}} ->
-        {:error, :view_not_found}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
+  def get_row_count, do: CityEventsMv.row_count()
 
   @doc """
   Force refresh the materialized view.
@@ -130,24 +115,5 @@ defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
   - Takes ~2-5 seconds for typical data volumes
   """
   @spec refresh_view() :: {:ok, non_neg_integer()} | {:error, term()}
-  def refresh_view do
-    case JobRepo.query(
-           "REFRESH MATERIALIZED VIEW CONCURRENTLY city_events_mv",
-           [],
-           timeout: :timer.minutes(5)
-         ) do
-      {:ok, _} ->
-        # Get updated row count
-        case get_row_count() do
-          {:ok, count} -> {:ok, count}
-          {:error, _} -> {:ok, 0}
-        end
-
-      {:error, %Postgrex.Error{postgres: %{code: :undefined_table}}} ->
-        {:error, :view_not_found}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
+  def refresh_view, do: CityEventsMv.refresh()
 end

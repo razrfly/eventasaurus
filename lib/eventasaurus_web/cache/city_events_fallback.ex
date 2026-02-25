@@ -170,17 +170,14 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
   @spec get_date_counts(String.t()) :: {:ok, map()} | {:error, term()}
   def get_date_counts(city_slug) do
     try do
-      events =
-        from(e in "city_events_mv",
-          where: e.city_slug == ^city_slug and not is_nil(e.event_slug),
-          select: %{starts_at: e.starts_at}
-        )
+      raw_events =
+        base_query(city_slug)
+        |> order_by([e], asc: e.starts_at)
         |> Repo.replica().all()
-        |> Enum.map(fn row ->
-          %{starts_at: naive_to_utc_datetime(row.starts_at)}
-        end)
+        |> Enum.map(&transform_row/1)
 
-      counts = calculate_date_range_counts(events)
+      aggregated = aggregate_mv_events(raw_events, city_slug)
+      counts = calculate_date_range_counts(aggregated)
       {:ok, counts}
     rescue
       e ->
@@ -526,10 +523,10 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
 
   # Extract vote_average from movie metadata (stored by TMDB sync)
   # Always coerce to float to match AggregatedMovieGroup.movie_vote_average spec
-  defp extract_vote_average(%{"vote_average" => v}) when is_number(v) and v > 0, do: v / 1
+  defp extract_vote_average(%{"vote_average" => v}) when is_number(v) and v > 0, do: v * 1.0
 
   defp extract_vote_average(%{"tmdb_data" => %{"vote_average" => v}}) when is_number(v) and v > 0,
-    do: v / 1
+    do: v * 1.0
 
   defp extract_vote_average(_), do: nil
 

@@ -50,7 +50,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     - sort_order: asc, desc
   """
   def nearby(conn, params) do
-    with {:ok, lat, lng, city_id} <- resolve_coordinates(params) do
+    with {:ok, lat, lng, city_id, city_slug} <- resolve_coordinates(params) do
       page = parse_int(params["page"], 1)
       per_page = min(parse_int(params["per_page"], @default_per_page), @max_per_page)
 
@@ -91,11 +91,12 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         |> maybe_add_sort(params)
 
       # Try MV fallback first (sub-5ms) when city_id is available and no complex filters
-      # MV doesn't support category/search filtering, only unfiltered + date range
+      # MV doesn't support category/search/date filtering, only unfiltered listing
       has_complex_filters =
-        Keyword.has_key?(opts, :categories) or Keyword.has_key?(opts, :search)
+        Keyword.has_key?(opts, :categories) or Keyword.has_key?(opts, :search) or
+          Keyword.has_key?(opts, :start_date) or Keyword.has_key?(opts, :end_date)
 
-      case maybe_serve_from_mv(city_id, page, per_page, has_complex_filters) do
+      case maybe_serve_from_mv(city_slug, page, per_page, has_complex_filters) do
         {:ok, {items, total_count, all_count, mv_date_counts}} ->
           query_ms = System.monotonic_time(:millisecond) - query_start
 
@@ -281,21 +282,14 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   # --- MV fallback for mobile (Issue #3686) ---
 
-  # Try serving from the materialized view when city_id is available and no complex filters
+  # Try serving from the materialized view when city slug is available and no complex filters
   defp maybe_serve_from_mv(nil, _page, _per_page, _has_complex_filters), do: :miss
-  defp maybe_serve_from_mv(_city_id, _page, _per_page, true = _has_complex_filters), do: :miss
+  defp maybe_serve_from_mv(_slug, _page, _per_page, true = _has_complex_filters), do: :miss
 
-  defp maybe_serve_from_mv(city_id, page, per_page, _has_complex_filters) do
-    # Look up city slug from city_id
-    case Repo.get(City, city_id) do
-      %City{slug: slug} when is_binary(slug) ->
-        case CityEventsFallback.get_events_with_counts(slug, page: page, page_size: per_page) do
-          {:ok, %{events: events} = data} when events != [] ->
-            {:ok, {events, data.total_count, data.all_events_count, data.date_counts}}
-
-          _ ->
-            :miss
-        end
+  defp maybe_serve_from_mv(slug, page, per_page, _has_complex_filters) when is_binary(slug) do
+    case CityEventsFallback.get_events_with_counts(slug, page: page, page_size: per_page) do
+      {:ok, %{events: events} = data} when events != [] ->
+        {:ok, {events, data.total_count, data.all_events_count, data.date_counts}}
 
       _ ->
         :miss
@@ -308,8 +302,9 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     case Integer.parse(city_id) do
       {id, _} ->
         case Repo.get(City, id) do
-          %City{latitude: lat, longitude: lng} when not is_nil(lat) and not is_nil(lng) ->
-            {:ok, Decimal.to_float(lat), Decimal.to_float(lng), id}
+          %City{latitude: lat, longitude: lng, slug: slug}
+          when not is_nil(lat) and not is_nil(lng) ->
+            {:ok, Decimal.to_float(lat), Decimal.to_float(lng), id, slug}
 
           _ ->
             {:error, "city_id", "city not found"}
@@ -323,7 +318,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   defp resolve_coordinates(params) do
     with {:ok, lat} <- parse_float(params["lat"], "lat"),
          {:ok, lng} <- parse_float(params["lng"], "lng") do
-      {:ok, lat, lng, nil}
+      {:ok, lat, lng, nil, nil}
     end
   end
 
