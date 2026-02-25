@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.CityLive.Search do
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
+  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers, only: [format_local_datetime: 3]
 
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do

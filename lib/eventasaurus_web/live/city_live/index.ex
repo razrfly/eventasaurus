@@ -441,6 +441,19 @@ defmodule EventasaurusWeb.CityLive.Index do
     {:noreply, update(socket, :show_filters, &(!&1))}
   end
 
+  # Toggle debug comparison panel (dev only, Issue #3675)
+  @impl true
+  def handle_event("toggle_debug", _params, socket) do
+    if socket.assigns.debug_mode do
+      # Turning off — just hide the panel
+      {:noreply, assign(socket, :debug_mode, false)}
+    else
+      # Turning on — fetch comparison data then show
+      debug_data = fetch_debug_comparison(socket)
+      {:noreply, socket |> assign(:debug_mode, true) |> assign(:debug_data, debug_data)}
+    end
+  end
+
   @impl true
   def handle_event("change_view", %{"view" => view_mode}, socket) do
     {:noreply, assign(socket, :view_mode, view_mode)}
@@ -568,7 +581,7 @@ defmodule EventasaurusWeb.CityLive.Index do
               <%= gettext("Events in %{city}", city: @city.name) %>
             </h1>
             <%= if @debug_enabled and @cache_status do %>
-              <.cache_status_pill status={@cache_status} />
+              <.cache_status_pill status={@cache_status} debug_mode={@debug_mode} />
             <% end %>
           </div>
           <div class="flex items-center gap-4">
@@ -665,13 +678,17 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   # Component: Cache status pill (dev only, Issue #3675)
   # Shows which query path served the page as a colored pill next to the city title.
+  # Clickable to toggle the full debug comparison panel.
   # Only rendered when @debug_enabled is true (compile-time dev check).
   defp cache_status_pill(assigns) do
     ~H"""
-    <div class="flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+    <button
+      phx-click="toggle_debug"
+      class={"flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity " <> if(@debug_mode, do: "bg-yellow-100 text-yellow-800 ring-1 ring-yellow-400", else: "bg-gray-100 text-gray-600")}
+    >
       <span class={"w-2 h-2 rounded-full " <> status_color(@status)}></span>
       <%= status_label(@status) %>
-    </div>
+    </button>
     """
   end
 

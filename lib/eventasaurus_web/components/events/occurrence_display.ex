@@ -221,6 +221,9 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
     length(dates) == 1
   end
 
+  # Occurrence datetimes are already in local venue time (constructed via
+  # DateTime.new(date, time, timezone) from parsed occurrence data).
+  # No timezone conversion needed — converting would double-shift.
   defp format_occurrence_datetime(nil), do: gettext("Select a date")
 
   defp format_occurrence_datetime(%{datetime: datetime}) do

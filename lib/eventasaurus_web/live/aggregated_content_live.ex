@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusWeb.JsonLd.ItemListSchema
   alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusWeb.UrlHelper
+  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers, only: [format_local_datetime: 3]
 
   # Multi-city route: /social/:identifier, /movies/:identifier, etc.
   # Content type is extracted from the URL path (first segment)
@@ -661,20 +662,12 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     """
   end
 
-  # Format datetime with timezone conversion
-  # Extracts timezone from event.occurrences and converts UTC to local time
+  # Format datetime with timezone conversion using the consolidated helper.
+  # For recurring events, next_occurrence_date returns already-local datetimes;
+  # DateTime.shift_zone is idempotent for same-timezone inputs so no double-shift.
   defp format_datetime_with_tz(%DateTime{} = datetime, event) do
-    # Extract timezone from occurrences (pattern events have timezone info)
-    timezone = extract_timezone_from_event(event)
-
-    # Convert UTC to local timezone
-    local_datetime =
-      case DateTime.shift_zone(datetime, timezone) do
-        {:ok, local_dt} -> local_dt
-        {:error, _} -> datetime
-      end
-
-    Calendar.strftime(local_datetime, "%b %d at %H:%M")
+    venue = Map.get(event, :venue)
+    format_local_datetime(datetime, venue, :short)
   end
 
   defp format_datetime_with_tz(%NaiveDateTime{} = datetime, _event) do
@@ -682,16 +675,6 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   end
 
   defp format_datetime_with_tz(_, _), do: "Date TBD"
-
-  # Extract timezone from event occurrences
-  # For pattern events: occurrences.pattern.timezone (e.g., "America/Denver")
-  # For explicit events: Fallback to UTC
-  defp extract_timezone_from_event(%{occurrences: %{"pattern" => %{"timezone" => tz}}})
-       when is_binary(tz) and tz != "" do
-    tz
-  end
-
-  defp extract_timezone_from_event(_event), do: "Etc/UTC"
 
   defp format_page_title(content_type, identifier, city) do
     source_name = get_source_name(identifier)

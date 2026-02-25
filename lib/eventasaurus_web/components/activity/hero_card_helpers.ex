@@ -45,6 +45,27 @@ defmodule EventasaurusWeb.Components.Activity.HeroCardHelpers do
     TimezoneHelpers.convert_to_timezone(datetime, timezone)
   end
 
+  defp to_local_datetime(%NaiveDateTime{} = naive_dt, %{} = venue) do
+    alias EventasaurusDiscovery.Helpers.TimezoneMapper
+    alias EventasaurusWeb.TimezoneHelpers
+
+    timezone = TimezoneMapper.get_timezone_for_venue(venue)
+
+    case DateTime.from_naive(naive_dt, timezone) do
+      {:ok, datetime} ->
+        datetime
+
+      {:ambiguous, first, _second} ->
+        first
+
+      {:gap, _just_before, just_after} ->
+        just_after
+
+      {:error, _} ->
+        TimezoneHelpers.convert_to_timezone(DateTime.from_naive!(naive_dt, "Etc/UTC"), timezone)
+    end
+  end
+
   defp to_local_datetime(datetime, _venue), do: datetime
 
   @doc """

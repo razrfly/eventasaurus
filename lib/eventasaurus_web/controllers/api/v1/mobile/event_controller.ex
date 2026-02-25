@@ -54,9 +54,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       page = parse_int(params["page"], 1)
       per_page = min(parse_int(params["per_page"], @default_per_page), @max_per_page)
 
-      # Try fast path: materialized view fallback (production, no category/search filters)
+      # Try fast path: MV fallback for pure lat/lng requests only (no city_id).
+      # When city_id is available, skip MV — its movie-only aggregation produces
+      # different counts than the web's full aggregation pipeline (Issue #3675).
       result =
-        if can_use_fallback?(params) do
+        if is_nil(city_id) and can_use_fallback?(params) do
           city_slug = resolve_city_slug(lat, lng, city_id)
           if city_slug, do: serve_from_fallback(conn, city_slug, page, per_page, params)
         end
@@ -64,12 +66,17 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       if result do
         result
       else
-        # Slow path: live query (dev/test, or category/search filters active)
+        # Live query path: full aggregation (movies + source groups + containers)
         # Use city_id when available (exact city boundary match);
         # fall back to radius for pure lat/lng searches (Issue #3673)
         opts =
           if city_id do
-            [city_id: city_id, page: page, page_size: per_page, language: params["language"] || "en"]
+            [
+              city_id: city_id,
+              page: page,
+              page_size: per_page,
+              language: params["language"] || "en"
+            ]
           else
             radius_km =
               case parse_float(params["radius"], "radius") do
@@ -77,8 +84,14 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
                 _ -> @default_radius_km
               end
 
-            [center_lat: lat, center_lng: lng, radius_km: radius_km,
-             page: page, page_size: per_page, language: params["language"] || "en"]
+            [
+              center_lat: lat,
+              center_lng: lng,
+              radius_km: radius_km,
+              page: page,
+              page_size: per_page,
+              language: params["language"] || "en"
+            ]
           end
           |> maybe_add_browsing_city(city_id)
           |> maybe_add_categories(params)
@@ -100,7 +113,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
           PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
 
         # Compute date range counts for filter chips (efficient SQL COUNTs)
-        date_range_counts = compute_date_range_counts(city_id, lat, lng, params)
+        # Thread the same radius used by the main query for consistency
+        date_range_counts = compute_date_range_counts(city_id, lat, lng, params, opts[:radius_km])
 
         json(conn, %{
           events: Enum.map(items, &serialize_item/1),
@@ -148,7 +162,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       case find_event_by_slug(slug, language) do
         {:ok, {:public, event}} ->
           json(conn, %{
-            event: serialize_public_event_detail(event, language) |> add_attendance_info(slug, user)
+            event:
+              serialize_public_event_detail(event, language) |> add_attendance_info(slug, user)
           })
 
         {:ok, {:user, event}} ->
@@ -174,7 +189,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   @date_ranges ~w(today tomorrow this_weekend next_7_days next_30_days this_month next_month)a
 
   # Use city_id when available for consistent city-boundary filtering (Issue #3673)
-  defp compute_date_range_counts(city_id, _lat, _lng, params) when is_integer(city_id) do
+  defp compute_date_range_counts(city_id, _lat, _lng, params, _radius_km)
+       when is_integer(city_id) do
     base_opts =
       [city_id: city_id]
       |> maybe_add_categories(params)
@@ -183,8 +199,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     do_compute_date_range_counts(base_opts)
   end
 
-  defp compute_date_range_counts(_city_id, lat, lng, params) do
-    radius_km = @default_radius_km
+  defp compute_date_range_counts(_city_id, lat, lng, params, radius_km) do
+    radius_km = radius_km || @default_radius_km
 
     base_opts =
       [center_lat: lat, center_lng: lng, radius_km: radius_km]
@@ -195,7 +211,6 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   end
 
   defp do_compute_date_range_counts(base_opts) do
-
     defaults = Map.new(@date_ranges, &{Atom.to_string(&1), 0})
 
     Task.Supervisor.async_stream_nolink(
@@ -270,7 +285,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   @fallback_fetch_limit 5_000
 
   defp serve_from_fallback(conn, city_slug, page, per_page, params) do
-    case CityEventsFallback.get_events_with_counts(city_slug, page: 1, page_size: @fallback_fetch_limit) do
+    case CityEventsFallback.get_events_with_counts(city_slug,
+           page: 1,
+           page_size: @fallback_fetch_limit
+         ) do
       {:ok, %{events: all_events, date_counts: date_counts}} ->
         # Capture unfiltered count before date filtering (Issue #3675)
         all_events_count = length(all_events)
@@ -529,7 +547,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     case PublicEvents.get_by_slug(slug) do
       %{} = event ->
         # Preload sources, movies, and venue for cover image resolution and attribution
-        event = Repo.preload(event, [sources: [:source], movies: [], venue: [city_ref: :country]])
+        event = Repo.preload(event, sources: [:source], movies: [], venue: [city_ref: :country])
 
         # Populate virtual fields that preload_with_sources normally sets
         event =
@@ -550,9 +568,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   end
 
   defp get_localized_field(nil, fallback, _language), do: fallback
+
   defp get_localized_field(translations, fallback, language) when is_map(translations) do
     translations[language] || translations["en"] || fallback
   end
+
   defp get_localized_field(_, fallback, _language), do: fallback
 
   defp get_source_description(sources, language) do
@@ -607,17 +627,22 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   defp serialize_public_event_detail(event, language) do
     nearby_events =
-      PublicEvents.get_nearby_activities_with_fallback(event, display_count: 4, language: language)
+      PublicEvents.get_nearby_activities_with_fallback(event,
+        display_count: 4,
+        language: language
+      )
 
-    movie_slug = case event.movies do
-      [movie | _] when not is_nil(movie) -> movie.slug
-      _ -> nil
-    end
+    movie_slug =
+      case event.movies do
+        [movie | _] when not is_nil(movie) -> movie.slug
+        _ -> nil
+      end
 
-    city_id = case event.venue do
-      %{city_ref: %{id: id}} when not is_nil(id) -> id
-      _ -> nil
-    end
+    city_id =
+      case event.venue do
+        %{city_ref: %{id: id}} when not is_nil(id) -> id
+        _ -> nil
+      end
 
     serialize_public_event(event)
     |> Map.merge(%{
@@ -817,5 +842,4 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       attendee_count: attendee_count
     })
   end
-
 end

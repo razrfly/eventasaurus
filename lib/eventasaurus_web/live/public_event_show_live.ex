@@ -44,6 +44,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusWeb.Utils.TimezoneUtils
   import Ecto.Query
+  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers, only: [format_local_datetime: 3]
 
   @impl true
   def mount(_params, session, socket) do
@@ -1583,7 +1584,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     </p>
                     <p class="text-yellow-700 text-sm mt-1">
                       <%= gettext("This is an archived event page. The event took place on %{date}.",
-                          date: format_event_datetime(@event.starts_at)) %>
+                          date: format_local_datetime(@event.starts_at, @event.venue, :full)) %>
                     </p>
                   </div>
                 </div>
@@ -1793,11 +1794,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   # Helper Functions
-  defp format_event_datetime(nil), do: gettext("TBD")
-
-  defp format_event_datetime(datetime) do
-    Calendar.strftime(datetime, "%A, %B %d, %Y at %H:%M")
-  end
 
   defp format_description(nil), do: Phoenix.HTML.raw("")
 

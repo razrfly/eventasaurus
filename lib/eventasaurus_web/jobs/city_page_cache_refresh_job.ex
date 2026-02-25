@@ -159,113 +159,124 @@ defmodule EventasaurusWeb.Jobs.CityPageCacheRefreshJob do
 
   # Base cache refresh - fetches ~500 events with no filters for in-memory filtering
   defp perform_base_refresh(args) do
+    alias EventasaurusWeb.Cache.CityPageCache
+
     city_slug = args["city_slug"]
     radius_km = args["radius_km"]
 
-    Logger.info("Starting BASE cache refresh for city=#{city_slug} radius=#{radius_km}km")
-    start_time = System.monotonic_time(:millisecond)
+    if not CityPageCache.enabled?() do
+      Logger.debug("Caching disabled, skipping BASE cache refresh for #{city_slug}")
+      :ok
+    else
+      Logger.info("Starting BASE cache refresh for city=#{city_slug} radius=#{radius_km}km")
+      start_time = System.monotonic_time(:millisecond)
 
-    # Build query opts for base cache (large page, no date filters)
-    query_opts = build_base_query_opts(city_slug, radius_km)
-    query_opts_with_repo = Map.put(query_opts, :repo, EventasaurusApp.JobRepo)
+      # Build query opts for base cache (large page, no date filters)
+      query_opts = build_base_query_opts(city_slug, radius_km)
+      query_opts_with_repo = Map.put(query_opts, :repo, EventasaurusApp.JobRepo)
 
-    try do
-      {events, total_count, all_events_count} =
-        PublicEventsEnhanced.list_events_with_aggregation_and_counts(query_opts_with_repo)
+      try do
+        {events, total_count, all_events_count} =
+          PublicEventsEnhanced.list_events_with_aggregation_and_counts(query_opts_with_repo)
 
-      duration = System.monotonic_time(:millisecond) - start_time
-      event_count = length(events)
+        duration = System.monotonic_time(:millisecond) - start_time
+        event_count = length(events)
 
-      # Store in base cache
-      alias EventasaurusWeb.Cache.CityPageCache
+        cache_data = %{
+          events: events,
+          total_count: total_count,
+          all_events_count: all_events_count,
+          duration_ms: duration
+        }
 
-      cache_data = %{
-        events: events,
-        total_count: total_count,
-        all_events_count: all_events_count,
-        duration_ms: duration
-      }
+        case CityPageCache.put_base_events(city_slug, radius_km, cache_data) do
+          :ok ->
+            Logger.info(
+              "BASE cache refreshed for city=#{city_slug}: #{event_count} events in #{duration}ms"
+            )
 
-      case CityPageCache.put_base_events(city_slug, radius_km, cache_data) do
-        :ok ->
-          Logger.info(
-            "BASE cache refreshed for city=#{city_slug}: #{event_count} events in #{duration}ms"
-          )
+            :ok
 
-          :ok
-
-        {:error, reason} ->
-          Logger.error("Failed to store BASE cache for city=#{city_slug}: #{inspect(reason)}")
-          {:error, reason}
+          {:error, reason} ->
+            Logger.error("Failed to store BASE cache for city=#{city_slug}: #{inspect(reason)}")
+            {:error, reason}
+        end
+      rescue
+        e ->
+          Logger.error("BASE cache refresh failed for city=#{city_slug}: #{inspect(e)}")
+          {:error, Exception.message(e)}
       end
-    rescue
-      e ->
-        Logger.error("BASE cache refresh failed for city=#{city_slug}: #{inspect(e)}")
-        {:error, Exception.message(e)}
     end
   end
 
   # Regular per-filter cache refresh
   defp perform_filter_refresh(args) do
+    alias EventasaurusWeb.Cache.CityPageCache
+
     city_slug = args["city_slug"]
     radius_km = args["radius_km"]
 
-    # IMPORTANT: Build cache key using ORIGINAL string args (Issue #3357)
-    # The LiveView looks up cache using string representations of dates,
-    # so we must store using the same format to avoid key mismatch.
-    cache_opts = build_cache_opts_from_args(args)
+    if not CityPageCache.enabled?() do
+      Logger.debug("Caching disabled, skipping filter cache refresh for #{city_slug}")
+      :ok
+    else
+      # IMPORTANT: Build cache key using ORIGINAL string args (Issue #3357)
+      # The LiveView looks up cache using string representations of dates,
+      # so we must store using the same format to avoid key mismatch.
+      cache_opts = build_cache_opts_from_args(args)
 
-    # Parse opts for query execution (DateTime structs needed for SQL)
-    opts = decode_opts(args)
+      # Parse opts for query execution (DateTime structs needed for SQL)
+      opts = decode_opts(args)
 
-    Logger.info("Starting cache refresh for city=#{city_slug} radius=#{radius_km}km")
-    start_time = System.monotonic_time(:millisecond)
+      Logger.info("Starting cache refresh for city=#{city_slug} radius=#{radius_km}km")
+      start_time = System.monotonic_time(:millisecond)
 
-    # Build the query options for PublicEventsEnhanced
-    # Need to look up city by slug and pass as viewing_city
-    query_opts = build_query_opts(city_slug, radius_km, opts)
+      # Build the query options for PublicEventsEnhanced
+      # Need to look up city by slug and pass as viewing_city
+      query_opts = build_query_opts(city_slug, radius_km, opts)
 
-    # Use JobRepo (direct connection) instead of Repo (PgBouncer) - Issue #3353
-    # PgBouncer in transaction mode kills long-running queries. The city page
-    # aggregation query can take 30-60+ seconds with 800+ events.
-    # JobRepo bypasses PgBouncer and connects directly to PostgreSQL.
-    query_opts_with_repo = Map.put(query_opts, :repo, EventasaurusApp.JobRepo)
+      # Use JobRepo (direct connection) instead of Repo (PgBouncer) - Issue #3353
+      # PgBouncer in transaction mode kills long-running queries. The city page
+      # aggregation query can take 30-60+ seconds with 800+ events.
+      # JobRepo bypasses PgBouncer and connects directly to PostgreSQL.
+      query_opts_with_repo = Map.put(query_opts, :repo, EventasaurusApp.JobRepo)
 
-    # The function returns {events, total_count, all_events_count} tuple
-    try do
-      {events, total_count, all_events_count} =
-        PublicEventsEnhanced.list_events_with_aggregation_and_counts(query_opts_with_repo)
+      # The function returns {events, total_count, all_events_count} tuple
+      try do
+        {events, total_count, all_events_count} =
+          PublicEventsEnhanced.list_events_with_aggregation_and_counts(query_opts_with_repo)
 
-      duration = System.monotonic_time(:millisecond) - start_time
-      event_count = length(events)
+        duration = System.monotonic_time(:millisecond) - start_time
+        event_count = length(events)
 
-      # Store in cache with TTL using ORIGINAL string-based opts for key
-      key = cache_key(city_slug, radius_km, cache_opts)
+        # Store in cache with TTL using ORIGINAL string-based opts for key
+        key = cache_key(city_slug, radius_km, cache_opts)
 
-      cache_value = %{
-        events: events,
-        total_count: total_count,
-        all_events_count: all_events_count,
-        cached_at: DateTime.utc_now(),
-        duration_ms: duration
-      }
+        cache_value = %{
+          events: events,
+          total_count: total_count,
+          all_events_count: all_events_count,
+          cached_at: DateTime.utc_now(),
+          duration_ms: duration
+        }
 
-      case Cachex.put(@cache_name, key, cache_value, ttl: @cache_ttl_ms) do
-        {:ok, true} ->
-          Logger.info(
-            "Cache refreshed for city=#{city_slug}: #{event_count} events in #{duration}ms"
-          )
+        case Cachex.put(@cache_name, key, cache_value, ttl: @cache_ttl_ms) do
+          {:ok, true} ->
+            Logger.info(
+              "Cache refreshed for city=#{city_slug}: #{event_count} events in #{duration}ms"
+            )
 
-          :ok
+            :ok
 
-        {:error, reason} ->
-          Logger.error("Failed to store cache for city=#{city_slug}: #{inspect(reason)}")
-          {:error, reason}
+          {:error, reason} ->
+            Logger.error("Failed to store cache for city=#{city_slug}: #{inspect(reason)}")
+            {:error, reason}
+        end
+      rescue
+        e ->
+          Logger.error("Cache refresh failed for city=#{city_slug}: #{inspect(e)}")
+          {:error, Exception.message(e)}
       end
-    rescue
-      e ->
-        Logger.error("Cache refresh failed for city=#{city_slug}: #{inspect(e)}")
-        {:error, Exception.message(e)}
     end
   end
 

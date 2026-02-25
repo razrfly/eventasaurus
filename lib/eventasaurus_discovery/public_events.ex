@@ -717,6 +717,8 @@ defmodule EventasaurusDiscovery.PublicEvents do
 
     EventasaurusDiscovery.PublicEventsEnhanced.list_events(opts)
     |> Enum.reject(&(&1.id == current_event.id))
+    |> Enum.reject(&is_nil(&1.slug))
+    |> Enum.shuffle()
     |> Enum.take(display_count)
     |> Repo.preload([:venue, :categories, :performers, sources: :source])
   end

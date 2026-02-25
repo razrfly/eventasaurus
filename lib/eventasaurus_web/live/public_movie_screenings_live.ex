@@ -1075,6 +1075,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   defp parse_formats_from_label(_), do: []
 
   # Format date in short form: "oct 5"
+  # Operates on Date structs only (no time/timezone component).
+  # No timezone conversion needed.
   defp format_date_short(date) do
     month_abbr = Calendar.strftime(date, "%b") |> String.capitalize()
     "#{month_abbr} #{date.day}"
