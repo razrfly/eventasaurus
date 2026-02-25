@@ -4,14 +4,12 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.PublicEvents
   alias EventasaurusDiscovery.Categories
-  alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusApp.{Events, Repo}
   alias EventasaurusApp.Events.EventParticipant
-  alias EventasaurusWeb.Cache.CityEventsFallback
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Helpers.SourceAttribution
   alias Eventasaurus.CDN
@@ -54,102 +52,86 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       page = parse_int(params["page"], 1)
       per_page = min(parse_int(params["per_page"], @default_per_page), @max_per_page)
 
-      # Try fast path: MV fallback for pure lat/lng requests only (no city_id).
-      # When city_id is available, skip MV — its movie-only aggregation produces
-      # different counts than the web's full aggregation pipeline (Issue #3675).
-      # Performance note: city_id live queries use an indexed city_id lookup which
-      # is fast (~20-50ms) compared to radius-based spatial queries. The MV path
-      # (~5ms) is only materially faster for unfiltered lat/lng requests.
-      result =
-        if is_nil(city_id) and can_use_fallback?(params) do
-          city_slug = resolve_city_slug(lat, lng, city_id)
-          if city_slug, do: serve_from_fallback(conn, city_slug, page, per_page, params)
-        end
+      # Live query path: full aggregation (movies + source groups + containers)
+      # Use city_id when available (exact city boundary match);
+      # fall back to radius for pure lat/lng searches (Issue #3673)
+      language = params["language"] || "en"
+      query_start = System.monotonic_time(:millisecond)
 
-      if result do
-        result
-      else
-        # Live query path: full aggregation (movies + source groups + containers)
-        # Use city_id when available (exact city boundary match);
-        # fall back to radius for pure lat/lng searches (Issue #3673)
-        language = params["language"] || "en"
-        query_start = System.monotonic_time(:millisecond)
-
-        opts =
-          if city_id do
-            [
-              city_id: city_id,
-              page: page,
-              page_size: per_page,
-              language: language
-            ]
-          else
-            radius_km =
-              case parse_float(params["radius"], "radius") do
-                {:ok, meters} -> meters / 1000
-                _ -> @default_radius_km
-              end
-
-            [
-              center_lat: lat,
-              center_lng: lng,
-              radius_km: radius_km,
-              page: page,
-              page_size: per_page,
-              language: language
-            ]
-          end
-          |> maybe_add_browsing_city(city_id)
-          |> maybe_add_categories(params)
-          |> maybe_add_search(params)
-          |> maybe_add_date_range(params)
-          |> maybe_add_sort(params)
-
-        # Fetch up to 500 events, aggregate, then paginate in-memory
-        # (matches the web pipeline — without this, DB pagination fetches only
-        # 20 events, leaving almost nothing to aggregate).
-        opts_for_aggregation =
-          opts
-          |> Keyword.put(:aggregate, true)
-          |> Keyword.put(:ignore_city_in_aggregation, true)
-          |> Map.new()
-          |> EventFilters.enrich_with_all_events_filters()
-
-        {items, total_count, all_count} =
-          PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
-
-        query_ms = System.monotonic_time(:millisecond) - query_start
-
-        :telemetry.execute(
-          [:eventasaurus, :mobile_api, :nearby],
-          %{duration_ms: query_ms, event_count: total_count},
-          %{path: if(city_id, do: :city_id, else: :lat_lng), city_id: city_id}
-        )
-
-        if query_ms > 200 do
-          Logger.warning("Slow mobile nearby query",
-            path: if(city_id, do: "city_id", else: "lat_lng"),
+      opts =
+        if city_id do
+          [
             city_id: city_id,
-            duration_ms: query_ms,
-            event_count: total_count
-          )
-        end
-
-        # Compute date range counts for filter chips (efficient SQL COUNTs)
-        # Thread the same radius used by the main query for consistency
-        date_range_counts = compute_date_range_counts(city_id, lat, lng, params, opts[:radius_km])
-
-        json(conn, %{
-          events: Enum.map(items, &serialize_item/1),
-          meta: %{
             page: page,
-            per_page: per_page,
-            total_count: total_count,
-            all_events_count: all_count,
-            date_range_counts: date_range_counts
-          }
-        })
+            page_size: per_page,
+            language: language
+          ]
+        else
+          radius_km =
+            case parse_float(params["radius"], "radius") do
+              {:ok, meters} -> meters / 1000
+              _ -> @default_radius_km
+            end
+
+          [
+            center_lat: lat,
+            center_lng: lng,
+            radius_km: radius_km,
+            page: page,
+            page_size: per_page,
+            language: language
+          ]
+        end
+        |> maybe_add_browsing_city(city_id)
+        |> maybe_add_categories(params)
+        |> maybe_add_search(params)
+        |> maybe_add_date_range(params)
+        |> maybe_add_sort(params)
+
+      # Fetch up to 500 events, aggregate, then paginate in-memory
+      # (matches the web pipeline — without this, DB pagination fetches only
+      # 20 events, leaving almost nothing to aggregate).
+      opts_for_aggregation =
+        opts
+        |> Keyword.put(:aggregate, true)
+        |> Keyword.put(:ignore_city_in_aggregation, true)
+        |> Map.new()
+        |> EventFilters.enrich_with_all_events_filters()
+
+      {items, total_count, all_count} =
+        PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
+
+      query_ms = System.monotonic_time(:millisecond) - query_start
+
+      :telemetry.execute(
+        [:eventasaurus, :mobile_api, :nearby],
+        %{duration_ms: query_ms, event_count: total_count},
+        %{path: if(city_id, do: :city_id, else: :lat_lng), city_id: city_id}
+      )
+
+      if query_ms > 200 do
+        Logger.warning("Slow mobile nearby query",
+          path: if(city_id, do: "city_id", else: "lat_lng"),
+          city_id: city_id,
+          duration_ms: query_ms,
+          event_count: total_count
+        )
       end
+
+      # Compute date range counts for filter chips (efficient SQL COUNTs)
+      # Thread the same radius used by the main query for consistency
+      date_range_counts = compute_date_range_counts(city_id, lat, lng, params, opts[:radius_km])
+
+      json(conn, %{
+        events: Enum.map(items, &serialize_item/1),
+        meta: %{
+          page: page,
+          per_page: per_page,
+          total_count: total_count,
+          all_events_count: all_count,
+          date_range_counts: date_range_counts
+        }
+      })
     else
       {:error, field, message} ->
         conn
@@ -266,152 +248,6 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
         acc
     end)
-  end
-
-  # --- Fallback path (materialized view) ---
-
-  defp can_use_fallback?(params) do
-    fallback_enabled?() &&
-      empty_param?(params["radius"]) &&
-      empty_param?(params["categories"]) &&
-      empty_param?(params["search"]) &&
-      empty_param?(params["sort_by"]) &&
-      empty_param?(params["sort_order"])
-  end
-
-  defp fallback_enabled? do
-    Application.get_env(:eventasaurus, :enable_caching, true)
-  end
-
-  defp empty_param?(nil), do: true
-  defp empty_param?(""), do: true
-  defp empty_param?(_), do: false
-
-  # Bridges lat/lng → city_slug for the MV fallback.
-  # Returns nil if no city found (signals: fall back to live query).
-  defp resolve_city_slug(_lat, _lng, city_id) when is_integer(city_id) do
-    case Repo.get(City, city_id) do
-      %City{slug: slug} -> slug
-      nil -> nil
-    end
-  end
-
-  defp resolve_city_slug(lat, lng, _city_id) do
-    case Locations.get_nearby_cities(lat, lng, limit: 1, radius_km: 100) do
-      [%City{slug: slug} | _] -> slug
-      _ -> nil
-    end
-  end
-
-  # Max events any single city has is ~300; this fetches the full set for
-  # in-memory date filtering + pagination. The MV query is sub-5ms.
-  @fallback_fetch_limit 5_000
-
-  defp serve_from_fallback(conn, city_slug, page, per_page, params) do
-    case CityEventsFallback.get_events_with_counts(city_slug,
-           page: 1,
-           page_size: @fallback_fetch_limit
-         ) do
-      {:ok, %{events: all_events, date_counts: date_counts}} ->
-        # Capture unfiltered count before date filtering (Issue #3675)
-        all_events_count = length(all_events)
-
-        # Filter by date range if present
-        events = maybe_filter_fallback_by_date(all_events, params)
-        total_count = length(events)
-
-        # Paginate
-        offset = (page - 1) * per_page
-        page_events = Enum.slice(events, offset, per_page)
-
-        # Convert date count keys to strings (atoms from CityEventsFallback)
-        string_date_counts = Map.new(date_counts, fn {k, v} -> {to_string(k), v} end)
-
-        json(conn, %{
-          events: Enum.map(page_events, &serialize_fallback_item/1),
-          meta: %{
-            page: page,
-            per_page: per_page,
-            total_count: total_count,
-            all_events_count: all_events_count,
-            date_range_counts: string_date_counts
-          }
-        })
-
-      {:error, reason} ->
-        Logger.warning("Fallback query failed for #{city_slug}, falling back to live query",
-          reason: inspect(reason)
-        )
-
-        nil
-    end
-  end
-
-  defp maybe_filter_fallback_by_date(events, %{"date_range" => range}) when is_binary(range) do
-    case EventFilters.parse_quick_range(range) do
-      {:ok, :all} ->
-        events
-
-      {:ok, range_atom} ->
-        {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range_atom)
-        now = DateTime.utc_now()
-
-        Enum.filter(events, fn event ->
-          starts_at = fallback_starts_at(event)
-
-          cond do
-            is_nil(starts_at) -> false
-            DateTime.compare(starts_at, now) == :lt -> false
-            start_date && DateTime.compare(starts_at, start_date) == :lt -> false
-            end_date && DateTime.compare(starts_at, end_date) == :gt -> false
-            true -> true
-          end
-        end)
-
-      :error ->
-        events
-    end
-  end
-
-  defp maybe_filter_fallback_by_date(events, _params), do: events
-
-  defp fallback_starts_at(%AggregatedMovieGroup{earliest_starts_at: %DateTime{} = dt}), do: dt
-  defp fallback_starts_at(%{starts_at: %DateTime{} = dt}), do: dt
-  defp fallback_starts_at(_), do: nil
-
-  # --- Fallback serializers ---
-
-  defp serialize_fallback_item(%AggregatedMovieGroup{} = group), do: serialize_item(group)
-
-  defp serialize_fallback_item(event) when is_map(event) do
-    %{
-      slug: event.slug,
-      title: event[:display_title] || event.title,
-      starts_at: event.starts_at,
-      ends_at: event.ends_at,
-      cover_image_url: resolve_image_url(event.cover_image_url),
-      type: "public",
-      venue: serialize_fallback_venue(event.venue),
-      categories: serialize_fallback_category(event[:category])
-    }
-  end
-
-  defp serialize_fallback_venue(nil), do: nil
-
-  defp serialize_fallback_venue(venue) when is_map(venue) do
-    %{
-      name: VenueHelpers.venue_display_name(venue.name),
-      slug: venue.slug,
-      address: nil,
-      lat: venue.latitude,
-      lng: venue.longitude
-    }
-  end
-
-  defp serialize_fallback_category(nil), do: []
-
-  defp serialize_fallback_category(cat) when is_map(cat) do
-    [%{name: cat.name, slug: cat.slug, icon: nil, color: nil}]
   end
 
   # --- Coordinate resolution ---

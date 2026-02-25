@@ -1,12 +1,11 @@
 defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   @moduledoc """
-  Admin dashboard for cache and materialized view management.
+  Admin dashboard for cache management.
 
-  Layer 3 of the self-healing cache strategy (Issue #3493):
-  - Refresh Materialized View button
+  Provides emergency controls for cache operations:
   - Clear Cache for City
   - Clear All Caches
-  - Cache Health Report (cache vs MV vs direct query comparison)
+  - Cache Health Report (cache vs direct query comparison)
 
   This provides an emergency escape hatch for ops when automated systems fail.
   """
@@ -16,7 +15,6 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
 
   alias EventasaurusDiscovery.Admin.DiscoveryConfigManager
   alias EventasaurusWeb.Cache.CityPageCache
-  alias EventasaurusWeb.Cache.CityEventsMvInitializer
   alias EventasaurusApp.Repo
 
   @type socket :: Phoenix.LiveView.Socket.t()
@@ -31,34 +29,11 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
       |> assign(:page_title, "Cache Management")
       |> assign(:cities, cities)
       |> assign(:selected_city_slug, nil)
-      |> assign(:mv_status, nil)
-      |> assign(:mv_refreshing, false)
-      |> assign(:mv_refresh_start_time, nil)
       |> assign(:flash_message, nil)
       |> assign(:health_report, nil)
       |> assign(:health_loading, false)
-      |> load_mv_status()
 
     {:ok, socket}
-  end
-
-  @impl true
-  def handle_event("refresh_mv", _params, socket) do
-    # Run asynchronously so we don't block the LiveView process
-    start_time = System.monotonic_time(:millisecond)
-    lv_pid = self()
-
-    Task.start(fn ->
-      result = CityEventsMvInitializer.refresh_view()
-      send(lv_pid, {:mv_refresh_result, result, start_time})
-    end)
-
-    socket =
-      socket
-      |> assign(:mv_refreshing, true)
-      |> assign(:mv_refresh_start_time, start_time)
-
-    {:noreply, socket}
   end
 
   @impl true
@@ -140,51 +115,6 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
     {:noreply, assign(socket, :flash_message, nil)}
   end
 
-  @impl true
-  def handle_info({:mv_refresh_result, result, start_time}, socket) do
-    duration_ms = System.monotonic_time(:millisecond) - start_time
-
-    socket =
-      case result do
-        {:ok, row_count} ->
-          Logger.info(
-            "[CacheDashboard] MV refreshed manually in #{duration_ms}ms - #{row_count} rows"
-          )
-
-          socket
-          |> assign(:mv_refreshing, false)
-          |> assign(:mv_refresh_start_time, nil)
-          |> assign(
-            :flash_message,
-            {:info, "Materialized view refreshed: #{row_count} rows in #{duration_ms}ms"}
-          )
-          |> load_mv_status()
-
-        {:error, reason} ->
-          Logger.error("[CacheDashboard] MV refresh failed: #{inspect(reason)}")
-
-          socket
-          |> assign(:mv_refreshing, false)
-          |> assign(:mv_refresh_start_time, nil)
-          |> assign(:flash_message, {:error, "MV refresh failed: #{inspect(reason)}"})
-      end
-
-    {:noreply, socket}
-  end
-
-  defp load_mv_status(socket) do
-    case CityEventsMvInitializer.get_row_count() do
-      {:ok, count} ->
-        assign(socket, :mv_status, %{row_count: count, status: :ok})
-
-      {:error, :view_not_found} ->
-        assign(socket, :mv_status, %{row_count: 0, status: :missing})
-
-      {:error, reason} ->
-        assign(socket, :mv_status, %{row_count: 0, status: :error, error: reason})
-    end
-  end
-
   # Get count from Cachex cache for a city (read-only peek, no refresh triggers)
   defp get_cache_count(city_slug) do
     # Use peek_base_events to avoid triggering refresh jobs on miss/stale
@@ -260,7 +190,7 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Cache Management</h1>
         <p class="text-gray-600 mt-1">
-          Layer 3 emergency controls for cache and materialized view management (Issue #3493)
+          Emergency controls for cache management
         </p>
       </div>
 
@@ -272,54 +202,6 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
           <button phx-click="dismiss_flash" class="text-sm underline">Dismiss</button>
         </div>
       <% end %>
-
-      <!-- Materialized View Status -->
-      <div class="bg-white shadow rounded-lg p-6 mb-6">
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <h2 class="text-xl font-semibold text-gray-900">Materialized View Status</h2>
-            <p class="text-sm text-gray-600">city_events_mv - Fast fallback data source</p>
-          </div>
-          <button
-            phx-click="refresh_mv"
-            disabled={@mv_refreshing}
-            class={"px-4 py-2 rounded-md text-white font-medium #{if @mv_refreshing, do: "bg-gray-400 cursor-not-allowed", else: "bg-blue-600 hover:bg-blue-700"}"}
-          >
-            <%= if @mv_refreshing do %>
-              <span class="flex items-center gap-2">
-                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
-                Refreshing...
-              </span>
-            <% else %>
-              Refresh Materialized View
-            <% end %>
-          </button>
-        </div>
-
-        <%= if @mv_status do %>
-          <div class="grid grid-cols-3 gap-4">
-            <div class="bg-gray-50 rounded-lg p-4">
-              <div class="text-2xl font-bold text-gray-900"><%= @mv_status.row_count %></div>
-              <div class="text-sm text-gray-600">Rows in MV</div>
-            </div>
-            <div class="bg-gray-50 rounded-lg p-4">
-              <div class={"text-lg font-semibold #{mv_status_color(@mv_status.status)}"}>
-                <%= mv_status_label(@mv_status.status) %>
-              </div>
-              <div class="text-sm text-gray-600">Status</div>
-            </div>
-            <div class="bg-gray-50 rounded-lg p-4">
-              <div class="text-sm text-gray-700">
-                <code>REFRESH MATERIALIZED VIEW CONCURRENTLY city_events_mv</code>
-              </div>
-              <div class="text-sm text-gray-600 mt-1">Command (runs non-blocking)</div>
-            </div>
-          </div>
-        <% end %>
-      </div>
 
       <!-- Clear Cache for City -->
       <div class="bg-white shadow rounded-lg p-6 mb-6">
@@ -375,7 +257,7 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
           <div>
             <h2 class="text-xl font-semibold text-gray-900">Cache Health Report</h2>
             <p class="text-sm text-gray-600">
-              Compares event counts across: Cachex cache, Materialized View, Direct Query
+              Compares event counts across: Cachex cache, MV (read-only diagnostic), Direct Query
             </p>
           </div>
           <button
@@ -447,15 +329,12 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
 
       <!-- Documentation -->
       <div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 class="text-sm font-medium text-blue-800 mb-2">How the 3-Layer Cache Works</h3>
+        <h3 class="text-sm font-medium text-blue-800 mb-2">How Caching Works</h3>
         <ul class="text-sm text-blue-700 space-y-1">
-          <li><strong>Layer 1 (Startup)</strong>: MV is refreshed on app boot if empty</li>
-          <li><strong>Layer 2 (Fallback)</strong>: If Cachex misses, query MV instead of direct DB</li>
-          <li><strong>Layer 3 (This Page)</strong>: Manual controls for ops intervention</li>
+          <li><strong>Cachex</strong>: In-memory cache for city page events, warmed on startup and refreshed by scraper completions</li>
+          <li><strong>Live Query</strong>: On cache miss, runs full aggregation query directly against the database</li>
+          <li><strong>This Page</strong>: Manual controls for ops intervention (clear city/all caches)</li>
         </ul>
-        <p class="text-sm text-blue-600 mt-2">
-          See: <a href="https://github.com/anthropics/eventasaurus/issues/3493" class="underline" target="_blank">Issue #3493</a>
-        </p>
       </div>
     </div>
     """
@@ -465,14 +344,4 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   defp flash_classes(:warning), do: "bg-yellow-50 text-yellow-800 border border-yellow-200"
   defp flash_classes(:error), do: "bg-red-50 text-red-800 border border-red-200"
   defp flash_classes(_), do: "bg-gray-50 text-gray-800 border border-gray-200"
-
-  defp mv_status_color(:ok), do: "text-green-600"
-  defp mv_status_color(:missing), do: "text-red-600"
-  defp mv_status_color(:error), do: "text-red-600"
-  defp mv_status_color(_), do: "text-gray-600"
-
-  defp mv_status_label(:ok), do: "OK"
-  defp mv_status_label(:missing), do: "View Missing"
-  defp mv_status_label(:error), do: "Error"
-  defp mv_status_label(_), do: "Unknown"
 end

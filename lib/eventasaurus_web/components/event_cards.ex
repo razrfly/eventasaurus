@@ -367,7 +367,7 @@ defmodule EventasaurusWeb.Components.EventCards do
 
   # =============================================================================
   # Helper functions for event_card that work with both PublicEvent structs
-  # and plain maps (from CityEventsFallback materialized view - Issue #3373)
+  # and plain maps (from aggregation pipeline)
   # =============================================================================
 
   # Check if event is recurring (works with both structs and maps)
@@ -449,6 +449,307 @@ defmodule EventasaurusWeb.Components.EventCards do
     end
   end
 
+  # =============================================================================
+  # Compact Row Components (List View)
+  # =============================================================================
+
+  @doc """
+  Renders a compact row for a regular PublicEvent in list view.
+
+  Layout: 60px thumbnail | details (category, title, date/venue) | trailing badge
+  """
+  attr :event, :map, required: true
+  attr :language, :string, default: "en"
+  attr :show_city, :boolean, default: true
+
+  def event_compact_row(%{event: %{slug: nil}} = assigns) do
+    ~H"""
+    """
+  end
+
+  def event_compact_row(assigns) do
+    ~H"""
+    <.link navigate={~p"/activities/#{@event.slug}"} class="flex items-center gap-3 py-3 px-2 hover:bg-gray-50 transition-colors">
+      <!-- Thumbnail -->
+      <div class="w-[60px] h-[60px] rounded-lg overflow-hidden flex-shrink-0 bg-gray-200">
+        <%= if Map.get(@event, :cover_image_url) do %>
+          <.cdn_img src={@event.cover_image_url} alt={@event.title} width={120} height={120} fit="cover" quality={80} class="w-full h-full object-cover" />
+        <% else %>
+          <div class="w-full h-full flex items-center justify-center">
+            <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+            </svg>
+          </div>
+        <% end %>
+      </div>
+
+      <!-- Details -->
+      <div class="flex-1 min-w-0">
+        <%= if event_categories(@event) != [] do %>
+          <% category = CategoryHelpers.get_preferred_category(event_categories(@event)) %>
+          <%= if category && Map.get(category, :color) do %>
+            <span
+              class="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium text-white mb-0.5"
+              style={"background-color: #{category.color}"}
+            >
+              <%= category.name %>
+            </span>
+          <% end %>
+        <% end %>
+
+        <h3 class="font-semibold text-sm text-gray-900 line-clamp-1">
+          <%= Map.get(@event, :display_title) || @event.title %>
+        </h3>
+
+        <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+          <span class="flex items-center">
+            <Heroicons.calendar class="w-3 h-3 mr-0.5 flex-shrink-0" />
+            <%= cond do %>
+              <% event_recurring?(@event) -> %>
+                <%= if next = event_next_occurrence_date(@event) do %>
+                  <span class="text-green-600"><%= format_local_datetime(next, @event.venue, :short) %></span>
+                <% else %>
+                  <span class="text-green-600"><%= event_frequency_label(@event) %></span>
+                <% end %>
+              <% is_exhibition?(@event) -> %>
+                <%= if exhibition_datetime = format_exhibition_datetime(@event) do %>
+                  <span><%= exhibition_datetime %></span>
+                <% else %>
+                  <span><%= gettext("Currently showing") %></span>
+                <% end %>
+              <% true -> %>
+                <%= format_local_datetime(@event.starts_at, @event.venue, :short) %>
+            <% end %>
+          </span>
+          <%= if @event.venue do %>
+            <span class="flex items-center truncate">
+              <Heroicons.map_pin class="w-3 h-3 mr-0.5 flex-shrink-0" />
+              <span class="truncate"><%= @event.venue.name %></span>
+            </span>
+          <% end %>
+        </div>
+      </div>
+
+      <!-- Trailing Badge -->
+      <div class="flex-shrink-0 ml-auto">
+        <%= cond do %>
+          <% event_recurring?(@event) -> %>
+            <span class="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-green-100 text-green-700">
+              <%= event_occurrence_count(@event) %> dates
+            </span>
+          <% badge = get_time_sensitive_badge(@event) -> %>
+            <span class={[
+              "inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium text-white",
+              case badge.type do
+                :last_chance -> "bg-red-500"
+                :this_week -> "bg-orange-500"
+                :upcoming -> "bg-blue-500"
+                _ -> "bg-gray-500"
+              end
+            ]}>
+              <%= badge.label %>
+            </span>
+          <% true -> %>
+        <% end %>
+      </div>
+    </.link>
+    """
+  end
+
+  @doc """
+  Renders a compact row for an AggregatedMovieGroup in list view.
+  """
+  attr :group, AggregatedMovieGroup, required: true
+  attr :language, :string, default: "en"
+  attr :show_city, :boolean, default: true
+
+  def aggregated_movie_compact_row(assigns) do
+    ~H"""
+    <.link navigate={AggregatedMovieGroup.path(@group)} class="flex items-center gap-3 py-3 px-2 hover:bg-blue-50 transition-colors">
+      <!-- Thumbnail -->
+      <div class="w-[60px] h-[60px] rounded-lg overflow-hidden flex-shrink-0 bg-gray-200 ring-2 ring-blue-500">
+        <%= if @group.movie_backdrop_url do %>
+          <.cdn_img src={@group.movie_backdrop_url} alt={@group.movie_title} width={120} height={120} fit="cover" quality={80} class="w-full h-full object-cover" />
+        <% else %>
+          <div class="w-full h-full flex items-center justify-center">
+            <Heroicons.film class="w-6 h-6 text-gray-400" />
+          </div>
+        <% end %>
+      </div>
+
+      <!-- Details -->
+      <div class="flex-1 min-w-0">
+        <%= if @group.categories && @group.categories != [] do %>
+          <% category = CategoryHelpers.get_preferred_category(@group.categories) %>
+          <%= if category do %>
+            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium text-white bg-blue-600 mb-0.5">
+              <%= category.name %>
+            </span>
+          <% end %>
+        <% end %>
+
+        <h3 class="font-semibold text-sm text-gray-900 line-clamp-1">
+          <%= AggregatedMovieGroup.title(@group) %>
+        </h3>
+
+        <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+          <span class="flex items-center text-blue-600">
+            <Heroicons.calendar class="w-3 h-3 mr-0.5 flex-shrink-0" />
+            Movie Screenings
+          </span>
+          <span class="flex items-center truncate">
+            <Heroicons.building_storefront class="w-3 h-3 mr-0.5 flex-shrink-0" />
+            <span class="truncate"><%= AggregatedMovieGroup.description(@group) %></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Trailing Badge -->
+      <div class="flex-shrink-0 ml-auto">
+        <span class="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-blue-100 text-blue-700">
+          <Heroicons.film class="w-3 h-3 mr-0.5" />
+          <%= @group.screening_count %> screenings
+        </span>
+      </div>
+    </.link>
+    """
+  end
+
+  @doc """
+  Renders a compact row for an AggregatedEventGroup in list view (recurring events).
+  """
+  attr :group, AggregatedEventGroup, required: true
+  attr :language, :string, default: "en"
+  attr :show_city, :boolean, default: true
+
+  def aggregated_event_compact_row(assigns) do
+    ~H"""
+    <.link navigate={AggregatedEventGroup.path(@group)} class="flex items-center gap-3 py-3 px-2 hover:bg-green-50 transition-colors">
+      <!-- Thumbnail -->
+      <div class="w-[60px] h-[60px] rounded-lg overflow-hidden flex-shrink-0 bg-gray-200 ring-2 ring-green-500">
+        <%= if @group.cover_image_url do %>
+          <.cdn_img src={@group.cover_image_url} alt={@group.source_name} width={120} height={120} fit="cover" quality={80} class="w-full h-full object-cover" />
+        <% else %>
+          <div class="w-full h-full flex items-center justify-center">
+            <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+            </svg>
+          </div>
+        <% end %>
+      </div>
+
+      <!-- Details -->
+      <div class="flex-1 min-w-0">
+        <%= if @group.categories && @group.categories != [] do %>
+          <% category = CategoryHelpers.get_preferred_category(@group.categories) %>
+          <%= if category && category.color do %>
+            <span
+              class="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium text-white mb-0.5"
+              style={"background-color: #{category.color}"}
+            >
+              <%= category.name %>
+            </span>
+          <% end %>
+        <% end %>
+
+        <h3 class="font-semibold text-sm text-gray-900 line-clamp-1">
+          <%= AggregatedEventGroup.title(@group) %>
+        </h3>
+
+        <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+          <span class="flex items-center text-green-600">
+            <Heroicons.calendar class="w-3 h-3 mr-0.5 flex-shrink-0" />
+            <%= @group.aggregation_type |> to_string() |> String.capitalize() %>
+          </span>
+          <span class="flex items-center truncate">
+            <Heroicons.building_storefront class="w-3 h-3 mr-0.5 flex-shrink-0" />
+            <span class="truncate"><%= AggregatedEventGroup.description(@group) %></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Trailing Badge -->
+      <div class="flex-shrink-0 ml-auto">
+        <span class="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-green-100 text-green-700">
+          <%= @group.event_count %> events
+        </span>
+      </div>
+    </.link>
+    """
+  end
+
+  @doc """
+  Renders a compact row for an AggregatedContainerGroup in list view (festivals, conferences, etc.).
+  """
+  attr :group, AggregatedContainerGroup, required: true
+  attr :language, :string, default: "en"
+  attr :show_city, :boolean, default: true
+
+  def aggregated_container_compact_row(assigns) do
+    ring_color = AggregatedContainerGroup.ring_color_class(assigns.group)
+    badge_color = get_container_badge_color(assigns.group.container_type)
+    text_color = get_container_text_color(assigns.group.container_type)
+    hover_color = get_container_hover_color(assigns.group.container_type)
+
+    assigns =
+      assigns
+      |> assign(:ring_color, ring_color)
+      |> assign(:badge_color, badge_color)
+      |> assign(:text_color, text_color)
+      |> assign(:hover_color, hover_color)
+
+    ~H"""
+    <.link navigate={AggregatedContainerGroup.path(@group)} class={"flex items-center gap-3 py-3 px-2 #{@hover_color} transition-colors"}>
+      <!-- Thumbnail -->
+      <div class={"w-[60px] h-[60px] rounded-lg overflow-hidden flex-shrink-0 bg-gray-200 ring-2 #{@ring_color}"}>
+        <%= if @group.cover_image_url do %>
+          <.cdn_img src={@group.cover_image_url} alt={@group.container_title} width={120} height={120} fit="cover" quality={80} class="w-full h-full object-cover" />
+        <% else %>
+          <div class="w-full h-full flex items-center justify-center">
+            <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+            </svg>
+          </div>
+        <% end %>
+      </div>
+
+      <!-- Details -->
+      <div class="flex-1 min-w-0">
+        <span class={"inline-block px-1.5 py-0.5 rounded text-[10px] font-medium text-white #{@badge_color} mb-0.5"}>
+          <%= AggregatedContainerGroup.type_label(@group) %>
+        </span>
+
+        <h3 class="font-semibold text-sm text-gray-900 line-clamp-1">
+          <%= AggregatedContainerGroup.title(@group) %>
+        </h3>
+
+        <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+          <span class={"flex items-center #{@text_color}"}>
+            <Heroicons.calendar class="w-3 h-3 mr-0.5 flex-shrink-0" />
+            <%= AggregatedContainerGroup.date_range_text(@group) %>
+          </span>
+          <span class="flex items-center truncate">
+            <Heroicons.building_storefront class="w-3 h-3 mr-0.5 flex-shrink-0" />
+            <span class="truncate"><%= AggregatedContainerGroup.description(@group) %></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Trailing Badge -->
+      <div class="flex-shrink-0 ml-auto">
+        <span class={"inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium #{get_container_badge_light_color(@group.container_type)}"}>
+          <%= @group.event_count %> events
+        </span>
+      </div>
+    </.link>
+    """
+  end
+
+  # =============================================================================
+  # Helper functions for event_card that work with both PublicEvent structs
+  # and plain maps (from aggregation pipeline)
+  # =============================================================================
+
   # Helper functions for container styling
   defp get_container_badge_color(:festival), do: "bg-purple-500"
   defp get_container_badge_color(:conference), do: "bg-orange-500"
@@ -465,4 +766,20 @@ defmodule EventasaurusWeb.Components.EventCards do
   defp get_container_text_color(:exhibition), do: "text-yellow-600"
   defp get_container_text_color(:tournament), do: "text-pink-600"
   defp get_container_text_color(_), do: "text-gray-600"
+
+  defp get_container_hover_color(:festival), do: "hover:bg-purple-50"
+  defp get_container_hover_color(:conference), do: "hover:bg-orange-50"
+  defp get_container_hover_color(:tour), do: "hover:bg-red-50"
+  defp get_container_hover_color(:series), do: "hover:bg-indigo-50"
+  defp get_container_hover_color(:exhibition), do: "hover:bg-yellow-50"
+  defp get_container_hover_color(:tournament), do: "hover:bg-pink-50"
+  defp get_container_hover_color(_), do: "hover:bg-gray-50"
+
+  defp get_container_badge_light_color(:festival), do: "bg-purple-100 text-purple-700"
+  defp get_container_badge_light_color(:conference), do: "bg-orange-100 text-orange-700"
+  defp get_container_badge_light_color(:tour), do: "bg-red-100 text-red-700"
+  defp get_container_badge_light_color(:series), do: "bg-indigo-100 text-indigo-700"
+  defp get_container_badge_light_color(:exhibition), do: "bg-yellow-100 text-yellow-700"
+  defp get_container_badge_light_color(:tournament), do: "bg-pink-100 text-pink-700"
+  defp get_container_badge_light_color(_), do: "bg-gray-100 text-gray-700"
 end

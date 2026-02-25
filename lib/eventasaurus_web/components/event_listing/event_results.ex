@@ -23,7 +23,11 @@ defmodule EventasaurusWeb.Components.EventListing.EventResults do
       event_card: 1,
       aggregated_movie_card: 1,
       aggregated_container_card: 1,
-      aggregated_event_card: 1
+      aggregated_event_card: 1,
+      event_compact_row: 1,
+      aggregated_movie_compact_row: 1,
+      aggregated_container_compact_row: 1,
+      aggregated_event_compact_row: 1
     ]
 
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
@@ -88,7 +92,7 @@ defmodule EventasaurusWeb.Components.EventListing.EventResults do
   end
 
   @doc """
-  Renders events in a vertical list layout.
+  Renders events in a compact list layout with dividers.
   """
   attr :events, :list, required: true
   attr :language, :string, default: "en"
@@ -96,15 +100,15 @@ defmodule EventasaurusWeb.Components.EventListing.EventResults do
 
   def event_list(assigns) do
     ~H"""
-    <div class="space-y-4">
+    <div class="divide-y divide-gray-100">
       <%= for item <- @events do %>
-        <.render_event_item item={item} language={@language} show_city={@show_city} />
+        <.render_compact_item item={item} language={@language} show_city={@show_city} />
       <% end %>
     </div>
     """
   end
 
-  # Private component to render individual event items based on type
+  # Private component to render individual event items based on type (grid view)
   attr :item, :any, required: true
   attr :language, :string, default: "en"
   attr :show_city, :boolean, default: false
@@ -120,6 +124,26 @@ defmodule EventasaurusWeb.Components.EventListing.EventResults do
         <.aggregated_event_card group={@item} language={@language} show_city={@show_city} />
       <% true -> %>
         <.event_card event={@item} language={@language} show_city={@show_city} />
+    <% end %>
+    """
+  end
+
+  # Private component to render compact row items based on type (list view)
+  attr :item, :any, required: true
+  attr :language, :string, default: "en"
+  attr :show_city, :boolean, default: false
+
+  defp render_compact_item(assigns) do
+    ~H"""
+    <%= cond do %>
+      <% match?(%AggregatedMovieGroup{}, @item) -> %>
+        <.aggregated_movie_compact_row group={@item} language={@language} show_city={@show_city} />
+      <% match?(%AggregatedContainerGroup{}, @item) -> %>
+        <.aggregated_container_compact_row group={@item} language={@language} show_city={@show_city} />
+      <% match?(%AggregatedEventGroup{}, @item) -> %>
+        <.aggregated_event_compact_row group={@item} language={@language} show_city={@show_city} />
+      <% true -> %>
+        <.event_compact_row event={@item} language={@language} show_city={@show_city} />
     <% end %>
     """
   end

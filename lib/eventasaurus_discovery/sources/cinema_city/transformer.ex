@@ -54,7 +54,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
           description: build_description(raw_event),
 
           # Source URL - prefer showtime-specific booking link, fall back to cinema website
-          source_url: fetch(raw_event, :booking_url) || fetch(cinema_data, :website),
+          source_url: non_blank(fetch(raw_event, :booking_url)) || fetch(cinema_data, :website),
 
           # Movie images from TMDB
           image_url: fetch(raw_event, :poster_url) || fetch(raw_event, :backdrop_url),
@@ -275,6 +275,16 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
   defp validate_api_city(_api_city, known_country) do
     {nil, known_country}
   end
+
+  # Returns the string if non-nil and non-blank (after trimming), otherwise nil
+  defp non_blank(nil), do: nil
+  defp non_blank(str) when is_binary(str) do
+    case String.trim(str) do
+      "" -> nil
+      _ -> str
+    end
+  end
+  defp non_blank(_), do: nil
 
   # Helper to get value from map with both atom and string keys
   # Handles Oban's JSON serialization which converts atoms to strings
