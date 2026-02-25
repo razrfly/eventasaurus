@@ -149,19 +149,25 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
           :skip
 
         timezone ->
-          corrected_dates = correct_all_dates(event, timezone)
+          {corrected_dates, entry_failures} = correct_all_dates(event, timezone)
 
           if dry_run do
             {:ok, :dry_run}
           else
-            updated_occurrences = Map.put(event.occurrences, "dates", corrected_dates)
+            total_entries = length(event.occurrences["dates"])
 
-            event
-            |> Ecto.Changeset.change(occurrences: updated_occurrences)
-            |> Repo.update()
-            |> case do
-              {:ok, _} -> {:ok, event_id}
-              {:error, reason} -> {:error, reason}
+            if entry_failures == total_entries do
+              {:error, :unparseable_occurrence_entries}
+            else
+              updated_occurrences = Map.put(event.occurrences, "dates", corrected_dates)
+
+              event
+              |> Ecto.Changeset.change(occurrences: updated_occurrences)
+              |> Repo.update()
+              |> case do
+                {:ok, _} -> {:ok, event_id}
+                {:error, reason} -> {:error, reason}
+              end
             end
           end
       end
@@ -172,30 +178,36 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
   # For multi-occurrence events, we reconstruct each entry's local time
   # by finding the matching starts_at (from the date entry's external_id)
   # or by returning the entry unchanged when reconstruction fails.
+  # Returns {corrected_dates, failed_count} so callers can detect unparseable entries.
   defp correct_all_dates(event, timezone) do
-    Enum.map(event.occurrences["dates"], fn date_entry ->
-      # Try to reconstruct the UTC datetime for this specific entry
-      case reconstruct_utc_for_entry(date_entry) do
-        {:ok, utc_dt} ->
-          case DateTime.shift_zone(utc_dt, timezone) do
-            {:ok, local_dt} ->
-              local_date = local_dt |> DateTime.to_date() |> Date.to_string()
+    {entries, failed_count} =
+      Enum.map_reduce(event.occurrences["dates"], 0, fn date_entry, fails ->
+        case reconstruct_utc_for_entry(date_entry) do
+          {:ok, utc_dt} ->
+            case DateTime.shift_zone(utc_dt, timezone) do
+              {:ok, local_dt} ->
+                local_date = local_dt |> DateTime.to_date() |> Date.to_string()
 
-              local_time =
-                local_dt |> DateTime.to_time() |> Time.to_string() |> String.slice(0..4)
+                local_time =
+                  local_dt |> DateTime.to_time() |> Time.to_string() |> String.slice(0..4)
 
-              date_entry
-              |> Map.put("date", local_date)
-              |> Map.put("time", local_time)
+                corrected =
+                  date_entry
+                  |> Map.put("date", local_date)
+                  |> Map.put("time", local_time)
 
-            {:error, _} ->
-              date_entry
-          end
+                {corrected, fails}
 
-        :error ->
-          date_entry
-      end
-    end)
+              {:error, _} ->
+                {date_entry, fails + 1}
+            end
+
+          :error ->
+            {date_entry, fails + 1}
+        end
+      end)
+
+    {entries, failed_count}
   end
 
   # Reconstruct the UTC datetime for a specific date entry.
@@ -370,7 +382,11 @@ defmodule EventasaurusDiscovery.Monitoring.TimeConsistency do
     end
   end
 
-  defp normalize_slug(slug) do
+  defp normalize_slug(slug) when is_atom(slug) do
+    slug |> Atom.to_string() |> String.replace("_", "-")
+  end
+
+  defp normalize_slug(slug) when is_binary(slug) do
     String.replace(slug, "_", "-")
   end
 

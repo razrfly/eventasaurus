@@ -150,15 +150,15 @@ defmodule Mix.Tasks.Audit.TimeConsistency do
     IO.puts("")
 
     cond do
-      total_fixed > 0 ->
+      total_failed > 0 and total_fixed > 0 ->
         IO.puts(
-          IO.ANSI.green() <>
-            "Fixed #{total_fixed} events" <>
-            if(total_failed > 0,
-              do: " (#{total_failed} failed)",
-              else: ""
-            ) <> IO.ANSI.reset()
+          IO.ANSI.yellow() <>
+            "Fixed #{total_fixed} events, but #{total_failed} failed" <>
+            IO.ANSI.reset()
         )
+
+        IO.puts("")
+        System.halt(1)
 
       total_failed > 0 ->
         IO.puts(
@@ -169,6 +169,13 @@ defmodule Mix.Tasks.Audit.TimeConsistency do
 
         IO.puts("")
         System.halt(1)
+
+      total_fixed > 0 ->
+        IO.puts(
+          IO.ANSI.green() <>
+            "Fixed #{total_fixed} events" <>
+            IO.ANSI.reset()
+        )
 
       true ->
         IO.puts("No mismatches to fix")
