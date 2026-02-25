@@ -92,13 +92,16 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
 
     report =
       Enum.map(cities, fn city ->
+        cache_count = get_cache_count(city.slug)
+        direct_count = get_direct_count(city.slug)
+
         %{
           city_slug: city.slug,
           city_name: city.name,
-          cache_count: get_cache_count(city.slug),
+          cache_count: cache_count,
           mv_count: get_mv_count(city.slug),
-          direct_count: get_direct_count(city.slug),
-          status: determine_health_status(city.slug)
+          direct_count: direct_count,
+          status: determine_health_status(cache_count, direct_count)
         }
       end)
 
@@ -154,18 +157,15 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
     end
   end
 
-  # Determine health status based on counts
-  defp determine_health_status(city_slug) do
-    cache = get_cache_count(city_slug)
-    direct = get_direct_count(city_slug)
-
+  # Determine health status based on precomputed counts
+  defp determine_health_status(cache_count, direct_count) do
     cond do
-      is_nil(cache) and is_nil(direct) -> :critical
-      is_nil(direct) -> :direct_failed
-      is_nil(cache) -> :warning
-      cache == 0 and direct == 0 -> :empty
-      cache == 0 and direct > 0 -> :cache_miss
-      abs(cache - direct) > 10 -> :mismatch
+      is_nil(cache_count) and is_nil(direct_count) -> :critical
+      is_nil(direct_count) -> :direct_failed
+      is_nil(cache_count) -> :warning
+      cache_count == 0 and direct_count == 0 -> :empty
+      cache_count == 0 and direct_count > 0 -> :cache_miss
+      abs(cache_count - direct_count) > 10 -> :mismatch
       true -> :healthy
     end
   end
@@ -314,12 +314,18 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
             </table>
           </div>
 
-          <div class="mt-4 text-sm text-gray-600">
+          <div class="mt-4 text-sm text-gray-600 space-y-1">
             <strong>Legend:</strong>
-            <span class="ml-2 px-2 py-0.5 bg-green-100 text-green-800 rounded">Healthy</span> = All sources match
-            <span class="ml-2 px-2 py-0.5 bg-orange-100 text-orange-800 rounded">Cache Miss</span> = Cache empty but MV has data
-            <span class="ml-2 px-2 py-0.5 bg-purple-100 text-purple-800 rounded">Mismatch</span> = Counts differ by >10
-            <span class="ml-2 px-2 py-0.5 bg-red-100 text-red-800 rounded">Critical</span> = Both cache and MV empty
+            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+              <span><span class="px-2 py-0.5 bg-green-100 text-green-800 rounded">Healthy</span> = Cache and direct query counts match</span>
+              <span><span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded">Warning</span> = Cache empty, direct query unavailable</span>
+              <span><span class="px-2 py-0.5 bg-orange-100 text-orange-800 rounded">Cache Miss</span> = Cache empty but direct query has data</span>
+              <span><span class="px-2 py-0.5 bg-purple-100 text-purple-800 rounded">Mismatch</span> = Cache and direct query counts differ by &gt;10</span>
+              <span><span class="px-2 py-0.5 bg-red-100 text-red-800 rounded">Direct Failed</span> = Direct query failed (cache still available)</span>
+              <span><span class="px-2 py-0.5 bg-red-100 text-red-800 rounded">Critical</span> = Both cache and direct query unavailable</span>
+              <span><span class="px-2 py-0.5 bg-gray-100 text-gray-800 rounded">Empty</span> = No events in cache or direct query</span>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">MV column is diagnostic only and does not affect status.</p>
           </div>
         <% else %>
           <div class="text-center py-8 text-gray-500">

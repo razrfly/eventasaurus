@@ -433,10 +433,10 @@ defmodule EventasaurusWeb.CityLive.Index do
     {:noreply, update(socket, :show_filters, &(!&1))}
   end
 
-  # Toggle debug comparison panel (only when caching is enabled)
+  # Toggle debug comparison panel (only when debug and caching are enabled)
   @impl true
   def handle_event("toggle_debug", _params, socket) do
-    if caching_enabled?() do
+    if debug_enabled?() do
       if socket.assigns.debug_mode do
         # Turning off — just hide the panel
         {:noreply, assign(socket, :debug_mode, false)}
@@ -1256,8 +1256,8 @@ defmodule EventasaurusWeb.CityLive.Index do
     page = parse_integer(params["page"]) || 1
     radius_km = parse_integer(params["radius"]) || socket.assigns.radius_km
 
-    # Debug mode: ?debug=true enables data source comparison (when caching is on)
-    debug_mode = caching_enabled?() and parse_boolean(params["debug"])
+    # Debug mode: ?debug=true enables data source comparison (when debug and caching are on)
+    debug_mode = debug_enabled?() and parse_boolean(params["debug"])
 
     if debug_mode do
       Logger.info("[DEBUG_MODE] Enabled for city page - will fetch comparison data")
