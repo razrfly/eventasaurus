@@ -644,6 +644,35 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     # Note: metadata is now stored only in public_event_sources, not in public_events
 
+    # Correct occurrence time for this event's matching date entry
+    # Re-scraped data carries :venue_timezone — use it to store correct local time
+    updates =
+      if data.start_at && event.occurrences && event.occurrences["dates"] do
+        timezone = extract_timezone(data) || "Etc/UTC"
+        corrected_time = format_time_only(data.start_at, data)
+        corrected_date = format_date_only(data.start_at, timezone)
+
+        updated_dates =
+          Enum.map(event.occurrences["dates"], fn date_entry ->
+            if date_entry["external_id"] == data.external_id do
+              date_entry
+              |> Map.put("date", corrected_date)
+              |> Map.put("time", corrected_time)
+            else
+              date_entry
+            end
+          end)
+
+        if updated_dates != event.occurrences["dates"] do
+          updated_occurrences = Map.put(event.occurrences, "dates", updated_dates)
+          [{:occurrences, updated_occurrences} | updates]
+        else
+          updates
+        end
+      else
+        updates
+      end
+
     # Apply field updates if any
     event_result =
       if Enum.any?(updates) do
