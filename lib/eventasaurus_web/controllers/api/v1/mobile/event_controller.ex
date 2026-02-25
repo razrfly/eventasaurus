@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
+  alias EventasaurusWeb.Cache.CityEventsFallback
   alias EventasaurusApp.{Events, Repo}
   alias EventasaurusApp.Events.EventParticipant
   alias EventasaurusWeb.Live.Helpers.EventFilters
@@ -70,7 +71,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         else
           radius_km =
             case parse_float(params["radius"], "radius") do
-              {:ok, meters} -> meters / 1000 |> max(0) |> min(@max_radius_km)
+              {:ok, meters} -> (meters / 1000) |> max(0) |> min(@max_radius_km)
               _ -> @default_radius_km
             end
 
@@ -89,50 +90,77 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         |> maybe_add_date_range(params)
         |> maybe_add_sort(params)
 
-      # Fetch up to 500 events, aggregate, then paginate in-memory
-      # (matches the web pipeline — without this, DB pagination fetches only
-      # 20 events, leaving almost nothing to aggregate).
-      opts_for_aggregation =
-        opts
-        |> Keyword.put(:aggregate, true)
-        |> Keyword.put(:ignore_city_in_aggregation, true)
-        |> Map.new()
-        |> EventFilters.enrich_with_all_events_filters()
+      # Try MV fallback first (sub-5ms) when city_id is available and no complex filters
+      # MV doesn't support category/search filtering, only unfiltered + date range
+      has_complex_filters =
+        Keyword.has_key?(opts, :categories) or Keyword.has_key?(opts, :search)
 
-      {items, total_count, all_count} =
-        PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
+      case maybe_serve_from_mv(city_id, page, per_page, has_complex_filters) do
+        {:ok, {items, total_count, all_count, mv_date_counts}} ->
+          query_ms = System.monotonic_time(:millisecond) - query_start
 
-      query_ms = System.monotonic_time(:millisecond) - query_start
+          :telemetry.execute(
+            [:eventasaurus, :mobile_api, :nearby],
+            %{duration_ms: query_ms, event_count: total_count},
+            %{path: :mv_fallback, city_id: city_id}
+          )
 
-      :telemetry.execute(
-        [:eventasaurus, :mobile_api, :nearby],
-        %{duration_ms: query_ms, event_count: total_count},
-        %{path: if(city_id, do: :city_id, else: :lat_lng), city_id: city_id}
-      )
+          json(conn, %{
+            events: Enum.map(items, &serialize_item/1),
+            meta: %{
+              page: page,
+              per_page: per_page,
+              total_count: total_count,
+              all_events_count: all_count,
+              date_range_counts: mv_date_counts
+            }
+          })
 
-      if query_ms > 200 do
-        Logger.warning("Slow mobile nearby query",
-          path: if(city_id, do: "city_id", else: "lat_lng"),
-          city_id: city_id,
-          duration_ms: query_ms,
-          event_count: total_count
-        )
+        :miss ->
+          # Live query path: full aggregation (movies + source groups + containers)
+          opts_for_aggregation =
+            opts
+            |> Keyword.put(:aggregate, true)
+            |> Keyword.put(:ignore_city_in_aggregation, true)
+            |> Map.new()
+            |> EventFilters.enrich_with_all_events_filters()
+
+          {items, total_count, all_count} =
+            PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
+
+          query_ms = System.monotonic_time(:millisecond) - query_start
+
+          :telemetry.execute(
+            [:eventasaurus, :mobile_api, :nearby],
+            %{duration_ms: query_ms, event_count: total_count},
+            %{path: if(city_id, do: :city_id, else: :lat_lng), city_id: city_id}
+          )
+
+          if query_ms > 200 do
+            Logger.warning("Slow mobile nearby query",
+              path: if(city_id, do: "city_id", else: "lat_lng"),
+              city_id: city_id,
+              duration_ms: query_ms,
+              event_count: total_count
+            )
+          end
+
+          # Compute date range counts for filter chips (efficient SQL COUNTs)
+          # Thread the same radius used by the main query for consistency
+          date_range_counts =
+            compute_date_range_counts(city_id, lat, lng, params, opts[:radius_km])
+
+          json(conn, %{
+            events: Enum.map(items, &serialize_item/1),
+            meta: %{
+              page: page,
+              per_page: per_page,
+              total_count: total_count,
+              all_events_count: all_count,
+              date_range_counts: date_range_counts
+            }
+          })
       end
-
-      # Compute date range counts for filter chips (efficient SQL COUNTs)
-      # Thread the same radius used by the main query for consistency
-      date_range_counts = compute_date_range_counts(city_id, lat, lng, params, opts[:radius_km])
-
-      json(conn, %{
-        events: Enum.map(items, &serialize_item/1),
-        meta: %{
-          page: page,
-          per_page: per_page,
-          total_count: total_count,
-          all_events_count: all_count,
-          date_range_counts: date_range_counts
-        }
-      })
     else
       {:error, field, message} ->
         conn
@@ -249,6 +277,29 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
         acc
     end)
+  end
+
+  # --- MV fallback for mobile (Issue #3686) ---
+
+  # Try serving from the materialized view when city_id is available and no complex filters
+  defp maybe_serve_from_mv(nil, _page, _per_page, _has_complex_filters), do: :miss
+  defp maybe_serve_from_mv(_city_id, _page, _per_page, true = _has_complex_filters), do: :miss
+
+  defp maybe_serve_from_mv(city_id, page, per_page, _has_complex_filters) do
+    # Look up city slug from city_id
+    case Repo.get(City, city_id) do
+      %City{slug: slug} when is_binary(slug) ->
+        case CityEventsFallback.get_events_with_counts(slug, page: page, page_size: per_page) do
+          {:ok, %{events: events} = data} when events != [] ->
+            {:ok, {events, data.total_count, data.all_events_count, data.date_counts}}
+
+          _ ->
+            :miss
+        end
+
+      _ ->
+        :miss
+    end
   end
 
   # --- Coordinate resolution ---
@@ -394,6 +445,37 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       venue_count: length(group.venue_ids || []),
       subtitle: AggregatedContainerGroup.description(group),
       container_type: to_string(group.container_type)
+    }
+  end
+
+  # Plain map from MV fallback (not a struct — has :slug key but no __struct__)
+  defp serialize_item(%{slug: slug, title: title} = event)
+       when is_map(event) and not is_struct(event) do
+    %{
+      slug: slug,
+      title: title,
+      starts_at: event[:starts_at],
+      ends_at: event[:ends_at],
+      cover_image_url: resolve_image_url(event[:cover_image_url]),
+      type: "public",
+      venue:
+        case event[:venue] do
+          %{name: _} = venue ->
+            %{
+              name: venue[:name],
+              slug: venue[:slug],
+              latitude: venue[:latitude],
+              longitude: venue[:longitude]
+            }
+
+          _ ->
+            nil
+        end,
+      categories:
+        case event[:category] do
+          %{name: name, slug: cat_slug} -> [%{name: name, slug: cat_slug}]
+          _ -> []
+        end
     }
   end
 

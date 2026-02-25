@@ -23,6 +23,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.JsonLd.CitySchema
   alias Eventasaurus.SocialCards.UrlBuilder
   alias EventasaurusWeb.Cache.CityPageCache
+  alias EventasaurusWeb.Cache.CityEventsFallback
   alias EventasaurusWeb.Telemetry.CityPageTelemetry
 
   import EventasaurusWeb.EventComponents
@@ -310,7 +311,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     send(self(), :load_filtered_events)
     {:noreply, socket}
   end
-
 
   @impl true
   def handle_params(params, _url, socket) do
@@ -899,7 +899,8 @@ defmodule EventasaurusWeb.CityLive.Index do
                     "(filtered #{result.total_count} from #{length(base_data.events)} events)"
                 )
 
-                {result.events, result.total_count, result.all_events_count, date_counts, :base_hit}
+                {result.events, result.total_count, result.all_events_count, date_counts,
+                 :base_hit}
 
               {:ok, %{events: []} = _empty_cache} ->
                 # Issue #3490: Cache hit but EMPTY - verify with live query before returning empty
@@ -911,23 +912,38 @@ defmodule EventasaurusWeb.CityLive.Index do
                 fetch_live_query(city, query_filters, date_range_count_filters)
 
               {:miss, nil} ->
-                # No base cache yet - fall back to per-filter cache
-                Logger.info(
-                  "[CityPage] BASE Cache MISS for #{city.slug} - falling back to per-filter cache"
-                )
+                # No base cache yet - try MV fallback before per-filter cache
+                case fetch_from_mv_fallback(city) do
+                  {:ok, result} ->
+                    Logger.info("[CityPage] MV Fallback HIT for #{city.slug} (base cache miss)")
 
-                fetch_from_filter_cache(
-                  city,
-                  radius_km,
-                  filters,
-                  aggregate,
-                  query_filters,
-                  date_range_count_filters
-                )
+                    result
+
+                  :miss ->
+                    Logger.info(
+                      "[CityPage] BASE Cache MISS for #{city.slug} - falling back to per-filter cache"
+                    )
+
+                    fetch_from_filter_cache(
+                      city,
+                      radius_km,
+                      filters,
+                      aggregate,
+                      query_filters,
+                      date_range_count_filters
+                    )
+                end
             end
           else
             # Categories or search active - must use per-filter cache
-            fetch_from_filter_cache(city, radius_km, filters, aggregate, query_filters, date_range_count_filters)
+            fetch_from_filter_cache(
+              city,
+              radius_km,
+              filters,
+              aggregate,
+              query_filters,
+              date_range_count_filters
+            )
           end
         else
           # Caching OFF: run live query directly (Issue #3673)
@@ -990,7 +1006,14 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   # Fetch events from per-filter cache (used for category/search filters or base cache miss)
-  defp fetch_from_filter_cache(city, radius_km, filters, aggregate, query_filters, date_range_count_filters) do
+  defp fetch_from_filter_cache(
+         city,
+         radius_km,
+         filters,
+         aggregate,
+         query_filters,
+         date_range_count_filters
+       ) do
     # Build cache options from current filters
     cache_opts = build_cache_opts(filters, aggregate)
 
@@ -1008,22 +1031,31 @@ defmodule EventasaurusWeb.CityLive.Index do
         {cached.events, cached.total_count, cached.all_events_count, date_counts, :hit}
 
       {:ok, %{events: []} = _empty_cache} ->
-        # Issue #3675: Cache hit but EMPTY - run live query instead of MV fallback
-        # Live query produces correct aggregation (movies + source groups + containers)
-        Logger.warning(
-          "[CityPage] Filter Cache STALE-EMPTY for #{city.slug} - running live query"
-        )
+        # Cache hit but EMPTY - try MV fallback, then live query
+        case fetch_from_mv_fallback(city) do
+          {:ok, result} ->
+            Logger.info("[CityPage] MV Fallback HIT for #{city.slug} (filter cache stale-empty)")
+            result
 
-        fetch_live_query(city, query_filters, date_range_count_filters)
+          :miss ->
+            Logger.warning(
+              "[CityPage] Filter Cache STALE-EMPTY for #{city.slug} - running live query"
+            )
+
+            fetch_live_query(city, query_filters, date_range_count_filters)
+        end
 
       {:miss, nil} ->
-        # Issue #3675: Cache miss - run live query instead of MV fallback
-        # Live query is slower (~200-500ms) but produces correct results
-        Logger.info(
-          "[CityPage] Filter Cache MISS for #{city.slug} - running live query"
-        )
+        # Cache miss - try MV fallback, then live query
+        case fetch_from_mv_fallback(city) do
+          {:ok, result} ->
+            Logger.info("[CityPage] MV Fallback HIT for #{city.slug} (filter cache miss)")
+            result
 
-        fetch_live_query(city, query_filters, date_range_count_filters)
+          :miss ->
+            Logger.info("[CityPage] Filter Cache MISS for #{city.slug} - running live query")
+            fetch_live_query(city, query_filters, date_range_count_filters)
+        end
     end
   end
 
@@ -1037,14 +1069,33 @@ defmodule EventasaurusWeb.CityLive.Index do
         CityPageFilters.calculate_date_range_counts(base_data)
 
       _ ->
-        # Base cache miss or empty — fall back to live query
-        CityPageCache.get_date_range_counts(
-          city_slug,
-          radius_km,
-          fn ->
-            PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
-          end
-        )
+        # Base cache miss or empty — try MV fallback, then live query
+        case CityEventsFallback.get_date_counts(city_slug) do
+          {:ok, counts} when counts != %{} ->
+            counts
+
+          _ ->
+            CityPageCache.get_date_range_counts(
+              city_slug,
+              radius_km,
+              fn ->
+                PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+              end
+            )
+        end
+    end
+  end
+
+  # MV fallback — Tier 3 in cache chain (Issue #3686)
+  # Sub-5ms guaranteed response from city_events_mv materialized view
+  # Returns {:ok, tuple} on hit, :miss on failure/empty
+  defp fetch_from_mv_fallback(city) do
+    case CityEventsFallback.get_events_with_counts(city.slug) do
+      {:ok, %{events: events} = data} when events != [] ->
+        {:ok, {events, data.total_count, data.all_events_count, data.date_counts, :mv_fallback}}
+
+      _ ->
+        :miss
     end
   end
 
@@ -1078,7 +1129,6 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp debug_enabled? do
     Application.get_env(:eventasaurus, :debug_enabled, false)
   end
-
 
   # Build cache options from filter state
   defp build_cache_opts(filters, aggregate) do
@@ -1139,7 +1189,6 @@ defmodule EventasaurusWeb.CityLive.Index do
 
     opts
   end
-
 
   defp fetch_nearby_cities(socket) do
     # No longer showing nearby cities
