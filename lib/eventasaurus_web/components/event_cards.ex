@@ -49,6 +49,11 @@ defmodule EventasaurusWeb.Components.EventCards do
   attr :language, :string, default: "en"
   attr :show_city, :boolean, default: true
 
+  def event_card(%{event: %{slug: nil}} = assigns) do
+    ~H"""
+    """
+  end
+
   def event_card(assigns) do
     ~H"""
     <.link navigate={~p"/activities/#{@event.slug}"} class="block">

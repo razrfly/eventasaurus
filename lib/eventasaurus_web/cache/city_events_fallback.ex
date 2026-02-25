@@ -277,7 +277,7 @@ defmodule EventasaurusWeb.Cache.CityEventsFallback do
   # Build base query for the materialized view
   defp base_query(city_slug) do
     from(e in "city_events_mv",
-      where: e.city_slug == ^city_slug,
+      where: e.city_slug == ^city_slug and not is_nil(e.event_slug),
       select: %{
         event_id: e.event_id,
         title: e.title,
