@@ -3,10 +3,10 @@ import Config
 # Set environment
 config :eventasaurus, :environment, :dev
 
-# Enable materialized view fallback for mobile API (same as production behavior).
-# Useful for testing the fast path in the iOS simulator.
-# Set to false (or remove) to use the live query path instead.
-config :eventasaurus, :mobile_api_fallback, true
+# Shared caching toggle for both web (Cachex) and mobile API (MV fallback).
+# false = bypass all caches, always query the DB (useful for dev/debugging).
+# true  = enable caching (matches production behavior).
+config :eventasaurus, :enable_caching, false
 
 # Configure Nx to use EXLA backend for ML operations (Issue #3213)
 # EXLA provides optimized CPU/GPU tensor operations for Bumblebee models

@@ -65,21 +65,21 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         result
       else
         # Slow path: live query (dev/test, or category/search filters active)
-        radius_km =
-          case parse_float(params["radius"], "radius") do
-            {:ok, meters} -> meters / 1000
-            _ -> @default_radius_km
-          end
-
+        # Use city_id when available (exact city boundary match);
+        # fall back to radius for pure lat/lng searches (Issue #3673)
         opts =
-          [
-            center_lat: lat,
-            center_lng: lng,
-            radius_km: radius_km,
-            page: page,
-            page_size: per_page,
-            language: params["language"] || "en"
-          ]
+          if city_id do
+            [city_id: city_id, page: page, page_size: per_page, language: params["language"] || "en"]
+          else
+            radius_km =
+              case parse_float(params["radius"], "radius") do
+                {:ok, meters} -> meters / 1000
+                _ -> @default_radius_km
+              end
+
+            [center_lat: lat, center_lng: lng, radius_km: radius_km,
+             page: page, page_size: per_page, language: params["language"] || "en"]
+          end
           |> maybe_add_browsing_city(city_id)
           |> maybe_add_categories(params)
           |> maybe_add_search(params)
@@ -100,7 +100,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
           PublicEventsEnhanced.list_events_with_aggregation_and_counts(opts_for_aggregation)
 
         # Compute date range counts for filter chips (efficient SQL COUNTs)
-        date_range_counts = compute_date_range_counts(lat, lng, radius_km, params)
+        date_range_counts = compute_date_range_counts(city_id, lat, lng, params)
 
         json(conn, %{
           events: Enum.map(items, &serialize_item/1),
@@ -173,12 +173,28 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
   @date_ranges ~w(today tomorrow this_weekend next_7_days next_30_days this_month next_month)a
 
-  defp compute_date_range_counts(lat, lng, radius_km, params) do
-    # Build base filters matching the current search/category context (but NOT date range)
+  # Use city_id when available for consistent city-boundary filtering (Issue #3673)
+  defp compute_date_range_counts(city_id, _lat, _lng, params) when is_integer(city_id) do
+    base_opts =
+      [city_id: city_id]
+      |> maybe_add_categories(params)
+      |> maybe_add_search(params)
+
+    do_compute_date_range_counts(base_opts)
+  end
+
+  defp compute_date_range_counts(_city_id, lat, lng, params) do
+    radius_km = @default_radius_km
+
     base_opts =
       [center_lat: lat, center_lng: lng, radius_km: radius_km]
       |> maybe_add_categories(params)
       |> maybe_add_search(params)
+
+    do_compute_date_range_counts(base_opts)
+  end
+
+  defp do_compute_date_range_counts(base_opts) do
 
     defaults = Map.new(@date_ranges, &{Atom.to_string(&1), 0})
 
@@ -226,11 +242,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   end
 
   defp fallback_enabled? do
-    case Application.get_env(:eventasaurus, :mobile_api_fallback) do
-      true -> true
-      false -> false
-      nil -> Application.get_env(:eventasaurus, :environment) == :prod
-    end
+    Application.get_env(:eventasaurus, :enable_caching, true)
   end
 
   defp empty_param?(nil), do: true
@@ -260,6 +272,9 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   defp serve_from_fallback(conn, city_slug, page, per_page, params) do
     case CityEventsFallback.get_events_with_counts(city_slug, page: 1, page_size: @fallback_fetch_limit) do
       {:ok, %{events: all_events, date_counts: date_counts}} ->
+        # Capture unfiltered count before date filtering (Issue #3675)
+        all_events_count = length(all_events)
+
         # Filter by date range if present
         events = maybe_filter_fallback_by_date(all_events, params)
         total_count = length(events)
@@ -277,7 +292,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
             page: page,
             per_page: per_page,
             total_count: total_count,
-            all_events_count: total_count,
+            all_events_count: all_events_count,
             date_range_counts: string_date_counts
           }
         })

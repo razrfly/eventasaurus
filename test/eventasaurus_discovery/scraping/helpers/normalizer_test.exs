@@ -136,6 +136,18 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.NormalizerTest do
       assert Normalizer.normalize_text("hello\x00world") == "helloworld"
       assert Normalizer.normalize_text("test\x01\x02\x03") == "test"
     end
+
+    test "preserves mathematical bold Unicode characters" do
+      # RA promoters use mathematical bold Unicode (U+1D5D7 etc.)
+      # These are multi-byte UTF-8 sequences that must not be corrupted
+      assert Normalizer.normalize_text("𝗗𝗔𝗥𝗜𝗔 𝗞𝗢𝗟𝗢𝗦𝗢𝗩𝗔") == "𝗗𝗔𝗥𝗜𝗔 𝗞𝗢𝗟𝗢𝗦𝗢𝗩𝗔"
+    end
+
+    test "preserves other multi-byte UTF-8 characters" do
+      assert Normalizer.normalize_text("café résumé") == "café résumé"
+      assert Normalizer.normalize_text("日本語テスト") == "日本語テスト"
+      assert Normalizer.normalize_text("Łódź Kraków") == "Łódź Kraków"
+    end
   end
 
   describe "create_slug/1" do

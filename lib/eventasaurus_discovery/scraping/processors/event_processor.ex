@@ -1115,8 +1115,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     # Then normalize the text
     normalized_name = Normalizer.normalize_text(clean_name)
 
-    # CRITICAL: Clean UTF-8 again after normalization
-    # The Normalizer's regex operations can corrupt UTF-8
+    # Defense-in-depth: ensure UTF-8 validity after normalization
+    # External data may arrive with invalid UTF-8 encoding
     normalized_name =
       if normalized_name do
         EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(normalized_name)

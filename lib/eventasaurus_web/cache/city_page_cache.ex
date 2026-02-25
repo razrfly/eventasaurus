@@ -58,6 +58,10 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   TTL: 30 minutes
   """
   def get_categories(compute_fn) when is_function(compute_fn, 0) do
+    if not enabled?(), do: compute_fn.(), else: do_get_categories(compute_fn)
+  end
+
+  defp do_get_categories(compute_fn) do
     cache_key = "categories_list"
 
     Cachex.fetch(@cache_name, cache_key, fn ->
@@ -90,6 +94,10 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   TTL: 30 minutes
   """
   def get_city_stats(city_slug, radius_km, compute_fn) when is_function(compute_fn, 0) do
+    if not enabled?(), do: compute_fn.(), else: do_get_city_stats(city_slug, radius_km, compute_fn)
+  end
+
+  defp do_get_city_stats(city_slug, radius_km, compute_fn) do
     cache_key = "city_stats:#{city_slug}:#{radius_km}"
 
     Cachex.fetch(@cache_name, cache_key, fn ->
@@ -118,6 +126,10 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   TTL: 30 minutes
   """
   def get_available_languages(city_slug, compute_fn) when is_function(compute_fn, 0) do
+    if not enabled?(), do: compute_fn.(), else: do_get_available_languages(city_slug, compute_fn)
+  end
+
+  defp do_get_available_languages(city_slug, compute_fn) do
     cache_key = "languages:#{city_slug}"
 
     Cachex.fetch(@cache_name, cache_key, fn ->
@@ -146,6 +158,12 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   TTL: 15 minutes (date counts rarely change, longer TTL reduces DB load)
   """
   def get_date_range_counts(city_slug, radius_km, compute_fn) when is_function(compute_fn, 0) do
+    if not enabled?(),
+      do: compute_fn.(),
+      else: do_get_date_range_counts(city_slug, radius_km, compute_fn)
+  end
+
+  defp do_get_date_range_counts(city_slug, radius_km, compute_fn) do
     cache_key = "date_counts:#{city_slug}:#{radius_km}"
 
     Cachex.fetch(@cache_name, cache_key, fn ->
@@ -204,6 +222,14 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
       end
   """
   def get_aggregated_events(city_slug, radius_km, opts \\ []) do
+    if not enabled?() do
+      {:miss, nil}
+    else
+      do_get_aggregated_events(city_slug, radius_km, opts)
+    end
+  end
+
+  defp do_get_aggregated_events(city_slug, radius_km, opts) do
     cache_key = CityPageCacheRefreshJob.cache_key(city_slug, radius_km, opts)
 
     case Cachex.get(@cache_name, cache_key) do
@@ -264,12 +290,16 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   Useful for determining whether to show loading state vs skeleton.
   """
   def has_cached_events?(city_slug, radius_km, opts \\ []) do
-    cache_key = CityPageCacheRefreshJob.cache_key(city_slug, radius_km, opts)
+    if not enabled?() do
+      false
+    else
+      cache_key = CityPageCacheRefreshJob.cache_key(city_slug, radius_km, opts)
 
-    case Cachex.get(@cache_name, cache_key) do
-      {:ok, nil} -> false
-      {:ok, _} -> true
-      {:error, _} -> false
+      case Cachex.get(@cache_name, cache_key) do
+        {:ok, nil} -> false
+        {:ok, _} -> true
+        {:error, _} -> false
+      end
     end
   end
 
@@ -300,6 +330,14 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
     - `{:miss, nil}` - Cache miss, background refresh enqueued (Issue #3376)
   """
   def get_base_events(city_slug, radius_km) do
+    if not enabled?() do
+      {:miss, nil}
+    else
+      do_get_base_events(city_slug, radius_km)
+    end
+  end
+
+  defp do_get_base_events(city_slug, radius_km) do
     cache_key = base_cache_key(city_slug, radius_km)
 
     case Cachex.get(@cache_name, cache_key) do
@@ -597,5 +635,11 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   """
   def clear_all do
     Cachex.clear(@cache_name)
+  end
+
+  # Shared caching toggle — checked by both web (Cachex) and mobile API (MV fallback).
+  # Defaults to true (production). Set `config :eventasaurus, :enable_caching, false` to disable.
+  defp enabled? do
+    Application.get_env(:eventasaurus, :enable_caching, true)
   end
 end

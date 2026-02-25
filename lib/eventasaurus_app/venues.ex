@@ -216,9 +216,18 @@ defmodule EventasaurusApp.Venues do
 
   @doc """
   Deletes a venue.
+
+  Returns `{:error, changeset}` if the venue still has associated events
+  (due to the RESTRICT foreign key constraint).
   """
   def delete_venue(%Venue{} = venue) do
-    Repo.delete(venue)
+    venue
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.foreign_key_constraint(:id,
+      name: "public_events_venue_id_fkey",
+      message: "cannot delete venue while events are associated with it"
+    )
+    |> Repo.delete()
   end
 
   @doc """

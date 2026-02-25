@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
 
   alias Eventasaurus.CDN
   alias EventasaurusApp.Images.MovieImages
+  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers, only: [format_local_datetime: 3]
 
   def render(assigns) do
     ~H"""
@@ -151,9 +152,8 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
       nil ->
         gettext("Date TBD")
 
-      date ->
-        # Format as "Dec 25, 2024 at 19:00" (24-hour format)
-        Calendar.strftime(date, "%b %d, %Y at %H:%M")
+      _date ->
+        format_local_datetime(event.starts_at, event.venue, :short)
     end
   end
 

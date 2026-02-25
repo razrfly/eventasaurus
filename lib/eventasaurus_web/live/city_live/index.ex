@@ -105,9 +105,10 @@ defmodule EventasaurusWeb.CityLive.Index do
            # Debug mode for comparing data sources (dev only)
            |> assign(:debug_mode, false)
            |> assign(:debug_data, nil)
-           # Cache retry state for stale-while-revalidate pattern (Issue #3347)
-           |> assign(:cache_loading, false)
-           |> assign(:cache_retry_count, 0)
+           # Cache status pill visibility (compile-time dev check, Issue #3675)
+           |> assign(:debug_enabled, @debug_enabled)
+           # Cache status for dev debug pill (Issue #3675)
+           |> assign(:cache_status, nil)
            |> assign(:total_events, 0)
            |> assign(:all_events_count, 0)
            |> assign(:categories, [])
@@ -318,29 +319,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     {:noreply, socket}
   end
 
-  # Retry cache load after Oban job has had time to complete (Issue #3347)
-  @impl true
-  def handle_info(:retry_cache_load, socket) do
-    # Guard: Skip if fetch is already in progress (prevents concurrent fetches)
-    if socket.assigns[:fetch_in_progress] do
-      {:noreply, socket}
-    else
-      Logger.debug("[CityPage] Retrying cache load for #{socket.assigns.city.slug}")
-
-      # Mark fetch as in progress before starting
-      socket = assign(socket, :fetch_in_progress, true)
-
-      # Reset loading state and retry fetch
-      socket =
-        socket
-        |> assign(:events_loading, true)
-        |> fetch_events()
-        |> assign(:events_loading, false)
-        |> assign(:fetch_in_progress, false)
-
-      {:noreply, socket}
-    end
-  end
 
   @impl true
   def handle_params(params, _url, socket) do
@@ -585,9 +563,14 @@ defmodule EventasaurusWeb.CityLive.Index do
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Header with Title and Controls -->
         <div class="flex items-center justify-between mb-6">
-          <h1 class="text-3xl font-bold text-gray-900">
-            <%= gettext("Events in %{city}", city: @city.name) %>
-          </h1>
+          <div class="flex items-center gap-3">
+            <h1 class="text-3xl font-bold text-gray-900">
+              <%= gettext("Events in %{city}", city: @city.name) %>
+            </h1>
+            <%= if @debug_enabled and @cache_status do %>
+              <.cache_status_pill status={@cache_status} />
+            <% end %>
+          </div>
           <div class="flex items-center gap-4">
             <!-- Language Switcher -->
             <.language_switcher
@@ -679,6 +662,36 @@ defmodule EventasaurusWeb.CityLive.Index do
     <div id="language-cookie-hook" phx-hook="LanguageCookie"></div>
     """
   end
+
+  # Component: Cache status pill (dev only, Issue #3675)
+  # Shows which query path served the page as a colored pill next to the city title.
+  # Only rendered when @debug_enabled is true (compile-time dev check).
+  defp cache_status_pill(assigns) do
+    ~H"""
+    <div class="flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+      <span class={"w-2 h-2 rounded-full " <> status_color(@status)}></span>
+      <%= status_label(@status) %>
+    </div>
+    """
+  end
+
+  defp status_color(:live_query), do: "bg-blue-500"
+  defp status_color(:base_hit), do: "bg-green-500"
+  defp status_color(:hit), do: "bg-green-500"
+  defp status_color(:miss), do: "bg-orange-500"
+  defp status_color(:fallback), do: "bg-purple-500"
+  defp status_color(:stale_empty), do: "bg-orange-500"
+  defp status_color(:no_coords), do: "bg-red-500"
+  defp status_color(_), do: "bg-gray-400"
+
+  defp status_label(:live_query), do: "LIVE QUERY"
+  defp status_label(:base_hit), do: "BASE HIT"
+  defp status_label(:hit), do: "HIT"
+  defp status_label(:miss), do: "MISS"
+  defp status_label(:fallback), do: "FALLBACK"
+  defp status_label(:stale_empty), do: "STALE-EMPTY"
+  defp status_label(:no_coords), do: "NO COORDS"
+  defp status_label(status), do: to_string(status) |> String.upcase()
 
   # Component: Debug Panel showing data source comparison
   # Only shown in dev when ?debug=true
@@ -861,79 +874,82 @@ defmodule EventasaurusWeb.CityLive.Index do
     language = socket.assigns.language
     aggregate = socket.assigns.aggregate
 
-    # Get city coordinates
-    lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
-    lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
-
-    radius_km = filters[:radius_km] || @default_radius_km
+    # Use city_id for exact city-boundary filtering instead of radius (Issue #3673)
+    radius_km = @default_radius_km
 
     # Get events with geographic filtering - uses cache to prevent OOM (Issue #3347)
     {geographic_events, total_count, all_events_count, date_range_counts, cache_status} =
-      if lat && lng do
-        # Build filters for "all events" count (without date restrictions)
+      if city.id do
+        # Build filters using city_id for consistent results across all paths
         query_filters =
           Map.merge(filters, %{
             language: language,
             sort_order: filters[:sort_order] || :asc,
             page_size: filters[:page_size] || 30,
             page: filters[:page] || 1,
-            center_lat: lat,
-            center_lng: lng,
-            radius_km: radius_km
+            city_id: city.id
           })
 
         count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
         date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
 
-        # Issue #3363: Use base cache for date-only filters (instant response)
-        # Fall back to per-filter cache for category/search filters
-        if CityPageFilters.can_use_base_cache?(filters) do
-          # Date-only filters can use base cache with in-memory filtering
-          case CityPageCache.get_base_events(city.slug, radius_km) do
-            {:ok, base_data} when base_data.events != [] ->
-              # Base cache hit with data - filter in-memory for instant response
-              page_opts = [page: filters[:page] || 1, page_size: filters[:page_size] || 30]
-              result = CityPageFilters.filter_base_events(base_data, filters, page_opts)
+        if caching_enabled?() do
+          # Production path: use cache chain with MV fallback
+          # Issue #3363: Use base cache for date-only filters (instant response)
+          # Fall back to per-filter cache for category/search filters
+          if CityPageFilters.can_use_base_cache?(filters) do
+            # Date-only filters can use base cache with in-memory filtering
+            case CityPageCache.get_base_events(city.slug, radius_km) do
+              {:ok, base_data} when base_data.events != [] ->
+                # Base cache hit with data - filter in-memory for instant response
+                page_opts = [page: filters[:page] || 1, page_size: filters[:page_size] || 30]
+                result = CityPageFilters.filter_base_events(base_data, filters, page_opts)
 
-              # Calculate date counts from base cache (more efficient, same data source)
-              date_counts = CityPageFilters.calculate_date_range_counts(base_data)
+                # Calculate date counts from base cache (more efficient, same data source)
+                date_counts = CityPageFilters.calculate_date_range_counts(base_data)
 
-              Logger.info(
-                "[CityPage] BASE Cache HIT for #{city.slug} " <>
-                  "(filtered #{result.total_count} from #{length(base_data.events)} events)"
-              )
+                Logger.info(
+                  "[CityPage] BASE Cache HIT for #{city.slug} " <>
+                    "(filtered #{result.total_count} from #{length(base_data.events)} events)"
+                )
 
-              {result.events, result.total_count, result.all_events_count, date_counts, :base_hit}
+                {result.events, result.total_count, result.all_events_count, date_counts, :base_hit}
 
-            {:ok, %{events: []} = _empty_cache} ->
-              # Issue #3490: Cache hit but EMPTY - verify against MV before returning empty
-              # This catches stale caches that were populated when no events existed
-              Logger.warning(
-                "[CityPage] BASE Cache STALE-EMPTY for #{city.slug} - verifying against MV fallback"
-              )
+              {:ok, %{events: []} = _empty_cache} ->
+                # Issue #3490: Cache hit but EMPTY - verify with live query before returning empty
+                # This catches stale caches that were populated when no events existed
+                Logger.warning(
+                  "[CityPage] BASE Cache STALE-EMPTY for #{city.slug} - running live query"
+                )
 
-              fetch_from_fallback(city, filters)
+                fetch_live_query(city, query_filters, date_range_count_filters)
 
-            {:miss, nil} ->
-              # No base cache yet - fall back to per-filter cache
-              Logger.info(
-                "[CityPage] BASE Cache MISS for #{city.slug} - falling back to per-filter cache"
-              )
+              {:miss, nil} ->
+                # No base cache yet - fall back to per-filter cache
+                Logger.info(
+                  "[CityPage] BASE Cache MISS for #{city.slug} - falling back to per-filter cache"
+                )
 
-              fetch_from_filter_cache(
-                city,
-                radius_km,
-                filters,
-                aggregate,
-                date_range_count_filters
-              )
+                fetch_from_filter_cache(
+                  city,
+                  radius_km,
+                  filters,
+                  aggregate,
+                  query_filters,
+                  date_range_count_filters
+                )
+            end
+          else
+            # Categories or search active - must use per-filter cache
+            fetch_from_filter_cache(city, radius_km, filters, aggregate, query_filters, date_range_count_filters)
           end
         else
-          # Categories or search active - must use per-filter cache
-          fetch_from_filter_cache(city, radius_km, filters, aggregate, date_range_count_filters)
+          # Caching OFF: run live query directly (Issue #3673)
+          # Uses the same code path as the mobile slow path for consistent counts
+          fetch_live_query(city, query_filters, date_range_count_filters)
         end
       else
-        # No coordinates, fallback to empty list
+        # No city, fallback to empty list
         {[], 0, 0, %{}, :no_coords}
       end
 
@@ -981,21 +997,14 @@ defmodule EventasaurusWeb.CityLive.Index do
       |> assign(:total_events, total_entries)
       |> assign(:all_events_count, all_events_count)
       |> assign(:date_range_counts, date_range_counts)
+      |> assign(:cache_status, cache_status)
       |> assign(:loading, false)
 
-    # If cache miss with empty events, show loading skeleton while we wait
-    # Issue #3373: This prevents showing "No Events Found" briefly before retry
-    if cache_status == :miss and geographic_events == [] do
-      socket
-      |> assign(:events_loading, true)
-      |> schedule_cache_retry()
-    else
-      socket
-    end
+    socket
   end
 
   # Fetch events from per-filter cache (used for category/search filters or base cache miss)
-  defp fetch_from_filter_cache(city, radius_km, filters, aggregate, date_range_count_filters) do
+  defp fetch_from_filter_cache(city, radius_km, filters, aggregate, query_filters, date_range_count_filters) do
     # Build cache options from current filters
     cache_opts = build_cache_opts(filters, aggregate)
 
@@ -1013,48 +1022,22 @@ defmodule EventasaurusWeb.CityLive.Index do
         {cached.events, cached.total_count, cached.all_events_count, date_counts, :hit}
 
       {:ok, %{events: []} = _empty_cache} ->
-        # Issue #3490: Cache hit but EMPTY - verify against MV for date-only filters
-        if CityPageFilters.can_use_base_cache?(filters) do
-          Logger.warning(
-            "[CityPage] Filter Cache STALE-EMPTY for #{city.slug} - verifying against MV fallback"
-          )
+        # Issue #3675: Cache hit but EMPTY - run live query instead of MV fallback
+        # Live query produces correct aggregation (movies + source groups + containers)
+        Logger.warning(
+          "[CityPage] Filter Cache STALE-EMPTY for #{city.slug} - running live query"
+        )
 
-          fetch_from_fallback(city, filters)
-        else
-          # Category/search filters can't use MV fallback - return empty with warning
-          Logger.warning(
-            "[CityPage] Filter Cache STALE-EMPTY for #{city.slug} with category/search filters - returning empty"
-          )
-
-          date_counts =
-            get_date_counts_consistently(city.slug, radius_km, date_range_count_filters)
-
-          {[], 0, 0, date_counts, :stale_empty}
-        end
+        fetch_live_query(city, query_filters, date_range_count_filters)
 
       {:miss, nil} ->
-        # Issue #3373: Use materialized view fallback instead of showing empty results
-        # The fallback only supports date-only filters (no category/search)
-        # For category/search filters, we must wait for cache to populate
-        if CityPageFilters.can_use_base_cache?(filters) do
-          # Date-only filters - use materialized view fallback
-          Logger.info(
-            "[CityPage] Filter Cache MISS for #{city.slug} - using materialized view fallback"
-          )
+        # Issue #3675: Cache miss - run live query instead of MV fallback
+        # Live query is slower (~200-500ms) but produces correct results
+        Logger.info(
+          "[CityPage] Filter Cache MISS for #{city.slug} - running live query"
+        )
 
-          fetch_from_fallback(city, filters)
-        else
-          # Category/search filters - can't use fallback, wait for cache
-          Logger.info(
-            "[CityPage] Filter Cache MISS for #{city.slug} - job enqueued, will retry (has category/search filters)"
-          )
-
-          # Issue #3373: Use base cache for date counts to ensure consistency
-          date_counts =
-            get_date_counts_consistently(city.slug, radius_km, date_range_count_filters)
-
-          {[], 0, 0, date_counts, :miss}
-        end
+        fetch_live_query(city, query_filters, date_range_count_filters)
     end
   end
 
@@ -1096,40 +1079,33 @@ defmodule EventasaurusWeb.CityLive.Index do
     end
   end
 
-  # Fetch events from materialized view fallback (Issue #3373)
-  # Used when cache misses occur for date-only filters
-  #
-  # This provides IMMEDIATE event display from the materialized view while
-  # the background cache refresh job runs. The MV data may be slightly
-  # imperfect (missing cover images, no aggregation) but showing real events
-  # is FAR better than showing "No events found" (Issue #3378).
-  defp fetch_from_fallback(city, filters) do
-    # Get all events from fallback, then filter in-memory for date range
-    # This matches how base cache works
-    case CityEventsFallback.get_all_events(city.slug) do
-      {:ok, fallback_data} ->
-        # Apply date filter in-memory (same as base cache path)
-        page_opts = [page: filters[:page] || 1, page_size: filters[:page_size] || 30]
-        result = CityPageFilters.filter_base_events(fallback_data, filters, page_opts)
+  # Direct live query path — used when caching is OFF (Issue #3673)
+  # Runs the same aggregation pipeline as the mobile slow path for consistent counts
+  defp fetch_live_query(city, query_filters, date_range_count_filters) do
+    live_opts =
+      query_filters
+      |> Map.put(:aggregate, true)
+      |> Map.put(:ignore_city_in_aggregation, true)
+      |> Map.put(:viewing_city, city)
+      |> EventFilters.enrich_with_all_events_filters()
 
-        # Calculate date counts from the full list (same data source)
-        date_counts = CityPageFilters.calculate_date_range_counts(fallback_data)
+    {events, total_count, all_events_count} =
+      PublicEventsEnhanced.list_events_with_aggregation_and_counts(live_opts)
 
-        Logger.info(
-          "[CityPage] Fallback SUCCESS for #{city.slug} " <>
-            "(filtered #{result.total_count} from #{fallback_data.all_events_count} events in #{fallback_data.duration_ms}ms)"
-        )
+    date_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
 
-        {result.events, result.total_count, fallback_data.all_events_count, date_counts,
-         :fallback}
+    Logger.info(
+      "[CityPage] LIVE QUERY for #{city.slug} " <>
+        "(events: #{length(events)}, total: #{total_count}, all: #{all_events_count})"
+    )
 
-      {:error, reason} ->
-        # Fallback failed - log error and return empty
-        # This should be rare since materialized view is always available
-        Logger.error("[CityPage] Fallback FAILED for #{city.slug}: #{reason}")
-        {[], 0, 0, %{}, :miss}
-    end
+    {events, total_count, all_events_count, date_counts, :live_query}
   end
+
+  defp caching_enabled? do
+    Application.get_env(:eventasaurus, :enable_caching, true)
+  end
+
 
   # Build cache options from filter state
   defp build_cache_opts(filters, aggregate) do
@@ -1191,34 +1167,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     opts
   end
 
-  # Schedule a retry to check cache after Oban job completes
-  # Uses exponential backoff: 3s, 6s, 12s (max 3 retries)
-  defp schedule_cache_retry(socket) do
-    retry_count = socket.assigns[:cache_retry_count] || 0
-
-    if retry_count < 3 do
-      # Exponential backoff: 3s, 6s, 12s
-      delay_ms = (3000 * :math.pow(2, retry_count)) |> round()
-
-      Logger.debug(
-        "[CityPage] Scheduling cache retry #{retry_count + 1}/3 in #{delay_ms}ms for #{socket.assigns.city.slug}"
-      )
-
-      Process.send_after(self(), :retry_cache_load, delay_ms)
-
-      socket
-      |> assign(:cache_retry_count, retry_count + 1)
-      |> assign(:cache_loading, true)
-    else
-      Logger.warning(
-        "[CityPage] Max cache retries reached for #{socket.assigns.city.slug} - showing empty state"
-      )
-
-      socket
-      |> assign(:cache_retry_count, 0)
-      |> assign(:cache_loading, false)
-    end
-  end
 
   defp fetch_nearby_cities(socket) do
     # No longer showing nearby cities

@@ -1701,9 +1701,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       paginated_events = paginate_aggregated_results(sorted, page, page_size)
 
       # Calculate "all events" count (without date filters)
-      # P0 Optimization: Use efficient SQL COUNT instead of fetching all events
-      # The count is approximate (doesn't account for aggregation grouping) but
-      # provides a reasonable estimate at ~95% lower cost than fetching all events.
+      # Uses fetch + aggregate for accurate post-aggregation count.
+      # The raw SQL COUNT was ~15 events higher because it counted individual
+      # movie screenings that get collapsed into a single AggregatedMovieGroup.
       all_events_count =
         case opts[:all_events_filters] do
           nil ->
@@ -1711,14 +1711,12 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
             total_count
 
           all_filters when is_map(all_filters) ->
-            # Use efficient SQL COUNT instead of fetching all events
-            # This gives raw event count (not aggregated), but is much faster
+            # Fetch events without date filter and aggregate for accurate count.
             # CRITICAL: Propagate :repo from parent opts (Issue #3352)
-            # all_filters doesn't include :repo, so we must add it from parent opts
-            # to ensure count_events uses SessionRepo instead of PgBouncer
-            count_opts =
+            all_opts =
               all_filters
               |> Map.drop([:page, :offset, :limit, :page_size, :all_events_filters])
+              |> Map.put(:page_size, @max_limit)
               |> then(fn opts_map ->
                 case opts[:repo] do
                   nil -> opts_map
@@ -1732,13 +1730,15 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
                 end
               end)
 
-            # TELEMETRY: Measure count_events query time
+            # TELEMETRY: Measure fetch + aggregate for all events count
             {count_ms, count} =
               CityPageTelemetry.measure_query(:count_all_events, telemetry_meta, fn ->
-                count_events(count_opts)
+                all_events = list_events(all_opts)
+                all_aggregated = aggregate_events(all_events, opts)
+                length(all_aggregated)
               end)
 
-            CityPageTelemetry.log_if_slow("count_events (all)", count_ms, telemetry_meta)
+            CityPageTelemetry.log_if_slow("count_all_events (aggregated)", count_ms, telemetry_meta)
             count
         end
 

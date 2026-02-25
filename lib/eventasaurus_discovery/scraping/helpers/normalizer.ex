@@ -12,7 +12,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.Normalizer do
     text
     |> String.trim()
     |> String.replace(~r/\s+/, " ")
-    |> String.replace(~r/[[:cntrl:]]/, "")
+    |> String.replace(~r/[\x00-\x1f\x7f]/, "")
   end
 
   def normalize_text(_), do: nil

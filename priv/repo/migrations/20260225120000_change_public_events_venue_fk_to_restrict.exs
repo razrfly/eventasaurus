@@ -62,10 +62,37 @@ defmodule EventasaurusApp.Repo.Migrations.ChangePublicEventsVenueFkToRestrict do
       WHEN (NEW.venue_id IS NULL)
       EXECUTE FUNCTION prevent_public_event_venue_null();
     """
+
+    # 4. Guard on public_event_sources: prevent linking a source to an event
+    #    whose venue_id is NULL. This closes the gap where a new source record
+    #    could reference an event that has no venue.
+    execute """
+    CREATE OR REPLACE FUNCTION prevent_public_event_source_link_to_event_without_venue()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM public_events WHERE id = NEW.event_id AND venue_id IS NOT NULL
+      ) THEN
+        RAISE EXCEPTION 'Cannot link source to public_event without a venue. Event ID: %', NEW.event_id
+          USING HINT = 'The referenced public_event must have a non-NULL venue_id before adding sources.';
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+    """
+
+    execute """
+    CREATE TRIGGER enforce_venue_on_public_event_sources
+      BEFORE INSERT OR UPDATE ON public_event_sources
+      FOR EACH ROW
+      EXECUTE FUNCTION prevent_public_event_source_link_to_event_without_venue();
+    """
   end
 
   def down do
-    # Drop trigger and function
+    # Drop triggers and functions
+    execute "DROP TRIGGER IF EXISTS enforce_venue_on_public_event_sources ON public_event_sources"
+    execute "DROP FUNCTION IF EXISTS prevent_public_event_source_link_to_event_without_venue()"
     execute "DROP TRIGGER IF EXISTS enforce_venue_on_public_events ON public_events"
     execute "DROP FUNCTION IF EXISTS prevent_public_event_venue_null()"
 
