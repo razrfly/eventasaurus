@@ -279,9 +279,11 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
   # Returns the string if non-nil and non-blank (after trimming), otherwise nil
   defp non_blank(nil), do: nil
   defp non_blank(str) when is_binary(str) do
-    case String.trim(str) do
+    trimmed = String.trim(str)
+
+    case trimmed do
       "" -> nil
-      _ -> str
+      _ -> trimmed
     end
   end
   defp non_blank(_), do: nil

@@ -458,6 +458,7 @@ defmodule EventasaurusWeb.Components.EventCards do
 
   Layout: 60px thumbnail | details (category, title, date/venue) | trailing badge
   """
+  @spec event_compact_row(map()) :: Phoenix.LiveView.Rendered.t()
   attr :event, :map, required: true
   attr :language, :string, default: "en"
   attr :show_city, :boolean, default: true
@@ -527,6 +528,13 @@ defmodule EventasaurusWeb.Components.EventCards do
               <span class="truncate"><%= @event.venue.name %></span>
             </span>
           <% end %>
+          <% city = if @event.venue, do: Map.get(@event.venue, :city) %>
+          <%= if @show_city && city && not match?(%Ecto.Association.NotLoaded{}, city) do %>
+            <span class="flex items-center truncate">
+              <Heroicons.building_office class="w-3 h-3 mr-0.5 flex-shrink-0" />
+              <span class="truncate"><%= city.name %></span>
+            </span>
+          <% end %>
         </div>
       </div>
 
@@ -559,6 +567,7 @@ defmodule EventasaurusWeb.Components.EventCards do
   @doc """
   Renders a compact row for an AggregatedMovieGroup in list view.
   """
+  @spec aggregated_movie_compact_row(map()) :: Phoenix.LiveView.Rendered.t()
   attr :group, AggregatedMovieGroup, required: true
   attr :language, :string, default: "en"
   attr :show_city, :boolean, default: true
@@ -601,6 +610,12 @@ defmodule EventasaurusWeb.Components.EventCards do
             <Heroicons.building_storefront class="w-3 h-3 mr-0.5 flex-shrink-0" />
             <span class="truncate"><%= AggregatedMovieGroup.description(@group) %></span>
           </span>
+          <%= if @show_city && @group.city do %>
+            <span class="flex items-center truncate">
+              <Heroicons.map_pin class="w-3 h-3 mr-0.5 flex-shrink-0" />
+              <span class="truncate"><%= @group.city.name %></span>
+            </span>
+          <% end %>
         </div>
       </div>
 
@@ -618,6 +633,7 @@ defmodule EventasaurusWeb.Components.EventCards do
   @doc """
   Renders a compact row for an AggregatedEventGroup in list view (recurring events).
   """
+  @spec aggregated_event_compact_row(map()) :: Phoenix.LiveView.Rendered.t()
   attr :group, AggregatedEventGroup, required: true
   attr :language, :string, default: "en"
   attr :show_city, :boolean, default: true
@@ -665,6 +681,12 @@ defmodule EventasaurusWeb.Components.EventCards do
             <Heroicons.building_storefront class="w-3 h-3 mr-0.5 flex-shrink-0" />
             <span class="truncate"><%= AggregatedEventGroup.description(@group) %></span>
           </span>
+          <%= if @show_city && @group.city do %>
+            <span class="flex items-center truncate">
+              <Heroicons.map_pin class="w-3 h-3 mr-0.5 flex-shrink-0" />
+              <span class="truncate"><%= @group.city.name %></span>
+            </span>
+          <% end %>
         </div>
       </div>
 
@@ -681,6 +703,7 @@ defmodule EventasaurusWeb.Components.EventCards do
   @doc """
   Renders a compact row for an AggregatedContainerGroup in list view (festivals, conferences, etc.).
   """
+  @spec aggregated_container_compact_row(map()) :: Phoenix.LiveView.Rendered.t()
   attr :group, AggregatedContainerGroup, required: true
   attr :language, :string, default: "en"
   attr :show_city, :boolean, default: true
@@ -732,6 +755,12 @@ defmodule EventasaurusWeb.Components.EventCards do
             <Heroicons.building_storefront class="w-3 h-3 mr-0.5 flex-shrink-0" />
             <span class="truncate"><%= AggregatedContainerGroup.description(@group) %></span>
           </span>
+          <%= if @show_city && @group.city do %>
+            <span class="flex items-center truncate">
+              <Heroicons.map_pin class="w-3 h-3 mr-0.5 flex-shrink-0" />
+              <span class="truncate"><%= @group.city.name %></span>
+            </span>
+          <% end %>
         </div>
       </div>
 

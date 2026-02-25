@@ -157,15 +157,15 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   # Determine health status based on counts
   defp determine_health_status(city_slug) do
     cache = get_cache_count(city_slug)
-    mv = get_mv_count(city_slug)
+    _mv = get_mv_count(city_slug)
     direct = get_direct_count(city_slug)
 
     cond do
-      is_nil(cache) and is_nil(mv) -> :critical
+      is_nil(cache) and is_nil(direct) -> :critical
       is_nil(cache) -> :warning
-      cache == 0 and mv == 0 and direct == 0 -> :empty
-      cache == 0 and (mv || 0) > 0 -> :cache_miss
-      abs((cache || 0) - (mv || 0)) > 10 -> :mismatch
+      cache == 0 and direct == 0 -> :empty
+      cache == 0 and (direct || 0) > 0 -> :cache_miss
+      abs((cache || 0) - (direct || 0)) > 10 -> :mismatch
       true -> :healthy
     end
   end

@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   require Logger
 
   @default_radius_km 50
+  @max_radius_km 200
   @default_per_page 50
   @max_per_page 100
 
@@ -69,7 +70,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         else
           radius_km =
             case parse_float(params["radius"], "radius") do
-              {:ok, meters} -> meters / 1000
+              {:ok, meters} -> meters / 1000 |> max(0) |> min(@max_radius_km)
               _ -> @default_radius_km
             end
 
