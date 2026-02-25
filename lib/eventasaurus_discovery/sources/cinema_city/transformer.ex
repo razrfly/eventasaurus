@@ -236,6 +236,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
   ## Returns
   - `{city_name, country}` tuple
   """
+  @spec resolve_location(float() | nil, float() | nil, String.t() | nil, String.t() | nil) ::
+          {String.t() | nil, String.t() | nil}
   def resolve_location(latitude, longitude, api_city, known_country) do
     case CityResolver.resolve_city(latitude, longitude) do
       {:ok, city_name} ->
@@ -279,11 +281,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
   # Returns the string if non-nil and non-blank (after trimming), otherwise nil
   defp non_blank(nil), do: nil
   defp non_blank(str) when is_binary(str) do
-    trimmed = String.trim(str)
-
-    case trimmed do
+    case String.trim(str) do
       "" -> nil
-      _ -> trimmed
+      other -> other
     end
   end
   defp non_blank(_), do: nil

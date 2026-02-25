@@ -99,7 +99,7 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:events_loading, true)
            |> assign(:debug_mode, false)
            |> assign(:debug_data, nil)
-           |> assign(:debug_enabled, caching_enabled?())
+           |> assign(:debug_enabled, debug_enabled?())
            |> assign(:cache_status, nil)
            |> assign(:total_events, 0)
            |> assign(:all_events_count, 0)
@@ -1073,6 +1073,10 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   defp caching_enabled? do
     Application.get_env(:eventasaurus, :enable_caching, true)
+  end
+
+  defp debug_enabled? do
+    Application.get_env(:eventasaurus, :debug_enabled, false)
   end
 
 

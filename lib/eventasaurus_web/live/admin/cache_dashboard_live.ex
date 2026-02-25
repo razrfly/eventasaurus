@@ -157,21 +157,22 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   # Determine health status based on counts
   defp determine_health_status(city_slug) do
     cache = get_cache_count(city_slug)
-    _mv = get_mv_count(city_slug)
     direct = get_direct_count(city_slug)
 
     cond do
       is_nil(cache) and is_nil(direct) -> :critical
+      is_nil(direct) -> :direct_failed
       is_nil(cache) -> :warning
       cache == 0 and direct == 0 -> :empty
-      cache == 0 and (direct || 0) > 0 -> :cache_miss
-      abs((cache || 0) - (direct || 0)) > 10 -> :mismatch
+      cache == 0 and direct > 0 -> :cache_miss
+      abs(cache - direct) > 10 -> :mismatch
       true -> :healthy
     end
   end
 
   defp status_badge(:healthy), do: {"bg-green-100 text-green-800", "Healthy"}
   defp status_badge(:warning), do: {"bg-yellow-100 text-yellow-800", "Warning"}
+  defp status_badge(:direct_failed), do: {"bg-red-100 text-red-800", "Direct Failed"}
   defp status_badge(:critical), do: {"bg-red-100 text-red-800", "Critical"}
   defp status_badge(:empty), do: {"bg-gray-100 text-gray-800", "Empty"}
   defp status_badge(:cache_miss), do: {"bg-orange-100 text-orange-800", "Cache Miss"}
