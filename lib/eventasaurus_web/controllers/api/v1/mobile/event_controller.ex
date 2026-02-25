@@ -221,7 +221,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       empty_param?(params["radius"]) &&
       empty_param?(params["categories"]) &&
       empty_param?(params["search"]) &&
-      empty_param?(params["sort_by"])
+      empty_param?(params["sort_by"]) &&
+      empty_param?(params["sort_order"])
   end
 
   defp fallback_enabled? do
@@ -252,10 +253,12 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     end
   end
 
+  # Max events any single city has is ~300; this fetches the full set for
+  # in-memory date filtering + pagination. The MV query is sub-5ms.
+  @fallback_fetch_limit 5_000
+
   defp serve_from_fallback(conn, city_slug, page, per_page, params) do
-    # Get all events from fallback to handle date filtering + pagination correctly.
-    # The MV query is sub-5ms so fetching all is cheap.
-    case CityEventsFallback.get_events_with_counts(city_slug, page: 1, page_size: 100_000) do
+    case CityEventsFallback.get_events_with_counts(city_slug, page: 1, page_size: @fallback_fetch_limit) do
       {:ok, %{events: all_events, date_counts: date_counts}} ->
         # Filter by date range if present
         events = maybe_filter_fallback_by_date(all_events, params)
