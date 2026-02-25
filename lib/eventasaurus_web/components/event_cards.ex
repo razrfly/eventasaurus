@@ -209,7 +209,7 @@ defmodule EventasaurusWeb.Components.EventCards do
             <%= AggregatedMovieGroup.description(@group) %>
           </div>
 
-          <%= if @show_city do %>
+          <%= if @show_city && Ecto.assoc_loaded?(@group.city) && @group.city do %>
             <div class="mt-1 flex items-center text-sm text-gray-600">
               <Heroicons.map_pin class="w-4 h-4 mr-1" />
               <%= @group.city.name %>
@@ -281,7 +281,7 @@ defmodule EventasaurusWeb.Components.EventCards do
             <%= AggregatedEventGroup.description(@group) %>
           </div>
 
-          <%= if @show_city do %>
+          <%= if @show_city && Ecto.assoc_loaded?(@group.city) && @group.city do %>
             <div class="mt-1 flex items-center text-sm text-gray-600">
               <Heroicons.map_pin class="w-4 h-4 mr-1" />
               <%= @group.city.name %>
@@ -353,7 +353,7 @@ defmodule EventasaurusWeb.Components.EventCards do
             <%= AggregatedContainerGroup.description(@group) %>
           </div>
 
-          <%= if @show_city do %>
+          <%= if @show_city && Ecto.assoc_loaded?(@group.city) && @group.city do %>
             <div class="mt-1 flex items-center text-sm text-gray-600">
               <Heroicons.map_pin class="w-4 h-4 mr-1" />
               <%= @group.city.name %>
@@ -531,7 +531,7 @@ defmodule EventasaurusWeb.Components.EventCards do
           <% city = if @event.venue, do: Map.get(@event.venue, :city) %>
           <%= if @show_city && city && not match?(%Ecto.Association.NotLoaded{}, city) do %>
             <span class="flex items-center truncate">
-              <Heroicons.building_office class="w-3 h-3 mr-0.5 flex-shrink-0" />
+              <Heroicons.map_pin class="w-3 h-3 mr-0.5 flex-shrink-0" />
               <span class="truncate"><%= city.name %></span>
             </span>
           <% end %>
@@ -610,7 +610,7 @@ defmodule EventasaurusWeb.Components.EventCards do
             <Heroicons.building_storefront class="w-3 h-3 mr-0.5 flex-shrink-0" />
             <span class="truncate"><%= AggregatedMovieGroup.description(@group) %></span>
           </span>
-          <%= if @show_city && @group.city do %>
+          <%= if @show_city && Ecto.assoc_loaded?(@group.city) && @group.city do %>
             <span class="flex items-center truncate">
               <Heroicons.map_pin class="w-3 h-3 mr-0.5 flex-shrink-0" />
               <span class="truncate"><%= @group.city.name %></span>
@@ -681,7 +681,7 @@ defmodule EventasaurusWeb.Components.EventCards do
             <Heroicons.building_storefront class="w-3 h-3 mr-0.5 flex-shrink-0" />
             <span class="truncate"><%= AggregatedEventGroup.description(@group) %></span>
           </span>
-          <%= if @show_city && @group.city do %>
+          <%= if @show_city && Ecto.assoc_loaded?(@group.city) && @group.city do %>
             <span class="flex items-center truncate">
               <Heroicons.map_pin class="w-3 h-3 mr-0.5 flex-shrink-0" />
               <span class="truncate"><%= @group.city.name %></span>
@@ -755,7 +755,7 @@ defmodule EventasaurusWeb.Components.EventCards do
             <Heroicons.building_storefront class="w-3 h-3 mr-0.5 flex-shrink-0" />
             <span class="truncate"><%= AggregatedContainerGroup.description(@group) %></span>
           </span>
-          <%= if @show_city && @group.city do %>
+          <%= if @show_city && Ecto.assoc_loaded?(@group.city) && @group.city do %>
             <span class="flex items-center truncate">
               <Heroicons.map_pin class="w-3 h-3 mr-0.5 flex-shrink-0" />
               <span class="truncate"><%= @group.city.name %></span>
