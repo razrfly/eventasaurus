@@ -39,7 +39,6 @@ defmodule EventasaurusWeb.Workers.RefreshCityEventsViewJob do
           "[RefreshCityEventsViewJob] Completed in #{duration_ms}ms, #{row_count} rows (job_id: #{job_id})"
         )
 
-        CityEventsMv.persist_last_refresh(row_count, duration_ms)
         {:ok, %{duration_ms: duration_ms, row_count: row_count}}
 
       {:error, :view_not_found} ->

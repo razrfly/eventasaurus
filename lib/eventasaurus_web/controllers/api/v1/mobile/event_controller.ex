@@ -120,25 +120,32 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         :miss ->
           # Live query path with circuit breaker (Issue #3686 Phase 4)
           {items, total_count, all_count, date_range_counts, query_path} =
-            CityEvents.with_circuit_breaker(city_slug, fn ->
-              opts_for_aggregation =
-                opts
-                |> Keyword.put(:aggregate, true)
-                |> Keyword.put(:ignore_city_in_aggregation, true)
-                |> Map.new()
-                |> EventFilters.enrich_with_all_events_filters()
+            CityEvents.with_circuit_breaker(
+              city_slug,
+              fn ->
+                opts_for_aggregation =
+                  opts
+                  |> Keyword.put(:aggregate, true)
+                  |> Keyword.put(:ignore_city_in_aggregation, true)
+                  |> Map.new()
+                  |> EventFilters.enrich_with_all_events_filters()
 
-              {items, total_count, all_count} =
-                PublicEventsEnhanced.list_events_with_aggregation_and_counts(
-                  opts_for_aggregation
-                )
+                {items, total_count, all_count} =
+                  PublicEventsEnhanced.list_events_with_aggregation_and_counts(
+                    opts_for_aggregation
+                  )
 
-              dr_counts =
-                compute_date_range_counts(city_id, lat, lng, params, opts[:radius_km])
+                dr_counts =
+                  compute_date_range_counts(city_id, lat, lng, params, opts[:radius_km])
 
-              path = if(city_id, do: :city_id, else: :lat_lng)
-              {items, total_count, all_count, dr_counts, path}
-            end)
+                path = if(city_id, do: :city_id, else: :lat_lng)
+                {items, total_count, all_count, dr_counts, path}
+              end,
+              on_failure: fn ->
+                {items, total, all_count, date_counts, _} = CityEvents.serve_degraded(city_slug)
+                {items, total, all_count, date_counts, if(city_id, do: :city_id, else: :lat_lng)}
+              end
+            )
 
           query_ms = System.monotonic_time(:millisecond) - query_start
 

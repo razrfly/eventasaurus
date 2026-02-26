@@ -162,9 +162,9 @@ defmodule EventasaurusApp.Repo.Migrations.FixCityEventsMvPastFilter do
     WHERE aggregate_on_index = true
     """)
 
-    # Populate the view without blocking readers. Requires the unique index above
-    # and @disable_ddl_transaction true (CONCURRENTLY cannot run inside a transaction).
-    execute("REFRESH MATERIALIZED VIEW CONCURRENTLY city_events_mv")
+    # Populate the view for the first time (non-concurrent, since the view has no data yet).
+    # Subsequent refreshes via RefreshCityEventsViewJob use CONCURRENTLY once populated.
+    execute("REFRESH MATERIALIZED VIEW city_events_mv")
   end
 
   def down do

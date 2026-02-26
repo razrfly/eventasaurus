@@ -13,20 +13,51 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
     />
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
     <style>
       :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
+
+      /* Oatmeal page font — bypasses app.css .font-inter !important collision */
+      .oatmeal-body { font-family: 'Inter', system-ui, sans-serif; }
+
+      /* Familjen Grotesk wider width for headings (matches Oatmeal theme) */
+      .font-familjen { font-variation-settings: "wdth" 112.5; }
+
       .wallpaper-noise {
         background-position: center;
         background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'250'%20height%3D'250'%20viewBox%3D'0%200%20100%20100'%3E%3Cfilter%20id%3D'n'%3E%3CfeTurbulence%20type%3D'turbulence'%20baseFrequency%3D'1.4'%20numOctaves%3D'1'%20seed%3D'2'%20stitchTiles%3D'stitch'%20result%3D'n'%2F%3E%3CfeComponentTransfer%20result%3D'g'%3E%3CfeFuncR%20type%3D'linear'%20slope%3D'4'%20intercept%3D'1'%2F%3E%3CfeFuncG%20type%3D'linear'%20slope%3D'4'%20intercept%3D'1'%2F%3E%3CfeFuncB%20type%3D'linear'%20slope%3D'4'%20intercept%3D'1'%2F%3E%3C%2FfeComponentTransfer%3E%3CfeColorMatrix%20type%3D'saturate'%20values%3D'0'%20in%3D'g'%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D'100%25'%20height%3D'100%25'%20filter%3D'url(%23n)'%2F%3E%3C%2Fsvg%3E");
       }
+
+      /* Mobile menu */
+      #mobile-menu[aria-hidden="true"] { display: none; }
+      #mobile-menu[aria-hidden="false"] { display: block; }
+
+      /* FAQ accordion */
+      .faq-item .faq-answer { display: none; }
+      .faq-item.open .faq-answer { display: flex; }
+      .faq-item .faq-icon-plus { display: block; }
+      .faq-item.open .faq-icon-plus { display: none; }
+      .faq-item .faq-icon-minus { display: none; }
+      .faq-item.open .faq-icon-minus { display: block; }
+
+      /* Testimonial hanging quotes */
+      .testimonial-quote > p:first-child::before {
+        content: '\201C';
+        position: absolute;
+        display: inline;
+        transform: translateX(-100%);
+      }
+      .testimonial-quote > p:last-child::after {
+        content: '\201D';
+        display: inline;
+      }
     </style>
   </head>
-  <body class="bg-olive-100 font-inter antialiased">
+  <body class="bg-olive-100 oatmeal-body antialiased">
     <%!-- ═══════════════════════════════════════════════════════════════════
          NAVBAR — NavbarWithLinksActionsAndCenteredLogo
          Sticky bar: [links left] [centered logo] [actions + hamburger right]
@@ -61,6 +92,7 @@
             <button
               type="button"
               aria-label="Toggle menu"
+              onclick="document.getElementById('mobile-menu').setAttribute('aria-hidden','false')"
               class="inline-flex rounded-full p-1.5 text-olive-950 hover:bg-olive-950/10 lg:hidden"
             >
               <svg viewBox="0 0 24 24" fill="currentColor" class="h-6 w-6">
@@ -74,6 +106,26 @@
           </div>
         </div>
       </nav>
+      <%!-- Mobile menu overlay --%>
+      <div id="mobile-menu" aria-hidden="true" class="fixed inset-0 z-20 bg-olive-100 px-6 py-6 lg:hidden lg:px-10">
+        <div class="flex justify-end">
+          <button
+            type="button"
+            aria-label="Close menu"
+            onclick="document.getElementById('mobile-menu').setAttribute('aria-hidden','true')"
+            class="inline-flex rounded-full p-1.5 text-olive-950 hover:bg-olive-950/10"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" class="h-6 w-6">
+              <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+        <div class="mt-6 flex flex-col gap-6">
+          <a href="#pricing" onclick="document.getElementById('mobile-menu').setAttribute('aria-hidden','true')" class="text-3xl/10 font-medium text-olive-950">Pricing</a>
+          <a href="#about" onclick="document.getElementById('mobile-menu').setAttribute('aria-hidden','true')" class="text-3xl/10 font-medium text-olive-950">About</a>
+          <a href="#" onclick="document.getElementById('mobile-menu').setAttribute('aria-hidden','true')" class="text-3xl/10 font-medium text-olive-950">Docs</a>
+        </div>
+      </div>
     </header>
 
     <main class="isolate overflow-clip">
@@ -138,14 +190,14 @@
                       alt=""
                       width="1670"
                       height="1408"
-                      class="relative rounded-tl-sm ring-1 ring-black/10 bg-white/75 md:hidden"
+                      class="relative rounded-tl-[0.25rem] ring-1 ring-black/10 bg-white/75 md:hidden"
                     />
                     <img
                       src="https://assets.tailwindplus.com/screenshots/1.webp?left=2000&top=1408"
                       alt=""
                       width="2000"
                       height="1408"
-                      class="relative rounded-tl-sm ring-1 ring-black/10 bg-white/75 max-md:hidden"
+                      class="relative rounded-tl-[0.25rem] ring-1 ring-black/10 bg-white/75 max-md:hidden"
                     />
                   </div>
                 </div>
@@ -162,7 +214,7 @@
                       alt=""
                       width="3440"
                       height="1990"
-                      class="relative rounded-t-sm ring-1 ring-black/10 bg-white/75"
+                      class="relative rounded-t-[0.25rem] ring-1 ring-black/10 bg-white/75"
                     />
                   </div>
                 </div>
@@ -217,7 +269,7 @@
             <%!-- Feature 1: Shared Inbox --%>
             <div class="rounded-lg bg-olive-950/[0.025] p-2">
               <%!-- Screenshot (purple wallpaper, bottom-right) --%>
-              <div class="relative overflow-hidden rounded-sm bg-gradient-to-b from-[#7b627d] to-[#8f6976]">
+              <div class="relative overflow-hidden rounded-[0.25rem] bg-gradient-to-b from-[#7b627d] to-[#8f6976]">
                 <div class="wallpaper-noise absolute inset-0 opacity-30 mix-blend-overlay"></div>
                 <div class="relative pt-[min(10%,4rem)] pl-[min(10%,4rem)]">
                   <div>
@@ -226,28 +278,28 @@
                       alt=""
                       width="1000"
                       height="800"
-                      class="relative rounded-tl-sm ring-1 ring-black/10 bg-white/75 sm:hidden"
+                      class="relative rounded-tl-[0.25rem] ring-1 ring-black/10 bg-white/75 sm:hidden"
                     />
                     <img
                       src="https://assets.tailwindplus.com/screenshots/1.webp?left=1800&top=660"
                       alt=""
                       width="1800"
                       height="660"
-                      class="relative rounded-tl-sm ring-1 ring-black/10 bg-white/75 max-sm:hidden lg:hidden"
+                      class="relative rounded-tl-[0.25rem] ring-1 ring-black/10 bg-white/75 max-sm:hidden lg:hidden"
                     />
                     <img
                       src="https://assets.tailwindplus.com/screenshots/1.webp?left=1300&top=1300"
                       alt=""
                       width="1300"
                       height="1300"
-                      class="relative rounded-tl-sm ring-1 ring-black/10 bg-white/75 max-lg:hidden xl:hidden"
+                      class="relative rounded-tl-[0.25rem] ring-1 ring-black/10 bg-white/75 max-lg:hidden xl:hidden"
                     />
                     <img
                       src="https://assets.tailwindplus.com/screenshots/1.webp?left=1800&top=1250"
                       alt=""
                       width="1800"
                       height="1250"
-                      class="relative rounded-tl-sm ring-1 ring-black/10 bg-white/75 max-xl:hidden"
+                      class="relative rounded-tl-[0.25rem] ring-1 ring-black/10 bg-white/75 max-xl:hidden"
                     />
                   </div>
                 </div>
@@ -272,7 +324,7 @@
             <%!-- Feature 2: Inbox Agent --%>
             <div class="rounded-lg bg-olive-950/[0.025] p-2">
               <%!-- Screenshot (blue wallpaper, bottom-left) --%>
-              <div class="relative overflow-hidden rounded-sm bg-gradient-to-b from-[#637c86] to-[#778599]">
+              <div class="relative overflow-hidden rounded-[0.25rem] bg-gradient-to-b from-[#637c86] to-[#778599]">
                 <div class="wallpaper-noise absolute inset-0 opacity-30 mix-blend-overlay"></div>
                 <div class="relative pt-[min(10%,4rem)] pr-[min(10%,4rem)]">
                   <div>
@@ -281,28 +333,28 @@
                       alt=""
                       width="1000"
                       height="800"
-                      class="relative rounded-tr-sm ring-1 ring-black/10 bg-white/75 sm:hidden"
+                      class="relative rounded-tr-[0.25rem] ring-1 ring-black/10 bg-white/75 sm:hidden"
                     />
                     <img
                       src="https://assets.tailwindplus.com/screenshots/1.webp?right=1800&top=660"
                       alt=""
                       width="1800"
                       height="660"
-                      class="relative rounded-tr-sm ring-1 ring-black/10 bg-white/75 max-sm:hidden lg:hidden"
+                      class="relative rounded-tr-[0.25rem] ring-1 ring-black/10 bg-white/75 max-sm:hidden lg:hidden"
                     />
                     <img
                       src="https://assets.tailwindplus.com/screenshots/1.webp?right=1300&top=1300"
                       alt=""
                       width="1300"
                       height="1300"
-                      class="relative rounded-tr-sm ring-1 ring-black/10 bg-white/75 max-lg:hidden xl:hidden"
+                      class="relative rounded-tr-[0.25rem] ring-1 ring-black/10 bg-white/75 max-lg:hidden xl:hidden"
                     />
                     <img
                       src="https://assets.tailwindplus.com/screenshots/1.webp?right=1800&top=1250"
                       alt=""
                       width="1800"
                       height="1250"
-                      class="relative rounded-tr-sm ring-1 ring-black/10 bg-white/75 max-xl:hidden"
+                      class="relative rounded-tr-[0.25rem] ring-1 ring-black/10 bg-white/75 max-xl:hidden"
                     />
                   </div>
                 </div>
@@ -429,11 +481,11 @@
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <%!-- Testimonial 1 --%>
             <figure class="flex flex-col justify-between gap-10 rounded-md bg-olive-950/[0.025] p-6 text-sm/7 text-olive-950">
-              <blockquote class="relative flex flex-col gap-4">
-                <p>&ldquo;Oatmeal has completely transformed our customer support operations. To be fair, we weren't doing any customer support at all so the bar was pretty low.&rdquo;</p>
+              <blockquote class="testimonial-quote relative flex flex-col gap-4">
+                <p>Oatmeal has completely transformed our customer support operations. To be fair, we weren't doing any customer support at all so the bar was pretty low.</p>
               </blockquote>
               <figcaption class="flex items-center gap-4">
-                <div class="flex h-12 w-12 overflow-hidden rounded-full ring-1 ring-inset ring-black/5">
+                <div class="flex h-12 w-12 overflow-hidden rounded-full outline outline-1 -outline-offset-1 outline-black/5">
                   <img src="https://assets.tailwindplus.com/avatars/10.webp?size=160" alt="" width="160" height="160" class="h-full w-full object-cover bg-white/75" />
                 </div>
                 <div>
@@ -444,11 +496,11 @@
             </figure>
             <%!-- Testimonial 2 --%>
             <figure class="flex flex-col justify-between gap-10 rounded-md bg-olive-950/[0.025] p-6 text-sm/7 text-olive-950">
-              <blockquote class="relative flex flex-col gap-4">
-                <p>&ldquo;We use Oatmeal's automation features to make cancellation requests disappear into a black hole, improving our retention rates by over 300%.&rdquo;</p>
+              <blockquote class="testimonial-quote relative flex flex-col gap-4">
+                <p>We use Oatmeal's automation features to make cancellation requests disappear into a black hole, improving our retention rates by over 300%.</p>
               </blockquote>
               <figcaption class="flex items-center gap-4">
-                <div class="flex h-12 w-12 overflow-hidden rounded-full ring-1 ring-inset ring-black/5">
+                <div class="flex h-12 w-12 overflow-hidden rounded-full outline outline-1 -outline-offset-1 outline-black/5">
                   <img src="https://assets.tailwindplus.com/avatars/15.webp?size=160" alt="" width="160" height="160" class="h-full w-full object-cover bg-white/75" />
                 </div>
                 <div>
@@ -459,11 +511,11 @@
             </figure>
             <%!-- Testimonial 3 --%>
             <figure class="flex flex-col justify-between gap-10 rounded-md bg-olive-950/[0.025] p-6 text-sm/7 text-olive-950">
-              <blockquote class="relative flex flex-col gap-4">
-                <p>&ldquo;I've been using the spare time that Oatmeal has freed up to work not just one, but two other jobs, all while hitting my core KPIs. My bosses have no idea.&rdquo;</p>
+              <blockquote class="testimonial-quote relative flex flex-col gap-4">
+                <p>I've been using the spare time that Oatmeal has freed up to work not just one, but two other jobs, all while hitting my core KPIs. My bosses have no idea.</p>
               </blockquote>
               <figcaption class="flex items-center gap-4">
-                <div class="flex h-12 w-12 overflow-hidden rounded-full ring-1 ring-inset ring-black/5">
+                <div class="flex h-12 w-12 overflow-hidden rounded-full outline outline-1 -outline-offset-1 outline-black/5">
                   <img src="https://assets.tailwindplus.com/avatars/13.webp?size=160" alt="" width="160" height="160" class="h-full w-full object-cover bg-white/75" />
                 </div>
                 <div>
@@ -474,11 +526,11 @@
             </figure>
             <%!-- Testimonial 4 --%>
             <figure class="flex flex-col justify-between gap-10 rounded-md bg-olive-950/[0.025] p-6 text-sm/7 text-olive-950">
-              <blockquote class="relative flex flex-col gap-4">
-                <p>&ldquo;Oatmeal has given us key insights into how much our customers absolutely hate using our product and how we can improve it to stop them from leaving us.&rdquo;</p>
+              <blockquote class="testimonial-quote relative flex flex-col gap-4">
+                <p>Oatmeal has given us key insights into how much our customers absolutely hate using our product and how we can improve it to stop them from leaving us.</p>
               </blockquote>
               <figcaption class="flex items-center gap-4">
-                <div class="flex h-12 w-12 overflow-hidden rounded-full ring-1 ring-inset ring-black/5">
+                <div class="flex h-12 w-12 overflow-hidden rounded-full outline outline-1 -outline-offset-1 outline-black/5">
                   <img src="https://assets.tailwindplus.com/avatars/12.webp?size=160" alt="" width="160" height="160" class="h-full w-full object-cover bg-white/75" />
                 </div>
                 <div>
@@ -489,11 +541,11 @@
             </figure>
             <%!-- Testimonial 5 --%>
             <figure class="flex flex-col justify-between gap-10 rounded-md bg-olive-950/[0.025] p-6 text-sm/7 text-olive-950">
-              <blockquote class="relative flex flex-col gap-4">
-                <p>&ldquo;As a solo founder, Oatmeal has been a lifesaver. It makes it look like Looply is an actual company with multiple employees, when in reality it's just me and an AI.&rdquo;</p>
+              <blockquote class="testimonial-quote relative flex flex-col gap-4">
+                <p>As a solo founder, Oatmeal has been a lifesaver. It makes it look like Looply is an actual company with multiple employees, when in reality it's just me and an AI.</p>
               </blockquote>
               <figcaption class="flex items-center gap-4">
-                <div class="flex h-12 w-12 overflow-hidden rounded-full ring-1 ring-inset ring-black/5">
+                <div class="flex h-12 w-12 overflow-hidden rounded-full outline outline-1 -outline-offset-1 outline-black/5">
                   <img src="https://assets.tailwindplus.com/avatars/11.webp?size=160" alt="" width="160" height="160" class="h-full w-full object-cover bg-white/75" />
                 </div>
                 <div>
@@ -504,11 +556,11 @@
             </figure>
             <%!-- Testimonial 6 --%>
             <figure class="flex flex-col justify-between gap-10 rounded-md bg-olive-950/[0.025] p-6 text-sm/7 text-olive-950">
-              <blockquote class="relative flex flex-col gap-4">
-                <p>&ldquo;Thanks to Oatmeal, we've managed to cut our support costs in half by laying off dozens of employees, while still improving response times and customer satisfaction.&rdquo;</p>
+              <blockquote class="testimonial-quote relative flex flex-col gap-4">
+                <p>Thanks to Oatmeal, we've managed to cut our support costs in half by laying off dozens of employees, while still improving response times and customer satisfaction.</p>
               </blockquote>
               <figcaption class="flex items-center gap-4">
-                <div class="flex h-12 w-12 overflow-hidden rounded-full ring-1 ring-inset ring-black/5">
+                <div class="flex h-12 w-12 overflow-hidden rounded-full outline outline-1 -outline-offset-1 outline-black/5">
                   <img src="https://assets.tailwindplus.com/avatars/14.webp?size=160" alt="" width="160" height="160" class="h-full w-full object-cover bg-white/75" />
                 </div>
                 <div>
@@ -524,7 +576,6 @@
       <%!-- ═══════════════════════════════════════════════════════════════
            FAQs — FAQsTwoColumnAccordion
            Two-column: heading left, accordion items right
-           (Accordion shown expanded since we skip ElDisclosure JS)
            ═══════════════════════════════════════════════════════════════ --%>
       <section class="py-16" id="faqs">
         <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 grid grid-cols-1 gap-x-2 gap-y-8 lg:grid-cols-2">
@@ -534,54 +585,68 @@
               Questions &amp; Answers
             </h2>
           </div>
-          <%!-- Right: FAQ items --%>
+          <%!-- Right: FAQ items (accordion) --%>
           <div class="divide-y divide-olive-950/10 border-y border-olive-950/10">
-            <div>
-              <button type="button" class="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-olive-950">
+            <div class="faq-item">
+              <button type="button" onclick="this.parentElement.classList.toggle('open')" class="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-olive-950">
                 Do I need a credit card to start the free trial?
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="h-[1lh] shrink-0" aria-hidden="true">
+                <%!-- Plus icon (shown when closed) --%>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="faq-icon-plus h-[1lh] shrink-0" aria-hidden="true">
                   <path d="M6.5 0.5V12.5" stroke-linecap="round" stroke-linejoin="round" />
                   <path d="M12.5049 6.49512L0.504883 6.49512" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
+                <%!-- Minus icon (shown when open) --%>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="faq-icon-minus h-[1lh] shrink-0" aria-hidden="true">
+                  <path d="M12.5049 6.49512L0.504883 6.49512" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
               </button>
-              <div class="flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-olive-700">
-                Yes, but don't worry, you won't be charged until the trial period is over. We won't send you an email reminding you when this happens because we are really hoping you'll forget and we can keep charging you until your card expires.
+              <div class="faq-answer -mt-2 flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-olive-700">
+                <p>Yes, but don't worry, you won't be charged until the trial period is over. We won't send you an email reminding you when this happens because we are really hoping you'll forget and we can keep charging you until your card expires.</p>
               </div>
             </div>
-            <div>
-              <button type="button" class="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-olive-950">
+            <div class="faq-item">
+              <button type="button" onclick="this.parentElement.classList.toggle('open')" class="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-olive-950">
                 Can my whole team use the same inbox?
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="h-[1lh] shrink-0" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="faq-icon-plus h-[1lh] shrink-0" aria-hidden="true">
                   <path d="M6.5 0.5V12.5" stroke-linecap="round" stroke-linejoin="round" />
                   <path d="M12.5049 6.49512L0.504883 6.49512" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="faq-icon-minus h-[1lh] shrink-0" aria-hidden="true">
+                  <path d="M12.5049 6.49512L0.504883 6.49512" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
               </button>
-              <div class="flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-olive-700">
-                Yes, the more the merrier! Oatmeal works best when your entire company has access. We will charge you per additional seat, but we won't tell you about this until you get your invoice.
+              <div class="faq-answer -mt-2 flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-olive-700">
+                <p>Yes, the more the merrier! Oatmeal works best when your entire company has access. We will charge you per additional seat, but we won't tell you about this until you get your invoice.</p>
               </div>
             </div>
-            <div>
-              <button type="button" class="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-olive-950">
+            <div class="faq-item">
+              <button type="button" onclick="this.parentElement.classList.toggle('open')" class="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-olive-950">
                 Is the AI agent actually a bunch of people in India?
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="h-[1lh] shrink-0" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="faq-icon-plus h-[1lh] shrink-0" aria-hidden="true">
                   <path d="M6.5 0.5V12.5" stroke-linecap="round" stroke-linejoin="round" />
                   <path d="M12.5049 6.49512L0.504883 6.49512" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="faq-icon-minus h-[1lh] shrink-0" aria-hidden="true">
+                  <path d="M12.5049 6.49512L0.504883 6.49512" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
               </button>
-              <div class="flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-olive-700">
-                Not just India! We have people in lots of countries around the world pretending to be an AI, including some that are currently under sanctions, so we can't legally mention them here.
+              <div class="faq-answer -mt-2 flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-olive-700">
+                <p>Not just India! We have people in lots of countries around the world pretending to be an AI, including some that are currently under sanctions, so we can't legally mention them here.</p>
               </div>
             </div>
-            <div>
-              <button type="button" class="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-olive-950">
+            <div class="faq-item">
+              <button type="button" onclick="this.parentElement.classList.toggle('open')" class="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-olive-950">
                 Does Oatmeal replace my email client?
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="h-[1lh] shrink-0" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="faq-icon-plus h-[1lh] shrink-0" aria-hidden="true">
                   <path d="M6.5 0.5V12.5" stroke-linecap="round" stroke-linejoin="round" />
                   <path d="M12.5049 6.49512L0.504883 6.49512" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1" class="faq-icon-minus h-[1lh] shrink-0" aria-hidden="true">
+                  <path d="M12.5049 6.49512L0.504883 6.49512" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
               </button>
-              <div class="flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-olive-700">
-                Absolutely. The idea is that we transition you away from email entirely, so you become completely dependent on our service. Like a parasite living off a host.
+              <div class="faq-answer -mt-2 flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-olive-700">
+                <p>Absolutely. The idea is that we transition you away from email entirely, so you become completely dependent on our service. Like a parasite living off a host.</p>
               </div>
             </div>
           </div>
@@ -882,7 +947,7 @@
           </div>
           <%!-- Bottom: fineprint + social icons --%>
           <div class="flex items-center justify-between gap-10 text-sm/7">
-            <div class="text-olive-600">&copy; 2025 Oatmeal, Inc.</div>
+            <div class="text-olive-600">&copy; <%= Date.utc_today().year %> Oatmeal, Inc.</div>
             <div class="flex items-center gap-4 sm:gap-10">
               <a href="https://x.com" target="_blank" aria-label="X" class="text-olive-950">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="h-6 w-6">
