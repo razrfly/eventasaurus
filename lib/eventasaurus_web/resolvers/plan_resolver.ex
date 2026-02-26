@@ -31,6 +31,10 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
 
       public_event ->
         case EventPlans.get_user_plan_for_event(user.id, public_event.id) do
+          %{private_event: nil} ->
+            # Orphaned plan (private event was deleted) — treat as no plan
+            {:ok, nil}
+
           %{private_event: private_event} = event_plan ->
             invite_count =
               Events.list_event_participants(private_event)
@@ -41,7 +45,7 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
                slug: private_event.slug,
                title: private_event.title,
                invite_count: invite_count,
-               created_at: event_plan.inserted_at,
+               created_at: DateTime.from_naive!(event_plan.inserted_at, "Etc/UTC"),
                already_exists: nil
              }}
 
@@ -93,7 +97,8 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
 
         case EventPlans.create_from_public_event(public_event.id, user.id, plan_attrs) do
           {:ok, {:created, event_plan, private_event}} ->
-            invite_count = send_email_invitations(private_event, emails, args[:message], user)
+            {invite_count, invite_errors} =
+              send_email_invitations(private_event, emails, args[:message], user)
 
             {:ok,
              %{
@@ -101,16 +106,27 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
                  slug: private_event.slug,
                  title: private_event.title,
                  invite_count: invite_count,
-                 created_at: event_plan.inserted_at,
+                 created_at: DateTime.from_naive!(event_plan.inserted_at, "Etc/UTC"),
                  already_exists: false
                },
-               errors: []
+               errors: invite_errors
+             }}
+
+          {:ok, {:existing, _event_plan, nil}} ->
+            {:ok,
+             %{
+               plan: nil,
+               errors: [
+                 %{
+                   field: "base",
+                   message: "Your previous plan is no longer available. Please try again."
+                 }
+               ]
              }}
 
           {:ok, {:existing, event_plan, private_event}} ->
-            invite_count =
-              Events.list_event_participants(private_event)
-              |> Enum.count(fn p -> p.role == :invitee end)
+            {invite_count, invite_errors} =
+              send_email_invitations(private_event, emails, args[:message], user)
 
             {:ok,
              %{
@@ -118,10 +134,10 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
                  slug: private_event.slug,
                  title: private_event.title,
                  invite_count: invite_count,
-                 created_at: event_plan.inserted_at,
+                 created_at: DateTime.from_naive!(event_plan.inserted_at, "Etc/UTC"),
                  already_exists: true
                },
-               errors: []
+               errors: invite_errors
              }}
 
           {:error, :event_in_past} ->
@@ -168,7 +184,7 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
     end
   end
 
-  defp send_email_invitations(_event, [], _message, _organizer), do: 0
+  defp send_email_invitations(_event, [], _message, _organizer), do: {0, []}
 
   defp send_email_invitations(event, emails, message, organizer) do
     result =
@@ -181,8 +197,21 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
       )
 
     case result do
-      %{successful_invitations: count} ->
-        count
+      %{successful_invitations: count} = r ->
+        failed = Map.get(r, :failed_invitations, 0)
+        errs = Map.get(r, :errors, [])
+
+        if failed > 0 do
+          Logger.error("Invitation failures",
+            event_id: event.id,
+            failed_count: failed,
+            errors: errs
+          )
+
+          {count, Enum.map(errs, &%{field: "emails", message: &1})}
+        else
+          {count, []}
+        end
 
       {:error, reason} ->
         Logger.error("Failed to send email invitations",
@@ -191,7 +220,7 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
           reason: inspect(reason)
         )
 
-        0
+        {0, [%{field: "emails", message: "Could not send invitations"}]}
 
       other ->
         Logger.warning("Unexpected result from process_guest_invitations",
@@ -199,7 +228,7 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
           result: inspect(other)
         )
 
-        0
+        {0, []}
     end
   end
 end
