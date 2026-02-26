@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusWeb.Helpers.SourceAttribution
   alias Eventasaurus.CDN
   alias EventasaurusWeb.Helpers.VenueHelpers
+  alias EventasaurusWeb.Utils.TimezoneUtils
 
   require Logger
 
@@ -593,8 +594,42 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
       nearby_events: Enum.map(nearby_events, &serialize_public_event/1),
       movie_group_slug: movie_slug,
       movie_city_id: city_id,
-      occurrences: event.occurrences
+      occurrences: enrich_occurrences(event)
     })
+  end
+
+  defp enrich_occurrences(event) do
+    timezone =
+      case event.venue do
+        %{city_ref: %{timezone: tz}} when is_binary(tz) and tz != "" -> tz
+        _ -> TimezoneUtils.default_timezone()
+      end
+
+    occurrences = event.occurrences || %{}
+
+    enriched_dates =
+      case Map.get(occurrences, "dates") do
+        dates when is_list(dates) ->
+          Enum.map(dates, fn date_info ->
+            with {:ok, date} <- Date.from_iso8601(date_info["date"] || ""),
+                 [h, m] <- String.split(date_info["time"] || "", ":"),
+                 {hour, ""} <- Integer.parse(h),
+                 {min, ""} <- Integer.parse(m),
+                 {:ok, time} <- Time.new(hour, min, 0),
+                 {:ok, dt} <- DateTime.new(date, time, timezone) do
+              Map.put(date_info, "datetime", dt)
+            else
+              {:ambiguous, dt, _} -> Map.put(date_info, "datetime", dt)
+              {:gap, _, after_dt} -> Map.put(date_info, "datetime", after_dt)
+              _ -> date_info
+            end
+          end)
+
+        _ ->
+          []
+      end
+
+    Map.put(occurrences, "dates", enriched_dates)
   end
 
   defp serialize_user_event(event) do
