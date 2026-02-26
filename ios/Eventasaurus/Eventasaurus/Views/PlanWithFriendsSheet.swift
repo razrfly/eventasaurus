@@ -10,6 +10,7 @@ struct PlanWithFriendsSheet: View {
     @State private var isSubmitting = false
     @State private var showSuccess = false
     @State private var planAlreadyExisted = false
+    @State private var serverInviteCount: Int = 0
     @State private var errorMessage: String?
 
     // Suggestions
@@ -352,10 +353,10 @@ struct PlanWithFriendsSheet: View {
                 .font(DS.Typography.titleSecondary)
             Text(
                 planAlreadyExisted
-                    ? (emails.count + selectedFriendIds.count > 0
-                        ? "\(emails.count + selectedFriendIds.count) new invite(s) sent to your existing plan."
+                    ? (serverInviteCount > 0
+                        ? "\(serverInviteCount) new invite(s) sent to your existing plan."
                         : "Your group for this event already exists.")
-                    : "\(emails.count + selectedFriendIds.count) friends have been invited to your plan."
+                    : "\(serverInviteCount) friends have been invited to your plan."
             )
             .font(DS.Typography.body)
             .foregroundStyle(.secondary)
@@ -408,6 +409,7 @@ struct PlanWithFriendsSheet: View {
             )
 
             planAlreadyExisted = plan.alreadyExists == true
+            serverInviteCount = plan.inviteCount
             onPlanCreated(plan)
             withAnimation(DS.Animation.bouncy) {
                 showSuccess = true
