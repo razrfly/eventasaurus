@@ -21,6 +21,12 @@
     <style>
       :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
 
+      /* Reset app.css global transition override — Oatmeal uses no global transitions */
+      .oatmeal-page, .oatmeal-page * { transition: none !important; }
+      /* Re-enable transitions only where explicitly desired (hover states) */
+      .oatmeal-page a,
+      .oatmeal-page button { transition: background-color 150ms ease, color 150ms ease !important; }
+
       /* Oatmeal page font — bypasses app.css .font-inter !important collision */
       .oatmeal-body { font-family: 'Inter', system-ui, sans-serif; }
 
@@ -57,7 +63,7 @@
       }
     </style>
   </head>
-  <body class="bg-olive-100 oatmeal-body antialiased">
+  <body class="oatmeal-page bg-olive-100 text-olive-950 oatmeal-body antialiased">
     <%!-- ═══════════════════════════════════════════════════════════════════
          NAVBAR — NavbarWithLinksActionsAndCenteredLogo
          Sticky bar: [links left] [centered logo] [actions + hamburger right]
@@ -416,7 +422,7 @@
             </div>
             <%!-- Decorative SVG graph --%>
             <div class="pointer-events-none relative h-48 sm:h-64 lg:h-36">
-              <div class="absolute bottom-0 left-1/2 w-[150vw] max-w-[calc(80rem-5rem)] -translate-x-1/2">
+              <div class="absolute bottom-0 left-1/2 w-[150vw] max-w-[calc(80rem_-_5rem)] -translate-x-1/2">
                 <svg
                   class="h-[25rem] w-full fill-olive-950/[0.025] stroke-olive-950/40"
                   viewBox="0 0 1200 400"
@@ -897,7 +903,7 @@
                   type="email"
                   placeholder="Email"
                   aria-label="Email"
-                  class="flex-1 bg-transparent text-olive-950 placeholder:text-olive-400 focus:outline-none"
+                  class="flex-1 border-0 bg-transparent p-0 text-olive-950 placeholder:text-olive-400 focus:outline-none focus:ring-0"
                 />
                 <button type="submit" aria-label="Subscribe" class="relative inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-olive-950/10">
                   <svg width="13" height="7" viewBox="0 0 13 7" fill="none" stroke-width="1" aria-hidden="true">

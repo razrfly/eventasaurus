@@ -1,9 +1,6 @@
 defmodule EventasaurusApp.Repo.Migrations.FixCityEventsMvPastFilter do
   use Ecto.Migration
 
-  # Required so REFRESH MATERIALIZED VIEW CONCURRENTLY can run outside a transaction.
-  @disable_ddl_transaction true
-
   @doc """
   Fix the city_events_mv WHERE clause to include events that started in the
   past but haven't ended yet.
