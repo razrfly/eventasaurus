@@ -354,9 +354,13 @@ struct PlanWithFriendsSheet: View {
             Text(
                 planAlreadyExisted
                     ? (serverInviteCount > 0
-                        ? "\(serverInviteCount) new invite(s) sent to your existing plan."
+                        ? (serverInviteCount == 1
+                            ? "1 new invite sent to your existing plan."
+                            : "\(serverInviteCount) new invites sent to your existing plan.")
                         : "Your group for this event already exists.")
-                    : "\(serverInviteCount) friends have been invited to your plan."
+                    : (serverInviteCount == 1
+                        ? "1 friend has been invited to your plan."
+                        : "\(serverInviteCount) friends have been invited to your plan.")
             )
             .font(DS.Typography.body)
             .foregroundStyle(.secondary)
