@@ -126,8 +126,13 @@ defmodule Eventasaurus.Application do
       EventasaurusApp.Cache.CityGalleryCache,
       # Start City Fallback Image Cache for pre-computed fallback images
       EventasaurusApp.Cache.CityFallbackImageCache,
-      # Start a worker by calling: Eventasaurus.Worker.start_link(arg)
-      # {Eventasaurus.Worker, arg},
+      # Refresh MV before Endpoint starts accepting traffic (Issue #3686)
+      # Blocks startup until city_events_mv has fresh data for all cities
+      %{
+        id: :mv_startup_refresh,
+        start: {__MODULE__, :refresh_mv_sync, []},
+        restart: :temporary
+      },
       # Start to serve requests, typically the last entry
       EventasaurusWeb.Endpoint
     ]
@@ -150,10 +155,6 @@ defmodule Eventasaurus.Application do
         # Schedule city page cache warmup (Issue #3347 Phase 4)
         # Only in production to avoid noise in dev/test
         schedule_cache_warmup()
-
-        # Refresh materialized view on startup (Issue #3686)
-        # Ensures city_events_mv has fresh data before accepting traffic
-        ensure_materialized_view_populated()
 
         {:ok, pid}
 
@@ -206,14 +207,21 @@ defmodule Eventasaurus.Application do
     end
   end
 
-  # Refresh city_events_mv materialized view on startup (Issue #3686)
-  # Ensures sub-5ms fallback data is fresh before the app accepts traffic
-  defp ensure_materialized_view_populated do
+  # Synchronous MV refresh used as a supervisor child (blocks until complete).
+  # Placed before Endpoint in children list so traffic isn't served with stale MV data.
+  # Returns :ignore so the supervisor moves on without keeping a running process.
+  @doc false
+  def refresh_mv_sync do
     alias EventasaurusWeb.Cache.CityEventsMvInitializer
-    CityEventsMvInitializer.ensure_populated()
-  rescue
-    e ->
-      Logger.error("[Application] MV refresh failed on startup: #{inspect(e)}")
+
+    try do
+      CityEventsMvInitializer.ensure_populated()
+    rescue
+      e ->
+        Logger.error("[Application] MV refresh failed on startup: #{inspect(e)}")
+    end
+
+    :ignore
   end
 
   # Schedule city page cache warmup on startup (Issue #3347 Phase 4)

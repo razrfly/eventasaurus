@@ -7,6 +7,7 @@ config :eventasaurus, :environment, :dev
 # true  = enable caching + show cache status pill (matches production behavior).
 # false = bypass all caches, always query the DB directly.
 config :eventasaurus, :enable_caching, true
+config :eventasaurus, :debug_enabled, true
 
 # Configure Nx to use EXLA backend for ML operations (Issue #3213)
 # EXLA provides optimized CPU/GPU tensor operations for Bumblebee models

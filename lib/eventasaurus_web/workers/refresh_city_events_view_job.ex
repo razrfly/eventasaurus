@@ -24,26 +24,16 @@ defmodule EventasaurusWeb.Workers.RefreshCityEventsViewJob do
 
   require Logger
 
-  alias EventasaurusApp.JobRepo
+  alias EventasaurusWeb.Cache.CityEventsMv
 
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id}) do
     start_time = System.monotonic_time(:millisecond)
     Logger.info("[RefreshCityEventsViewJob] Starting refresh (job_id: #{job_id})")
 
-    result =
-      JobRepo.query(
-        "REFRESH MATERIALIZED VIEW CONCURRENTLY city_events_mv",
-        [],
-        timeout: :timer.minutes(5)
-      )
-
-    duration_ms = System.monotonic_time(:millisecond) - start_time
-
-    case result do
-      {:ok, _} ->
-        # Get row count for logging
-        row_count = get_row_count()
+    case CityEventsMv.refresh() do
+      {:ok, row_count} ->
+        duration_ms = System.monotonic_time(:millisecond) - start_time
 
         Logger.info(
           "[RefreshCityEventsViewJob] Completed in #{duration_ms}ms, #{row_count} rows (job_id: #{job_id})"
@@ -51,7 +41,7 @@ defmodule EventasaurusWeb.Workers.RefreshCityEventsViewJob do
 
         {:ok, %{duration_ms: duration_ms, row_count: row_count}}
 
-      {:error, %Postgrex.Error{postgres: %{code: :undefined_table}}} ->
+      {:error, :view_not_found} ->
         Logger.error(
           "[RefreshCityEventsViewJob] Materialized view does not exist (job_id: #{job_id})"
         )
@@ -59,18 +49,13 @@ defmodule EventasaurusWeb.Workers.RefreshCityEventsViewJob do
         {:error, :view_not_found}
 
       {:error, reason} ->
+        duration_ms = System.monotonic_time(:millisecond) - start_time
+
         Logger.error(
           "[RefreshCityEventsViewJob] Failed after #{duration_ms}ms: #{inspect(reason)} (job_id: #{job_id})"
         )
 
         {:error, reason}
-    end
-  end
-
-  defp get_row_count do
-    case JobRepo.query("SELECT COUNT(*) FROM city_events_mv", [], timeout: :timer.seconds(30)) do
-      {:ok, %{rows: [[count]]}} -> count
-      _ -> 0
     end
   end
 end

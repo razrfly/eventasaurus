@@ -24,6 +24,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias Eventasaurus.SocialCards.UrlBuilder
   alias EventasaurusWeb.Cache.CityPageCache
   alias EventasaurusWeb.Cache.CityEventsFallback
+  alias EventasaurusWeb.Cache.CityEventsMvInitializer
   alias EventasaurusWeb.Telemetry.CityPageTelemetry
 
   import EventasaurusWeb.EventComponents
@@ -450,6 +451,30 @@ defmodule EventasaurusWeb.CityLive.Index do
     end
   end
 
+  # Flush all Cachex caches for this city and re-fetch (debug only)
+  @impl true
+  def handle_event("debug_flush_cache", _params, socket) do
+    if debug_enabled?() do
+      city_slug = socket.assigns.city.slug
+      Logger.info("[DEBUG] Flushing ALL Cachex caches + refreshing MV for #{city_slug}")
+
+      # Nuclear option: clear the entire Cachex cache (debug only)
+      CityPageCache.clear_all()
+
+      # Also refresh the MV so it has the freshest data
+      CityEventsMvInitializer.refresh_view()
+
+      # Re-fetch events and debug data with fresh caches
+      # Note: fetch_events will miss cache, hit MV fallback or live query,
+      # then the cache auto-refill job runs in background
+      socket = fetch_events(socket)
+      debug_data = fetch_debug_comparison(socket)
+      {:noreply, assign(socket, :debug_data, debug_data)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   @impl true
   def handle_event("change_view", %{"view" => view_mode}, socket) do
     {:noreply, assign(socket, :view_mode, view_mode)}
@@ -715,12 +740,20 @@ defmodule EventasaurusWeb.CityLive.Index do
         <Heroicons.bug_ant class="w-6 h-6 text-yellow-600 mr-2" />
         <h2 class="text-lg font-bold text-yellow-800">Debug Mode: Data Source Comparison</h2>
       </div>
-      <p class="text-sm text-yellow-700 mb-4">
-        Comparing event counts from different data sources for city: <strong><%= @debug_data.city_slug %></strong>
-        (radius: <%= @debug_data.radius_km %>km) at <%= Calendar.strftime(@debug_data.fetched_at, "%H:%M:%S") %>
-      </p>
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-sm text-yellow-700">
+          Comparing event counts from different data sources for city: <strong><%= @debug_data.city_slug %></strong>
+          (radius: <%= @debug_data.radius_km %>km) at <%= Calendar.strftime(@debug_data.fetched_at, "%H:%M:%S") %>
+        </p>
+        <button
+          phx-click="debug_flush_cache"
+          class="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-md hover:bg-red-200"
+        >
+          Flush City Cache
+        </button>
+      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Direct Query -->
         <div class="bg-white p-4 rounded-lg shadow">
           <h3 class="font-semibold text-gray-800 mb-2">1. Direct Query</h3>
@@ -754,9 +787,32 @@ defmodule EventasaurusWeb.CityLive.Index do
           <% end %>
         </div>
 
+        <!-- MV Fallback -->
+        <div class="bg-white p-4 rounded-lg shadow">
+          <h3 class="font-semibold text-gray-800 mb-2">3. MV Fallback</h3>
+          <p class="text-xs text-gray-500 mb-2">CityEventsFallback (materialized view)</p>
+          <%= case @debug_data.mv_fallback.status do %>
+            <% :hit -> %>
+              <p class="text-2xl font-bold text-purple-600"><%= @debug_data.mv_fallback.event_count %> events</p>
+              <p class="text-sm text-gray-600">
+                <%= if types = @debug_data.mv_fallback[:types] do %>
+                  <%= Map.get(types, :movie_group, 0) %> movies,
+                  <%= Map.get(types, :event_group, 0) %> groups,
+                  <%= Map.get(types, :regular, 0) %> regular
+                <% end %>
+              </p>
+              <p class="text-xs text-gray-500"><%= @debug_data.mv_fallback.duration_ms %>ms</p>
+            <% :empty -> %>
+              <p class="text-2xl font-bold text-orange-600">EMPTY</p>
+              <p class="text-sm text-gray-600">MV has no events for this city</p>
+            <% :error -> %>
+              <p class="text-red-600">Error: <%= @debug_data.mv_fallback[:error] %></p>
+          <% end %>
+        </div>
+
         <!-- Current Path -->
         <div class="bg-white p-4 rounded-lg shadow">
-          <h3 class="font-semibold text-gray-800 mb-2">3. Current Path</h3>
+          <h3 class="font-semibold text-gray-800 mb-2">4. Current Path</h3>
           <p class="text-xs text-gray-500 mb-2"><%= @debug_data.current_path.path %></p>
           <%= if @debug_data.current_path[:event_count] do %>
             <p class="text-2xl font-bold text-indigo-600"><%= @debug_data.current_path.event_count %> events</p>
@@ -790,6 +846,19 @@ defmodule EventasaurusWeb.CityLive.Index do
             <%= if @debug_data.cachex_base[:sample_events] do %>
               <ul class="list-disc pl-4">
                 <%= for event <- @debug_data.cachex_base.sample_events do %>
+                  <li>
+                    <%= event.title %>
+                    <%= if event.has_image, do: "📷", else: "❌" %>
+                  </li>
+                <% end %>
+              </ul>
+            <% end %>
+          </div>
+          <div>
+            <h4 class="font-semibold">MV Fallback:</h4>
+            <%= if @debug_data.mv_fallback[:sample_events] do %>
+              <ul class="list-disc pl-4">
+                <%= for event <- @debug_data.mv_fallback.sample_events do %>
                   <li>
                     <%= event.title %>
                     <%= if event.has_image, do: "📷", else: "❌" %>
@@ -913,7 +982,7 @@ defmodule EventasaurusWeb.CityLive.Index do
 
               {:miss, nil} ->
                 # No base cache yet - try MV fallback before per-filter cache
-                case fetch_from_mv_fallback(city) do
+                case fetch_from_mv_fallback(city, filters) do
                   {:ok, result} ->
                     Logger.info("[CityPage] MV Fallback HIT for #{city.slug} (base cache miss)")
 
@@ -1032,7 +1101,7 @@ defmodule EventasaurusWeb.CityLive.Index do
 
       {:ok, %{events: []} = _empty_cache} ->
         # Cache hit but EMPTY - try MV fallback, then live query
-        case fetch_from_mv_fallback(city) do
+        case fetch_from_mv_fallback(city, filters) do
           {:ok, result} ->
             Logger.info("[CityPage] MV Fallback HIT for #{city.slug} (filter cache stale-empty)")
             result
@@ -1047,7 +1116,7 @@ defmodule EventasaurusWeb.CityLive.Index do
 
       {:miss, nil} ->
         # Cache miss - try MV fallback, then live query
-        case fetch_from_mv_fallback(city) do
+        case fetch_from_mv_fallback(city, filters) do
           {:ok, result} ->
             Logger.info("[CityPage] MV Fallback HIT for #{city.slug} (filter cache miss)")
             result
@@ -1089,8 +1158,13 @@ defmodule EventasaurusWeb.CityLive.Index do
   # MV fallback — Tier 3 in cache chain (Issue #3686)
   # Sub-5ms guaranteed response from city_events_mv materialized view
   # Returns {:ok, tuple} on hit, :miss on failure/empty
-  defp fetch_from_mv_fallback(city) do
-    case CityEventsFallback.get_events_with_counts(city.slug) do
+  defp fetch_from_mv_fallback(city, filters) do
+    mv_opts = [
+      page: filters[:page] || 1,
+      page_size: filters[:page_size] || 30
+    ]
+
+    case CityEventsFallback.get_events_with_counts(city.slug, mv_opts) do
       {:ok, %{events: events} = data} when events != [] ->
         {:ok, {events, data.total_count, data.all_events_count, data.date_counts, :mv_fallback}}
 
@@ -1650,9 +1724,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     language = socket.assigns.language
     filters = socket.assigns.filters
 
-    lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
-    lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
-
     debug_data = %{
       fetched_at: DateTime.utc_now(),
       city_slug: city.slug,
@@ -1660,21 +1731,25 @@ defmodule EventasaurusWeb.CityLive.Index do
     }
 
     # 1. Direct database query (bypasses all caching)
+    # Uses city_id for exact boundary match (same as fetch_events pipeline, Issue #3673)
     direct_result =
       try do
         start_time = System.monotonic_time(:millisecond)
 
-        query_filters = %{
-          language: language,
-          sort_by: :starts_at,
-          sort_order: :asc,
-          page_size: 1000,
-          page: 1,
-          center_lat: lat,
-          center_lng: lng,
-          radius_km: radius_km,
-          show_past: false
-        }
+        query_filters =
+          %{
+            language: language,
+            sort_by: :starts_at,
+            sort_order: :asc,
+            page_size: 1000,
+            page: 1,
+            city_id: city.id,
+            aggregate: true,
+            ignore_city_in_aggregation: true,
+            viewing_city: city,
+            show_past: false
+          }
+          |> EventFilters.enrich_with_all_events_filters()
 
         # Use PublicEventsEnhanced directly to bypass cache
         # Returns tuple: {events, total_count, all_events_count}
@@ -1757,9 +1832,47 @@ defmodule EventasaurusWeb.CityLive.Index do
           %{path: "error", error: Exception.message(e)}
       end
 
+    # 4. MV Fallback (materialized view — Issue #3686)
+    mv_result =
+      try do
+        start_time = System.monotonic_time(:millisecond)
+
+        case CityEventsFallback.get_events_with_counts(city.slug) do
+          {:ok, %{events: events} = data} when events != [] ->
+            duration = System.monotonic_time(:millisecond) - start_time
+
+            mv_types =
+              Enum.frequencies_by(events, fn
+                %EventasaurusDiscovery.Movies.AggregatedMovieGroup{} -> :movie_group
+                %EventasaurusDiscovery.PublicEvents.AggregatedEventGroup{} -> :event_group
+                _ -> :regular
+              end)
+
+            %{
+              status: :hit,
+              event_count: data.total_count,
+              all_events_count: data.all_events_count,
+              duration_ms: duration,
+              types: mv_types,
+              row_count: data.all_events_count,
+              sample_events: Enum.take(events, 3) |> Enum.map(&event_summary/1)
+            }
+
+          {:ok, _} ->
+            %{status: :empty, event_count: 0}
+
+          {:error, reason} ->
+            %{status: :error, error: inspect(reason)}
+        end
+      rescue
+        e ->
+          %{status: :error, error: Exception.message(e)}
+      end
+
     debug_data
     |> Map.put(:direct_query, direct_result)
     |> Map.put(:cachex_base, cache_result)
+    |> Map.put(:mv_fallback, mv_result)
     |> Map.put(:current_path, current_result)
   end
 
