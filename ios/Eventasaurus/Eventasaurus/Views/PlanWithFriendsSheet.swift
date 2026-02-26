@@ -352,7 +352,9 @@ struct PlanWithFriendsSheet: View {
                 .font(DS.Typography.titleSecondary)
             Text(
                 planAlreadyExisted
-                    ? "Your group for this event already exists."
+                    ? (emails.count + selectedFriendIds.count > 0
+                        ? "\(emails.count + selectedFriendIds.count) new invite(s) sent to your existing plan."
+                        : "Your group for this event already exists.")
                     : "\(emails.count + selectedFriendIds.count) friends have been invited to your plan."
             )
             .font(DS.Typography.body)

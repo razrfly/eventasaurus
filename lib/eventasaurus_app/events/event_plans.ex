@@ -9,6 +9,7 @@ defmodule EventasaurusApp.Events.EventPlans do
   alias EventasaurusApp.Events.EventPlan
   alias EventasaurusApp.Accounts.User
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
+  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
 
   @doc """
   Creates a private event plan from a public event.
@@ -166,14 +167,14 @@ defmodule EventasaurusApp.Events.EventPlans do
   Used as a fallback for old private events that were created before cover image
   copying was implemented (cover_image_url nil on the private event).
   """
+  @spec get_public_event_cover_url(integer() | binary()) :: String.t() | nil
   def get_public_event_cover_url(private_event_id) do
-    alias EventasaurusDiscovery.PublicEvents.PublicEventSource
-
     Repo.one(
       from ep in EventPlan,
         join: pes in PublicEventSource,
           on: pes.event_id == ep.public_event_id and not is_nil(pes.image_url),
         where: ep.private_event_id == ^private_event_id,
+        order_by: [asc: pes.id],
         select: pes.image_url,
         limit: 1
     )
