@@ -61,6 +61,14 @@ config :tailwind,
       --output=../priv/static/assets/app.css
     ),
     cd: Path.expand("../assets", __DIR__)
+  ],
+  oatmeal: [
+    args: ~w(
+      --config=tailwind.oatmeal.config.js
+      --input=css/oatmeal.css
+      --output=../priv/static/assets/oatmeal.css
+    ),
+    cd: Path.expand("../assets", __DIR__)
   ]
 
 # Configures Elixir's Logger

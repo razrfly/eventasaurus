@@ -204,9 +204,10 @@ defmodule Eventasaurus.MixProject do
         "tailwind.install --if-missing",
         "esbuild.install --if-missing"
       ],
-      "assets.build": ["tailwind eventasaurus", "esbuild eventasaurus"],
+      "assets.build": ["tailwind eventasaurus", "tailwind oatmeal", "esbuild eventasaurus"],
       "assets.deploy": [
         "tailwind eventasaurus --minify",
+        "tailwind oatmeal --minify",
         "esbuild eventasaurus --minify",
         "phx.digest",
         "sentry.package_source_code"

@@ -13,6 +13,8 @@ defmodule EventasaurusWeb.MarketingController do
 
   @spec oatmeal_demo(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def oatmeal_demo(conn, _params) do
-    render(conn, :oatmeal_demo, layout: false)
+    conn
+    |> put_root_layout(false)
+    |> render(:oatmeal_demo, layout: false)
   end
 end
