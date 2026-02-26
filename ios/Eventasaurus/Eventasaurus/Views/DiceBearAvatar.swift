@@ -93,8 +93,14 @@ struct DiceBearAvatar: View {
     /// Warms the NSCache for a batch of avatar URLs concurrently.
     /// Call this before rendering a list of avatars so images are ready on first render.
     nonisolated static func prefetch(avatarUrls: [URL]) async {
+        let maxConcurrent = 6
         await withTaskGroup(of: Void.self) { group in
+            var active = 0
             for inputURL in avatarUrls {
+                if active >= maxConcurrent {
+                    await group.next()
+                    active -= 1
+                }
                 group.addTask {
                     let url = pngURL(from: inputURL)
                     let key = url.absoluteString as NSString
@@ -105,6 +111,7 @@ struct DiceBearAvatar: View {
                           let uiImage = UIImage(data: data) else { return }
                     imageCache.setObject(uiImage, forKey: key)
                 }
+                active += 1
             }
         }
     }
