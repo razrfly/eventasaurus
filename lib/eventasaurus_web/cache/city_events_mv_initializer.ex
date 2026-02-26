@@ -76,7 +76,6 @@ defmodule EventasaurusWeb.Cache.CityEventsMvInitializer do
           "[CityEventsMvInitializer] MV refreshed in #{duration_ms}ms - #{row_count} rows"
         )
 
-        CityEventsMv.persist_last_refresh(row_count, duration_ms)
         :ok
 
       {:error, :view_not_found} ->

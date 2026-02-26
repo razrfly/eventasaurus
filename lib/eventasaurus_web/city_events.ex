@@ -101,8 +101,12 @@ defmodule EventasaurusWeb.CityEvents do
   by calling `fetch_from_mv/2` first and wrapping this function for the empty case.
   """
   @spec serve_degraded(String.t() | nil, keyword()) :: result_tuple()
-  def serve_degraded(city_slug, _opts \\ []) do
-    case CityEventsFallback.get_events_with_counts(city_slug || "") do
+  def serve_degraded(city_slug, opts \\ [])
+
+  def serve_degraded(nil, opts), do: serve_degraded("", opts)
+
+  def serve_degraded(city_slug, _opts) do
+    case CityEventsFallback.get_events_with_counts(city_slug) do
       {:ok, %{events: [_ | _] = events} = data} ->
         emit_degraded(:mv, city_slug)
         {events, data.total_count, data.all_events_count, data.date_counts, :degraded_mv}

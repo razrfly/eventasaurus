@@ -6,10 +6,12 @@ defmodule EventasaurusWeb.MarketingController do
     render(conn, :why_wombie, layout: false)
   end
 
+  @spec why_not(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def why_not(conn, _params) do
     render(conn, :why_not, layout: false)
   end
 
+  @spec oatmeal_demo(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def oatmeal_demo(conn, _params) do
     render(conn, :oatmeal_demo, layout: false)
   end

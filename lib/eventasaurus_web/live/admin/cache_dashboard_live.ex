@@ -183,7 +183,7 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   def handle_event("refresh_mv_now", _params, socket) do
     pid = self()
 
-    Task.start(fn ->
+    Task.Supervisor.start_child(Eventasaurus.TaskSupervisor, fn ->
       result = CityEventsMv.refresh()
       send(pid, {:mv_refresh_result, result})
     end)

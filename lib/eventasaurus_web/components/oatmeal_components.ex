@@ -20,6 +20,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec oat_container(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_container(assigns) do
     ~H"""
     <div class={["mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10", @class]}>
@@ -36,6 +37,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :color, :string, default: "dark"
   slot :inner_block, required: true
 
+  @spec oat_heading(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_heading(assigns) do
     ~H"""
     <h1 class={[
@@ -59,6 +61,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec oat_subheading(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_subheading(assigns) do
     ~H"""
     <h2 class={[
@@ -78,6 +81,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :size, :string, default: "md"
   slot :inner_block, required: true
 
+  @spec oat_text(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_text(assigns) do
     ~H"""
     <div class={[
@@ -101,6 +105,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec oat_eyebrow(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_eyebrow(assigns) do
     ~H"""
     <div class={["text-sm/7 font-semibold text-oat-700", @class]}>
@@ -119,6 +124,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec oat_button(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_button(assigns) do
     assigns =
       assign(assigns, :classes, [
@@ -136,7 +142,7 @@ defmodule EventasaurusWeb.OatmealComponents do
       """
     else
       ~H"""
-      <button class={@classes}>
+      <button type="button" class={@classes}>
         <%= render_slot(@inner_block) %>
       </button>
       """
@@ -160,6 +166,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec oat_soft_button(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_soft_button(assigns) do
     assigns =
       assign(assigns, :classes, [
@@ -176,7 +183,7 @@ defmodule EventasaurusWeb.OatmealComponents do
       """
     else
       ~H"""
-      <button class={@classes}>
+      <button type="button" class={@classes}>
         <%= render_slot(@inner_block) %>
       </button>
       """
@@ -191,6 +198,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec oat_link(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_link(assigns) do
     ~H"""
     <a href={@href} class={["inline-flex items-center gap-2 text-sm/7 font-medium text-oat-950", @class]}>
@@ -216,6 +224,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   slot :cta
   slot :inner_block, required: true
 
+  @spec oat_section(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_section(assigns) do
     ~H"""
     <section id={@id} class={["py-16", @class]}>
@@ -257,6 +266,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   slot :subheadline, required: true
   slot :cta
 
+  @spec hero_simple_centered(map()) :: Phoenix.LiveView.Rendered.t()
   def hero_simple_centered(assigns) do
     ~H"""
     <section class={["py-16", @class]}>
@@ -290,6 +300,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec oat_feature(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_feature(assigns) do
     ~H"""
     <div class={["flex flex-col gap-2 text-sm/7", @class]}>
@@ -316,6 +327,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :features, required: true
 
+  @spec features_three_column(map()) :: Phoenix.LiveView.Rendered.t()
   def features_three_column(assigns) do
     ~H"""
     <.oat_section eyebrow={@eyebrow} headline={@headline} subheadline={@subheadline} class={@class}>
@@ -341,6 +353,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :quote, required: true
 
+  @spec testimonial_large_quote(map()) :: Phoenix.LiveView.Rendered.t()
   def testimonial_large_quote(assigns) do
     ~H"""
     <section class={["py-16", @class]}>
@@ -379,6 +392,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :text, :string, required: true
   attr :class, :string, default: ""
 
+  @spec oat_stat(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_stat(assigns) do
     ~H"""
     <div class={["rounded-xl bg-oat-950/[0.025] p-6", @class]}>
@@ -397,6 +411,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   slot :description, required: true
   slot :inner_block, required: true
 
+  @spec stats_three_column(map()) :: Phoenix.LiveView.Rendered.t()
   def stats_three_column(assigns) do
     ~H"""
     <section class={["py-16", @class]}>
@@ -431,6 +446,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :id, :string, required: true
   slot :answer, required: true
 
+  @spec oat_faq(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_faq(assigns) do
     ~H"""
     <div id={@id} phx-hook="FaqToggle">
@@ -487,6 +503,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec faqs_accordion(map()) :: Phoenix.LiveView.Rendered.t()
   def faqs_accordion(assigns) do
     ~H"""
     <section class={["py-16", @class]}>
@@ -521,6 +538,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   slot :subheadline
   slot :cta
 
+  @spec cta_simple_centered(map()) :: Phoenix.LiveView.Rendered.t()
   def cta_simple_centered(assigns) do
     ~H"""
     <section class={["py-16", @class]}>
@@ -554,6 +572,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   slot :links
   slot :actions
 
+  @spec oat_navbar(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_navbar(assigns) do
     ~H"""
     <header class={["sticky top-0 z-10 bg-oat-100", @class]}>
@@ -584,6 +603,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec oat_nav_link(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_nav_link(assigns) do
     ~H"""
     <a href={@href} class={["text-sm/7 font-medium text-oat-950", @class]}>
@@ -605,6 +625,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   slot :links, required: true
   slot :fineprint, required: true
 
+  @spec oat_footer(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_footer(assigns) do
     ~H"""
     <footer class={["pt-16", @class]}>
@@ -634,6 +655,7 @@ defmodule EventasaurusWeb.OatmealComponents do
   attr :class, :string, default: ""
   slot :inner_block, required: true
 
+  @spec oat_footer_link(map()) :: Phoenix.LiveView.Rendered.t()
   def oat_footer_link(assigns) do
     ~H"""
     <li class={["text-oat-700", @class]}>

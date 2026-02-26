@@ -21,14 +21,19 @@ defmodule EventasaurusWeb.Cache.CityEventsMv do
   """
   @spec refresh() :: {:ok, non_neg_integer() | :unknown} | {:error, term()}
   def refresh do
+    start_time = System.monotonic_time(:millisecond)
+
     case JobRepo.query(
            "REFRESH MATERIALIZED VIEW CONCURRENTLY city_events_mv",
            [],
            timeout: :timer.minutes(5)
          ) do
       {:ok, _} ->
+        duration_ms = System.monotonic_time(:millisecond) - start_time
+
         case row_count() do
           {:ok, count} ->
+            persist_last_refresh(count, duration_ms)
             {:ok, count}
 
           {:error, reason} ->

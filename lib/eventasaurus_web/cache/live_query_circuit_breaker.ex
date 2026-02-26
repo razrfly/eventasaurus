@@ -163,6 +163,7 @@ defmodule EventasaurusWeb.Cache.LiveQueryCircuitBreaker do
             failure_count: 0,
             failures: [],
             opened_at: nil,
+            probe_in_flight: false,
             last_state_change: System.monotonic_time(:millisecond)
         }
 
@@ -195,6 +196,7 @@ defmodule EventasaurusWeb.Cache.LiveQueryCircuitBreaker do
           | state: :open,
             opened_at: now,
             last_state_change: now,
+            probe_in_flight: false,
             last_failure_reason: reason
         }
 
