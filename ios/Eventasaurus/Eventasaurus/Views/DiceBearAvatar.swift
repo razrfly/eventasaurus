@@ -101,6 +101,7 @@ struct DiceBearAvatar: View {
                     await group.next()
                     active -= 1
                 }
+                active += 1
                 group.addTask {
                     let url = pngURL(from: inputURL)
                     let key = url.absoluteString as NSString
@@ -111,7 +112,6 @@ struct DiceBearAvatar: View {
                           let uiImage = UIImage(data: data) else { return }
                     imageCache.setObject(uiImage, forKey: key)
                 }
-                active += 1
             }
         }
     }

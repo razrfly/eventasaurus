@@ -61,21 +61,20 @@ struct ContentView: View {
             }
             #endif
 
-            ZStack(alignment: .bottom) {
-                TabView(selection: $selectedTab) {
-                    MyEventsView(upcomingCount: $upcomingEventCount)
-                        .tag(AppTab.home)
-                        .toolbar(.hidden, for: .tabBar)
+            TabView(selection: $selectedTab) {
+                MyEventsView(upcomingCount: $upcomingEventCount)
+                    .tag(AppTab.home)
+                    .toolbar(.hidden, for: .tabBar)
 
-                    DiscoverView()
-                        .tag(AppTab.discover)
-                        .toolbar(.hidden, for: .tabBar)
+                DiscoverView()
+                    .tag(AppTab.discover)
+                    .toolbar(.hidden, for: .tabBar)
 
-                    ChatView()
-                        .tag(AppTab.chat)
-                        .toolbar(.hidden, for: .tabBar)
-                }
-
+                ChatView()
+                    .tag(AppTab.chat)
+                    .toolbar(.hidden, for: .tabBar)
+            }
+            .safeAreaInset(edge: .bottom) {
                 GlassTabBar(selectedTab: $selectedTab, eventCount: upcomingEventCount)
                     .padding(.horizontal, DS.Spacing.xl)
                     .padding(.bottom, DS.Spacing.lg)

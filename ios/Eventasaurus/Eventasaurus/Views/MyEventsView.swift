@@ -33,7 +33,7 @@ struct MyEventsView: View {
     // Cache per time filter to avoid re-fetching on tab switch
     @State private var cache: [TimeFilter: [DashboardEvent]] = [:]
 
-    init(upcomingCount: Binding<Int> = .constant(0)) {
+    init(upcomingCount: Binding<Int>) {
         self._upcomingCount = upcomingCount
     }
 
