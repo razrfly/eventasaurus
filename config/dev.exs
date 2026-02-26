@@ -225,7 +225,8 @@ config :eventasaurus, EventasaurusWeb.Endpoint,
   adapter: Phoenix.Endpoint.Cowboy2Adapter,
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:eventasaurus, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:eventasaurus, ~w(--watch)]}
+    tailwind: {Tailwind, :install_and_run, [:eventasaurus, ~w(--watch)]},
+    tailwind_oatmeal: {Tailwind, :install_and_run, [:oatmeal, ~w(--watch)]}
   ]
 
 # ## SSL Support
