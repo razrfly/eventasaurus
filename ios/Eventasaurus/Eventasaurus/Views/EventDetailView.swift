@@ -15,6 +15,8 @@ struct EventDetailView: View {
     @State private var existingPlan: GQLPlan?
     @State private var planSheetEvent: Event?
 
+    @Environment(\.tabBarSafeAreaInset) private var tabBarSafeAreaInset
+
     // Polls state
     @State private var polls: [EventPoll] = []
     @State private var pollRefreshID = UUID()
@@ -215,9 +217,11 @@ struct EventDetailView: View {
             if event.isInternalEvent && rsvpStatus == nil && event.isUpcoming {
                 // Internal event, no RSVP yet — show Going/Interested
                 rsvpActionBar
+                    .padding(.bottom, tabBarSafeAreaInset)
             } else if !event.isInternalEvent && event.isUpcoming && existingPlan == nil {
                 // Public event, no plan yet — show Plan with Friends
                 publicEventActionBar
+                    .padding(.bottom, tabBarSafeAreaInset)
             }
         }
     }

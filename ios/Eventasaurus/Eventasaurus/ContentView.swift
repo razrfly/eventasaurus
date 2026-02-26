@@ -2,6 +2,20 @@ import SwiftUI
 import ClerkKit
 import ClerkKitUI
 
+// MARK: - Tab bar height environment key
+// Injected by ContentView so NavigationStack-pushed views can pad their action bars
+// to appear above the custom GlassTabBar (safeAreaInset doesn't propagate through pushes).
+private struct TabBarSafeAreaInsetKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    var tabBarSafeAreaInset: CGFloat {
+        get { self[TabBarSafeAreaInsetKey.self] }
+        set { self[TabBarSafeAreaInsetKey.self] = newValue }
+    }
+}
+
 struct ContentView: View {
     @Environment(Clerk.self) private var clerk
     @State private var showAuth = false
@@ -10,6 +24,7 @@ struct ContentView: View {
     @State private var presentedSlug: String?
     @State private var selectedTab: AppTab = .home
     @State private var upcomingEventCount: Int = 0
+    @State private var tabBarHeight: CGFloat = 0
     #if DEBUG
     @State private var showDevPicker = false
     @State private var showEnvironmentConfirm = false
@@ -74,12 +89,14 @@ struct ContentView: View {
                     .tag(AppTab.chat)
                     .toolbar(.hidden, for: .tabBar)
             }
-            .safeAreaInset(edge: .bottom) {
-                GlassTabBar(selectedTab: $selectedTab, eventCount: upcomingEventCount)
-                    .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.bottom, DS.Spacing.lg)
-            }
         }
+        .safeAreaInset(edge: .bottom) {
+            GlassTabBar(selectedTab: $selectedTab, eventCount: upcomingEventCount)
+                .padding(.horizontal, DS.Spacing.xl)
+                .padding(.bottom, DS.Spacing.lg)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tabBarHeight = $0 }
+        }
+        .environment(\.tabBarSafeAreaInset, tabBarHeight)
     }
 
     #if DEBUG

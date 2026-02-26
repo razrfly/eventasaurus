@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusWeb.CityEvents
   alias EventasaurusApp.{Events, Repo}
+  alias EventasaurusApp.Events.EventPlans
   alias EventasaurusApp.Events.EventParticipant
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Helpers.SourceAttribution
@@ -645,6 +646,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   end
 
   defp serialize_user_event_detail(event, user) do
+    cover_image_url = event.cover_image_url || EventPlans.get_public_event_cover_url(event.id)
+
     participant_count =
       Events.list_event_participants(event)
       |> length()
@@ -653,6 +656,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
 
     serialize_user_event(event)
     |> Map.merge(%{
+      cover_image_url: resolve_image_url(cover_image_url),
       description: event.description,
       attendee_count: participant_count,
       is_attending: registration_status in [:registered, :organizer],

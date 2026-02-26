@@ -9,6 +9,7 @@ struct PlanWithFriendsSheet: View {
     @State private var message = ""
     @State private var isSubmitting = false
     @State private var showSuccess = false
+    @State private var planAlreadyExisted = false
     @State private var errorMessage: String?
 
     // Suggestions
@@ -344,15 +345,19 @@ struct PlanWithFriendsSheet: View {
     private var successView: some View {
         VStack(spacing: DS.Spacing.xl) {
             Spacer()
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: planAlreadyExisted ? "person.2.fill" : "checkmark.circle.fill")
                 .font(.system(size: 56))
-                .foregroundStyle(DS.Colors.success)
-            Text("Invites sent!")
+                .foregroundStyle(planAlreadyExisted ? DS.Colors.plan : DS.Colors.success)
+            Text(planAlreadyExisted ? "You already have a plan!" : "Invites sent!")
                 .font(DS.Typography.titleSecondary)
-            Text("\(emails.count + selectedFriendIds.count) friends have been invited to your plan.")
-                .font(DS.Typography.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            Text(
+                planAlreadyExisted
+                    ? "Your group for this event already exists."
+                    : "\(emails.count + selectedFriendIds.count) friends have been invited to your plan."
+            )
+            .font(DS.Typography.body)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
             Spacer()
         }
         .padding(DS.Spacing.xl)
@@ -400,6 +405,7 @@ struct PlanWithFriendsSheet: View {
                 message: message.isEmpty ? nil : message
             )
 
+            planAlreadyExisted = plan.alreadyExists == true
             onPlanCreated(plan)
             withAnimation(DS.Animation.bouncy) {
                 showSuccess = true

@@ -161,6 +161,25 @@ defmodule EventasaurusApp.Events.EventPlans do
   end
 
   @doc """
+  Returns the cover image URL from the public event linked to the given private event.
+
+  Used as a fallback for old private events that were created before cover image
+  copying was implemented (cover_image_url nil on the private event).
+  """
+  def get_public_event_cover_url(private_event_id) do
+    alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+
+    Repo.one(
+      from ep in EventPlan,
+        join: pes in PublicEventSource,
+          on: pes.event_id == ep.public_event_id and not is_nil(pes.image_url),
+        where: ep.private_event_id == ^private_event_id,
+        select: pes.image_url,
+        limit: 1
+    )
+  end
+
+  @doc """
   Checks if a user already has a plan for a public event.
   """
   def user_has_plan?(user_id, public_event_id) do
