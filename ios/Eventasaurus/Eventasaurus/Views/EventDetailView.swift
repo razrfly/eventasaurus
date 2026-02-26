@@ -10,6 +10,7 @@ struct EventDetailView: View {
     @State private var rsvpStatus: RsvpStatus?
     @State private var attendeeCount: Int = 0
     @State private var isUpdatingStatus = false
+    @State private var isOrganizer = false
 
     // Plan with Friends state
     @State private var existingPlan: GQLPlan?
@@ -214,7 +215,7 @@ struct EventDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if event.isInternalEvent && rsvpStatus == nil && event.isUpcoming {
+            if event.isInternalEvent && !isOrganizer && rsvpStatus == nil && event.isUpcoming {
                 // Internal event, no RSVP yet — show Going/Interested
                 rsvpActionBar
                     .padding(.bottom, tabBarSafeAreaInset)
@@ -443,10 +444,12 @@ struct EventDetailView: View {
                     let userEvent = try await GraphQLClient.shared.fetchEventAsAttendee(slug: slug)
                     rsvpStatus = userEvent.myRsvpStatus
                     attendeeCount = userEvent.participantCount
+                    isOrganizer = userEvent.isOrganizer
                 } catch {
                     // Non-fatal: event loaded from REST, just missing RSVP status
                     if let status = loaded.attendanceStatus {
                         rsvpStatus = RsvpStatus(restStatus: status)
+                        isOrganizer = (status == "organizer")
                     }
                     #if DEBUG
                     print("[EventDetailView] GraphQL RSVP fetch failed for \(slug): \(error)")
