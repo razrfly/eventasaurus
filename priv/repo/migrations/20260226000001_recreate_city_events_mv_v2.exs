@@ -153,94 +153,11 @@ defmodule EventasaurusApp.Repo.Migrations.RecreateCityEventsMvV2 do
   end
 
   def down do
-    # Drop v2 MV
-    execute("DROP MATERIALIZED VIEW IF EXISTS city_events_mv")
-
-    # Recreate old MV shape (columns from migration 20260127105300).
-    # NOTE: The movie join intentionally uses LEFT JOIN LATERAL instead of the
-    # original plain LEFT JOIN to avoid duplicate rows when an event has multiple
-    # movies. This is a deliberate improvement over the prior MV shape.
-    execute("""
-    CREATE MATERIALIZED VIEW city_events_mv AS
-    SELECT
-      pe.id AS event_id,
-      pe.title,
-      pe.slug AS event_slug,
-      pe.starts_at,
-      pe.ends_at,
-      pe.occurrences,
-      c.id AS city_id,
-      c.slug AS city_slug,
-      c.name AS city_name,
-      c.timezone AS city_timezone,
-      v.id AS venue_id,
-      v.name AS venue_name,
-      v.slug AS venue_slug,
-      v.latitude AS venue_lat,
-      v.longitude AS venue_lng,
-      v.is_public AS venue_is_public,
-      cat.id AS category_id,
-      cat.name AS category_name,
-      cat.slug AS category_slug,
-      -- Movie identification columns
-      m.movie_id,
-      m.movie_title,
-      m.movie_slug,
-      m.movie_release_date,
-      -- Image columns
-      m.movie_poster_url,
-      m.movie_backdrop_url,
-      primary_source.image_url AS source_image_url
-    FROM public_events pe
-    JOIN venues v ON v.id = pe.venue_id
-    JOIN cities c ON c.id = v.city_id
-    LEFT JOIN public_event_categories pec ON pec.event_id = pe.id AND pec.is_primary = true
-    LEFT JOIN categories cat ON cat.id = pec.category_id
-    -- Movie join: get at most one movie per event to avoid duplicate rows
-    LEFT JOIN LATERAL (
-      SELECT
-        mov.id AS movie_id,
-        mov.title AS movie_title,
-        mov.slug AS movie_slug,
-        mov.release_date AS movie_release_date,
-        mov.poster_url AS movie_poster_url,
-        mov.backdrop_url AS movie_backdrop_url
-      FROM event_movies em
-      JOIN movies mov ON mov.id = em.movie_id
-      WHERE em.event_id = pe.id
-      ORDER BY mov.id ASC
-      LIMIT 1
-    ) AS m ON true
-    LEFT JOIN LATERAL (
-      SELECT pes.image_url
-      FROM public_event_sources pes
-      WHERE pes.event_id = pe.id
-        AND pes.image_url IS NOT NULL
-      ORDER BY
-        COALESCE(
-          CASE
-            WHEN pes.metadata->>'priority' ~ '^[0-9]+$'
-            THEN (pes.metadata->>'priority')::integer
-            ELSE NULL
-          END,
-          10
-        ) ASC,
-        pes.last_seen_at DESC
-      LIMIT 1
-    ) AS primary_source ON true
-    WHERE pe.starts_at >= CURRENT_DATE
-      AND pe.starts_at < CURRENT_DATE + INTERVAL '60 days'
-      AND v.is_public = true
-    WITH DATA
-    """)
-
-    execute("CREATE UNIQUE INDEX city_events_mv_event_id_idx ON city_events_mv (event_id)")
-    execute("CREATE INDEX city_events_mv_city_slug_idx ON city_events_mv (city_slug)")
-    execute("CREATE INDEX city_events_mv_city_date_idx ON city_events_mv (city_slug, starts_at)")
-    execute("CREATE INDEX city_events_mv_starts_at_idx ON city_events_mv (starts_at)")
-
-    execute(
-      "CREATE INDEX city_events_mv_movie_id_idx ON city_events_mv (movie_id) WHERE movie_id IS NOT NULL"
-    )
+    # This migration cannot be reversed: the original MV shape (migration 20260127105300)
+    # used a plain LEFT JOIN for movies which can produce duplicate rows when an event
+    # has multiple movies. Restoring that exact query would reintroduce that bug, and
+    # the new source aggregation columns (source_id, source_slug, etc.) have no equivalent
+    # in the old schema. Roll forward instead of rolling back.
+    raise Ecto.MigrationError, message: "irreversible migration"
   end
 end

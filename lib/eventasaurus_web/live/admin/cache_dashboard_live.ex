@@ -14,6 +14,7 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   require Logger
 
   alias EventasaurusDiscovery.Admin.DiscoveryConfigManager
+  alias EventasaurusWeb.Cache.CityEventsMv
   alias EventasaurusWeb.Cache.CityPageCache
   alias EventasaurusWeb.Cache.LiveQueryCircuitBreaker
   alias EventasaurusApp.Repo
@@ -36,10 +37,14 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
       |> assign(:health_report, nil)
       |> assign(:health_loading, false)
       |> assign(:circuit_breaker, cb_state)
+      |> assign(:mv_status, nil)
+      |> assign(:mv_refreshing, false)
 
     {:ok, socket}
   end
 
+  @spec handle_event(String.t(), map() | nil, Phoenix.LiveView.Socket.t()) ::
+          {:noreply, Phoenix.LiveView.Socket.t()}
   @impl true
   def handle_event("select_city", %{"city_slug" => city_slug}, socket) do
     slug = if city_slug == "", do: nil, else: city_slug
@@ -154,6 +159,62 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   @impl true
   def handle_event("dismiss_flash", _params, socket) do
     {:noreply, assign(socket, :flash_message, nil)}
+  end
+
+  @impl true
+  def handle_event("load_mv_status", _params, socket) do
+    row_count =
+      case CityEventsMv.row_count() do
+        {:ok, n} -> n
+        _ -> nil
+      end
+
+    socket =
+      assign(socket, :mv_status, %{
+        row_count: row_count,
+        last_refresh: CityEventsMv.last_refresh_info(),
+        next_refresh: next_scheduled_refresh()
+      })
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("refresh_mv_now", _params, socket) do
+    pid = self()
+
+    Task.start(fn ->
+      result = CityEventsMv.refresh()
+      send(pid, {:mv_refresh_result, result})
+    end)
+
+    {:noreply, assign(socket, :mv_refreshing, true)}
+  end
+
+  @impl true
+  def handle_info({:mv_refresh_result, {:ok, row_count}}, socket) do
+    socket =
+      assign(socket,
+        mv_refreshing: false,
+        mv_status: %{
+          row_count: row_count,
+          last_refresh: CityEventsMv.last_refresh_info(),
+          next_refresh: next_scheduled_refresh()
+        }
+      )
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:mv_refresh_result, {:error, reason}}, socket) do
+    socket =
+      assign(socket,
+        mv_refreshing: false,
+        flash_message: {:error, "MV refresh failed: #{inspect(reason)}"}
+      )
+
+    {:noreply, socket}
   end
 
   # Get count from Cachex cache for a city (read-only peek, no refresh triggers)
@@ -362,6 +423,77 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
         </div>
       </div>
 
+      <!-- Materialized View Panel -->
+      <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-xl font-semibold text-gray-900">Materialized View</h2>
+            <p class="text-sm text-gray-600">
+              Refreshed hourly at :15 (Tier 3 fallback). Serves when Cachex misses.
+            </p>
+          </div>
+          <button
+            phx-click="load_mv_status"
+            class="px-3 py-1 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+          >
+            Load Status
+          </button>
+        </div>
+
+        <%= if @mv_status do %>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-gray-50 rounded-lg p-4">
+              <p class="text-xs text-gray-500 uppercase mb-1">Row Count</p>
+              <p class="text-2xl font-bold text-gray-900">
+                <%= if @mv_status.row_count, do: format_count(@mv_status.row_count), else: "—" %>
+              </p>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-4">
+              <p class="text-xs text-gray-500 uppercase mb-1">Next Scheduled</p>
+              <p class="text-sm font-medium text-gray-900">
+                <%= Calendar.strftime(@mv_status.next_refresh, "%H:%M:%S UTC") %>
+              </p>
+            </div>
+          </div>
+
+          <%= if @mv_status.last_refresh do %>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs text-gray-500 uppercase mb-1">Last Refresh</p>
+                <p class="text-sm text-gray-900">
+                  <%= format_relative_time(@mv_status.last_refresh.at) %>
+                  (<%= Calendar.strftime(DateTime.truncate(@mv_status.last_refresh.at, :second), "%H:%M:%S UTC") %>)
+                </p>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-4">
+                <p class="text-xs text-gray-500 uppercase mb-1">Refresh Duration</p>
+                <p class="text-sm font-medium text-gray-900">
+                  <%= format_duration_ms(@mv_status.last_refresh.duration_ms) %>
+                </p>
+              </div>
+            </div>
+          <% else %>
+            <p class="text-sm text-gray-500 mb-4">No refresh data available (server may have just started).</p>
+          <% end %>
+
+          <button
+            phx-click="refresh_mv_now"
+            disabled={@mv_refreshing}
+            class={"px-4 py-2 rounded-md text-white font-medium #{if @mv_refreshing, do: "bg-gray-400 cursor-not-allowed", else: "bg-blue-600 hover:bg-blue-700"}"}
+          >
+            <%= if @mv_refreshing do %>
+              Refreshing...
+            <% else %>
+              Refresh Now
+            <% end %>
+          </button>
+        <% else %>
+          <div class="text-center py-4 text-gray-500">
+            Click "Load Status" to view materialized view info.
+          </div>
+        <% end %>
+      </div>
+
       <!-- Cache Health Report -->
       <div class="bg-white shadow rounded-lg p-6">
         <div class="flex items-center justify-between mb-4">
@@ -472,4 +604,29 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   defp cb_admin_label(:open), do: "OPEN"
   defp cb_admin_label(:half_open), do: "HALF_OPEN"
   defp cb_admin_label(_), do: "UNKNOWN"
+
+  # Compute the next :15 minute mark after UTC now
+  defp next_scheduled_refresh do
+    epoch_seconds = DateTime.to_unix(DateTime.utc_now())
+    current_hour_start = epoch_seconds - rem(epoch_seconds, 3600)
+    next_15 = current_hour_start + 15 * 60
+    next_15 = if epoch_seconds >= next_15, do: next_15 + 3600, else: next_15
+    DateTime.from_unix!(next_15)
+  end
+
+  defp format_relative_time(datetime) do
+    diff = DateTime.diff(DateTime.utc_now(), datetime, :second)
+
+    cond do
+      diff < 60 -> "#{diff} seconds ago"
+      diff < 3600 -> "#{div(diff, 60)} minutes ago"
+      true -> "#{div(diff, 3600)} hours ago"
+    end
+  end
+
+  defp format_duration_ms(ms) when is_integer(ms) do
+    if ms < 1000, do: "#{ms}ms", else: "#{Float.round(ms / 1000, 1)}s"
+  end
+
+  defp format_duration_ms(_), do: "—"
 end

@@ -8,8 +8,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
-  alias EventasaurusWeb.Cache.CityEventsFallback
-  alias EventasaurusWeb.Cache.LiveQueryCircuitBreaker
+  alias EventasaurusWeb.CityEvents
   alias EventasaurusApp.{Events, Repo}
   alias EventasaurusApp.Events.EventParticipant
   alias EventasaurusWeb.Live.Helpers.EventFilters
@@ -98,7 +97,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
           Keyword.has_key?(opts, :start_date) or Keyword.has_key?(opts, :end_date)
 
       case maybe_serve_from_mv(city_slug, page, per_page, has_complex_filters) do
-        {:ok, {items, total_count, all_count, mv_date_counts}} ->
+        {:ok, {items, total_count, all_count, mv_date_counts, _source}} ->
           query_ms = System.monotonic_time(:millisecond) - query_start
 
           :telemetry.execute(
@@ -121,47 +120,25 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
         :miss ->
           # Live query path with circuit breaker (Issue #3686 Phase 4)
           {items, total_count, all_count, date_range_counts, query_path} =
-            case LiveQueryCircuitBreaker.allow_request?() do
-              :ok ->
-                try do
-                  opts_for_aggregation =
-                    opts
-                    |> Keyword.put(:aggregate, true)
-                    |> Keyword.put(:ignore_city_in_aggregation, true)
-                    |> Map.new()
-                    |> EventFilters.enrich_with_all_events_filters()
+            CityEvents.with_circuit_breaker(city_slug, fn ->
+              opts_for_aggregation =
+                opts
+                |> Keyword.put(:aggregate, true)
+                |> Keyword.put(:ignore_city_in_aggregation, true)
+                |> Map.new()
+                |> EventFilters.enrich_with_all_events_filters()
 
-                  {items, total_count, all_count} =
-                    PublicEventsEnhanced.list_events_with_aggregation_and_counts(
-                      opts_for_aggregation
-                    )
-
-                  LiveQueryCircuitBreaker.record_success()
-
-                  dr_counts =
-                    compute_date_range_counts(city_id, lat, lng, params, opts[:radius_km])
-
-                  path = if(city_id, do: :city_id, else: :lat_lng)
-                  {items, total_count, all_count, dr_counts, path}
-                rescue
-                  e ->
-                    LiveQueryCircuitBreaker.record_failure(Exception.message(e))
-
-                    Logger.warning(
-                      "Mobile live query failed: #{Exception.message(e)} — serving degraded fallback",
-                      city_id: city_id
-                    )
-
-                    mobile_degraded_fallback(city_slug, page, per_page)
-                end
-
-              {:circuit_open, :serve_fallback} ->
-                Logger.info("Mobile circuit OPEN — serving degraded fallback",
-                  city_id: city_id
+              {items, total_count, all_count} =
+                PublicEventsEnhanced.list_events_with_aggregation_and_counts(
+                  opts_for_aggregation
                 )
 
-                mobile_degraded_fallback(city_slug, page, per_page)
-            end
+              dr_counts =
+                compute_date_range_counts(city_id, lat, lng, params, opts[:radius_km])
+
+              path = if(city_id, do: :city_id, else: :lat_lng)
+              {items, total_count, all_count, dr_counts, path}
+            end)
 
           query_ms = System.monotonic_time(:millisecond) - query_start
 
@@ -309,56 +286,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     end)
   end
 
-  # --- Degraded fallback for mobile (Issue #3686 Phase 4) ---
-
-  # Serve-stale-on-error for mobile: MV fallback → empty result
-  # Mobile doesn't have a Cachex layer, so we only try MV
-  defp mobile_degraded_fallback(nil, _page, _per_page) do
-    :telemetry.execute(
-      [:eventasaurus, :fallback, :degraded],
-      %{system_time: System.system_time(:millisecond)},
-      %{source: :empty, city: nil}
-    )
-
-    {[], 0, 0, %{}, :degraded_empty}
-  end
-
-  defp mobile_degraded_fallback(city_slug, page, per_page) do
-    case CityEventsFallback.get_events_with_counts(city_slug, page: page, page_size: per_page) do
-      {:ok, %{events: events} = data} when events != [] ->
-        :telemetry.execute(
-          [:eventasaurus, :fallback, :degraded],
-          %{system_time: System.system_time(:millisecond)},
-          %{source: :mv, city: city_slug}
-        )
-
-        {events, data.total_count, data.all_events_count, data.date_counts, :degraded_mv}
-
-      _ ->
-        :telemetry.execute(
-          [:eventasaurus, :fallback, :degraded],
-          %{system_time: System.system_time(:millisecond)},
-          %{source: :empty, city: city_slug}
-        )
-
-        {[], 0, 0, %{}, :degraded_empty}
-    end
-  end
-
   # --- MV fallback for mobile (Issue #3686) ---
 
   # Try serving from the materialized view when city slug is available and no complex filters
-  defp maybe_serve_from_mv(nil, _page, _per_page, _has_complex_filters), do: :miss
-  defp maybe_serve_from_mv(_slug, _page, _per_page, true = _has_complex_filters), do: :miss
-
-  defp maybe_serve_from_mv(slug, page, per_page, _has_complex_filters) when is_binary(slug) do
-    case CityEventsFallback.get_events_with_counts(slug, page: page, page_size: per_page) do
-      {:ok, %{events: events} = data} when events != [] ->
-        {:ok, {events, data.total_count, data.all_events_count, data.date_counts}}
-
-      _ ->
-        :miss
-    end
+  defp maybe_serve_from_mv(city_slug, page, per_page, has_complex_filters) do
+    CityEvents.fetch_from_mv(city_slug, page: page, page_size: per_page, skip: has_complex_filters)
   end
 
   # --- Coordinate resolution ---

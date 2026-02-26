@@ -1,6 +1,9 @@
 defmodule EventasaurusApp.Repo.Migrations.FixCityEventsMvPastFilter do
   use Ecto.Migration
 
+  # Required so REFRESH MATERIALIZED VIEW CONCURRENTLY can run outside a transaction.
+  @disable_ddl_transaction true
+
   @doc """
   Fix the city_events_mv WHERE clause to include events that started in the
   past but haven't ended yet.
@@ -27,6 +30,9 @@ defmodule EventasaurusApp.Repo.Migrations.FixCityEventsMvPastFilter do
   """
 
   def up do
+    # DROP the old view (brief moment of non-existence; the app falls back to live queries).
+    # Immediately replaced with WITH NO DATA so readers get an empty result instead of
+    # an error while data is being populated by REFRESH CONCURRENTLY below.
     execute("DROP MATERIALIZED VIEW IF EXISTS city_events_mv")
 
     execute("""
@@ -124,7 +130,7 @@ defmodule EventasaurusApp.Repo.Migrations.FixCityEventsMvPastFilter do
         -- Event without end time: keep if it starts today or later
         (pe.ends_at IS NULL AND pe.starts_at >= CURRENT_DATE)
       )
-    WITH DATA
+    WITH NO DATA
     """)
 
     # Indexes — same as v2
@@ -155,6 +161,10 @@ defmodule EventasaurusApp.Repo.Migrations.FixCityEventsMvPastFilter do
     ON city_events_mv (source_id)
     WHERE aggregate_on_index = true
     """)
+
+    # Populate the view without blocking readers. Requires the unique index above
+    # and @disable_ddl_transaction true (CONCURRENTLY cannot run inside a transaction).
+    execute("REFRESH MATERIALIZED VIEW CONCURRENTLY city_events_mv")
   end
 
   def down do

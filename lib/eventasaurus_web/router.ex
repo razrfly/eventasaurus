@@ -26,6 +26,8 @@ defmodule EventasaurusWeb.Router do
     scope "/dev/marketing", EventasaurusWeb do
       pipe_through :browser
       get "/why", MarketingController, :why_wombie
+      get "/why-not", MarketingController, :why_not
+      get "/oatmeal", MarketingController, :oatmeal_demo
     end
 
     # Admin LiveView routes (dev - no auth, mirrors production paths)

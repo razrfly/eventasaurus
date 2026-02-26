@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>Why Not? — Wombie</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
+    </script>
+  </head>
+  <body class="bg-oat-100 antialiased">
+    <%!-- ═══════════════════════════════════════════════════════════
+         Navbar — oat_navbar (logo + left-aligned links + actions)
+         ═══════════════════════════════════════════════════════════ --%>
+    <.oat_navbar>
+      <:links>
+        <.oat_nav_link href="/about">About</.oat_nav_link>
+        <.oat_nav_link href="/our-story">Our Story</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/why">Why Wombie</.oat_nav_link>
+      </:links>
+      <:actions>
+        <.oat_button href="/invite-only" size="md">Get Started</.oat_button>
+      </:actions>
+    </.oat_navbar>
+
+    <main class="isolate overflow-clip">
+      <%!-- ═══════════════════════════════════════════════════════════
+           Hero — hero_simple_centered
+           ═══════════════════════════════════════════════════════════ --%>
+      <.hero_simple_centered eyebrow="A different kind of social app">
+        <:headline>
+          What if your phone helped you
+          <em class="italic">leave the house</em>?
+        </:headline>
+        <:subheadline>
+          <p>
+            Wombie finds things to do near you, helps you invite the right people,
+            and gets out of the way. No feeds. No followers. Just plans.
+          </p>
+        </:subheadline>
+        <:cta>
+          <div class="flex flex-wrap items-center justify-center gap-4">
+            <.oat_button href="/invite-only" size="lg">Join the waitlist</.oat_button>
+            <.oat_soft_button href="/dev/marketing/why" size="lg">Learn more</.oat_soft_button>
+          </div>
+        </:cta>
+      </.hero_simple_centered>
+
+      <%!-- ═══════════════════════════════════════════════════════════
+           Features — features_three_column
+           ═══════════════════════════════════════════════════════════ --%>
+      <.features_three_column
+        eyebrow="How it works"
+        headline="Three ingredients for a great night out"
+        subheadline="Most social apps optimize for screen time. Wombie optimizes for real time — the kind you spend with people, not pixels."
+      >
+        <:features>
+          <.oat_feature icon="🔍" headline="Discover what's happening">
+            See events near you — from your friends' plans to local happenings that match your interests.
+            No algorithm deciding what you see.
+          </.oat_feature>
+          <.oat_feature icon="🤝" headline="Coordinate without the chaos">
+            Vote on dates, split logistics, and see who's in — all in one place.
+            No more 47-message group chat just to pick a restaurant.
+          </.oat_feature>
+          <.oat_feature icon="🚪" headline="Show up">
+            That's the whole point. Close the app. Open the door.
+            Be somewhere real with people who matter.
+          </.oat_feature>
+          <.oat_feature icon="🔒" headline="Private by default">
+            Every event starts private. You choose who to open it up to — close friends,
+            extended circle, or everyone nearby.
+          </.oat_feature>
+          <.oat_feature icon="📍" headline="Hyperlocal discovery">
+            Find things happening within walking distance. Your neighbourhood bar's jazz night.
+            The pop-up market three blocks away. The pickup basketball game in the park.
+          </.oat_feature>
+          <.oat_feature icon="🗳️" headline="Democratic planning">
+            No one person has to be the organizer. Everyone votes on when, where, and what.
+            The best plan wins.
+          </.oat_feature>
+        </:features>
+      </.features_three_column>
+
+      <%!-- ═══════════════════════════════════════════════════════════
+           Stats — stats_three_column
+           ═══════════════════════════════════════════════════════════ --%>
+      <.stats_three_column>
+        <:heading>The loneliness epidemic isn't about being alone</:heading>
+        <:description>
+          <p>
+            It's about being surrounded by 800 followers and having no one to call on a Friday night.
+            Social media promised connection. It delivered performance.
+          </p>
+          <p>
+            We measure success differently. Not daily active users. Not time spent in app.
+            One metric: did you actually go somewhere, with someone?
+          </p>
+        </:description>
+        <.oat_stat stat="3.2 hours/day" text="Average time adults spend on social media — time that could be spent with friends in person." />
+        <.oat_stat stat="1 in 3" text="Adults who report feeling lonely on a regular basis, despite being more digitally connected than ever." />
+        <.oat_stat stat="0 feeds" text="Wombie has zero algorithmic feeds, zero follower counts, and zero engagement-optimized timelines." />
+      </.stats_three_column>
+
+      <%!-- ═══════════════════════════════════════════════════════════
+           Testimonial — testimonial_large_quote
+           ═══════════════════════════════════════════════════════════ --%>
+      <.testimonial_large_quote
+        name="Maya K."
+        byline="Beta tester, Krakow"
+      >
+        <:quote>
+          I used to scroll through 200 stories on Instagram and still have nothing to do on a Friday.
+          Now I just open Wombie and see three plans my friends already started.
+        </:quote>
+      </.testimonial_large_quote>
+
+      <%!-- ═══════════════════════════════════════════════════════════
+           Features — what we'll never build (re-using features_three_column)
+           ═══════════════════════════════════════════════════════════ --%>
+      <.features_three_column
+        eyebrow="Our principles"
+        headline="What we will never build"
+        subheadline="Every feature decision starts with one question: does this get people into the same room? If not, we don't build it."
+      >
+        <:features>
+          <.oat_feature icon="🔔" headline="Push notification spam">
+            We won't nag you to "check out what your friends are doing." You'll look when you want to.
+          </.oat_feature>
+          <.oat_feature icon="📊" headline="Follower counts">
+            No public metrics. No popularity contests. Your worth isn't a number.
+          </.oat_feature>
+          <.oat_feature icon="🎯" headline="Algorithmic feeds">
+            No engagement-optimized timeline. You see what your friends share, chronologically.
+          </.oat_feature>
+          <.oat_feature icon="📣" headline="Viral sharing mechanics">
+            No "share to 5 friends to unlock." Growth through genuine word-of-mouth only.
+          </.oat_feature>
+          <.oat_feature icon="🤖" headline="AI-generated event suggestions">
+            We won't pretend to know what you want better than your friends do.
+          </.oat_feature>
+          <.oat_feature icon="💰" headline="Sponsored events in your feed">
+            Your social circle is not ad inventory. Period.
+          </.oat_feature>
+        </:features>
+      </.features_three_column>
+
+      <%!-- ═══════════════════════════════════════════════════════════
+           FAQ — faqs_accordion
+           ═══════════════════════════════════════════════════════════ --%>
+      <.faqs_accordion
+        headline="Frequently asked questions"
+        subheadline="Everything you might want to know about Wombie before you sign up."
+      >
+        <.oat_faq id="faq-1" question="Is Wombie a social network?">
+          <:answer>
+            <p>
+              Not really. Social networks are built around content — posts, stories, reels.
+              Wombie is built around plans. There's no feed, no profile page to curate,
+              and no way to "follow" someone. You just see events from people you actually know.
+            </p>
+          </:answer>
+        </.oat_faq>
+        <.oat_faq id="faq-2" question="How is this different from a group chat?">
+          <:answer>
+            <p>
+              Group chats are great for chatting. They're terrible for planning. Messages get buried,
+              nobody can agree on a date, and half the group never responds. Wombie gives you
+              structured tools — date voting, RSVPs, location sharing — without the noise.
+            </p>
+          </:answer>
+        </.oat_faq>
+        <.oat_faq id="faq-3" question="What about Eventbrite / Meetup / Facebook Events?">
+          <:answer>
+            <p>
+              Those are great for public events with strangers. Wombie is for private plans with
+              people you know. Friday film night with 6 friends. Birthday dinner at that new place.
+              Sunday hike with your running club. The stuff that never makes it onto Eventbrite.
+            </p>
+          </:answer>
+        </.oat_faq>
+        <.oat_faq id="faq-4" question="How do you make money without ads?">
+          <:answer>
+            <p>
+              We plan to charge a small subscription for premium features — things like larger event
+              groups, advanced coordination tools, and priority support. Your attention is not for sale.
+            </p>
+          </:answer>
+        </.oat_faq>
+        <.oat_faq id="faq-5" question="What does 'private by default' actually mean?">
+          <:answer>
+            <p>
+              Every event you create starts visible only to you. You then choose to share it with
+              close friends, your extended circle, or make it discoverable to people nearby.
+              You're always in control of who sees what.
+            </p>
+          </:answer>
+        </.oat_faq>
+        <.oat_faq id="faq-6" question="When can I try it?">
+          <:answer>
+            <p>
+              We're running a small beta in select cities. Join the waitlist and we'll let you
+              know when it's your turn. We're growing slowly on purpose — quality over quantity.
+            </p>
+          </:answer>
+        </.oat_faq>
+      </.faqs_accordion>
+
+      <%!-- ═══════════════════════════════════════════════════════════
+           CTA — cta_simple_centered
+           ═══════════════════════════════════════════════════════════ --%>
+      <.cta_simple_centered>
+        <:headline>
+          You never have to be alone on a Friday night again.
+        </:headline>
+        <:subheadline>
+          Wombie isn't another social network. It's the tool that gets you off the couch
+          and into the same room as the people you care about.
+        </:subheadline>
+        <:cta>
+          <.oat_button href="/invite-only" size="lg">Join the waitlist</.oat_button>
+        </:cta>
+      </.cta_simple_centered>
+    </main>
+
+    <%!-- ═══════════════════════════════════════════════════════════
+         Footer — oat_footer (links + fineprint)
+         ═══════════════════════════════════════════════════════════ --%>
+    <.oat_footer>
+      <:links>
+        <.oat_footer_link href="/about">About</.oat_footer_link>
+        <.oat_footer_link href="/our-story">Our Story</.oat_footer_link>
+        <.oat_footer_link href="/privacy">Privacy</.oat_footer_link>
+        <.oat_footer_link href="/terms">Terms</.oat_footer_link>
+        <.oat_footer_link href="/your-data">Your Data</.oat_footer_link>
+      </:links>
+      <:fineprint>
+        &copy; <%= Date.utc_today().year %> Wombie. All rights reserved.
+      </:fineprint>
+    </.oat_footer>
+  </body>
+</html>

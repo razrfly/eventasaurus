@@ -44,6 +44,22 @@ defmodule EventasaurusWeb.Cache.CityEventsMv do
     end
   end
 
+  @doc "Store the result of the most recent MV refresh."
+  @spec persist_last_refresh(non_neg_integer() | :unknown, non_neg_integer()) :: :ok
+  def persist_last_refresh(row_count, duration_ms) do
+    :persistent_term.put({__MODULE__, :last_refresh}, %{
+      at: DateTime.utc_now(),
+      row_count: row_count,
+      duration_ms: duration_ms
+    })
+  end
+
+  @doc "Get the stored result of the most recent MV refresh. Returns nil if no refresh has run."
+  @spec last_refresh_info() :: map() | nil
+  def last_refresh_info do
+    :persistent_term.get({__MODULE__, :last_refresh}, nil)
+  end
+
   @doc """
   Get the current row count of the materialized view.
 
