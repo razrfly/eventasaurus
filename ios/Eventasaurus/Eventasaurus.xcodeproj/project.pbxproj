@@ -86,6 +86,8 @@
 		D4FDFE920221381C961396FC /* EventDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEAE06F4511DE5D006AFDD1 /* EventDetailView.swift */; };
 		D577F3F99A409AC4E9EBC795 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29DB2240AAF684CE1A11E249 /* LocationManager.swift */; };
 		D89359C2908E59F740218F2D /* EventRoleBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F913C199073C728397A1B17C /* EventRoleBadge.swift */; };
+		E4A1B2C3D5F607890123A001 /* GlassTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4A1B2C3D5F607890123B001 /* GlassTabBar.swift */; };
+		E4A1B2C3D5F607890123A002 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4A1B2C3D5F607890123B002 /* ChatView.swift */; };
 		D8DB093BB32B456D165D661C /* ApprovalVotingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D877A22F5506D97CCDC6B037 /* ApprovalVotingView.swift */; };
 		DBCCCB04C953FC3B590FB802 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A60E8B52121B630D8E34C9 /* APIClient.swift */; };
 		DC581E0753A15CDF03AD5CF5 /* VenueMapCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90BC383D7C38EF029AA1C1D4 /* VenueMapCard.swift */; };
@@ -210,6 +212,8 @@
 		FDAC37A111C3255FF5F29365 /* ManageHistoryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageHistoryTab.swift; sourceTree = "<group>"; };
 		FF6EC223F595A37DD515F75C /* DevEnvironmentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevEnvironmentService.swift; sourceTree = "<group>"; };
 		F7A3B9C2D1E4F5068A7B3C9D /* ScreeningScheduleSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreeningScheduleSection.swift; sourceTree = "<group>"; };
+		E4A1B2C3D5F607890123B001 /* GlassTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassTabBar.swift; sourceTree = "<group>"; };
+		E4A1B2C3D5F607890123B002 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -241,6 +245,22 @@
 				F913C199073C728397A1B17C /* EventRoleBadge.swift */,
 			);
 			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		E4A1B2C3D5F607890123C001 /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				E4A1B2C3D5F607890123B002 /* ChatView.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		E4A1B2C3D5F607890123C002 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				E4A1B2C3D5F607890123B001 /* GlassTabBar.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		31B32CCAD225FDEE0DC93BB5 /* Voting */ = {
@@ -424,8 +444,10 @@
 				90BC383D7C38EF029AA1C1D4 /* VenueMapCard.swift */,
 				38BAE24FBAAB1D6E0746B447 /* VenueSearchSheet.swift */,
 				9788D1D1EB0F8710454447F9 /* Cards */,
+				E4A1B2C3D5F607890123C001 /* Chat */,
 				2A089082629C63D49B0071EA /* Dashboard */,
 				C09E30AC18D7C10DDC4ADF99 /* Manage */,
+				E4A1B2C3D5F607890123C002 /* Shared */,
 				31B32CCAD225FDEE0DC93BB5 /* Voting */,
 			);
 			path = Views;
@@ -626,6 +648,8 @@
 				345EB3C4A22ABD7B06E50961 /* VenueSearchSheet.swift in Sources */,
 				75A71E89A516CC3DF536BF16 /* ViewModeToggle.swift in Sources */,
 				7F5A8CADA10CE6A138F69901 /* ViewModifiers.swift in Sources */,
+				E4A1B2C3D5F607890123A001 /* GlassTabBar.swift in Sources */,
+				E4A1B2C3D5F607890123A002 /* ChatView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

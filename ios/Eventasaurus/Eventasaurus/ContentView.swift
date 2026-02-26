@@ -8,6 +8,8 @@ struct ContentView: View {
     @Binding var deepLinkSlug: String?
     /// Local copy so sheet content stays stable during the dismiss animation.
     @State private var presentedSlug: String?
+    @State private var selectedTab: AppTab = .home
+    @State private var upcomingEventCount: Int = 0
     #if DEBUG
     @State private var showDevPicker = false
     @State private var showEnvironmentConfirm = false
@@ -59,21 +61,24 @@ struct ContentView: View {
             }
             #endif
 
-            TabView {
-                DiscoverView()
-                    .tabItem {
-                        Label("Discover", systemImage: "magnifyingglass")
-                    }
+            ZStack(alignment: .bottom) {
+                TabView(selection: $selectedTab) {
+                    MyEventsView(upcomingCount: $upcomingEventCount)
+                        .tag(AppTab.home)
+                        .toolbar(.hidden, for: .tabBar)
 
-                MyEventsView()
-                    .tabItem {
-                        Label("My Events", systemImage: "calendar")
-                    }
+                    DiscoverView()
+                        .tag(AppTab.discover)
+                        .toolbar(.hidden, for: .tabBar)
 
-                ProfileView()
-                    .tabItem {
-                        Label("Profile", systemImage: "person")
-                    }
+                    ChatView()
+                        .tag(AppTab.chat)
+                        .toolbar(.hidden, for: .tabBar)
+                }
+
+                GlassTabBar(selectedTab: $selectedTab, eventCount: upcomingEventCount)
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.bottom, DS.Spacing.lg)
             }
         }
     }

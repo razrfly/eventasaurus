@@ -17,6 +17,8 @@ struct MyEventsView: View {
 
     // MARK: - State
 
+    @Binding var upcomingCount: Int
+
     @State private var timeFilter: TimeFilter = .upcoming
     @State private var roleFilter: RoleFilter = .all
     @State private var viewMode: EventViewMode = EventViewMode.load(key: "myEventsViewMode", default: .card)
@@ -25,10 +27,15 @@ struct MyEventsView: View {
     @State private var isLoading = false
     @State private var error: Error?
     @State private var showCreateSheet = false
+    @State private var showProfileSheet = false
     @State private var refreshID = UUID()
 
     // Cache per time filter to avoid re-fetching on tab switch
     @State private var cache: [TimeFilter: [DashboardEvent]] = [:]
+
+    init(upcomingCount: Binding<Int> = .constant(0)) {
+        self._upcomingCount = upcomingCount
+    }
 
     // MARK: - Computed
 
@@ -91,6 +98,9 @@ struct MyEventsView: View {
                     refreshID = UUID()
                 }
             }
+            .sheet(isPresented: $showProfileSheet) {
+                ProfileView()
+            }
             .navigationDestination(for: DashboardEvent.self) { event in
                 if event.canManage {
                     EventManageView(slug: event.slug) {
@@ -133,6 +143,13 @@ struct MyEventsView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button {
+                showProfileSheet = true
+            } label: {
+                Image(systemName: "person.circle")
+            }
+        }
         ToolbarItem(placement: .primaryAction) {
             HStack(spacing: DS.Spacing.md) {
                 viewModeToggle
@@ -418,6 +435,7 @@ struct MyEventsView: View {
 
             events = result.events
             filterCounts = result.filterCounts
+            upcomingCount = result.filterCounts.upcoming
             cache[filter] = result.events
         } catch is CancellationError {
             return
