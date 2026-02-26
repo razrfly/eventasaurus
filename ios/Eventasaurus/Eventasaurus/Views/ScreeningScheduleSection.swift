@@ -97,7 +97,10 @@ struct ScreeningScheduleSection: View {
 
     private func screeningPill(_ showtime: EventShowtime) -> some View {
         HStack(spacing: DS.Spacing.xs) {
-            if let time = showtime.time {
+            if let datetime = showtime.datetime {
+                Text(datetime, format: .dateTime.hour().minute())
+                    .font(DS.Typography.bodyBold)
+            } else if let time = showtime.time {
                 Text(time)
                     .font(DS.Typography.bodyBold)
             }

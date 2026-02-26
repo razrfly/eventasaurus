@@ -240,6 +240,7 @@ struct EventShowtime: Codable, Identifiable {
     let time: String?
     let label: String?
     let externalId: String?
+    let datetime: Date?
 
     private static let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -260,6 +261,9 @@ struct EventShowtime: Codable, Identifiable {
 
     /// Whether this showtime is in the future
     var isUpcoming: Bool {
+        if let datetime {
+            return datetime > Date()
+        }
         guard let time else { return false }
         let isoString = "\(date)T\(time):00"
         guard let dt = Self.isoFormatter.date(from: isoString) else { return false }

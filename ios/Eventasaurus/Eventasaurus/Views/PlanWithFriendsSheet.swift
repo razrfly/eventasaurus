@@ -366,7 +366,11 @@ struct PlanWithFriendsSheet: View {
 
     private func loadSuggestions() async {
         do {
-            suggestions = try await GraphQLClient.shared.fetchParticipantSuggestions(limit: 20)
+            let fetched = try await GraphQLClient.shared.fetchParticipantSuggestions(limit: 20)
+            // Prefetch all avatars concurrently — warms NSCache before ForEach renders
+            let urls = fetched.compactMap { $0.avatarUrl.flatMap { URL(string: $0) } }
+            await DiceBearAvatar.prefetch(avatarUrls: urls)
+            suggestions = fetched
         } catch {
             // Silently fail — suggestions are optional enhancement
         }
