@@ -223,6 +223,7 @@ defmodule EventasaurusWeb.Cache.LiveQueryCircuitBreaker do
               failures: recent_failures,
               opened_at: now,
               last_state_change: now,
+              probe_in_flight: false,
               last_failure_reason: reason
           }
 
@@ -308,6 +309,7 @@ defmodule EventasaurusWeb.Cache.LiveQueryCircuitBreaker do
       | state: :open,
         opened_at: now,
         last_state_change: now,
+        probe_in_flight: false,
         last_failure_reason: "admin_override"
     }
 
@@ -328,7 +330,8 @@ defmodule EventasaurusWeb.Cache.LiveQueryCircuitBreaker do
         failures: [],
         opened_at: nil,
         last_state_change: System.monotonic_time(:millisecond),
-        last_failure_reason: nil
+        last_failure_reason: nil,
+        probe_in_flight: false
     }
 
     write_state(new_state)
