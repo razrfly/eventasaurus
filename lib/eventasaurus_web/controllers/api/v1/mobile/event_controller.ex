@@ -655,6 +655,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.EventController do
     registration_status = Events.get_user_registration_status(event, user)
 
     serialize_user_event(event)
+    |> Map.delete(:cover_image_url)
     |> Map.merge(%{
       cover_image_url: resolve_image_url(cover_image_url),
       description: event.description,

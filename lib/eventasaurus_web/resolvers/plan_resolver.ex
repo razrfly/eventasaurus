@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
   require Logger
 
   alias EventasaurusApp.Accounts
+  alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.EventPlans
   alias EventasaurusDiscovery.PublicEvents
@@ -57,6 +58,8 @@ defmodule EventasaurusWeb.Resolvers.PlanResolver do
 
   @max_invite_emails 50
 
+  @spec create_plan(any(), map(), %{context: %{current_user: User.t()}}) ::
+          {:ok, map()} | {:error, term()}
   def create_plan(_parent, %{slug: slug} = args, %{
         context: %{current_user: user}
       }) do
