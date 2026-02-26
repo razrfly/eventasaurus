@@ -273,17 +273,17 @@ defmodule Mix.Tasks.Cache.Diagnose do
 
   defp display_mv_status(_cities) do
     IO.puts(IO.ANSI.green() <> "📦 Materialized View Status:" <> IO.ANSI.reset())
-    IO.puts("  NOTE: city_events_mv is no longer refreshed (Issue #3680).")
-    IO.puts("  The MV fallback path has been removed. All queries use the live pipeline.")
+    IO.puts("  city_events_mv is refreshed hourly (cron: \"15 * * * *\") via RefreshCityEventsViewJob.")
+    IO.puts("  It serves as Tier 3 fallback: base cache → per-filter cache → MV → live query.")
 
-    # Still show row count as a read-only diagnostic
+    # Show row count as a diagnostic
     total_count =
       case Repo.query("SELECT COUNT(*) FROM city_events_mv", []) do
         {:ok, %{rows: [[count]]}} -> count
         _ -> "n/a"
       end
 
-    IO.puts("  - city_events_mv: #{format_number(total_count)} total rows (stale, read-only)")
+    IO.puts("  - city_events_mv: #{format_number(total_count)} total rows")
     IO.puts("")
   end
 

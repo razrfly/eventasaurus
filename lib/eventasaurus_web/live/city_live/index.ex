@@ -26,6 +26,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.Cache.CityEventsFallback
   alias EventasaurusWeb.Cache.CityEventsMvInitializer
   alias EventasaurusWeb.Cache.LiveQueryCircuitBreaker
+  alias EventasaurusWeb.CityEvents
   alias EventasaurusWeb.Telemetry.CityPageTelemetry
 
   import EventasaurusWeb.EventComponents
@@ -1243,45 +1244,21 @@ defmodule EventasaurusWeb.CityLive.Index do
   # Sub-5ms guaranteed response from city_events_mv materialized view
   # Returns {:ok, tuple} on hit, :miss on failure/empty
   defp fetch_from_mv_fallback(city, filters) do
-    mv_opts = [
+    CityEvents.fetch_from_mv(city.slug,
       page: filters[:page] || 1,
       page_size: filters[:page_size] || 30
-    ]
-
-    case CityEventsFallback.get_events_with_counts(city.slug, mv_opts) do
-      {:ok, %{events: events} = data} when events != [] ->
-        {:ok, {events, data.total_count, data.all_events_count, data.date_counts, :mv_fallback}}
-
-      _ ->
-        :miss
-    end
+    )
   end
 
   # Direct live query path — used when caching is OFF or as final fallback (Issue #3673)
   # Wrapped with circuit breaker (Issue #3686 Phase 4): when the DB is slow/down,
   # the circuit trips and we serve degraded data from the MV instead.
   defp fetch_live_query(city, query_filters, date_range_count_filters) do
-    case LiveQueryCircuitBreaker.allow_request?() do
-      :ok ->
-        try do
-          result = do_live_query(city, query_filters, date_range_count_filters)
-          LiveQueryCircuitBreaker.record_success()
-          result
-        rescue
-          e ->
-            LiveQueryCircuitBreaker.record_failure(Exception.message(e))
-
-            Logger.warning(
-              "[CityPage] Live query FAILED for #{city.slug}: #{Exception.message(e)} — serving degraded fallback"
-            )
-
-            serve_degraded_fallback(city)
-        end
-
-      {:circuit_open, :serve_fallback} ->
-        Logger.info("[CityPage] Circuit OPEN for #{city.slug} — serving degraded fallback")
-        serve_degraded_fallback(city)
-    end
+    CityEvents.with_circuit_breaker(
+      city.slug,
+      fn -> do_live_query(city, query_filters, date_range_count_filters) end,
+      on_failure: fn -> serve_degraded_fallback(city) end
+    )
   end
 
   # Actual live query execution (no circuit breaker wrapping)
@@ -1307,23 +1284,17 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   # Serve-stale-on-error: try MV fallback, then stale Cachex, then empty result
+  # MV + empty path delegated to CityEvents.serve_degraded; stale Cachex is web-specific.
   # Tagged as :degraded so the debug panel can surface this to developers
   defp serve_degraded_fallback(city) do
-    # 1. Try MV fallback (sub-5ms)
-    case CityEventsFallback.get_events_with_counts(city.slug) do
-      {:ok, %{events: events} = data} when events != [] ->
-        :telemetry.execute(
-          [:eventasaurus, :fallback, :degraded],
-          %{system_time: System.system_time(:millisecond)},
-          %{source: :mv, city: city.slug}
-        )
+    case CityEvents.serve_degraded(city.slug) do
+      {_events, _total, _all, _dc, :degraded_mv} = result ->
+        result
 
-        {events, data.total_count, data.all_events_count, data.date_counts, :degraded_mv}
-
-      _ ->
-        # 2. Try stale Cachex entry (web only)
+      {[], 0, 0, %{}, :degraded_empty} ->
+        # Web-only: try stale Cachex before giving up
         case CityPageCache.peek_base_events(city.slug, @default_radius_km) do
-          {:ok, %{events: events} = cached} when is_list(events) and events != [] ->
+          {:ok, %{events: [_ | _] = events} = cached} ->
             date_counts = CityPageFilters.calculate_date_range_counts(cached)
 
             :telemetry.execute(
@@ -1336,13 +1307,6 @@ defmodule EventasaurusWeb.CityLive.Index do
              :degraded_stale}
 
           _ ->
-            # 3. Last resort: empty result
-            :telemetry.execute(
-              [:eventasaurus, :fallback, :degraded],
-              %{system_time: System.system_time(:millisecond)},
-              %{source: :empty, city: city.slug}
-            )
-
             {[], 0, 0, %{}, :degraded_empty}
         end
     end

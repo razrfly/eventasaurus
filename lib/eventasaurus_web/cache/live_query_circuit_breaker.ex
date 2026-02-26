@@ -65,16 +65,16 @@ defmodule EventasaurusWeb.Cache.LiveQueryCircuitBreaker do
         :ok
 
       %{state: :half_open} ->
-        # Allow one probe request through
-        :ok
+        # Serialize probe grant through GenServer to ensure only one probe gets through
+        GenServer.call(__MODULE__, :request_probe)
 
       %{state: :open, opened_at: opened_at, cooldown_ms: cooldown_ms} ->
         now = System.monotonic_time(:millisecond)
 
         if now - opened_at >= cooldown_ms do
-          # Cooldown elapsed — transition to half_open
-          GenServer.cast(__MODULE__, :transition_to_half_open)
-          :ok
+          # Cooldown elapsed — atomically transition and grant exactly one probe via GenServer
+          # (avoids race where multiple callers read :open, all see cooldown elapsed, all proceed)
+          GenServer.call(__MODULE__, :request_probe_from_open)
         else
           {:circuit_open, :serve_fallback}
         end
@@ -123,8 +123,12 @@ defmodule EventasaurusWeb.Cache.LiveQueryCircuitBreaker do
     failure_window_ms = Keyword.get(opts, :failure_window_ms, @default_failure_window_ms)
     cooldown_ms = Keyword.get(opts, :cooldown_ms, @default_cooldown_ms)
 
-    # Create ETS table for lock-free reads on the hot path
-    :ets.new(@ets_table, [:named_table, :public, :set, read_concurrency: true])
+    # Create ETS table for lock-free reads on the hot path.
+    # Guard against the rare race where a named table owned by a crashed predecessor
+    # process hasn't been GC'd yet by the time the supervisor restarts this GenServer.
+    if :ets.whereis(@ets_table) == :undefined do
+      :ets.new(@ets_table, [:named_table, :public, :set, read_concurrency: true])
+    end
 
     initial_state = %{
       state: :closed,
@@ -134,6 +138,7 @@ defmodule EventasaurusWeb.Cache.LiveQueryCircuitBreaker do
       failure_window_ms: failure_window_ms,
       cooldown_ms: cooldown_ms,
       opened_at: nil,
+      probe_in_flight: false,
       last_state_change: System.monotonic_time(:millisecond),
       last_failure_reason: nil
     }
@@ -248,21 +253,47 @@ defmodule EventasaurusWeb.Cache.LiveQueryCircuitBreaker do
   end
 
   @impl true
-  def handle_cast(:transition_to_half_open, state) do
-    if state.state == :open do
+  def handle_call(
+        :request_probe_from_open,
+        _from,
+        %{state: :open, opened_at: opened_at} = state
+      ) do
+    now = System.monotonic_time(:millisecond)
+
+    if now - opened_at >= state.cooldown_ms do
+      # Atomically transition to half_open and grant the first (and only) probe
       new_state = %{
         state
         | state: :half_open,
-          last_state_change: System.monotonic_time(:millisecond)
+          probe_in_flight: true,
+          last_state_change: now
       }
 
       write_state(new_state)
       emit_state_change(:open, :half_open)
       Logger.info("[CircuitBreaker] Cooldown elapsed — circuit HALF_OPEN (probing)")
-      {:noreply, new_state}
+      {:reply, :ok, new_state}
     else
-      {:noreply, state}
+      # Cooldown not yet elapsed (another request already handled this race)
+      {:reply, {:circuit_open, :serve_fallback}, state}
     end
+  end
+
+  def handle_call(:request_probe_from_open, _from, state) do
+    # Circuit already transitioned (another caller got here first) — reject
+    {:reply, {:circuit_open, :serve_fallback}, state}
+  end
+
+  @impl true
+  def handle_call(:request_probe, _from, %{state: :half_open, probe_in_flight: false} = state) do
+    new_state = %{state | probe_in_flight: true}
+    write_state(new_state)
+    {:reply, :ok, new_state}
+  end
+
+  def handle_call(:request_probe, _from, state) do
+    # Probe already in flight or circuit not in half_open — reject
+    {:reply, {:circuit_open, :serve_fallback}, state}
   end
 
   @impl true
