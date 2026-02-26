@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
 
   alias EventasaurusDiscovery.Admin.DiscoveryConfigManager
   alias EventasaurusWeb.Cache.CityPageCache
+  alias EventasaurusWeb.Cache.LiveQueryCircuitBreaker
   alias EventasaurusApp.Repo
 
   @type socket :: Phoenix.LiveView.Socket.t()
@@ -24,6 +25,8 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   def mount(_params, _session, socket) do
     cities = DiscoveryConfigManager.list_discovery_enabled_cities()
 
+    cb_state = LiveQueryCircuitBreaker.state()
+
     socket =
       socket
       |> assign(:page_title, "Cache Management")
@@ -32,6 +35,7 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
       |> assign(:flash_message, nil)
       |> assign(:health_report, nil)
       |> assign(:health_loading, false)
+      |> assign(:circuit_breaker, cb_state)
 
     {:ok, socket}
   end
@@ -111,6 +115,40 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
       |> assign(:health_report, report)
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("cb_force_open", _params, socket) do
+    LiveQueryCircuitBreaker.force_open()
+    Logger.warning("[CacheDashboard] Circuit breaker FORCE OPENED by admin")
+
+    socket =
+      socket
+      |> assign(:circuit_breaker, LiveQueryCircuitBreaker.state())
+      |> assign(
+        :flash_message,
+        {:warning, "Circuit breaker forced OPEN — live queries are disabled"}
+      )
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("cb_force_close", _params, socket) do
+    LiveQueryCircuitBreaker.force_close()
+    Logger.info("[CacheDashboard] Circuit breaker FORCE CLOSED by admin")
+
+    socket =
+      socket
+      |> assign(:circuit_breaker, LiveQueryCircuitBreaker.state())
+      |> assign(:flash_message, {:info, "Circuit breaker forced CLOSED — live queries resumed"})
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("cb_refresh", _params, socket) do
+    {:noreply, assign(socket, :circuit_breaker, LiveQueryCircuitBreaker.state())}
   end
 
   @impl true
@@ -252,6 +290,78 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
         </button>
       </div>
 
+      <!-- Circuit Breaker Status (Issue #3686 Phase 4) -->
+      <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-xl font-semibold text-gray-900">Live Query Circuit Breaker</h2>
+            <p class="text-sm text-gray-600">
+              Protects against database slowness by skipping live queries when failures accumulate.
+            </p>
+          </div>
+          <button
+            phx-click="cb_refresh"
+            class="px-3 py-1 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+          >
+            Refresh
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <!-- State -->
+          <div class="bg-gray-50 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase mb-1">State</p>
+            <span class={"inline-flex px-3 py-1 text-sm font-bold rounded-full " <> cb_admin_badge(@circuit_breaker[:state])}>
+              <%= cb_admin_label(@circuit_breaker[:state]) %>
+            </span>
+          </div>
+
+          <!-- Failure Count -->
+          <div class="bg-gray-50 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase mb-1">Failures</p>
+            <p class="text-2xl font-bold text-gray-900">
+              <%= @circuit_breaker[:failure_count] || 0 %><span class="text-sm text-gray-500">/<%= @circuit_breaker[:failure_threshold] || 3 %></span>
+            </p>
+          </div>
+
+          <!-- Cooldown -->
+          <div class="bg-gray-50 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase mb-1">Cooldown</p>
+            <p class="text-lg font-medium text-gray-900">
+              <%= div(@circuit_breaker[:cooldown_ms] || 30_000, 1000) %>s
+            </p>
+          </div>
+
+          <!-- Last Failure -->
+          <div class="bg-gray-50 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase mb-1">Last Failure</p>
+            <p class="text-sm text-gray-700 truncate" title={@circuit_breaker[:last_failure_reason]}>
+              <%= @circuit_breaker[:last_failure_reason] || "—" %>
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <%= if @circuit_breaker[:state] != :open do %>
+            <button
+              phx-click="cb_force_open"
+              data-confirm="Force the circuit breaker OPEN? All live queries will be skipped until manually closed."
+              class="px-4 py-2 rounded-md text-white font-medium bg-red-600 hover:bg-red-700"
+            >
+              Force Open
+            </button>
+          <% end %>
+          <%= if @circuit_breaker[:state] != :closed do %>
+            <button
+              phx-click="cb_force_close"
+              class="px-4 py-2 rounded-md text-white font-medium bg-green-600 hover:bg-green-700"
+            >
+              Force Close
+            </button>
+          <% end %>
+        </div>
+      </div>
+
       <!-- Cache Health Report -->
       <div class="bg-white shadow rounded-lg p-6">
         <div class="flex items-center justify-between mb-4">
@@ -351,4 +461,15 @@ defmodule EventasaurusWeb.Admin.CacheDashboardLive do
   defp flash_classes(:warning), do: "bg-yellow-50 text-yellow-800 border border-yellow-200"
   defp flash_classes(:error), do: "bg-red-50 text-red-800 border border-red-200"
   defp flash_classes(_), do: "bg-gray-50 text-gray-800 border border-gray-200"
+
+  # Circuit breaker admin helpers
+  defp cb_admin_badge(:closed), do: "bg-green-100 text-green-800"
+  defp cb_admin_badge(:open), do: "bg-red-100 text-red-800"
+  defp cb_admin_badge(:half_open), do: "bg-yellow-100 text-yellow-800"
+  defp cb_admin_badge(_), do: "bg-gray-100 text-gray-800"
+
+  defp cb_admin_label(:closed), do: "CLOSED"
+  defp cb_admin_label(:open), do: "OPEN"
+  defp cb_admin_label(:half_open), do: "HALF_OPEN"
+  defp cb_admin_label(_), do: "UNKNOWN"
 end

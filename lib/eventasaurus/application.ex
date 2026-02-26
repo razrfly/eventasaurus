@@ -6,6 +6,8 @@ defmodule Eventasaurus.Application do
   use Application
   require Logger
 
+  alias EventasaurusWeb.Cache.CityEventsMvInitializer
+
   @impl true
   def start(_type, _args) do
     # Create ETS table for venue validation cache
@@ -116,6 +118,9 @@ defmodule Eventasaurus.Application do
       EventasaurusApp.Images.ImageCacheStatsCache,
       # Start City Page Cache for city page performance optimization
       EventasaurusWeb.Cache.CityPageCache,
+      # Start Live Query Circuit Breaker (Issue #3686 Phase 4)
+      # Protects against DB slowness by skipping live queries when failures accumulate
+      EventasaurusWeb.Cache.LiveQueryCircuitBreaker,
       # Start Event Page Cache for event page performance optimization
       EventasaurusWeb.Cache.EventPageCache,
       # Start Dashboard Stats Cache for admin dashboard performance
@@ -209,11 +214,11 @@ defmodule Eventasaurus.Application do
 
   # Synchronous MV refresh used as a supervisor child (blocks until complete).
   # Placed before Endpoint in children list so traffic isn't served with stale MV data.
+  # Errors are intentionally swallowed for startup resilience — the hourly
+  # RefreshCityEventsViewJob will retry if this fails.
   # Returns :ignore so the supervisor moves on without keeping a running process.
   @doc false
   def refresh_mv_sync do
-    alias EventasaurusWeb.Cache.CityEventsMvInitializer
-
     try do
       CityEventsMvInitializer.ensure_populated()
     rescue

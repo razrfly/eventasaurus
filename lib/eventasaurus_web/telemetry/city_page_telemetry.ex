@@ -178,6 +178,18 @@ defmodule EventasaurusWeb.Telemetry.CityPageTelemetry do
         "city-page-load-logger",
         @city_page_prefix ++ [:load, :complete],
         &__MODULE__.handle_load_complete/4
+      },
+      # Log circuit breaker state changes (Issue #3686 Phase 4)
+      {
+        "circuit-breaker-state-change-logger",
+        [:eventasaurus, :circuit_breaker, :state_change],
+        &__MODULE__.handle_circuit_breaker_state_change/4
+      },
+      # Log degraded fallback usage (Issue #3686 Phase 4)
+      {
+        "degraded-fallback-logger",
+        [:eventasaurus, :fallback, :degraded],
+        &__MODULE__.handle_degraded_fallback/4
       }
     ]
 
@@ -230,6 +242,24 @@ defmodule EventasaurusWeb.Telemetry.CityPageTelemetry do
       city_slug: metadata[:city_slug],
       total_duration_ms: duration_ms,
       timing_breakdown: marks
+    )
+  end
+
+  @doc false
+  def handle_circuit_breaker_state_change(_event, _measurements, metadata, _config) do
+    Logger.warning(
+      "[CircuitBreaker:STATE] #{metadata[:from]} → #{metadata[:to]}",
+      from: metadata[:from],
+      to: metadata[:to]
+    )
+  end
+
+  @doc false
+  def handle_degraded_fallback(_event, _measurements, metadata, _config) do
+    Logger.warning(
+      "[Fallback:DEGRADED] Serving degraded data for #{metadata[:city] || "unknown"} from #{metadata[:source]}",
+      source: metadata[:source],
+      city: metadata[:city]
     )
   end
 end

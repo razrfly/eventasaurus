@@ -316,14 +316,15 @@
     phx-hook="AuthHandler"
   >
     <%
-      # Check if we're on an admin route (to hide user navigation)
-      is_admin_route = case @conn.request_path do
+      # Check if we're on a route that hides standard chrome (nav/footer)
+      is_chrome_hidden = case @conn.request_path do
         "/admin" <> _ -> true
+        "/dev/marketing" <> _ -> true
         _ -> false
       end
     %>
 
-    <%= unless is_admin_route do %>
+    <%= unless is_chrome_hidden do %>
     <!-- Gradient Background for pages that need it -->
     <%= unless assigns[:hide_gradient] do %>
       <div class="fixed inset-0 -z-10 overflow-hidden">
@@ -533,14 +534,14 @@
         </div>
       </div>
     </div>
-    <% end %> <!-- end unless is_admin_route -->
+    <% end %> <!-- end unless is_chrome_hidden -->
 
     <!-- Main content wrapper - Theme fonts apply here, grows to fill available space -->
-    <main class={["main-content flex-grow", if(is_admin_route, do: "!p-0")]}>
+    <main class={["main-content flex-grow", if(is_chrome_hidden, do: "!p-0")]}>
       <%= @inner_content %>
     </main>
 
-    <%= unless is_admin_route do %>
+    <%= unless is_chrome_hidden do %>
     <!-- Footer - Protected UI Element (always uses Inter font) -->
     <footer class="footer bg-gray-950 text-white mt-0 flex-shrink-0">
       <.container class="py-8 lg:py-12">
@@ -625,7 +626,7 @@
         </div>
       </.container>
     </footer>
-    <% end %> <!-- end unless is_admin_route (footer) -->
+    <% end %> <!-- end unless is_chrome_hidden (footer) -->
 
     <!-- Toast notification container - Protected UI Element (always uses Inter font) -->
     <div class="toast-container fixed bottom-4 right-4 z-50">

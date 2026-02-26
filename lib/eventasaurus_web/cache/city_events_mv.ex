@@ -7,6 +7,8 @@ defmodule EventasaurusWeb.Cache.CityEventsMv do
   `RefreshCityEventsViewJob` (hourly cron).
   """
 
+  require Logger
+
   alias EventasaurusApp.JobRepo
 
   @doc """
@@ -17,7 +19,7 @@ defmodule EventasaurusWeb.Cache.CityEventsMv do
 
   Returns `{:ok, row_count}` on success, `{:error, reason}` on failure.
   """
-  @spec refresh() :: {:ok, non_neg_integer()} | {:error, term()}
+  @spec refresh() :: {:ok, non_neg_integer() | :unknown} | {:error, term()}
   def refresh do
     case JobRepo.query(
            "REFRESH MATERIALIZED VIEW CONCURRENTLY city_events_mv",
@@ -26,8 +28,12 @@ defmodule EventasaurusWeb.Cache.CityEventsMv do
          ) do
       {:ok, _} ->
         case row_count() do
-          {:ok, count} -> {:ok, count}
-          {:error, _} -> {:ok, 0}
+          {:ok, count} ->
+            {:ok, count}
+
+          {:error, reason} ->
+            Logger.warning("[CityEventsMv] row_count failed after refresh: #{inspect(reason)}")
+            {:ok, :unknown}
         end
 
       {:error, %Postgrex.Error{postgres: %{code: :undefined_table}}} ->
