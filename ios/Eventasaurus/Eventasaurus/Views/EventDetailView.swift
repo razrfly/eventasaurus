@@ -293,7 +293,7 @@ struct EventDetailView: View {
                     }
                     Spacer()
                     NavigationLink {
-                        EventManageView(slug: plan.slug)
+                        EventDetailView(slug: plan.slug)
                     } label: {
                         Text("View")
                             .font(DS.Typography.captionMedium)
