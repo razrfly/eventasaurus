@@ -215,7 +215,11 @@ struct EventDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if event.isInternalEvent && !isOrganizer && rsvpStatus == nil && event.isUpcoming {
+            if event.isInternalEvent && isOrganizer {
+                // Organiser — show Manage banner instead of RSVP bar
+                organizerManageBanner
+                    .padding(.bottom, tabBarSafeAreaInset)
+            } else if event.isInternalEvent && !isOrganizer && rsvpStatus == nil && event.isUpcoming {
                 // Internal event, no RSVP yet — show Going/Interested
                 rsvpActionBar
                     .padding(.bottom, tabBarSafeAreaInset)
@@ -288,7 +292,9 @@ struct EventDetailView: View {
                         }
                     }
                     Spacer()
-                    NavigationLink(value: EventDestination.event(slug: plan.slug)) {
+                    NavigationLink {
+                        EventManageView(slug: plan.slug)
+                    } label: {
                         Text("View")
                             .font(DS.Typography.captionMedium)
                     }
@@ -349,6 +355,28 @@ struct EventDetailView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassTinted(DS.Colors.plan, isActive: false))
+        }
+    }
+
+    private var organizerManageBanner: some View {
+        GlassActionBar {
+            NavigationLink {
+                EventManageView(slug: slug)
+            } label: {
+                HStack {
+                    Label("You organised this", systemImage: "gearshape")
+                        .font(DS.Typography.bodyMedium)
+                    Spacer()
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text("Manage")
+                            .font(DS.Typography.captionMedium)
+                        Image(systemName: "chevron.right")
+                            .font(DS.Typography.micro)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 

@@ -4,6 +4,7 @@ import SwiftUI
 /// Shows hero header + tabbed management interface.
 struct EventManageView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.tabBarSafeAreaInset) private var tabBarSafeAreaInset
     @State private var event: UserEvent?
     @State private var slug: String
     @State private var isLoading = false
@@ -78,6 +79,10 @@ struct EventManageView: View {
                 tabContent(for: event)
                     .padding(.bottom, DS.Spacing.xxl)
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            attendeeViewBanner(for: event)
+                .padding(.bottom, tabBarSafeAreaInset)
         }
         .navigationTitle(event.title)
         .toolbar {
@@ -252,6 +257,26 @@ struct EventManageView: View {
 
         case .history:
             ManageHistoryTab()
+        }
+    }
+
+    // MARK: - Banners
+
+    private func attendeeViewBanner(for event: UserEvent) -> some View {
+        GlassActionBar {
+            NavigationLink {
+                EventDetailView(slug: event.slug)
+            } label: {
+                HStack {
+                    Label("See attendee view", systemImage: "person.2")
+                        .font(DS.Typography.bodyMedium)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(DS.Typography.micro)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 
