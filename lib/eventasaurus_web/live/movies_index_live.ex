@@ -63,9 +63,15 @@ defmodule EventasaurusWeb.MoviesIndexLive do
     {:ok, socket}
   end
 
+  @allowed_sort_keys ~w(showing rt_score imdb awards)
+
+  @spec handle_params(map(), String.t(), Phoenix.LiveView.Socket.t()) ::
+          {:noreply, Phoenix.LiveView.Socket.t()}
   @impl true
   def handle_params(params, _url, socket) do
-    sort_by = params["sort"] || "showing"
+    sort_by =
+      if params["sort"] in @allowed_sort_keys, do: params["sort"], else: "showing"
+
     now_showing = apply_sort(socket.assigns.all_movies, sort_by)
     {:noreply, assign(socket, sort_by: sort_by, now_showing: now_showing)}
   end

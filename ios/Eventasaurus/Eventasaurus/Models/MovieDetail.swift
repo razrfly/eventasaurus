@@ -25,13 +25,16 @@ struct MovieInfo: Codable {
     let cast: [CastMember]?
     let tmdbId: Int?
     let imdbId: String?
+    let cinegraph: CinegraphInfo?
 }
 
 struct CastMember: Codable, Identifiable {
-    let id: Int
     let name: String
     let character: String?
+    let order: Int?
     let profileUrl: String?
+
+    var id: String { "\(order ?? 0)_\(name)" }
 }
 
 struct VenueScreenings: Codable, Identifiable {
@@ -75,5 +78,26 @@ struct Showtime: Codable {
     let datetime: Date
     let isUpcoming: Bool
     let eventSlug: String?
+}
+
+struct CinegraphInfo: Codable {
+    let ratings: CinegraphRatings?
+    let director: String?
+    let awards: CinegraphAwards?
+    let cinegraphSlug: String?
+}
+
+struct CinegraphRatings: Codable {
+    let imdb: Double?
+    let rottenTomatoes: Int?
+    let metacritic: Int?
+    let tmdb: Double?
+}
+
+struct CinegraphAwards: Codable {
+    let oscarWins: Int?
+    let totalWins: Int?
+    let totalNominations: Int?
+    let summary: String?
 }
 

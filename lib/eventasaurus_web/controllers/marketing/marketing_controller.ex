@@ -3,12 +3,12 @@ defmodule EventasaurusWeb.MarketingController do
 
   @spec why_wombie(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def why_wombie(conn, _params) do
-    render(conn, :why_wombie, layout: false)
+    conn |> put_root_layout(false) |> render(:why_wombie, layout: false)
   end
 
   @spec why_not(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def why_not(conn, _params) do
-    render(conn, :why_not, layout: false)
+    conn |> put_root_layout(false) |> render(:why_not, layout: false)
   end
 
   @spec oatmeal_demo(Plug.Conn.t(), map()) :: Plug.Conn.t()
@@ -20,27 +20,31 @@ defmodule EventasaurusWeb.MarketingController do
 
   @spec homepage(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def homepage(conn, _params) do
-    render(conn, :homepage, layout: false)
+    conn |> put_root_layout(false) |> render(:homepage, layout: false)
   end
 
   @spec about(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def about(conn, _params) do
-    render(conn, :about, layout: false)
+    conn |> put_root_layout(false) |> render(:about, layout: false)
   end
 
   @spec how_it_works(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def how_it_works(conn, _params) do
-    render(conn, :how_it_works, layout: false)
+    conn |> put_root_layout(false) |> render(:how_it_works, layout: false)
   end
 
   @spec pricing(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def pricing(conn, _params) do
-    render(conn, :pricing, layout: false)
+    conn |> put_root_layout(false) |> render(:pricing, layout: false)
   end
 
   @spec privacy_policy(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def privacy_policy(conn, _params), do: render(conn, :privacy_policy, layout: false)
+  def privacy_policy(conn, _params) do
+    conn |> put_root_layout(false) |> render(:privacy_policy, layout: false)
+  end
 
   @spec terms(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def terms(conn, _params), do: render(conn, :terms, layout: false)
+  def terms(conn, _params) do
+    conn |> put_root_layout(false) |> render(:terms, layout: false)
+  end
 end

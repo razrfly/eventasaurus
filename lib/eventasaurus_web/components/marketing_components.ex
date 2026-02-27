@@ -368,25 +368,42 @@ defmodule EventasaurusWeb.MarketingComponents do
 
   def privacy_circles(assigns) do
     ~H"""
-    <div class={["privacy-circles flex justify-center", @class]}>
-      <svg viewBox="0 0 400 400" class="w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96" role="img" aria-label="Concentric privacy circles: private at center, expanding to open">
-        <!-- Open (outermost) -->
-        <circle cx="200" cy="200" r="180" fill="none" stroke="#D97706" stroke-width="2" opacity="0.3" />
-        <circle cx="200" cy="200" r="180" fill="#FEF3C7" opacity="0.15" />
-        <!-- Extended -->
-        <circle cx="200" cy="200" r="130" fill="none" stroke="#B4B3A3" stroke-width="2" opacity="0.4" />
-        <circle cx="200" cy="200" r="130" fill="#EBEAE3" opacity="0.3" />
-        <!-- Close friends -->
-        <circle cx="200" cy="200" r="80" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.5" />
-        <circle cx="200" cy="200" r="80" fill="#E0E7FF" opacity="0.4" />
-        <!-- Private (center) -->
-        <circle cx="200" cy="200" r="35" fill="#6366F1" opacity="0.85" />
-        <text x="200" y="205" text-anchor="middle" fill="white" font-size="12" font-weight="600">You</text>
-        <!-- Labels -->
-        <text x="200" y="135" text-anchor="middle" fill="#6F6E5F" font-size="11" font-weight="500">Close Friends</text>
-        <text x="200" y="80" text-anchor="middle" fill="#8C8B78" font-size="11" font-weight="500">Extended Circle</text>
-        <text x="200" y="30" text-anchor="middle" fill="#B4B3A3" font-size="11" font-weight="500">Open</text>
+    <div id="privacy-circles" phx-hook="PrivacyCircles"
+         class={["privacy-circles flex flex-col items-center gap-4", @class]}>
+      <svg viewBox="0 0 400 400" class="w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96"
+           role="img" aria-label="Interactive privacy circles">
+        <%!-- Open (outermost) --%>
+        <g data-ring="open" class="ring-open cursor-pointer">
+          <circle cx="200" cy="200" r="180" fill="none" stroke="#D97706" stroke-width="2" opacity="0.3" />
+          <circle cx="200" cy="200" r="180" fill="#FEF3C7" opacity="0.15" />
+          <circle cx="200" cy="200" r="190" fill="transparent" />
+          <text x="200" y="30" text-anchor="middle" fill="#B4B3A3" font-size="11" font-weight="500">Open</text>
+        </g>
+        <%!-- Extended --%>
+        <g data-ring="extended" class="ring-extended cursor-pointer">
+          <circle cx="200" cy="200" r="130" fill="none" stroke="#B4B3A3" stroke-width="2" opacity="0.4" />
+          <circle cx="200" cy="200" r="130" fill="#EBEAE3" opacity="0.3" />
+          <circle cx="200" cy="200" r="140" fill="transparent" />
+          <text x="200" y="80" text-anchor="middle" fill="#8C8B78" font-size="11" font-weight="500">Extended Circle</text>
+        </g>
+        <%!-- Close friends --%>
+        <g data-ring="friends" class="ring-friends cursor-pointer">
+          <circle cx="200" cy="200" r="80" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.5" />
+          <circle cx="200" cy="200" r="80" fill="#E0E7FF" opacity="0.4" />
+          <circle cx="200" cy="200" r="90" fill="transparent" />
+          <text x="200" y="135" text-anchor="middle" fill="#6F6E5F" font-size="11" font-weight="500">Close Friends</text>
+        </g>
+        <%!-- Private (center) --%>
+        <g data-ring="private" class="ring-private cursor-pointer">
+          <circle cx="200" cy="200" r="35" fill="#6366F1" opacity="0.85" />
+          <text x="200" y="205" text-anchor="middle" fill="white" font-size="12" font-weight="600">You</text>
+        </g>
       </svg>
+      <%!-- Scenario description — updated by PrivacyCircles hook --%>
+      <p id="privacy-scenario"
+         class="min-h-[3rem] max-w-xs text-center text-sm/6 text-oat-600 transition-all duration-300">
+        Tap a ring to see how it works.
+      </p>
     </div>
     """
   end

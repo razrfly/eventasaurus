@@ -33,13 +33,8 @@ struct MovieDetailView: View {
                 heroImage(data.movie)
 
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // Rating pill (title+year now in hero overlay)
-                    if let rating = data.movie.voteAverage {
-                        HStack {
-                            RatingPill(rating: rating)
-                            Spacer()
-                        }
-                    }
+                    // Ratings row
+                    ratingsRow(data.movie)
 
                     // Tagline
                     if let tagline = data.movie.tagline {
@@ -48,7 +43,7 @@ struct MovieDetailView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    // Runtime + genres
+                    // Runtime + genres + director
                     HStack(spacing: DS.Spacing.lg) {
                         if let runtime = data.movie.runtime {
                             Label("\(runtime) min", systemImage: "clock")
@@ -61,6 +56,17 @@ struct MovieDetailView: View {
                                 .font(DS.Typography.body)
                                 .foregroundStyle(.secondary)
                         }
+
+                        if let director = data.movie.cinegraph?.director {
+                            Label(director, systemImage: "video.fill")
+                                .font(DS.Typography.body)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    // Awards row
+                    if let awards = awardsRow(data.movie) {
+                        awards
                     }
 
                     // Overview
@@ -240,6 +246,86 @@ struct MovieDetailView: View {
         return Self.displayDateFormatter.string(from: date)
     }
 
+    // MARK: - Ratings Row
+
+    @ViewBuilder
+    private func ratingsRow(_ movie: MovieInfo) -> some View {
+        if let ratings = movie.cinegraph?.ratings {
+            HStack(spacing: DS.Spacing.sm) {
+                if let tmdb = ratings.tmdb {
+                    Text("⭐ \(String(format: "%.1f", tmdb)) TMDB")
+                        .font(DS.Typography.badge)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(Color.blue.opacity(DS.Opacity.tintedBackground))
+                        .foregroundStyle(Color.blue)
+                        .clipShape(Capsule())
+                }
+                if let imdb = ratings.imdb {
+                    let amberColor = Color(red: 0.5, green: 0.35, blue: 0.0)
+                    Text("🎬 \(String(format: "%.1f", imdb)) IMDb")
+                        .font(DS.Typography.badge)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(Color.yellow.opacity(DS.Opacity.tintedBackground))
+                        .foregroundStyle(amberColor)
+                        .clipShape(Capsule())
+                }
+                if let rt = ratings.rottenTomatoes {
+                    let icon = rt >= 60 ? "🍅" : "🦠"
+                    let color = rtBadgeColor(rt)
+                    Text("\(icon) \(rt)% RT")
+                        .font(DS.Typography.badge)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(color.opacity(DS.Opacity.tintedBackground))
+                        .foregroundStyle(color)
+                        .clipShape(Capsule())
+                }
+                if let mc = ratings.metacritic {
+                    let color = metacriticBadgeColor(mc)
+                    Text("📰 \(mc) MC")
+                        .font(DS.Typography.badge)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(color.opacity(DS.Opacity.tintedBackground))
+                        .foregroundStyle(color)
+                        .clipShape(Capsule())
+                }
+                Spacer()
+            }
+        } else if let rating = movie.voteAverage {
+            HStack {
+                RatingPill(rating: rating)
+                Spacer()
+            }
+        }
+    }
+
+    private func rtBadgeColor(_ score: Int) -> Color {
+        if score >= 75 { return .green }
+        if score >= 60 { return Color(red: 0.6, green: 0.8, blue: 0.0) }
+        return .red
+    }
+
+    private func metacriticBadgeColor(_ score: Int) -> Color {
+        if score >= 61 { return .green }
+        if score >= 40 { return .orange }
+        return .red
+    }
+
+    // MARK: - Awards Row
+
+    private func awardsRow(_ movie: MovieInfo) -> AwardsRowView? {
+        guard let awards = movie.cinegraph?.awards else { return nil }
+        let hasOscars = (awards.oscarWins ?? 0) > 0
+        let hasSummary = !(awards.summary ?? "").isEmpty
+        let hasWins = (awards.totalWins ?? 0) > 0
+        let hasNoms = (awards.totalNominations ?? 0) > 0
+        guard hasOscars || hasSummary || hasWins || hasNoms else { return nil }
+        return AwardsRowView(awards: awards)
+    }
+
     // MARK: - Hero Image
 
     private func heroImage(_ movie: MovieInfo) -> some View {
@@ -309,16 +395,21 @@ struct MovieDetailView: View {
     @ViewBuilder
     private func externalLinks(_ movie: MovieInfo) -> some View {
         let tmdbUrl = movie.tmdbId.flatMap { URL(string: "https://www.themoviedb.org/movie/\($0)") }
-        let cinegraphUrl = movie.tmdbId.flatMap { URL(string: "https://cinegraph.org/movies/tmdb/\($0)") }
 
-        if tmdbUrl != nil || cinegraphUrl != nil {
-            HStack(spacing: DS.Spacing.lg) {
-                if let url = tmdbUrl {
-                    ExternalLinkButton(title: "TMDB", url: url, icon: "film")
-                }
-                if let url = cinegraphUrl {
-                    ExternalLinkButton(title: "Cinegraph", url: url, icon: "popcorn")
-                }
+        HStack(spacing: DS.Spacing.lg) {
+            // Cinegraph — always present, in-app navigation
+            NavigationLink {
+                CinegraphDetailView(movie: movie)
+            } label: {
+                Label("Cinegraph", systemImage: "popcorn")
+                    .font(DS.Typography.bodyBold)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassSecondary)
+
+            // TMDB — external link, only when tmdbId exists
+            if let url = tmdbUrl {
+                ExternalLinkButton(title: "TMDB", url: url, icon: "film")
             }
         }
     }
@@ -427,5 +518,49 @@ struct MovieDetailView: View {
             self.error = error
             isLoading = false
         }
+    }
+}
+
+// MARK: - Awards Row View
+
+struct AwardsRowView: View {
+    let awards: CinegraphAwards
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            if let wins = awards.oscarWins, wins > 0 {
+                Text("🏆 \(wins) Oscar Win\(wins == 1 ? "" : "s")")
+                    .font(DS.Typography.badge)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(Color.yellow.opacity(DS.Opacity.tintedBackground))
+                    .foregroundStyle(Color(red: 0.6, green: 0.4, blue: 0.0))
+                    .clipShape(Capsule())
+            }
+
+            if let summaryText = awardsSummaryText() {
+                Text(summaryText)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    private func awardsSummaryText() -> String? {
+        if let summary = awards.summary, !summary.isEmpty {
+            return summary
+        }
+        let wins = awards.totalWins ?? 0
+        let noms = awards.totalNominations ?? 0
+        if wins > 0 && noms > 0 {
+            return "\(wins) wins & \(noms) nominations"
+        } else if wins > 0 {
+            return "\(wins) wins"
+        } else if noms > 0 {
+            return "\(noms) nominations"
+        }
+        return nil
     }
 }

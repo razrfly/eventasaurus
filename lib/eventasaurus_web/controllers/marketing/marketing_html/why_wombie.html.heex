@@ -6,8 +6,15 @@
     <meta name="csrf-token" content={get_csrf_token()} />
     <title>Why Wombie</title>
     <link rel="icon" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wdth,wght@0,75..125,400..700;1,75..125,400..700&family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&display=swap" />
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}></script>
+    <style>
+      :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
+      .marketing-page .font-familjen, .marketing-page h1, .marketing-page h2, .marketing-page h3, .marketing-page h4 { font-variation-settings: "wdth" 112.5; }
+    </style>
   </head>
   <body class="bg-oat-100 antialiased">
     <.marketing_page>
@@ -32,6 +39,46 @@
               Join the waitlist
             </.m_button>
           </div>
+
+          <div class="mt-12 scroll-reveal max-w-sm mx-auto">
+            <div class="hero-contrast rounded-2xl ring-1 ring-oat-950/[0.06] shadow-sm">
+              <%!-- Panel A: grey social feed --%>
+              <div class="hero-contrast-panel hero-contrast-before bg-gray-100 p-6 rounded-2xl">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="w-8 h-8 rounded-full bg-gray-300"></div>
+                  <div class="h-3 w-24 rounded bg-gray-300"></div>
+                  <div class="ml-auto text-xs text-gray-400">3.2k followers</div>
+                </div>
+                <div class="h-20 rounded-lg bg-gray-200 mb-3"></div>
+                <div class="flex gap-4 text-xs text-gray-400">
+                  <span>♥ 47 likes</span>
+                  <span>💬 12 comments</span>
+                  <span>↗ Share</span>
+                </div>
+              </div>
+              <%!-- Panel B: warm Wombie invite --%>
+              <div class="hero-contrast-panel hero-contrast-after bg-oat-50 p-6 rounded-2xl">
+                <div class="flex items-center justify-between mb-4">
+                  <span class="rounded-full bg-oat-950/[0.07] px-2.5 py-0.5 text-xs font-medium text-oat-700">
+                    Close friends
+                  </span>
+                  <span class="text-xs text-oat-500">Fri 7 Mar</span>
+                </div>
+                <h4 class="font-familjen text-base font-medium text-oat-950 mb-1">Friday Film Night</h4>
+                <p class="text-xs text-oat-600 mb-3">Maya's place · 7:30pm</p>
+                <div class="flex items-center justify-between">
+                  <div class="flex -space-x-1.5">
+                    <div class="h-5 w-5 rounded-full bg-oat-300 ring-2 ring-oat-50"></div>
+                    <div class="h-5 w-5 rounded-full bg-oat-400 ring-2 ring-oat-50"></div>
+                    <div class="h-5 w-5 rounded-full bg-oat-500 ring-2 ring-oat-50"></div>
+                  </div>
+                  <span class="rounded-full bg-oat-950 px-2.5 py-0.5 text-xs font-medium text-white">
+                    You're in →
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </.m_container>
       </.m_section>
 
@@ -46,26 +93,30 @@
               800 followers, no one to call
             </.m_heading>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 scroll-reveal-stagger">
+          <div class="story-scroll flex lg:grid lg:grid-cols-4 gap-6 overflow-x-auto lg:overflow-visible pb-4 lg:pb-0 scroll-reveal-stagger">
             <.story_card
               icon="📱"
               title="The Scroll"
               description="You open Instagram. 200 stories. None of them are inviting you anywhere tonight."
+              class="min-w-[280px] lg:min-w-0"
             />
             <.story_card
               icon="👻"
               title="The Ghost Group Chat"
               description="'Anyone want to do something this weekend?' Last message: 3 weeks ago. Seen by 12."
+              class="min-w-[280px] lg:min-w-0"
             />
             <.story_card
               icon="🎭"
               title="The Performance"
               description="You post about the concert you went to. 47 likes. You went alone."
+              class="min-w-[280px] lg:min-w-0"
             />
             <.story_card
               icon="🗓️"
               title="The Blank Calendar"
               description="Friday evening. Nothing planned. Not because you don't want to go out — because organizing is exhausting."
+              class="min-w-[280px] lg:min-w-0"
             />
           </div>
         </.m_container>
@@ -162,6 +213,21 @@
                 Maya creates a film night for 6 people. They vote on the movie, someone brings snacks.
                 No public event. No FOMO-inducing story. Just a couch, friends, and a projector.
               </p>
+              <div class="mt-4 rounded-xl bg-oat-100 p-3 ring-1 ring-oat-950/[0.06] text-xs">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-base">🎬</span>
+                  <span class="font-medium text-oat-950">Friday Film Night</span>
+                </div>
+                <p class="text-oat-500 mb-2">Maya's place · 7:30pm</p>
+                <div class="flex items-center justify-between">
+                  <div class="flex -space-x-1">
+                    <div class="h-4 w-4 rounded-full bg-oat-300 ring-1 ring-oat-100"></div>
+                    <div class="h-4 w-4 rounded-full bg-oat-400 ring-1 ring-oat-100"></div>
+                    <div class="h-4 w-4 rounded-full bg-oat-500 ring-1 ring-oat-100"></div>
+                  </div>
+                  <span class="text-oat-500">6 going</span>
+                </div>
+              </div>
             </div>
 
             <div class="scroll-reveal min-w-[280px] lg:min-w-0 rounded-2xl bg-oat-50 p-6">
@@ -173,6 +239,17 @@
                 A local bar posts their jazz night. It shows up for people within 2km who have "live music" in their interests.
                 30 people discover it. 12 show up. The bartender is thrilled.
               </p>
+              <div class="mt-4 rounded-xl bg-oat-100 p-3 ring-1 ring-oat-950/[0.06] text-xs">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-base">🎷</span>
+                  <span class="font-medium text-oat-950">Blue Note Sessions</span>
+                </div>
+                <p class="text-oat-500 mb-2">Praga Koneser · Tonight 8pm</p>
+                <div class="flex items-center justify-between">
+                  <span class="rounded-full bg-oat-950/[0.06] px-2 py-0.5 text-oat-600">400m away</span>
+                  <span class="text-oat-500">12 going</span>
+                </div>
+              </div>
             </div>
 
             <div class="scroll-reveal min-w-[280px] lg:min-w-0 rounded-2xl bg-oat-50 p-6">
@@ -184,6 +261,17 @@
                 Tom plans his partner's birthday. Guest list is locked. Everyone coordinates gifts and arrival times.
                 The birthday person has no idea. Exactly as planned.
               </p>
+              <div class="mt-4 rounded-xl bg-oat-100 p-3 ring-1 ring-oat-950/[0.06] text-xs">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-base">🔒</span>
+                  <span class="font-medium text-oat-950">Private event</span>
+                </div>
+                <p class="text-oat-500 mb-2">6 guests · Co-ordinating gifts</p>
+                <div class="flex items-center justify-between">
+                  <span class="text-oat-600">🎁 Tom added you</span>
+                  <span class="rounded-full bg-oat-950 px-2 py-0.5 text-white">View →</span>
+                </div>
+              </div>
             </div>
           </div>
         </.m_container>
@@ -252,16 +340,21 @@
         <.m_container narrow>
           <.scroll_reveal>
             <div class="text-center space-y-6">
-              <p class="text-oat-400 text-lg line-through">Not daily active users</p>
-              <p class="text-oat-400 text-lg line-through">Not time spent in app</p>
-              <p class="text-oat-400 text-lg line-through">Not content created</p>
+              <p class="text-oat-400 text-lg anti-strike">Not daily active users</p>
+              <p class="text-oat-400 text-lg anti-strike">Not time spent in app</p>
+              <p class="text-oat-400 text-lg anti-strike">Not content created</p>
             </div>
           </.scroll_reveal>
           <.scroll_reveal class="mt-12">
-            <.stat_block
-              metric="Events Attended Per User Per Month"
-              context="The only metric that matters. Did you actually go somewhere, with someone?"
-            />
+            <div class="text-center py-8 border-t border-b border-oat-200 mt-10">
+              <p class="font-familjen text-7xl sm:text-8xl lg:text-9xl text-oat-950 tracking-[-0.04em] leading-none">
+                2.1×
+              </p>
+              <p class="mt-4 font-semibold text-oat-950 text-lg">Events attended per user per month</p>
+              <p class="mt-2 text-oat-600 text-base/7 max-w-sm mx-auto">
+                The only metric that matters. Did you actually go somewhere, with someone?
+              </p>
+            </div>
           </.scroll_reveal>
         </.m_container>
       </.m_section>

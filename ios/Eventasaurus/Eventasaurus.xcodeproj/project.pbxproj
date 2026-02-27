@@ -16,6 +16,7 @@
 		2CBE1900F8D991008A0BE2FF /* EventCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AAF0EF0E711979E18C9F3C9 /* EventCreateView.swift */; };
 		2D34D393D59C9DED446B36AD /* DiceBearAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D7053A8B6FE98152743B2B0 /* DiceBearAvatar.swift */; };
 		2E32E8029F8A18DA3BCCCB93 /* MovieDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E16E9AAF138CB7EA570320 /* MovieDetailView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* CinegraphDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* CinegraphDetailView.swift */; };
 		2EFA6923E7A922942DA1B27E /* EventManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B35F1A39494A33D157DD9BE8 /* EventManageView.swift */; };
 		316C6E6EB47E284B5303B2FB /* ManageOverviewTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A136C1551289964EA5CD34A /* ManageOverviewTab.swift */; };
 		33E375250B0D4A06D83A5EE4 /* ManageGuestsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C72D0D04FBCD9DF19189F17 /* ManageGuestsTab.swift */; };
@@ -126,6 +127,7 @@
 		14E328F8B59147820895178F /* RankedVotingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankedVotingView.swift; sourceTree = "<group>"; };
 		15FCE072DF60782AD6EAD073 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		19E16E9AAF138CB7EA570320 /* MovieDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieDetailView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* CinegraphDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinegraphDetailView.swift; sourceTree = "<group>"; };
 		1B1C65EA3CEB181EA47B1CA7 /* CityPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityPickerView.swift; sourceTree = "<group>"; };
 		1D910507C20A4079D0F6753F /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
 		1DD58E490FBBFABB4DCA5D90 /* CachedImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedImage.swift; sourceTree = "<group>"; };
@@ -427,6 +429,7 @@
 				CCC601A146E33CBE05DCD517 /* FlowLayout.swift */,
 				44A0DA4DB7CF2300D99929B9 /* InviteGuestsSheet.swift */,
 				19E16E9AAF138CB7EA570320 /* MovieDetailView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* CinegraphDetailView.swift */,
 				F355DFAD17AF195B641426EC /* MyEventsView.swift */,
 				450DFE821D9BA30131B7CAA0 /* NearbyEventsSection.swift */,
 				C8ECCAAC176ABF8381CCFEB2 /* OrganizerSearchSheet.swift */,
@@ -621,6 +624,7 @@
 				77194EE24C138E393176C8D0 /* MapKitSearchService.swift in Sources */,
 				DE6D0309991E94B825D168A1 /* MovieDetail.swift in Sources */,
 				2E32E8029F8A18DA3BCCCB93 /* MovieDetailView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* CinegraphDetailView.swift in Sources */,
 				BF9ACEB5D68ECF001460E162 /* MyEventsView.swift in Sources */,
 				37098B29CE8BEAD07AC00C72 /* NearbyEventsSection.swift in Sources */,
 				F0736485920AB373A3052895 /* OrganizerSearchSheet.swift in Sources */,
