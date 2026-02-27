@@ -239,7 +239,12 @@ config :eventasaurus, Oban,
        # Refresh city_events_mv materialized view hourly at minute 15
        # Provides sub-5ms fallback for city page when Cachex cache misses
        # See: https://github.com/razrfly/eventasaurus/issues/3686
-       {"15 * * * *", EventasaurusWeb.Workers.RefreshCityEventsViewJob}
+       {"15 * * * *", EventasaurusWeb.Workers.RefreshCityEventsViewJob},
+       # Cinegraph weekly sweep at 9 AM UTC on Sundays
+       # Finds all movies with stale/missing Cinegraph data and enqueues individual sync jobs
+       # See: lib/eventasaurus_discovery/workers/cinegraph_sync_worker.ex
+       {"0 9 * * 0", EventasaurusDiscovery.Workers.CinegraphSyncWorker,
+        args: %{sweep: true}}
        # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]
@@ -435,6 +440,13 @@ unsplash_country_refresh_days =
 config :eventasaurus, :unsplash,
   city_refresh_days: unsplash_city_refresh_days,
   country_refresh_days: unsplash_country_refresh_days
+
+# Configure Cinegraph sister film database
+# Used by CinegraphClient to fetch rich movie data (ratings, cast, awards, canonical lists)
+# Data is cached in movies.cinegraph_data — synced weekly by CinegraphSyncWorker
+config :eventasaurus, :cinegraph,
+  base_url: System.get_env("CINEGRAPH_BASE_URL") || "http://cinegraph.org",
+  api_key: System.get_env("CINEGRAPH_API_KEY") || ""
 
 # Configure Mapbox for static maps
 config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN")

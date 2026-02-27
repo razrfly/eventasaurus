@@ -127,6 +127,10 @@ defmodule EventasaurusDiscovery.Movies.Movie do
     field(:posthog_view_count, :integer, default: 0)
     field(:posthog_synced_at, :utc_datetime)
 
+    # Cinegraph enrichment data (synced by CinegraphSyncWorker)
+    field(:cinegraph_data, :map)
+    field(:cinegraph_synced_at, :utc_datetime)
+
     timestamps()
   end
 
@@ -193,6 +197,32 @@ defmodule EventasaurusDiscovery.Movies.Movie do
       Map.has_key?(attrs, "tmdb_id") -> Map.put(attrs, "tmdb_id", id)
       true -> attrs
     end
+  end
+
+  def cinegraph_changeset(movie, attrs) do
+    movie
+    |> cast(attrs, [:cinegraph_data, :cinegraph_synced_at])
+  end
+
+  # Accessor helpers for Cinegraph data (all return nil/[] when cinegraph_data is nil)
+
+  def cinegraph_ratings(movie), do: get_in(movie.cinegraph_data, ["ratings"])
+
+  def cinegraph_cast(movie), do: get_in(movie.cinegraph_data, ["cast"]) || []
+
+  def cinegraph_crew(movie), do: get_in(movie.cinegraph_data, ["crew"]) || []
+
+  def cinegraph_awards(movie), do: get_in(movie.cinegraph_data, ["awards"])
+
+  def cinegraph_canonical_sources(movie),
+    do: get_in(movie.cinegraph_data, ["canonicalSources"]) || %{}
+
+  def cinegraph_director(movie) do
+    movie
+    |> cinegraph_crew()
+    |> Enum.find_value(fn c ->
+      c["job"] == "Director" && get_in(c, ["person", "name"])
+    end)
   end
 
   defp sanitize_utf8(changeset) do

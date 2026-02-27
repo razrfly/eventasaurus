@@ -11,6 +11,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusWeb.Live.Components.MovieHeroComponent
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.Live.Components.CityScreeningsSection
+  alias EventasaurusWeb.Live.Components.MovieRatingsComponent
+  alias EventasaurusWeb.Live.Components.MovieAwardsComponent
   alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, LanguageDiscovery, PlanWithFriendsHelpers}
   alias EventasaurusWeb.Services.TmdbService
   alias EventasaurusWeb.JsonLd.MovieSchema
@@ -228,10 +230,18 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     breadcrumb_items = BreadcrumbBuilder.build_movie_screenings_breadcrumbs(movie, city)
 
     # Build rich_data map for movie components
+    # Cinegraph director is injected if available
     rich_data = build_rich_data_from_movie(movie)
 
-    # Fetch cast/crew from TMDB if we have a tmdb_id
-    {cast, crew} = fetch_cast_and_crew(movie.tmdb_id)
+    # Use Cinegraph cast if available, fall back to TMDB
+    {cast, crew} =
+      if movie.cinegraph_data do
+        cinegraph_cast = Movie.cinegraph_cast(movie) |> normalize_cinegraph_cast()
+        cinegraph_crew = Movie.cinegraph_crew(movie) |> normalize_cinegraph_crew()
+        {cinegraph_cast, cinegraph_crew}
+      else
+        fetch_cast_and_crew(movie.tmdb_id)
+      end
 
     # Enrich movie with TMDB metadata for JSON-LD generation
     # This populates the virtual tmdb_metadata field with credits data
@@ -248,6 +258,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
      |> assign(:page_title, "#{movie.title} - #{city.name}")
      |> assign(:city, city)
      |> assign(:movie, movie)
+     |> assign(:cinegraph_data, movie.cinegraph_data)
      |> assign(:venues_with_info, venues_with_info)
      |> assign(:total_showtimes, total_showtimes)
      |> assign(:breadcrumb_items, breadcrumb_items)
@@ -309,6 +320,17 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           show_links={true}
           tmdb_id={@movie.tmdb_id}
         />
+
+        <!-- Ratings & Awards (from Cinegraph) -->
+        <%= if @cinegraph_data do %>
+          <div class="mt-4 bg-white rounded-2xl border border-gray-200 px-6 py-2 shadow-sm">
+            <MovieRatingsComponent.ratings_panel
+              cinegraph_data={@cinegraph_data}
+              tmdb_rating={@movie.metadata["vote_average"]}
+            />
+            <MovieAwardsComponent.awards_badges cinegraph_data={@cinegraph_data} />
+          </div>
+        <% end %>
 
         <!-- Plan with Friends Button -->
         <div class="my-8">
@@ -1242,11 +1264,38 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       "vote_average" => metadata["vote_average"],
       "vote_count" => metadata["vote_count"],
       "genres" => build_genres_list(metadata["genres"]),
-      "director" => nil,
-      "crew" => [],
+      "director" => Movie.cinegraph_director(movie),
+      "crew" => normalize_cinegraph_crew(Movie.cinegraph_crew(movie)),
       "external_links" => external_links
     }
   end
+
+  # Normalize Cinegraph cast (camelCase JSON) to CastCarouselComponent format
+  defp normalize_cinegraph_cast(cast) when is_list(cast) do
+    Enum.map(cast, fn c ->
+      %{
+        "name" => get_in(c, ["person", "name"]),
+        "character" => c["character"],
+        "profile_path" => get_in(c, ["person", "profilePath"])
+      }
+    end)
+  end
+
+  defp normalize_cinegraph_cast(_), do: []
+
+  # Normalize Cinegraph crew (camelCase JSON) to component format
+  defp normalize_cinegraph_crew(crew) when is_list(crew) do
+    Enum.map(crew, fn c ->
+      %{
+        "name" => get_in(c, ["person", "name"]),
+        "job" => c["job"],
+        "department" => c["department"],
+        "profile_path" => get_in(c, ["person", "profilePath"])
+      }
+    end)
+  end
+
+  defp normalize_cinegraph_crew(_), do: []
 
   # Extract the path portion from a full TMDB image URL
   # "https://image.tmdb.org/t/p/w500/abc123.jpg" -> "/abc123.jpg"
