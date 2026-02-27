@@ -251,6 +251,7 @@ struct MovieDetailView: View {
     @ViewBuilder
     private func ratingsRow(_ movie: MovieInfo) -> some View {
         if let ratings = movie.cinegraph?.ratings {
+            ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
                 if let tmdb = ratings.tmdb {
                     Text("⭐ \(String(format: "%.1f", tmdb)) TMDB")
@@ -293,6 +294,7 @@ struct MovieDetailView: View {
                         .clipShape(Capsule())
                 }
                 Spacer()
+            }
             }
         } else if let rating = movie.voteAverage {
             HStack {
@@ -397,15 +399,17 @@ struct MovieDetailView: View {
         let tmdbUrl = movie.tmdbId.flatMap { URL(string: "https://www.themoviedb.org/movie/\($0)") }
 
         HStack(spacing: DS.Spacing.lg) {
-            // Cinegraph — always present, in-app navigation
-            NavigationLink {
-                CinegraphDetailView(movie: movie)
-            } label: {
-                Label("Cinegraph", systemImage: "popcorn")
-                    .font(DS.Typography.bodyBold)
-                    .frame(maxWidth: .infinity)
+            // Cinegraph — only show when cinegraph data is available
+            if movie.cinegraph != nil {
+                NavigationLink {
+                    CinegraphDetailView(movie: movie)
+                } label: {
+                    Label("Cinegraph", systemImage: "popcorn")
+                        .font(DS.Typography.bodyBold)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassSecondary)
             }
-            .buttonStyle(.glassSecondary)
 
             // TMDB — external link, only when tmdbId exists
             if let url = tmdbUrl {

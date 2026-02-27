@@ -47,4 +47,24 @@ defmodule EventasaurusWeb.MarketingController do
   def terms(conn, _params) do
     conn |> put_root_layout(false) |> render(:terms, layout: false)
   end
+
+  @spec manifesto(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def manifesto(conn, _params) do
+    conn |> put_root_layout(false) |> render(:manifesto, layout: false)
+  end
+
+  @spec problem(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def problem(conn, _params) do
+    conn |> put_root_layout(false) |> render(:problem, layout: false)
+  end
+
+  @spec homepage_v2(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def homepage_v2(conn, _params) do
+    conn |> put_root_layout(false) |> render(:homepage_v2, layout: false)
+  end
+
+  @spec why_wombie_v2(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def why_wombie_v2(conn, _params) do
+    conn |> put_root_layout(false) |> render(:why_wombie_v2, layout: false)
+  end
 end

@@ -401,16 +401,16 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     }
   end
 
-  defp serialize_cinegraph_ratings(_), do: %{imdb: nil, rotten_tomatoes: nil, metacritic: nil, tmdb: nil}
+  defp serialize_cinegraph_ratings(_), do: nil
 
   defp serialize_cinegraph_awards(nil), do: nil
 
   defp serialize_cinegraph_awards(awards) when is_map(awards) do
     %{
-      oscar_wins: awards["oscarWins"],
-      total_wins: awards["totalWins"],
-      total_nominations: awards["totalNominations"],
-      summary: awards["summary"]
+      oscar_wins: Map.get(awards, "oscarWins") || Map.get(awards, :oscarWins),
+      total_wins: Map.get(awards, "totalWins") || Map.get(awards, :totalWins),
+      total_nominations: Map.get(awards, "totalNominations") || Map.get(awards, :totalNominations),
+      summary: Map.get(awards, "summary") || Map.get(awards, :summary)
     }
   end
 

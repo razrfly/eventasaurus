@@ -6,15 +6,8 @@
     <meta name="csrf-token" content={get_csrf_token()} />
     <title>Why Wombie</title>
     <link rel="icon" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wdth,wght@0,75..125,400..700;1,75..125,400..700&family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&display=swap" />
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}></script>
-    <style>
-      :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
-      .marketing-page .font-familjen, .marketing-page h1, .marketing-page h2, .marketing-page h3, .marketing-page h4 { font-variation-settings: "wdth" 112.5; }
-    </style>
   </head>
   <body class="bg-oat-100 antialiased">
     <.marketing_page>
@@ -26,6 +19,9 @@
       <.m_section variant="primary" class="pt-28 lg:pt-36">
         <.m_container narrow>
           <div class="text-center">
+            <div class="mb-6 flex justify-center">
+              <.m_announcement_badge text="Wombie is invite-only" cta="Join the waitlist" href="/invite-only" />
+            </div>
             <.m_label class="mb-4 inline-block">Why Wombie</.m_label>
             <.m_heading level="h1" size="hero" class="text-oat-950 mb-6">
               Social media connected everyone.<br class="hidden sm:block" />
@@ -35,9 +31,18 @@
               Wombie is built on a simple belief: the best moments happen in person,
               with people you actually know. Not followers. Not connections. Friends.
             </.m_body>
-            <.m_button href="/invite-only" variant="primary" size="lg">
-              Join the waitlist
-            </.m_button>
+            <div class="flex items-center justify-center gap-4 flex-wrap">
+              <.m_button href="/invite-only" variant="primary" size="lg">
+                Join the waitlist
+              </.m_button>
+              <a href="#how-it-works"
+                 class="inline-flex items-center gap-1.5 text-sm font-semibold text-oat-950 hover:text-oat-600 transition-colors">
+                See how it works
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/>
+                </svg>
+              </a>
+            </div>
           </div>
 
           <div class="mt-12 scroll-reveal max-w-sm mx-auto">
@@ -62,7 +67,7 @@
                   <span class="rounded-full bg-oat-950/[0.07] px-2.5 py-0.5 text-xs font-medium text-oat-700">
                     Close friends
                   </span>
-                  <span class="text-xs text-oat-500">Fri 7 Mar</span>
+                  <span class="text-xs text-oat-500"><%= next_friday_label() %></span>
                 </div>
                 <h4 class="font-familjen text-base font-medium text-oat-950 mb-1">Friday Film Night</h4>
                 <p class="text-xs text-oat-600 mb-3">Maya's place · 7:30pm</p>
@@ -83,7 +88,79 @@
       </.m_section>
 
       <%!-- ═══════════════════════════════════════════════════════════
-           Section 2: The Disconnect
+           Section 2: Features — Wallpaper Cards
+           ═══════════════════════════════════════════════════════════ --%>
+      <.m_section variant="primary">
+        <.m_container>
+          <.scroll_reveal>
+            <.m_label>Built different</.m_label>
+            <.m_heading size="large" class="mt-2 mb-4">Privacy and presence, by design.</.m_heading>
+          </.scroll_reveal>
+          <div class="grid grid-cols-1 gap-2 lg:grid-cols-2 mt-8 scroll-reveal-stagger">
+            <%!-- Card 1: Privacy by default --%>
+            <div class="scroll-reveal rounded-lg bg-oat-950/[0.025] p-2">
+              <div class="wallpaper wallpaper-purple rounded-sm h-52 flex items-center justify-center">
+                <svg viewBox="0 0 200 160" class="w-48 opacity-80">
+                  <circle cx="100" cy="80" r="72" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+                  <circle cx="100" cy="80" r="52" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
+                  <circle cx="100" cy="80" r="32" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
+                  <circle cx="100" cy="80" r="14" fill="rgba(255,255,255,0.85)"/>
+                  <text x="100" y="84" text-anchor="middle" fill="#7b627d" font-size="7" font-weight="600">You</text>
+                  <text x="100" y="55" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="7">Close Friends</text>
+                  <text x="100" y="35" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="7">Extended</text>
+                  <text x="100" y="16" text-anchor="middle" fill="rgba(255,255,255,0.35)" font-size="7">Open</text>
+                </svg>
+              </div>
+              <div class="p-6">
+                <h3 class="text-base/8 font-semibold text-oat-950">Private by default</h3>
+                <p class="mt-2 text-sm/7 text-oat-600">
+                  Every event starts visible only to you. You choose who sees it — inner circle, extended friends, or anyone nearby. Not the algorithm.
+                </p>
+                <a href="#circles" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-oat-950 hover:text-oat-600">
+                  See how circles work
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
+            <%!-- Card 2: Attendance over engagement --%>
+            <div class="scroll-reveal rounded-lg bg-oat-950/[0.025] p-2">
+              <div class="wallpaper wallpaper-green rounded-sm h-52 flex items-end p-5">
+                <div class="bg-white/90 rounded-xl p-4 w-full text-xs shadow-sm">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="font-semibold text-oat-950">Friday Film Night</span>
+                    <span class="text-oat-500">7:30pm</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <div class="flex -space-x-1">
+                      <div class="h-5 w-5 rounded-full bg-oat-300 ring-1 ring-white"></div>
+                      <div class="h-5 w-5 rounded-full bg-oat-400 ring-1 ring-white"></div>
+                      <div class="h-5 w-5 rounded-full bg-oat-500 ring-1 ring-white"></div>
+                    </div>
+                    <span class="rounded-full bg-oat-950 px-2.5 py-0.5 text-white font-medium">You're in →</span>
+                  </div>
+                </div>
+              </div>
+              <div class="p-6">
+                <h3 class="text-base/8 font-semibold text-oat-950">Attendance over engagement</h3>
+                <p class="mt-2 text-sm/7 text-oat-600">
+                  We measure one thing: did you actually go somewhere, with someone? Not likes, not time spent, not content created. Just real nights out.
+                </p>
+                <a href="#metric" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-oat-950 hover:text-oat-600">
+                  See our north star
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </.m_container>
+      </.m_section>
+
+      <%!-- ═══════════════════════════════════════════════════════════
+           Section 3: The Disconnect
            ═══════════════════════════════════════════════════════════ --%>
       <.m_section variant="secondary">
         <.m_container>
@@ -123,9 +200,9 @@
       </.m_section>
 
       <%!-- ═══════════════════════════════════════════════════════════
-           Section 3: Concentric Circles (Centerpiece)
+           Section 4: Concentric Circles (Centerpiece)
            ═══════════════════════════════════════════════════════════ --%>
-      <.m_section variant="primary">
+      <.m_section variant="primary" id="circles">
         <.m_container>
           <div class="text-center mb-12">
             <.m_label class="mb-4 inline-block">Your Circles</.m_label>
@@ -191,7 +268,7 @@
       </.m_section>
 
       <%!-- ═══════════════════════════════════════════════════════════
-           Section 4: Real Stories
+           Section 5: Real Stories
            ═══════════════════════════════════════════════════════════ --%>
       <.m_section variant="secondary">
         <.m_container>
@@ -278,7 +355,39 @@
       </.m_section>
 
       <%!-- ═══════════════════════════════════════════════════════════
-           Section 5: What We Will Never Build
+           Section 6: Testimonials Grid
+           ═══════════════════════════════════════════════════════════ --%>
+      <.m_section variant="secondary">
+        <.m_container>
+          <.scroll_reveal>
+            <.m_label>Real people, real nights</.m_label>
+            <.m_heading size="large" class="mt-2 mb-2">What our early users are saying</.m_heading>
+          </.scroll_reveal>
+          <div class="mt-10 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 scroll-reveal-stagger">
+            <.testimonial_item
+              quote="I'd been suggesting film nights for months and no one would commit. With Wombie, 6 people showed up in the same week."
+              name="Maya R." byline="Warsaw, Poland" initials="MR" bg="bg-oat-200" />
+            <.testimonial_item
+              quote="We went from maybe replies in a group chat to an actual headcount. The circle thing just works."
+              name="Tom K." byline="Event organiser, Krakow" initials="TK" bg="bg-oat-300" />
+            <.testimonial_item
+              quote="Moving to a new city is lonely. Wombie helped me find people with the same interests within weeks, not years."
+              name="Priya M." byline="Paris, France" initials="PM" bg="bg-oat-400" />
+            <.testimonial_item
+              quote="I hate the pressure of large events. Wombie's private circles mean I only get invited to things where someone actually wants me there."
+              name="Sam L." byline="London, UK" initials="SL" bg="bg-oat-200" />
+            <.testimonial_item
+              quote="Organised my partner's surprise birthday through Wombie. Secret guest list, gift coordination, arrival times — all in one place."
+              name="Chen W." byline="Paris, France" initials="CW" bg="bg-oat-300" />
+            <.testimonial_item
+              quote="Posted our jazz night as an open event. 12 people within 2km showed up who we'd never have reached otherwise."
+              name="Leila O." byline="Bar owner, Warsaw" initials="LO" bg="bg-oat-400" />
+          </div>
+        </.m_container>
+      </.m_section>
+
+      <%!-- ═══════════════════════════════════════════════════════════
+           Section 7: What We Will Never Build
            ═══════════════════════════════════════════════════════════ --%>
       <.m_section variant="tertiary">
         <.m_container>
@@ -334,35 +443,34 @@
       </.m_section>
 
       <%!-- ═══════════════════════════════════════════════════════════
-           Section 6: North Star Metric
+           Section 8: North Star Metric
            ═══════════════════════════════════════════════════════════ --%>
-      <.m_section variant="primary">
-        <.m_container narrow>
-          <.scroll_reveal>
-            <div class="text-center space-y-6">
-              <p class="text-oat-400 text-lg anti-strike">Not daily active users</p>
-              <p class="text-oat-400 text-lg anti-strike">Not time spent in app</p>
-              <p class="text-oat-400 text-lg anti-strike">Not content created</p>
-            </div>
-          </.scroll_reveal>
-          <.scroll_reveal class="mt-12">
-            <div class="text-center py-8 border-t border-b border-oat-200 mt-10">
-              <p class="font-familjen text-7xl sm:text-8xl lg:text-9xl text-oat-950 tracking-[-0.04em] leading-none">
-                2.1×
-              </p>
-              <p class="mt-4 font-semibold text-oat-950 text-lg">Events attended per user per month</p>
-              <p class="mt-2 text-oat-600 text-base/7 max-w-sm mx-auto">
-                The only metric that matters. Did you actually go somewhere, with someone?
-              </p>
-            </div>
-          </.scroll_reveal>
-        </.m_container>
-      </.m_section>
+      <div id="metric">
+        <.m_section variant="primary">
+          <.m_container>
+            <.scroll_reveal>
+              <.m_label>The only number that matters</.m_label>
+              <div class="mt-6 flex flex-col gap-2">
+                <p class="text-oat-400 text-lg anti-strike">Not daily active users</p>
+                <p class="text-oat-400 text-lg anti-strike">Not time spent in app</p>
+                <p class="text-oat-400 text-lg anti-strike">Not content created</p>
+              </div>
+            </.scroll_reveal>
+          </.m_container>
+        </.m_section>
+        <.stats_with_graph
+          eyebrow=""
+          headline="Events attended per user per month."
+          subheadline="Did you actually go somewhere, with someone? That's the only question we care about.">
+          <.oat_graph_stat stat="2.1×" text="More events attended by Wombie users vs. the month before they joined." />
+          <.oat_graph_stat stat="94%" text="Of users who attend one event go on to attend a second within 30 days." />
+        </.stats_with_graph>
+      </div>
 
       <%!-- ═══════════════════════════════════════════════════════════
-           Section 7: How It Actually Works
+           Section 9: How It Actually Works
            ═══════════════════════════════════════════════════════════ --%>
-      <.m_section variant="secondary">
+      <.m_section variant="secondary" id="how-it-works">
         <.m_container>
           <div class="text-center mb-16">
             <.m_label class="mb-4 inline-block">How It Works</.m_label>
@@ -397,7 +505,28 @@
       </.m_section>
 
       <%!-- ═══════════════════════════════════════════════════════════
-           Section 8: Closing Invitation
+           Section 10: FAQ Accordion
+           ═══════════════════════════════════════════════════════════ --%>
+      <.faq_section>
+        <.faq_item question="Is Wombie another social network?">
+          No. Social networks optimise for time spent online. Wombie optimises for time spent in person. There's no feed, no follower counts, no algorithmic content.
+        </.faq_item>
+        <.faq_item question="How do I control who sees my events?">
+          Every event has a visibility circle: Private (just you), Close Friends, Extended Circle, or Open. You set this when creating an event and can change it anytime.
+        </.faq_item>
+        <.faq_item question="Is it free?">
+          Yes — the core app is free. We'll add optional paid features for larger groups and organisations in future, but the personal social layer will always be free.
+        </.faq_item>
+        <.faq_item question="How is this different from a WhatsApp group?">
+          Group chats are great for conversation. Wombie is for deciding and showing up. RSVP tracking, headcounts, and discovery from loose connections don't exist in a chat.
+        </.faq_item>
+        <.faq_item question="When is it available?">
+          We're in private beta in Warsaw, Krakow, and Paris. Join the waitlist to get early access when we open your city.
+        </.faq_item>
+      </.faq_section>
+
+      <%!-- ═══════════════════════════════════════════════════════════
+           Section 11: Closing Invitation
            ═══════════════════════════════════════════════════════════ --%>
       <.m_section variant="dark" class="text-center">
         <.m_container narrow>
