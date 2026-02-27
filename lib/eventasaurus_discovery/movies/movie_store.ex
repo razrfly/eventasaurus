@@ -8,6 +8,7 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Movies.Movie
   alias EventasaurusApp.Images.ImageCacheService
+  alias EventasaurusDiscovery.Workers.CinegraphSyncWorker
 
   @doc """
   Find an existing movie by TMDB ID or create a new one.
@@ -50,6 +51,7 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
     case Repo.insert(Movie.changeset(%Movie{}, attrs)) do
       {:ok, movie} ->
         queue_image_caching(movie)
+        queue_cinegraph_sync(movie)
         {:ok, movie}
 
       {:error, changeset} ->
@@ -92,6 +94,21 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
 
       _ ->
         :ok
+    end
+  end
+
+  # Queue a Cinegraph sync job for a newly created movie.
+  # Failures are logged but don't affect movie creation.
+  defp queue_cinegraph_sync(%Movie{} = movie) do
+    if movie.tmdb_id do
+      case %{movie_id: movie.id}
+           |> CinegraphSyncWorker.new()
+           |> Oban.insert() do
+        {:ok, _} -> :ok
+        {:error, reason} ->
+          require Logger
+          Logger.warning("Failed to queue Cinegraph sync for movie #{movie.id}: #{inspect(reason)}")
+      end
     end
   end
 

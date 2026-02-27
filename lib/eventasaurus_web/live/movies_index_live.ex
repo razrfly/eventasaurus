@@ -47,6 +47,7 @@ defmodule EventasaurusWeb.MoviesIndexLive do
       |> assign(:screening_count, screening_count)
       |> assign(:upcoming_movies, upcoming_movies)
       |> assign(:search_query, "")
+      |> assign(:sort_by, "showing")
       |> SEOHelpers.assign_meta_tags(
         title: "Movies Now Showing | Wombie",
         description:
@@ -63,8 +64,47 @@ defmodule EventasaurusWeb.MoviesIndexLive do
   @impl true
   def handle_event("search", %{"q" => query}, socket) do
     movies = MovieStats.list_now_showing_movies(limit: 24, search: query)
-    {:noreply, assign(socket, now_showing: movies, search_query: query)}
+    sorted = apply_sort(movies, socket.assigns.sort_by)
+    {:noreply, assign(socket, now_showing: sorted, search_query: query)}
   end
+
+  @impl true
+  def handle_event("sort", %{"by" => sort_by}, socket) do
+    sorted = apply_sort(socket.assigns.now_showing, sort_by)
+    {:noreply, assign(socket, now_showing: sorted, sort_by: sort_by)}
+  end
+
+  defp apply_sort(movies, "rt_score") do
+    Enum.sort_by(
+      movies,
+      fn %{movie: m} ->
+        get_in(m.cinegraph_data || %{}, ["ratings", "rottenTomatoes"]) || -1
+      end,
+      :desc
+    )
+  end
+
+  defp apply_sort(movies, "imdb") do
+    Enum.sort_by(
+      movies,
+      fn %{movie: m} ->
+        get_in(m.cinegraph_data || %{}, ["ratings", "imdb"]) || -1
+      end,
+      :desc
+    )
+  end
+
+  defp apply_sort(movies, "awards") do
+    Enum.sort_by(
+      movies,
+      fn %{movie: m} ->
+        get_in(m.cinegraph_data || %{}, ["awards", "oscarWins"]) || 0
+      end,
+      :desc
+    )
+  end
+
+  defp apply_sort(movies, _showing), do: movies
 
   @impl true
   def render(assigns) do
@@ -130,6 +170,41 @@ defmodule EventasaurusWeb.MoviesIndexLive do
               <Heroicons.film class="w-7 h-7 inline-block mr-2 text-blue-600" />
               <%= gettext("Now Showing") %>
             </h2>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="text-gray-500 hidden sm:inline"><%= gettext("Sort:") %></span>
+              <button
+                phx-click="sort"
+                phx-value-by="showing"
+                class={["px-3 py-1.5 rounded-full font-medium transition",
+                  if(@sort_by == "showing", do: "bg-blue-600 text-white", else: "bg-gray-100 text-gray-700 hover:bg-gray-200")]}
+              >
+                Showing
+              </button>
+              <button
+                phx-click="sort"
+                phx-value-by="rt_score"
+                class={["px-3 py-1.5 rounded-full font-medium transition",
+                  if(@sort_by == "rt_score", do: "bg-red-600 text-white", else: "bg-gray-100 text-gray-700 hover:bg-gray-200")]}
+              >
+                🍅 RT
+              </button>
+              <button
+                phx-click="sort"
+                phx-value-by="imdb"
+                class={["px-3 py-1.5 rounded-full font-medium transition",
+                  if(@sort_by == "imdb", do: "bg-yellow-500 text-white", else: "bg-gray-100 text-gray-700 hover:bg-gray-200")]}
+              >
+                IMDb
+              </button>
+              <button
+                phx-click="sort"
+                phx-value-by="awards"
+                class={["px-3 py-1.5 rounded-full font-medium transition",
+                  if(@sort_by == "awards", do: "bg-amber-600 text-white", else: "bg-gray-100 text-gray-700 hover:bg-gray-200")]}
+              >
+                🏆 Awards
+              </button>
+            </div>
           </div>
 
           <%= if @now_showing == [] do %>

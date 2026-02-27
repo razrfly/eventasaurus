@@ -23,6 +23,12 @@ defmodule EventasaurusApp.ReleaseTasks do
 
       # Fix duplicate cinema_city_film_ids (apply changes)
       bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates(true)"
+
+      # Cinegraph backfill - show status (dry run)
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.cinegraph_backfill()"
+
+      # Cinegraph backfill - reset stamped-but-empty movies and trigger sweep
+      bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.cinegraph_backfill(true)"
   """
 
   require Logger
@@ -389,6 +395,88 @@ defmodule EventasaurusApp.ReleaseTasks do
         IO.puts("ℹ️  Dry run - no changes made")
         IO.puts("   Run with: fix_cinema_city_duplicates(true) to apply")
       end
+    end
+
+    :ok
+  end
+
+  @doc """
+  Backfill Cinegraph sync for movies stamped as attempted but with no data.
+
+  Movies with `cinegraph_synced_at IS NOT NULL` and `cinegraph_data IS NULL` were
+  stamped during a failed or empty-key sweep and won't be retried for 7 days.
+  This task resets them so the next sweep picks them up immediately.
+
+  ## Arguments
+
+    - `apply` - When false (default), prints a status report. When true, resets
+      stamped-but-empty movies and enqueues a sweep job.
+
+  ## Examples
+
+      # Dry run — show current sync status
+      EventasaurusApp.ReleaseTasks.cinegraph_backfill()
+
+      # Apply — reset movies and trigger sweep
+      EventasaurusApp.ReleaseTasks.cinegraph_backfill(true)
+  """
+  def cinegraph_backfill(apply \\ false) do
+    start_app()
+
+    alias EventasaurusDiscovery.Movies.Movie
+    alias EventasaurusDiscovery.Workers.CinegraphSyncWorker
+
+    total = Repo.one(from(m in Movie, select: count()))
+
+    with_data =
+      Repo.one(from(m in Movie, where: not is_nil(m.cinegraph_data), select: count()))
+
+    stamped_not_found =
+      Repo.one(
+        from(m in Movie,
+          where: is_nil(m.cinegraph_data) and not is_nil(m.cinegraph_synced_at),
+          select: count()
+        )
+      )
+
+    never_synced =
+      Repo.one(
+        from(m in Movie, where: is_nil(m.cinegraph_synced_at), select: count())
+      )
+
+    IO.puts("\nCinegraph Sync Status")
+    IO.puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    IO.puts("Total movies:         #{String.pad_leading(to_string(total), 6)}")
+    IO.puts("With cinegraph_data:  #{String.pad_leading(to_string(with_data), 6)}")
+
+    not_found_note =
+      if stamped_not_found > 0, do: "  ← these need apply=true to retry", else: ""
+
+    IO.puts(
+      "Stamped as not_found: #{String.pad_leading(to_string(stamped_not_found), 6)}#{not_found_note}"
+    )
+
+    IO.puts("Pending (never synced): #{String.pad_leading(to_string(never_synced), 4)}")
+    IO.puts("")
+
+    if apply do
+      {count, _} =
+        from(m in Movie,
+          where: is_nil(m.cinegraph_data) and not is_nil(m.cinegraph_synced_at)
+        )
+        |> Repo.update_all(set: [cinegraph_synced_at: nil])
+
+      IO.puts("Reset #{count} movies (cleared cinegraph_synced_at).")
+
+      {:ok, _job} =
+        %{sweep: true}
+        |> CinegraphSyncWorker.new()
+        |> Oban.insert()
+
+      IO.puts("Enqueued Cinegraph sweep job.")
+      IO.puts("Run cinegraph_backfill() again after the sweep completes to verify results.")
+    else
+      IO.puts("Run cinegraph_backfill(true) to reset the #{stamped_not_found} stamped movies and trigger a sweep.")
     end
 
     :ok
