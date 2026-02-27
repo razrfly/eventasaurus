@@ -25,8 +25,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Live.Components.MovieHeroComponent
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
-  alias EventasaurusWeb.Live.Components.MovieRatingsComponent
-  alias EventasaurusWeb.Live.Components.MovieAwardsComponent
+  alias EventasaurusWeb.Helpers.CinegraphNormalizer
   alias EventasaurusWeb.JsonLd.MovieSchema
   alias EventasaurusWeb.Services.TmdbService
   alias EventasaurusWeb.UrlHelper
@@ -79,11 +78,12 @@ defmodule EventasaurusWeb.GenericMovieLive do
           # Cinegraph director is injected if available
           rich_data = build_rich_data_from_movie(movie)
 
-          # Use Cinegraph cast if available, fall back to TMDB
+          # Use Cinegraph cast if available and non-empty, fall back to TMDB
+          cinegraph_cast = Movie.cinegraph_cast(movie) |> CinegraphNormalizer.normalize_cinegraph_cast()
+          cinegraph_crew = Movie.cinegraph_crew(movie) |> CinegraphNormalizer.normalize_cinegraph_crew()
+
           {cast, crew} =
-            if movie.cinegraph_data do
-              cinegraph_cast = Movie.cinegraph_cast(movie) |> normalize_cinegraph_cast()
-              cinegraph_crew = Movie.cinegraph_crew(movie) |> normalize_cinegraph_crew()
+            if cinegraph_cast != [] or cinegraph_crew != [] do
               {cinegraph_cast, cinegraph_crew}
             else
               fetch_cast_and_crew(movie.tmdb_id)
@@ -119,7 +119,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-50">
+    <div class="min-h-screen">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Breadcrumbs -->
         <Breadcrumbs.breadcrumb items={@breadcrumb_items} class="mb-6" />
@@ -133,18 +133,9 @@ defmodule EventasaurusWeb.GenericMovieLive do
           show_overview={true}
           show_links={true}
           tmdb_id={@movie.tmdb_id}
+          cinegraph_data={@movie.cinegraph_data}
         />
 
-        <!-- Ratings & Awards (from Cinegraph) -->
-        <%= if @cinegraph_data do %>
-          <div class="mt-4 bg-white rounded-2xl border border-gray-200 px-6 py-2 shadow-sm">
-            <MovieRatingsComponent.ratings_panel
-              cinegraph_data={@cinegraph_data}
-              tmdb_rating={@movie.metadata["vote_average"]}
-            />
-            <MovieAwardsComponent.awards_badges cinegraph_data={@cinegraph_data} />
-          </div>
-        <% end %>
 
         <!-- Cast Section -->
         <%= if length(@cast) > 0 do %>
@@ -408,7 +399,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
       "vote_count" => metadata["vote_count"],
       "genres" => build_genres_list(metadata["genres"]),
       "director" => Movie.cinegraph_director(movie),
-      "crew" => normalize_cinegraph_crew(Movie.cinegraph_crew(movie)),
+      "crew" => CinegraphNormalizer.normalize_cinegraph_crew(Movie.cinegraph_crew(movie)),
       "external_links" => external_links
     }
   end
@@ -531,33 +522,6 @@ defmodule EventasaurusWeb.GenericMovieLive do
   defp stringify_keys(map) when is_map(map) do
     Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
-
-  # Normalize Cinegraph cast (camelCase JSON) to CastCarouselComponent format
-  defp normalize_cinegraph_cast(cast) when is_list(cast) do
-    Enum.map(cast, fn c ->
-      %{
-        "name" => get_in(c, ["person", "name"]),
-        "character" => c["character"],
-        "profile_path" => get_in(c, ["person", "profilePath"])
-      }
-    end)
-  end
-
-  defp normalize_cinegraph_cast(_), do: []
-
-  # Normalize Cinegraph crew (camelCase JSON) to component format
-  defp normalize_cinegraph_crew(crew) when is_list(crew) do
-    Enum.map(crew, fn c ->
-      %{
-        "name" => get_in(c, ["person", "name"]),
-        "job" => c["job"],
-        "department" => c["department"],
-        "profile_path" => get_in(c, ["person", "profilePath"])
-      }
-    end)
-  end
-
-  defp normalize_cinegraph_crew(_), do: []
 
   # Enrich movie struct with TMDB metadata for JSON-LD generation
   # This populates the virtual tmdb_metadata field with credits data

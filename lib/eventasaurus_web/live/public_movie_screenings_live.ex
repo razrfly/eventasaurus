@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusWeb.Live.Components.CityScreeningsSection
   alias EventasaurusWeb.Live.Components.MovieRatingsComponent
   alias EventasaurusWeb.Live.Components.MovieAwardsComponent
-  alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, LanguageDiscovery, PlanWithFriendsHelpers}
+  alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, CinegraphNormalizer, LanguageDiscovery, PlanWithFriendsHelpers}
   alias EventasaurusWeb.Services.TmdbService
   alias EventasaurusWeb.JsonLd.MovieSchema
   alias Eventasaurus.SocialCards.HashGenerator
@@ -233,11 +233,12 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     # Cinegraph director is injected if available
     rich_data = build_rich_data_from_movie(movie)
 
-    # Use Cinegraph cast if available, fall back to TMDB
+    # Use Cinegraph cast if available and non-empty, fall back to TMDB
+    cinegraph_cast = Movie.cinegraph_cast(movie) |> CinegraphNormalizer.normalize_cinegraph_cast()
+    cinegraph_crew = Movie.cinegraph_crew(movie) |> CinegraphNormalizer.normalize_cinegraph_crew()
+
     {cast, crew} =
-      if movie.cinegraph_data do
-        cinegraph_cast = Movie.cinegraph_cast(movie) |> normalize_cinegraph_cast()
-        cinegraph_crew = Movie.cinegraph_crew(movie) |> normalize_cinegraph_crew()
+      if cinegraph_cast != [] or cinegraph_crew != [] do
         {cinegraph_cast, cinegraph_crew}
       else
         fetch_cast_and_crew(movie.tmdb_id)
@@ -1265,37 +1266,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       "vote_count" => metadata["vote_count"],
       "genres" => build_genres_list(metadata["genres"]),
       "director" => Movie.cinegraph_director(movie),
-      "crew" => normalize_cinegraph_crew(Movie.cinegraph_crew(movie)),
+      "crew" => CinegraphNormalizer.normalize_cinegraph_crew(Movie.cinegraph_crew(movie)),
       "external_links" => external_links
     }
   end
-
-  # Normalize Cinegraph cast (camelCase JSON) to CastCarouselComponent format
-  defp normalize_cinegraph_cast(cast) when is_list(cast) do
-    Enum.map(cast, fn c ->
-      %{
-        "name" => get_in(c, ["person", "name"]),
-        "character" => c["character"],
-        "profile_path" => get_in(c, ["person", "profilePath"])
-      }
-    end)
-  end
-
-  defp normalize_cinegraph_cast(_), do: []
-
-  # Normalize Cinegraph crew (camelCase JSON) to component format
-  defp normalize_cinegraph_crew(crew) when is_list(crew) do
-    Enum.map(crew, fn c ->
-      %{
-        "name" => get_in(c, ["person", "name"]),
-        "job" => c["job"],
-        "department" => c["department"],
-        "profile_path" => get_in(c, ["person", "profilePath"])
-      }
-    end)
-  end
-
-  defp normalize_cinegraph_crew(_), do: []
 
   # Extract the path portion from a full TMDB image URL
   # "https://image.tmdb.org/t/p/w500/abc123.jpg" -> "/abc123.jpg"

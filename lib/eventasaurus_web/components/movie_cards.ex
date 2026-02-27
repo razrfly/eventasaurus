@@ -51,12 +51,18 @@ defmodule EventasaurusWeb.Components.MovieCards do
           <% end %>
 
           <!-- Rating Badge -->
-      <%= if rating = get_vote_average(@movie) do %>
-        <div class="absolute top-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-bold flex items-center">
-          <Heroicons.star solid class="w-3 h-3 mr-1" />
-          <%= Float.round(rating, 1) %>
-        </div>
-      <% end %>
+          <%= case get_best_rating(@movie) do %>
+            <% {:imdb, score} -> %>
+              <div class="absolute top-2 left-2 bg-black/80 text-yellow-400 px-2 py-1 rounded-md text-xs font-bold">
+                IMDb <%= Float.round(score * 1.0, 1) %>
+              </div>
+            <% {:tmdb, score} -> %>
+              <div class="absolute top-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-bold flex items-center">
+                <Heroicons.star solid class="w-3 h-3 mr-1" />
+                <%= Float.round(score * 1.0, 1) %>
+              </div>
+            <% nil -> %>
+          <% end %>
 
           <!-- City Count Badge -->
           <div class="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-medium">
@@ -201,10 +207,15 @@ defmodule EventasaurusWeb.Components.MovieCards do
   defp get_genres(%{metadata: %{"genres" => genres}}) when is_list(genres), do: genres
   defp get_genres(_), do: nil
 
-  defp get_vote_average(%{metadata: %{"vote_average" => avg}}) when is_number(avg) and avg > 0,
-    do: avg / 1.0
+  defp get_best_rating(%{cinegraph_data: %{"ratings" => %{"imdb" => imdb}}})
+       when is_number(imdb) and imdb > 0,
+       do: {:imdb, imdb}
 
-  defp get_vote_average(_), do: nil
+  defp get_best_rating(%{metadata: %{"vote_average" => avg}})
+       when is_number(avg) and avg > 0,
+       do: {:tmdb, avg / 1.0}
+
+  defp get_best_rating(_), do: nil
 
   defp format_tmdb_date(date_str) when is_binary(date_str) do
     case Date.from_iso8601(date_str) do

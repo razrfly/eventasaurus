@@ -41,6 +41,8 @@ defmodule EventasaurusWeb.MoviesIndexLive do
     socket =
       socket
       |> assign(:page_title, gettext("Movies Now Showing"))
+      |> assign(:all_movies, now_showing)
+      |> assign(:original_now_showing, now_showing)
       |> assign(:now_showing, now_showing)
       |> assign(:cities_with_movies, cities_with_movies)
       |> assign(:movie_count, movie_count)
@@ -62,16 +64,22 @@ defmodule EventasaurusWeb.MoviesIndexLive do
   end
 
   @impl true
+  def handle_params(params, _url, socket) do
+    sort_by = params["sort"] || "showing"
+    now_showing = apply_sort(socket.assigns.all_movies, sort_by)
+    {:noreply, assign(socket, sort_by: sort_by, now_showing: now_showing)}
+  end
+
+  @impl true
   def handle_event("search", %{"q" => query}, socket) do
     movies = MovieStats.list_now_showing_movies(limit: 24, search: query)
     sorted = apply_sort(movies, socket.assigns.sort_by)
-    {:noreply, assign(socket, now_showing: sorted, search_query: query)}
+    {:noreply, assign(socket, all_movies: movies, original_now_showing: movies, now_showing: sorted, search_query: query)}
   end
 
   @impl true
   def handle_event("sort", %{"by" => sort_by}, socket) do
-    sorted = apply_sort(socket.assigns.now_showing, sort_by)
-    {:noreply, assign(socket, now_showing: sorted, sort_by: sort_by)}
+    {:noreply, push_patch(socket, to: ~p"/movies?#{[sort: sort_by]}")}
   end
 
   defp apply_sort(movies, "rt_score") do
@@ -109,7 +117,7 @@ defmodule EventasaurusWeb.MoviesIndexLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="bg-gray-50 min-h-screen pb-20">
+    <div class="min-h-screen pb-20">
       <!-- Hero Section -->
       <div class="relative bg-gray-900 text-white overflow-hidden">
         <div class="absolute inset-0">
@@ -178,7 +186,7 @@ defmodule EventasaurusWeb.MoviesIndexLive do
                 class={["px-3 py-1.5 rounded-full font-medium transition",
                   if(@sort_by == "showing", do: "bg-blue-600 text-white", else: "bg-gray-100 text-gray-700 hover:bg-gray-200")]}
               >
-                Showing
+                <%= gettext("Showing") %>
               </button>
               <button
                 phx-click="sort"
@@ -186,7 +194,7 @@ defmodule EventasaurusWeb.MoviesIndexLive do
                 class={["px-3 py-1.5 rounded-full font-medium transition",
                   if(@sort_by == "rt_score", do: "bg-red-600 text-white", else: "bg-gray-100 text-gray-700 hover:bg-gray-200")]}
               >
-                🍅 RT
+                🍅 <%= gettext("RT") %>
               </button>
               <button
                 phx-click="sort"
@@ -194,7 +202,7 @@ defmodule EventasaurusWeb.MoviesIndexLive do
                 class={["px-3 py-1.5 rounded-full font-medium transition",
                   if(@sort_by == "imdb", do: "bg-yellow-500 text-white", else: "bg-gray-100 text-gray-700 hover:bg-gray-200")]}
               >
-                IMDb
+                <%= gettext("IMDb") %>
               </button>
               <button
                 phx-click="sort"
@@ -202,7 +210,7 @@ defmodule EventasaurusWeb.MoviesIndexLive do
                 class={["px-3 py-1.5 rounded-full font-medium transition",
                   if(@sort_by == "awards", do: "bg-amber-600 text-white", else: "bg-gray-100 text-gray-700 hover:bg-gray-200")]}
               >
-                🏆 Awards
+                🏆 <%= gettext("Awards") %>
               </button>
             </div>
           </div>
@@ -248,7 +256,7 @@ defmodule EventasaurusWeb.MoviesIndexLive do
             <% end %>
           </div>
           <!-- Fade effect on the right -->
-          <div class="absolute top-0 bottom-6 right-0 w-12 bg-gradient-to-l from-gray-50 to-transparent pointer-events-none"></div>
+          <div class="absolute top-0 bottom-6 right-0 w-12 bg-gradient-to-l from-white to-transparent pointer-events-none"></div>
         </div>
       </section>
     <% end %>

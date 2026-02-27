@@ -39,6 +39,7 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorker do
 
   @sync_interval_days 7
 
+  @spec perform(Oban.Job.t()) :: {:ok, term()} | {:error, term()}
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"sweep" => true}}) do
     Logger.info("CinegraphSyncWorker: starting weekly sweep")
@@ -71,38 +72,64 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"movie_id" => movie_id}}) do
-    movie = Repo.get!(Movie, movie_id)
+    case Repo.get(Movie, movie_id) do
+      nil ->
+        Logger.info("CinegraphSyncWorker: movie #{movie_id} not found in DB (deleted?)")
+        {:ok, :missing}
 
-    if is_nil(movie.tmdb_id) do
-      Logger.info("CinegraphSyncWorker: skipping movie #{movie_id} — no tmdb_id")
-      {:ok, :skipped}
-    else
-      sync_movie(movie)
+      movie ->
+        if is_nil(movie.tmdb_id) do
+          Logger.info("CinegraphSyncWorker: skipping movie #{movie_id} — no tmdb_id")
+          {:ok, :skipped}
+        else
+          sync_movie(movie)
+        end
     end
   end
 
   defp sync_movie(movie) do
     case CinegraphClient.get_movie(movie.tmdb_id) do
       {:ok, data} ->
-        movie
-        |> Movie.cinegraph_changeset(%{
-          cinegraph_data: data,
-          cinegraph_synced_at: DateTime.utc_now() |> DateTime.truncate(:second)
-        })
-        |> Repo.update!()
+        result =
+          movie
+          |> Movie.cinegraph_changeset(%{
+            cinegraph_data: data,
+            cinegraph_synced_at: DateTime.utc_now() |> DateTime.truncate(:second)
+          })
+          |> Repo.update()
 
-        Logger.info("CinegraphSyncWorker: synced movie #{movie.id} (tmdb_id=#{movie.tmdb_id})")
-        {:ok, :synced}
+        case result do
+          {:ok, _} ->
+            Logger.info("CinegraphSyncWorker: synced movie #{movie.id} (tmdb_id=#{movie.tmdb_id})")
+            {:ok, :synced}
+
+          {:error, changeset} ->
+            Logger.warning(
+              "CinegraphSyncWorker: DB update failed for movie #{movie.id}: #{inspect(changeset.errors)}"
+            )
+
+            {:error, {:db_update_failed, changeset.errors}}
+        end
 
       {:error, :not_found} ->
         # Movie not in Cinegraph yet — mark as attempted to avoid constant retries
-        movie
-        |> Movie.cinegraph_changeset(%{
-          cinegraph_synced_at: DateTime.utc_now() |> DateTime.truncate(:second)
-        })
-        |> Repo.update!()
+        result =
+          movie
+          |> Movie.cinegraph_changeset(%{
+            cinegraph_synced_at: DateTime.utc_now() |> DateTime.truncate(:second)
+          })
+          |> Repo.update()
 
-        {:ok, :not_found}
+        case result do
+          {:ok, _} -> {:ok, :not_found}
+
+          {:error, changeset} ->
+            Logger.warning(
+              "CinegraphSyncWorker: DB update failed for movie #{movie.id}: #{inspect(changeset.errors)}"
+            )
+
+            {:error, {:db_update_failed, changeset.errors}}
+        end
 
       {:error, reason} ->
         Logger.warning(

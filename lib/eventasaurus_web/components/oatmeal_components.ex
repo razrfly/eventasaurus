@@ -663,4 +663,521 @@ defmodule EventasaurusWeb.OatmealComponents do
     </li>
     """
   end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Hero Centered with Demo
+  # Source: home-03/sections/hero-centered-with-demo.tsx
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Hero section with centered text above and a full-width demo block below.
+  Source: home-03/sections/hero-centered-with-demo.tsx
+  """
+  attr :class, :string, default: ""
+  slot :eyebrow
+  slot :headline, required: true
+  slot :subheadline
+  slot :cta
+  slot :demo
+  slot :footer
+
+  @spec hero_centered_with_demo(map()) :: Phoenix.LiveView.Rendered.t()
+  def hero_centered_with_demo(assigns) do
+    ~H"""
+    <section class={["py-16", @class]}>
+      <.oat_container class="flex flex-col gap-16">
+        <div class="flex flex-col items-center gap-8">
+          <div class="flex flex-col items-center gap-6">
+            <%= render_slot(@eyebrow) %>
+            <.oat_heading class="max-w-4xl text-center">
+              <%= render_slot(@headline) %>
+            </.oat_heading>
+            <%= render_slot(@subheadline) %>
+            <%= render_slot(@cta) %>
+          </div>
+          <%= render_slot(@demo) %>
+        </div>
+        <%= render_slot(@footer) %>
+      </.oat_container>
+    </section>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Features Stacked Alternating
+  # Source: home-03/sections/features-stacked-alternating-with-demos.tsx
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Individual alternating feature with text on one side and demo on the other.
+  Text/demo sides alternate on desktop using group-even CSS.
+  Source: home-03/sections/features-stacked-alternating-with-demos.tsx — Feature
+  """
+  attr :class, :string, default: ""
+  slot :headline, required: true
+  slot :subheadline
+  slot :cta
+  slot :demo
+
+  @spec oat_alternating_feature(map()) :: Phoenix.LiveView.Rendered.t()
+  def oat_alternating_feature(assigns) do
+    ~H"""
+    <div class={[
+      "group grid grid-flow-dense grid-cols-1 gap-2 rounded-lg bg-oat-950/[0.025] p-2 lg:grid-cols-2",
+      @class
+    ]}>
+      <div class="flex flex-col justify-between gap-6 p-6 sm:p-10 lg:p-6 lg:group-even:col-start-2">
+        <div class="flex flex-col gap-4">
+          <h3 class="font-familjen text-xl/8 font-medium tracking-tight text-oat-950 sm:text-2xl/9">
+            <%= render_slot(@headline) %>
+          </h3>
+          <div class="text-base/7 text-oat-700">
+            <%= render_slot(@subheadline) %>
+          </div>
+        </div>
+        <%= render_slot(@cta) %>
+      </div>
+      <div class="relative overflow-hidden rounded-sm lg:group-even:col-start-1">
+        <%= render_slot(@demo) %>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Stacked alternating features section with section header.
+  Source: home-03/sections/features-stacked-alternating-with-demos.tsx
+  """
+  attr :eyebrow, :string, default: nil
+  attr :headline, :string, default: nil
+  attr :subheadline, :string, default: nil
+  attr :id, :string, default: nil
+  attr :class, :string, default: ""
+  slot :features, required: true
+
+  @spec features_stacked_alternating(map()) :: Phoenix.LiveView.Rendered.t()
+  def features_stacked_alternating(assigns) do
+    ~H"""
+    <.oat_section id={@id} eyebrow={@eyebrow} headline={@headline} subheadline={@subheadline} class={@class}>
+      <div class="grid grid-cols-1 gap-6">
+        <%= render_slot(@features) %>
+      </div>
+    </.oat_section>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Brands Cards Multi Column
+  # Source: home-03/sections/brands-cards-multi-column.tsx
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Individual brand/community card with icon, text, and footnote.
+  Source: home-03/sections/brands-cards-multi-column.tsx — BrandCard
+  """
+  attr :icon, :string, required: true
+  attr :text, :string, required: true
+  attr :footnote, :string, required: true
+  attr :class, :string, default: ""
+
+  @spec oat_brand_card(map()) :: Phoenix.LiveView.Rendered.t()
+  def oat_brand_card(assigns) do
+    ~H"""
+    <div class={["flex flex-col justify-between gap-6 rounded-xl bg-oat-950/[0.025] p-6", @class]}>
+      <div class="flex flex-col items-start gap-2">
+        <div class="flex h-8 shrink-0 items-center text-2xl"><%= @icon %></div>
+        <p class="text-sm/7 text-oat-700"><%= @text %></p>
+      </div>
+      <p class="text-xs/6 text-oat-500"><%= @footnote %></p>
+    </div>
+    """
+  end
+
+  @doc """
+  Multi-column brand/community cards section.
+  Source: home-03/sections/brands-cards-multi-column.tsx
+  """
+  attr :eyebrow, :string, default: nil
+  attr :headline, :string, default: nil
+  attr :subheadline, :string, default: nil
+  attr :id, :string, default: nil
+  attr :class, :string, default: ""
+  slot :inner_block, required: true
+
+  @spec brands_cards_multi_column(map()) :: Phoenix.LiveView.Rendered.t()
+  def brands_cards_multi_column(assigns) do
+    ~H"""
+    <.oat_section id={@id} eyebrow={@eyebrow} headline={@headline} subheadline={@subheadline} class={@class}>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+        <%= render_slot(@inner_block) %>
+      </div>
+    </.oat_section>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Testimonial Two Column with Large Photo
+  # Source: home-03/sections/testimonial-two-column-with-large-photo.tsx
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Two-column testimonial with large photo on one side and quote on the other.
+  Source: home-03/sections/testimonial-two-column-with-large-photo.tsx
+  """
+  attr :name, :string, required: true
+  attr :byline, :string, required: true
+  attr :class, :string, default: ""
+  slot :quote, required: true
+  slot :photo
+
+  @spec testimonial_two_column_large_photo(map()) :: Phoenix.LiveView.Rendered.t()
+  def testimonial_two_column_large_photo(assigns) do
+    ~H"""
+    <section class={["py-16", @class]}>
+      <.oat_container>
+        <figure class="grid grid-cols-1 gap-x-2 rounded-xl bg-oat-950/[0.025] p-2 lg:grid-cols-2">
+          <div class="flex flex-col items-start justify-between gap-10 p-6 sm:p-10">
+            <blockquote class="testimonial-hanging relative flex flex-col gap-4 text-xl/8 text-oat-950 sm:text-2xl/9">
+              <%= render_slot(@quote) %>
+            </blockquote>
+            <figcaption class="flex flex-col gap-1">
+              <p class="text-sm/7 font-semibold text-oat-950"><%= @name %></p>
+              <p class="text-sm/7 text-oat-700"><%= @byline %></p>
+            </figcaption>
+          </div>
+          <div class="flex min-h-64 overflow-hidden rounded-sm">
+            <%= render_slot(@photo) %>
+          </div>
+        </figure>
+      </.oat_container>
+    </section>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Stats with Graph
+  # Source: home-03/sections/stats-with-graph.tsx
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Individual stat item with left border accent.
+  Source: home-03/sections/stats-with-graph.tsx — Stat
+  """
+  attr :stat, :string, required: true
+  attr :text, :string, required: true
+  attr :class, :string, default: ""
+
+  @spec oat_graph_stat(map()) :: Phoenix.LiveView.Rendered.t()
+  def oat_graph_stat(assigns) do
+    ~H"""
+    <div class={["border-l border-oat-950/20 pl-6", @class]}>
+      <div class="font-familjen text-2xl/10 tracking-tight text-oat-950"><%= @stat %></div>
+      <p class="mt-2 text-sm/7 text-oat-700"><%= @text %></p>
+    </div>
+    """
+  end
+
+  @doc """
+  Stats section with a decorative SVG graph and stat items.
+  Source: home-03/sections/stats-with-graph.tsx
+  """
+  attr :eyebrow, :string, default: nil
+  attr :headline, :string, default: nil
+  attr :subheadline, :string, default: nil
+  attr :class, :string, default: ""
+  slot :inner_block, required: true
+
+  @spec stats_with_graph(map()) :: Phoenix.LiveView.Rendered.t()
+  def stats_with_graph(assigns) do
+    ~H"""
+    <.oat_section eyebrow={@eyebrow} headline={@headline} subheadline={@subheadline} class={@class}>
+      <div class="grid grid-cols-1 gap-10 lg:grid-cols-2">
+        <%!-- Stats column --%>
+        <div class="flex flex-col justify-center gap-8">
+          <%= render_slot(@inner_block) %>
+        </div>
+        <%!-- Decorative SVG graph --%>
+        <div class="relative overflow-hidden rounded-lg bg-oat-950/[0.025] p-6 text-oat-950">
+          <svg viewBox="0 0 400 220" class="w-full" aria-hidden="true">
+            <defs>
+              <clipPath id="stats-graph-clip">
+                <rect width="400" height="220" />
+              </clipPath>
+            </defs>
+            <%!-- Dashed vertical grid lines --%>
+            <line x1="80" y1="10" x2="80" y2="190" stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.15" />
+            <line x1="160" y1="10" x2="160" y2="190" stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.15" />
+            <line x1="240" y1="10" x2="240" y2="190" stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.15" />
+            <line x1="320" y1="10" x2="320" y2="190" stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.15" />
+            <%!-- Horizontal baseline --%>
+            <line x1="0" y1="190" x2="400" y2="190" stroke="currentColor" stroke-width="1" stroke-opacity="0.15" />
+            <%!-- Area fill under curve --%>
+            <path
+              d="M 0 175 C 30 172, 55 162, 80 152 C 115 138, 135 128, 160 112 C 190 94, 210 82, 240 64 C 270 46, 295 30, 320 20 C 348 10, 378 8, 400 7 L 400 190 L 0 190 Z"
+              fill="currentColor"
+              fill-opacity="0.06"
+              clip-path="url(#stats-graph-clip)"
+            />
+            <%!-- Bezier curve line --%>
+            <path
+              d="M 0 175 C 30 172, 55 162, 80 152 C 115 138, 135 128, 160 112 C 190 94, 210 82, 240 64 C 270 46, 295 30, 320 20 C 348 10, 378 8, 400 7"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-opacity="0.45"
+              clip-path="url(#stats-graph-clip)"
+            />
+            <%!-- Data point dots --%>
+            <circle cx="80" cy="152" r="4" fill="currentColor" fill-opacity="0.6" />
+            <circle cx="160" cy="112" r="4" fill="currentColor" fill-opacity="0.6" />
+            <circle cx="240" cy="64" r="4" fill="currentColor" fill-opacity="0.6" />
+            <circle cx="320" cy="20" r="4" fill="currentColor" fill-opacity="0.6" />
+            <%!-- X-axis month labels --%>
+            <text x="80" y="210" text-anchor="middle" font-size="11" fill="currentColor" fill-opacity="0.4">Jan</text>
+            <text x="160" y="210" text-anchor="middle" font-size="11" fill="currentColor" fill-opacity="0.4">Apr</text>
+            <text x="240" y="210" text-anchor="middle" font-size="11" fill="currentColor" fill-opacity="0.4">Jul</text>
+            <text x="320" y="210" text-anchor="middle" font-size="11" fill="currentColor" fill-opacity="0.4">Oct</text>
+          </svg>
+        </div>
+      </div>
+    </.oat_section>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Hero Left-Aligned with Photo
+  # Source: sections/hero-left-aligned-with-photo.tsx
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Left-aligned hero with text block above full-width photo/placeholder.
+  Source: sections/hero-left-aligned-with-photo.tsx
+  """
+  attr :class, :string, default: ""
+  slot :eyebrow
+  slot :headline, required: true
+  slot :subheadline, required: true
+  slot :cta
+  slot :photo
+  slot :footer
+
+  @spec hero_left_aligned_with_photo(map()) :: Phoenix.LiveView.Rendered.t()
+  def hero_left_aligned_with_photo(assigns) do
+    ~H"""
+    <section class={["py-16", @class]}>
+      <.oat_container class="flex flex-col gap-16">
+        <div class="flex flex-col gap-16">
+          <div class="flex flex-col items-start gap-6">
+            <%= render_slot(@eyebrow) %>
+            <.oat_heading>
+              <%= render_slot(@headline) %>
+            </.oat_heading>
+            <.oat_text size="lg" class="max-w-2xl text-pretty">
+              <%= render_slot(@subheadline) %>
+            </.oat_text>
+            <%= render_slot(@cta) %>
+          </div>
+          <%= if @photo != [] do %>
+            <div class="overflow-hidden rounded-xl outline -outline-offset-1 outline-black/5">
+              <%= render_slot(@photo) %>
+            </div>
+          <% end %>
+        </div>
+        <%= render_slot(@footer) %>
+      </.oat_container>
+    </section>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Team Member Card
+  # Source: sections/team-four-column-grid.tsx — TeamMember
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Individual team member card with photo, name, and byline.
+  Source: sections/team-four-column-grid.tsx — TeamMember
+  """
+  attr :name, :string, required: true
+  attr :byline, :string, required: true
+  attr :class, :string, default: ""
+  slot :photo, required: true
+
+  @spec oat_team_member(map()) :: Phoenix.LiveView.Rendered.t()
+  def oat_team_member(assigns) do
+    ~H"""
+    <div class={["flex flex-col gap-3", @class]}>
+      <div class="aspect-[4/5] overflow-hidden rounded-xl bg-oat-950/[0.025]">
+        <%= render_slot(@photo) %>
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <p class="text-sm font-semibold text-oat-950"><%= @name %></p>
+        <p class="text-sm text-oat-700"><%= @byline %></p>
+      </div>
+    </div>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Team Four Column Grid
+  # Source: sections/team-four-column-grid.tsx
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Four-column team grid with section header.
+  Source: sections/team-four-column-grid.tsx
+  """
+  attr :headline, :string, default: nil
+  attr :subheadline, :string, default: nil
+  attr :id, :string, default: nil
+  attr :class, :string, default: ""
+  slot :inner_block, required: true
+
+  @spec team_four_column_grid(map()) :: Phoenix.LiveView.Rendered.t()
+  def team_four_column_grid(assigns) do
+    ~H"""
+    <.oat_section id={@id} headline={@headline} subheadline={@subheadline} class={@class}>
+      <div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
+        <%= render_slot(@inner_block) %>
+      </div>
+    </.oat_section>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Pricing Plan Card
+  # Source: sections/pricing-hero-multi-tier.tsx — Plan
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Individual pricing plan card with feature list.
+  Source: sections/pricing-hero-multi-tier.tsx — Plan
+  """
+  attr :name, :string, required: true
+  attr :price, :string, required: true
+  attr :period, :string, required: true
+  attr :badge, :string, default: nil
+  attr :class, :string, default: ""
+  slot :subheadline, required: true
+  slot :features, required: true
+  slot :cta, required: true
+
+  @spec oat_plan(map()) :: Phoenix.LiveView.Rendered.t()
+  def oat_plan(assigns) do
+    ~H"""
+    <div class={[
+      "flex flex-col justify-between gap-8 rounded-xl bg-oat-950/[0.025] p-8 ring-1 ring-oat-950/[0.06]",
+      @class
+    ]}>
+      <div class="flex flex-col gap-6">
+        <%= if @badge do %>
+          <div>
+            <span class="rounded-full bg-oat-950 px-3 py-1 text-xs text-white">
+              <%= @badge %>
+            </span>
+          </div>
+        <% end %>
+        <div>
+          <h3 class="font-familjen text-xl font-medium text-oat-950"><%= @name %></h3>
+          <div class="mt-1 text-sm text-oat-700">
+            <%= render_slot(@subheadline) %>
+          </div>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span class="font-familjen text-4xl/10 tracking-tight text-oat-950"><%= @price %></span>
+          <span class="text-sm text-oat-500"><%= @period %></span>
+        </div>
+        <hr class="border-oat-950/10" />
+        <ul class="flex flex-col gap-3 text-sm/7 text-oat-700">
+          <%= render_slot(@features) %>
+        </ul>
+      </div>
+      <%= render_slot(@cta) %>
+    </div>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SECTION: Pricing Hero (multi-tier, no toggle)
+  # Source: sections/pricing-hero-multi-tier.tsx
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Pricing hero section with plan cards. No monthly/yearly toggle (free product).
+  Source: sections/pricing-hero-multi-tier.tsx
+  """
+  attr :headline, :string, required: true
+  attr :subheadline, :string, default: nil
+  attr :id, :string, default: nil
+  attr :class, :string, default: ""
+  slot :plans, required: true
+  slot :footer
+
+  @spec pricing_hero(map()) :: Phoenix.LiveView.Rendered.t()
+  def pricing_hero(assigns) do
+    ~H"""
+    <section id={@id} class={["py-16", @class]}>
+      <.oat_container class="flex flex-col gap-10 sm:gap-16">
+        <div class="flex flex-col items-center gap-4 text-center">
+          <.oat_heading class="max-w-3xl text-center">
+            <%= @headline %>
+          </.oat_heading>
+          <%= if @subheadline do %>
+            <.oat_text size="lg" class="max-w-2xl text-center text-pretty">
+              <%= @subheadline %>
+            </.oat_text>
+          <% end %>
+        </div>
+        <div class="mx-auto grid w-full max-w-4xl grid-cols-1 gap-4 lg:grid-cols-2">
+          <%= render_slot(@plans) %>
+        </div>
+        <%= if @footer != [] do %>
+          <div class="text-center text-sm text-oat-600">
+            <%= render_slot(@footer) %>
+          </div>
+        <% end %>
+      </.oat_container>
+    </section>
+    """
+  end
+
+  # ═══════════════════════════════════════════════════════════════════
+  # DOCUMENT CENTERED
+  # ═══════════════════════════════════════════════════════════════════
+
+  @doc """
+  Centered narrow prose wrapper for legal/document pages.
+  Source: privacy-policy-01.tsx → DocumentCentered
+  """
+  attr :headline, :string, required: true
+  attr :subheadline, :string, default: nil
+  attr :class, :string, default: ""
+  slot :inner_block, required: true
+
+  @spec oat_document(map()) :: Phoenix.LiveView.Rendered.t()
+  def oat_document(assigns) do
+    ~H"""
+    <section class={["py-16", @class]}>
+      <div class="mx-auto max-w-3xl px-6 lg:px-10">
+        <div class="flex flex-col gap-8">
+          <div class="flex flex-col gap-2">
+            <.oat_heading><%= @headline %></.oat_heading>
+            <%= if @subheadline do %>
+              <.oat_text size="lg"><%= @subheadline %></.oat_text>
+            <% end %>
+          </div>
+          <div class={[
+            "flex flex-col gap-6",
+            "[&_h2]:mt-4 [&_h2]:font-familjen [&_h2]:text-2xl [&_h2]:font-medium [&_h2]:text-oat-950",
+            "[&_p]:text-base/7 [&_p]:text-oat-700",
+            "[&_ul]:text-base/7 [&_ul]:text-oat-700 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:flex [&_ul]:flex-col [&_ul]:gap-1",
+            "[&_a]:text-oat-950 [&_a]:underline [&_a]:underline-offset-2"
+          ]}>
+            <%= render_slot(@inner_block) %>
+          </div>
+        </div>
+      </div>
+    </section>
+    """
+  end
 end

@@ -22,6 +22,7 @@ defmodule EventasaurusWeb.Live.Components.MovieAwardsComponent do
 
   attr :cinegraph_data, :map, default: nil
 
+  @spec awards_badges(map()) :: Phoenix.LiveView.Rendered.t()
   def awards_badges(assigns) do
     awards = get_in(assigns.cinegraph_data || %{}, ["awards"]) || %{}
     canonical = get_in(assigns.cinegraph_data || %{}, ["canonicalSources"]) || %{}

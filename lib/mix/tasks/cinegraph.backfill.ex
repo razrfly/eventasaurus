@@ -113,21 +113,22 @@ defmodule Mix.Tasks.Cinegraph.Backfill do
   end
 
   defp do_reset_all do
-    {count, _} =
-      from(m in Movie, where: not is_nil(m.cinegraph_synced_at))
-      |> Repo.update_all(set: [cinegraph_synced_at: nil, cinegraph_data: nil])
+    {count, _} = Repo.update_all(Movie, set: [cinegraph_synced_at: nil, cinegraph_data: nil])
 
     IO.puts("Reset #{count} movies (cleared cinegraph_synced_at and cinegraph_data).")
     enqueue_sweep()
   end
 
   defp enqueue_sweep do
-    {:ok, _job} =
-      %{sweep: true}
-      |> CinegraphSyncWorker.new()
-      |> Oban.insert()
+    case %{sweep: true} |> CinegraphSyncWorker.new() |> Oban.insert() do
+      {:ok, _job} ->
+        IO.puts("Enqueued Cinegraph sweep job.")
+        IO.puts("Run `mix cinegraph.backfill` after the sweep completes to check results.")
+        :ok
 
-    IO.puts("Enqueued Cinegraph sweep job.")
-    IO.puts("Run `mix cinegraph.backfill` after the sweep completes to check results.")
+      {:error, reason} ->
+        IO.puts("Failed to enqueue sweep job: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 end

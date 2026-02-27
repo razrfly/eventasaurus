@@ -199,6 +199,7 @@ defmodule EventasaurusDiscovery.Movies.Movie do
     end
   end
 
+  @spec cinegraph_changeset(%__MODULE__{}, map()) :: Ecto.Changeset.t()
   def cinegraph_changeset(movie, attrs) do
     movie
     |> cast(attrs, [:cinegraph_data, :cinegraph_synced_at])
@@ -206,17 +207,23 @@ defmodule EventasaurusDiscovery.Movies.Movie do
 
   # Accessor helpers for Cinegraph data (all return nil/[] when cinegraph_data is nil)
 
+  @spec cinegraph_ratings(%__MODULE__{}) :: map() | nil
   def cinegraph_ratings(movie), do: get_in(movie.cinegraph_data, ["ratings"])
 
+  @spec cinegraph_cast(%__MODULE__{}) :: list(map())
   def cinegraph_cast(movie), do: get_in(movie.cinegraph_data, ["cast"]) || []
 
+  @spec cinegraph_crew(%__MODULE__{}) :: list(map())
   def cinegraph_crew(movie), do: get_in(movie.cinegraph_data, ["crew"]) || []
 
+  @spec cinegraph_awards(%__MODULE__{}) :: map() | nil
   def cinegraph_awards(movie), do: get_in(movie.cinegraph_data, ["awards"])
 
+  @spec cinegraph_canonical_sources(%__MODULE__{}) :: map()
   def cinegraph_canonical_sources(movie),
     do: get_in(movie.cinegraph_data, ["canonicalSources"]) || %{}
 
+  @spec cinegraph_director(%__MODULE__{}) :: String.t() | nil
   def cinegraph_director(movie) do
     movie
     |> cinegraph_crew()

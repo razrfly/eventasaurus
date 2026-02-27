@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
   alias EventasaurusDiscovery.Movies.MovieStore
   alias EventasaurusDiscovery.Movies.MovieStats
+  alias EventasaurusDiscovery.Movies.Movie
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusWeb.Utils.TimezoneUtils
   alias EventasaurusApp.Images.MovieImages
@@ -248,31 +249,6 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
         _ -> nil
       end
 
-    cast =
-      case get_in(md, ["credits", "cast"]) do
-        cast when is_list(cast) ->
-          cast
-          |> Enum.filter(fn member -> is_integer(member["id"]) end)
-          |> Enum.take(15)
-          |> Enum.map(fn member ->
-            profile_path = member["profile_path"]
-
-            %{
-              id: member["id"],
-              name: member["name"],
-              character: member["character"],
-              profile_url:
-                if(is_binary(profile_path) && profile_path != "",
-                  do: "https://image.tmdb.org/t/p/w185#{profile_path}",
-                  else: nil
-                )
-            }
-          end)
-
-        _ ->
-          []
-      end
-
     %{
       title: movie.title,
       slug: movie.slug,
@@ -284,9 +260,10 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
       genres: genres,
       vote_average: vote_average,
       tagline: tagline,
-      cast: cast,
+      cast: cinegraph_or_tmdb_cast(movie),
       tmdb_id: movie.tmdb_id,
-      imdb_id: movie.imdb_id
+      imdb_id: movie.imdb_id,
+      cinegraph: serialize_cinegraph(movie)
     }
   end
 
@@ -360,6 +337,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
       runtime: movie.runtime,
       genres: genres,
       vote_average: vote_average,
+      imdb_rating: get_in(movie.cinegraph_data || %{}, ["ratings", "imdb"]),
       city_count: city_count,
       screening_count: screening_count,
       next_screening: next_screening
@@ -396,6 +374,98 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
   defp ensure_https("http://" <> rest), do: "https://" <> rest
   defp ensure_https(url), do: url
+
+  # --- Cinegraph serializers ---
+
+  defp serialize_cinegraph(%{cinegraph_data: nil}), do: nil
+
+  defp serialize_cinegraph(%{cinegraph_data: %{}} = movie) do
+    %{
+      ratings: serialize_cinegraph_ratings(Movie.cinegraph_ratings(movie)),
+      director: Movie.cinegraph_director(movie),
+      awards: serialize_cinegraph_awards(Movie.cinegraph_awards(movie)),
+      cinegraph_slug: get_in(movie.cinegraph_data, ["slug"])
+    }
+  end
+
+  defp serialize_cinegraph(_), do: nil
+
+  defp serialize_cinegraph_ratings(nil), do: nil
+
+  defp serialize_cinegraph_ratings(ratings) do
+    %{
+      imdb: ratings["imdb"],
+      rotten_tomatoes: ratings["rottenTomatoes"],
+      metacritic: ratings["metacritic"],
+      tmdb: ratings["tmdb"]
+    }
+  end
+
+  defp serialize_cinegraph_awards(nil), do: nil
+
+  defp serialize_cinegraph_awards(awards) do
+    %{
+      oscar_wins: awards["oscarWins"],
+      total_wins: awards["totalWins"],
+      total_nominations: awards["totalNominations"],
+      summary: awards["summary"]
+    }
+  end
+
+  defp cinegraph_or_tmdb_cast(movie) do
+    case Movie.cinegraph_cast(movie) do
+      [_ | _] = cast -> serialize_cinegraph_cast(cast)
+      _ -> serialize_tmdb_cast(movie.metadata)
+    end
+  end
+
+  defp serialize_cinegraph_cast(cast) do
+    cast
+    |> Enum.sort_by(& &1["castOrder"])
+    |> Enum.take(15)
+    |> Enum.map(fn c ->
+      profile_path = get_in(c, ["person", "profilePath"])
+
+      %{
+        name: get_in(c, ["person", "name"]),
+        character: c["character"],
+        order: c["castOrder"],
+        profile_url:
+          if is_binary(profile_path) and profile_path != "" do
+            "https://image.tmdb.org/t/p/w185#{profile_path}"
+          else
+            nil
+          end
+      }
+    end)
+  end
+
+  defp serialize_tmdb_cast(md) do
+    case get_in(md || %{}, ["credits", "cast"]) do
+      cast when is_list(cast) ->
+        cast
+        |> Enum.filter(fn member -> is_integer(member["id"]) end)
+        |> Enum.take(15)
+        |> Enum.map(fn member ->
+          profile_path = member["profile_path"]
+
+          %{
+            name: member["name"],
+            character: member["character"],
+            order: member["order"],
+            profile_url:
+              if is_binary(profile_path) and profile_path != "" do
+                "https://image.tmdb.org/t/p/w185#{profile_path}"
+              else
+                nil
+              end
+          }
+        end)
+
+      _ ->
+        []
+    end
+  end
 
   defp parse_int(nil, default), do: default
 

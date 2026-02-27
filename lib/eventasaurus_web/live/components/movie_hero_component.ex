@@ -40,6 +40,7 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
      |> assign_new(:show_overview, fn -> false end)
      |> assign_new(:show_links, fn -> false end)
      |> assign_new(:tmdb_id, fn -> nil end)
+     |> assign_new(:cinegraph_data, fn -> nil end)
      |> assign_computed_data()}
   end
 
@@ -93,6 +94,7 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
                   show_overview={@show_overview}
                   show_links={@show_links}
                   tmdb_id={@tmdb_id}
+                  cinegraph_data={@cinegraph_data}
                 />
               </div>
             </div>
@@ -129,6 +131,7 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
                   show_overview={@show_overview}
                   show_links={@show_links}
                   tmdb_id={@tmdb_id}
+                  cinegraph_data={@cinegraph_data}
                 />
               </div>
             </div>
@@ -142,6 +145,23 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
   # Private function components
 
   defp hero_content(assigns) do
+    awards = get_in(assigns[:cinegraph_data] || %{}, ["awards"]) || %{}
+    oscar_wins = awards["oscarWins"] || 0
+    total_wins = awards["totalWins"] || 0
+    total_nominations = awards["totalNominations"] || 0
+    raw_summary = awards["summary"]
+
+    awards_summary =
+      cond do
+        is_binary(raw_summary) and raw_summary != "" -> raw_summary
+        total_wins > 0 && total_nominations > 0 -> "#{total_wins} wins & #{total_nominations} nominations"
+        total_wins > 0 -> "#{total_wins} wins"
+        total_nominations > 0 -> "#{total_nominations} nominations"
+        true -> nil
+      end
+
+    assigns = assign(assigns, oscar_wins: oscar_wins, awards_summary: awards_summary)
+
     ~H"""
     <div class="space-y-4">
       <!-- Title -->
@@ -165,14 +185,7 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
           <.metadata_pill variant={@variant}><%= format_runtime(@runtime) %></.metadata_pill>
         <% end %>
 
-        <%= if @rating do %>
-          <.metadata_pill variant={@variant}>
-            <span class="flex items-center gap-1">
-              <.icon name="hero-star-solid" class="h-3.5 w-3.5 text-yellow-400" />
-              <%= format_rating(@rating) %>/10
-            </span>
-          </.metadata_pill>
-        <% end %>
+        <.cinegraph_ratings_row cinegraph_data={@cinegraph_data} rating={@rating} variant={@variant} />
       </div>
 
       <!-- Genres -->
@@ -196,32 +209,47 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
       <% end %>
 
       <!-- External Links -->
-      <%= if @show_links && @tmdb_id do %>
-        <div class="flex flex-wrap gap-3 pt-2">
-          <.hero_link_button
-            href={"https://cinegraph.org/movies/tmdb/#{@tmdb_id}"}
-            icon={:cinegraph}
-            label="Cinegraph"
-            variant={@variant}
-          />
-          <.hero_link_button
-            href={"https://www.themoviedb.org/movie/#{@tmdb_id}"}
-            icon={:tmdb}
-            label="TMDB"
-            variant={@variant}
-          />
-        </div>
+      <%= if @show_links do %>
+        <% cinegraph_url = cinegraph_movie_url(@cinegraph_data, @tmdb_id) %>
+        <%= if cinegraph_url || @tmdb_id do %>
+          <div class="flex flex-wrap gap-3 pt-2">
+            <%= if cinegraph_url do %>
+              <.hero_link_button
+                href={cinegraph_url}
+                icon={:cinegraph}
+                label="Cinegraph"
+                variant={@variant}
+              />
+            <% end %>
+            <%= if @tmdb_id do %>
+              <.hero_link_button
+                href={"https://www.themoviedb.org/movie/#{@tmdb_id}"}
+                icon={:tmdb}
+                label="TMDB"
+                variant={@variant}
+              />
+            <% end %>
+          </div>
+        <% end %>
       <% end %>
 
-      <!-- Director -->
+      <!-- Director + Awards inline -->
       <%= if @show_director && @director do %>
         <div class="pt-2">
-          <p class={director_label_classes(@variant)}>
-            Directed by
-          </p>
-          <p class={director_name_classes(@variant)}>
-            <%= @director %>
-          </p>
+          <p class={director_label_classes(@variant)}>Directed by</p>
+          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <p class={director_name_classes(@variant)}><%= @director %></p>
+            <%= if @oscar_wins > 0 do %>
+              <span class="text-sm text-white/70">
+                · 🏆 <%= if @oscar_wins == 1, do: "1 Oscar Win", else: "#{@oscar_wins} Oscar Wins" %>
+              </span>
+            <% end %>
+            <%= if @awards_summary do %>
+              <span class="text-sm text-white/50">
+                <%= if @oscar_wins == 0, do: "· " %><%= @awards_summary %>
+              </span>
+            <% end %>
+          </div>
         </div>
       <% end %>
     </div>
@@ -233,6 +261,58 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
     <span class={metadata_pill_classes(@variant)}>
       <%= render_slot(@inner_block) %>
     </span>
+    """
+  end
+
+  defp cinegraph_ratings_row(assigns) do
+    ratings = get_in(assigns[:cinegraph_data] || %{}, ["ratings"]) || %{}
+    tmdb_score = ratings["tmdb"]
+    imdb_score = ratings["imdb"]
+    rt_score = ratings["rottenTomatoes"]
+    meta_score = ratings["metacritic"]
+    has_cinegraph_ratings = !is_nil(tmdb_score) || !is_nil(imdb_score) || !is_nil(rt_score) || !is_nil(meta_score)
+
+    assigns =
+      assign(assigns,
+        tmdb_score: tmdb_score,
+        imdb_score: imdb_score,
+        rt_score: rt_score,
+        meta_score: meta_score,
+        has_cinegraph_ratings: has_cinegraph_ratings
+      )
+
+    ~H"""
+    <%= if @has_cinegraph_ratings do %>
+      <%= if @tmdb_score do %>
+        <span class={metadata_pill_classes(@variant)}>
+          <span class="flex items-center gap-1">⭐ <%= format_rating(@tmdb_score) %> TMDB</span>
+        </span>
+      <% end %>
+      <%= if @imdb_score do %>
+        <span class={metadata_pill_classes(@variant)}>
+          <span class="flex items-center gap-1">🎬 <%= format_rating(@imdb_score) %> IMDb</span>
+        </span>
+      <% end %>
+      <%= if @rt_score do %>
+        <span class={metadata_pill_classes(@variant)}>
+          <span class="flex items-center gap-1">🍅 <%= @rt_score %>% RT</span>
+        </span>
+      <% end %>
+      <%= if @meta_score do %>
+        <span class={metadata_pill_classes(@variant)}>
+          <span class="flex items-center gap-1">📰 <%= @meta_score %> MC</span>
+        </span>
+      <% end %>
+    <% else %>
+      <%= if @rating do %>
+        <span class={metadata_pill_classes(@variant)}>
+          <span class="flex items-center gap-1">
+            <.icon name="hero-star-solid" class="h-3.5 w-3.5 text-yellow-400" />
+            <%= format_rating(@rating) %>/10
+          </span>
+        </span>
+      <% end %>
+    <% end %>
     """
   end
 
@@ -508,6 +588,15 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
   end
 
   defp format_rating(_), do: nil
+
+  defp cinegraph_movie_url(%{"slug" => slug}, _tmdb_id)
+       when is_binary(slug) and slug != "",
+       do: "https://cinegraph.org/movies/#{slug}"
+
+  defp cinegraph_movie_url(_cinegraph_data, tmdb_id) when not is_nil(tmdb_id),
+    do: "https://cinegraph.org/movies/tmdb/#{tmdb_id}"
+
+  defp cinegraph_movie_url(_, _), do: nil
 
   defp format_runtime(nil), do: nil
 
