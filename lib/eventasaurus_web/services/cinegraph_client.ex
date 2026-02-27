@@ -13,9 +13,9 @@ defmodule EventasaurusWeb.Services.CinegraphClient do
 
   require Logger
 
-  @graphql_query """
-  query GetMovie($tmdbId: Int!) {
-    movie(tmdbId: $tmdbId) {
+  @graphql_query_template """
+  {
+    movie(tmdbId: TMDB_ID_PLACEHOLDER) {
       title
       slug
       ratings {
@@ -64,35 +64,37 @@ defmodule EventasaurusWeb.Services.CinegraphClient do
   @spec get_movie(integer()) :: {:ok, map()} | {:error, term()}
   def get_movie(tmdb_id) when is_integer(tmdb_id) do
     config = Application.get_env(:eventasaurus, :cinegraph, [])
-    base_url = Keyword.get(config, :base_url, "http://cinegraph.org")
-    api_key = Keyword.get(config, :api_key, "")
+    base_url = Keyword.get(config, :base_url, "https://cinegraph.org")
+    api_key = Keyword.get(config, :api_key)
 
-    url = "#{base_url}/api/graphql"
+    if is_nil(api_key) or api_key == "" do
+      {:error, :missing_api_key}
+    else
+      url = "#{base_url}/api/graphql"
 
-    headers = [
-      {"Content-Type", "application/json"},
-      {"Authorization", "Bearer #{api_key}"}
-    ]
+      headers = [
+        {"Content-Type", "application/json"},
+        {"Authorization", "Bearer #{api_key}"}
+      ]
 
-    body =
-      Jason.encode!(%{
-        query: @graphql_query,
-        variables: %{tmdbId: tmdb_id}
-      })
+      query = String.replace(@graphql_query_template, "TMDB_ID_PLACEHOLDER", to_string(tmdb_id))
 
-    options = [recv_timeout: 15_000, timeout: 15_000]
+      body = Jason.encode!(%{query: query})
 
-    case HTTPoison.post(url, body, headers, options) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
-        parse_response(response_body, tmdb_id)
+      options = [recv_timeout: 15_000, timeout: 15_000]
 
-      {:ok, %HTTPoison.Response{status_code: status_code}} ->
-        Logger.warning("CinegraphClient: HTTP #{status_code} for tmdb_id=#{tmdb_id}")
-        {:error, {:http_error, status_code}}
+      case HTTPoison.post(url, body, headers, options) do
+        {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
+          parse_response(response_body, tmdb_id)
 
-      {:error, %HTTPoison.Error{reason: reason}} ->
-        Logger.warning("CinegraphClient: request failed for tmdb_id=#{tmdb_id}: #{inspect(reason)}")
-        {:error, {:request_failed, reason}}
+        {:ok, %HTTPoison.Response{status_code: status_code}} ->
+          Logger.warning("CinegraphClient: HTTP #{status_code} for tmdb_id=#{tmdb_id}")
+          {:error, {:http_error, status_code}}
+
+        {:error, %HTTPoison.Error{reason: reason}} ->
+          Logger.warning("CinegraphClient: request failed for tmdb_id=#{tmdb_id}: #{inspect(reason)}")
+          {:error, {:request_failed, reason}}
+      end
     end
   end
 
@@ -101,13 +103,13 @@ defmodule EventasaurusWeb.Services.CinegraphClient do
       {:ok, %{"data" => %{"movie" => movie}}} when not is_nil(movie) ->
         {:ok, movie}
 
-      {:ok, %{"data" => %{"movie" => nil}}} ->
-        Logger.info("CinegraphClient: movie not found for tmdb_id=#{tmdb_id}")
-        {:error, :not_found}
-
       {:ok, %{"errors" => errors}} ->
         Logger.warning("CinegraphClient: GraphQL errors for tmdb_id=#{tmdb_id}: #{inspect(errors)}")
         {:error, {:graphql_errors, errors}}
+
+      {:ok, %{"data" => %{"movie" => nil}}} ->
+        Logger.info("CinegraphClient: movie not found for tmdb_id=#{tmdb_id}")
+        {:error, :not_found}
 
       {:ok, unexpected} ->
         Logger.warning("CinegraphClient: unexpected response shape for tmdb_id=#{tmdb_id}: #{inspect(unexpected)}")

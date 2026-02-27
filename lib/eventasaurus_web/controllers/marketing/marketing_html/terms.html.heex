@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>Terms of Service — Wombie</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+    <style>
+      :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
+      .font-familjen { font-variation-settings: "wdth" 112.5; }
+    </style>
+  </head>
+  <body class="bg-oat-100 text-oat-950 antialiased">
+
+    <%!-- NAVBAR --%>
+    <.oat_navbar>
+      <:links>
+        <.oat_nav_link href="/dev/marketing/home">Home</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/about">About</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/pricing">Pricing</.oat_nav_link>
+      </:links>
+      <:actions>
+        <.oat_soft_button href="/sign-in">Log in</.oat_soft_button>
+        <.oat_button href="/invite-only">Get Started</.oat_button>
+      </:actions>
+    </.oat_navbar>
+
+    <%!-- DOCUMENT --%>
+    <.oat_document headline="Terms of Service" subheadline="Last updated February 2026.">
+
+      <div>
+        <h2>Using Wombie</h2>
+        <p>You must be at least 16 years old to use Wombie. By creating an account, you agree to provide accurate information and to maintain only one account per person. You're responsible for keeping your account secure.</p>
+      </div>
+
+      <div>
+        <h2>Your content</h2>
+        <p>You own the content you create on Wombie — event listings, comments, and profile information. By posting, you grant us a limited licence to display it on the platform. You're responsible for ensuring your content doesn't infringe on anyone else's rights.</p>
+      </div>
+
+      <div>
+        <h2>What you can't do</h2>
+        <p>When using Wombie, you agree not to:</p>
+        <ul>
+          <li>Spam, harass, or impersonate other users</li>
+          <li>Post illegal, harmful, or misleading content</li>
+          <li>Attempt to access other users' accounts or data</li>
+          <li>Use automated tools to scrape or abuse the platform</li>
+          <li>List events that are fraudulent or deceptive</li>
+        </ul>
+      </div>
+
+      <div>
+        <h2>Wombie's responsibility</h2>
+        <p>Wombie is a discovery and coordination platform — we list events, we don't organise them. We're not responsible for the content or conduct of third-party events. If an event is cancelled, changed, or misrepresented by an organiser, the organiser bears responsibility, not Wombie.</p>
+      </div>
+
+      <div>
+        <h2>Changes to these terms</h2>
+        <p>We may update these terms from time to time. When we make material changes, we'll notify you by email at least 14 days before they take effect. Continued use of Wombie after that date constitutes acceptance of the updated terms.</p>
+      </div>
+
+      <div>
+        <h2>Contact</h2>
+        <p>Questions about these terms? Email <a href="mailto:hello@wombie.com">hello@wombie.com</a>.</p>
+      </div>
+
+    </.oat_document>
+
+    <%!-- FOOTER --%>
+    <.oat_footer>
+      <:links>
+        <.oat_footer_link href="/dev/marketing/home">Home</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/about">About</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/how-it-works">How It Works</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/privacy">Privacy</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/terms">Terms</.oat_footer_link>
+      </:links>
+      <:fineprint>
+        © 2025 Wombie
+      </:fineprint>
+    </.oat_footer>
+
+  </body>
+</html>

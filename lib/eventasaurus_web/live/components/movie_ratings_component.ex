@@ -21,6 +21,7 @@ defmodule EventasaurusWeb.Live.Components.MovieRatingsComponent do
   attr :cinegraph_data, :map, default: nil
   attr :tmdb_rating, :any, default: nil
 
+  @spec ratings_panel(map()) :: Phoenix.LiveView.Rendered.t()
   def ratings_panel(assigns) do
     ratings = get_in(assigns.cinegraph_data || %{}, ["ratings"]) || %{}
 

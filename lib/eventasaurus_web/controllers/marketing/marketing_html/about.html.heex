@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>About — Wombie</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+    <style>
+      :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
+      .font-familjen { font-variation-settings: "wdth" 112.5; }
+      .testimonial-hanging > p:first-child::before {
+        content: '\201C';
+        position: absolute;
+        display: inline;
+        transform: translateX(-100%);
+      }
+      .testimonial-hanging > p:last-child::after {
+        content: '\201D';
+        display: inline;
+      }
+    </style>
+  </head>
+  <body class="bg-oat-100 text-oat-950 antialiased">
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         NAVBAR
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_navbar>
+      <:links>
+        <.oat_nav_link href="/dev/marketing/why">Why Wombie</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/how-it-works">How It Works</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/about">About</.oat_nav_link>
+      </:links>
+      <:actions>
+        <.oat_soft_button href="/sign-in">Log in</.oat_soft_button>
+        <.oat_button href="/invite-only">Get Started</.oat_button>
+      </:actions>
+    </.oat_navbar>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         HERO — Left-aligned with photo
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.hero_left_aligned_with_photo>
+      <:headline>
+        We believe people are meant to be in the same room.
+      </:headline>
+      <:subheadline>
+        Wombie is built on a simple belief: in-person moments are irreplaceable. We're not building another social network. We're building the thing that gets you off social networks.
+      </:subheadline>
+      <:cta>
+        <div class="flex flex-wrap items-center gap-4">
+          <.oat_button href="/invite-only" size="lg">Join the waitlist</.oat_button>
+          <.oat_soft_button href="/dev/marketing/why" size="lg">Read why Wombie →</.oat_soft_button>
+        </div>
+      </:cta>
+      <:photo>
+        <%!-- Warm gradient placeholder --%>
+        <div class="h-64 w-full bg-gradient-to-r from-oat-200 via-oat-300 to-oat-400 sm:h-80 lg:h-96"></div>
+      </:photo>
+    </.hero_left_aligned_with_photo>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         STATS — With graph
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.stats_with_graph
+      eyebrow="Growing every week"
+      headline="More events attended. Less time scrolling."
+      subheadline="We measure success in one unit: events attended per user per month. Not sessions, not impressions, not time-in-app."
+    >
+      <.oat_graph_stat
+        stat="12,000+"
+        text="events listed across Warsaw, Paris, and Krakow last month"
+      />
+      <.oat_graph_stat
+        stat="78%"
+        text="of new users attend their first event within two weeks of joining"
+      />
+    </.stats_with_graph>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         TESTIMONIAL — Two column with photo
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.testimonial_two_column_large_photo name="Sarah K." byline="Software developer, Warsaw">
+      <:quote>
+        <p>
+          I used to scroll for an hour looking for something to do. Now I check Wombie and I'm out the door in ten minutes. I've been to more things in the last month than I had in the whole year before.
+        </p>
+      </:quote>
+      <:photo>
+        <div class="h-full w-full" style="background: linear-gradient(135deg, #DDDBD0 0%, #B4B3A3 40%, #8C8B78 100%);">
+          <div class="flex h-full w-full items-end justify-start p-6"
+               style="background: radial-gradient(ellipse at 30% 60%, rgba(90,80,60,0.15) 0%, transparent 70%);">
+            <div class="flex flex-col gap-1">
+              <div class="h-1 w-12 rounded-full bg-white/30"></div>
+              <div class="h-1 w-8 rounded-full bg-white/20"></div>
+            </div>
+          </div>
+        </div>
+      </:photo>
+    </.testimonial_two_column_large_photo>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         TEAM — Four column grid
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.team_four_column_grid
+      headline="Built by people who go to things"
+      subheadline="Small team. Strong opinions about what a Tuesday night can feel like."
+    >
+      <.oat_team_member name="Holden" byline="Co-Founder">
+        <:photo>
+          <div class="h-full w-full bg-gradient-to-br from-oat-200 to-oat-400"></div>
+        </:photo>
+      </.oat_team_member>
+      <.oat_team_member name="Alex" byline="Product & Design">
+        <:photo>
+          <div class="h-full w-full bg-gradient-to-tl from-oat-300 to-oat-500"></div>
+        </:photo>
+      </.oat_team_member>
+      <.oat_team_member name="Jamie" byline="Engineering">
+        <:photo>
+          <div class="h-full w-full bg-gradient-to-tr from-oat-200 to-oat-500"></div>
+        </:photo>
+      </.oat_team_member>
+    </.team_four_column_grid>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         CTA — Final call to action
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.cta_simple_centered>
+      <:headline>
+        Ready to show up?
+      </:headline>
+      <:subheadline>
+        Join thousands of people who stopped scrolling.
+      </:subheadline>
+      <:cta>
+        <div class="flex flex-wrap items-center justify-center gap-4">
+          <.oat_button href="/invite-only" size="lg">Get started</.oat_button>
+        </div>
+      </:cta>
+    </.cta_simple_centered>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         FOOTER
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_footer>
+      <:links>
+        <.oat_footer_link href="/dev/marketing/why">Why Wombie</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/how-it-works">How It Works</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/about">About</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/pricing">Pricing</.oat_footer_link>
+        <.oat_footer_link href="#">Privacy</.oat_footer_link>
+        <.oat_footer_link href="#">Terms</.oat_footer_link>
+      </:links>
+      <:fineprint>
+        © 2025 Wombie
+      </:fineprint>
+    </.oat_footer>
+
+  </body>
+</html>

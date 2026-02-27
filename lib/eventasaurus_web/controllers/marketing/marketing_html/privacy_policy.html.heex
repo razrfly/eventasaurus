@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>Privacy Policy — Wombie</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+    <style>
+      :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
+      .font-familjen { font-variation-settings: "wdth" 112.5; }
+    </style>
+  </head>
+  <body class="bg-oat-100 text-oat-950 antialiased">
+
+    <%!-- NAVBAR --%>
+    <.oat_navbar>
+      <:links>
+        <.oat_nav_link href="/dev/marketing/home">Home</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/about">About</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/pricing">Pricing</.oat_nav_link>
+      </:links>
+      <:actions>
+        <.oat_soft_button href="/sign-in">Log in</.oat_soft_button>
+        <.oat_button href="/invite-only">Get Started</.oat_button>
+      </:actions>
+    </.oat_navbar>
+
+    <%!-- DOCUMENT --%>
+    <.oat_document headline="Privacy Policy" subheadline="Last updated February 2026.">
+
+      <div>
+        <h2>What we collect</h2>
+        <p>When you create an account, we collect your email address, display name, and city. As you use Wombie, we also record the events you've RSVPd to so we can show you your history and send reminders.</p>
+      </div>
+
+      <div>
+        <h2>What we don't collect</h2>
+        <p>We don't use tracking pixels, serve ads, or build advertising profiles. We don't sell your data to third parties. We don't track you across other websites.</p>
+      </div>
+
+      <div>
+        <h2>How we use it</h2>
+        <p>We use your information to:</p>
+        <ul>
+          <li>Show you events relevant to your city</li>
+          <li>Remember your RSVPs and attendance history</li>
+          <li>Send event reminders you've opted into</li>
+          <li>Improve the quality of our event listings</li>
+        </ul>
+      </div>
+
+      <div>
+        <h2>Who sees it</h2>
+        <p>Your personal information is visible only to you. Your RSVP status on a specific event may be visible to other attendees of that event, depending on the event's privacy settings. We never publish your email address or contact details.</p>
+      </div>
+
+      <div>
+        <h2>How we store it</h2>
+        <p>Your data is stored on Fly.io infrastructure in the European Union. Data is encrypted at rest and in transit. We retain your data for as long as your account is active, or for as long as required to provide our services.</p>
+      </div>
+
+      <div>
+        <h2>Your rights</h2>
+        <p>You have the right to access, correct, delete, or export your personal data at any time. To exercise these rights, email us at <a href="mailto:privacy@wombie.com">privacy@wombie.com</a> and we'll respond within 30 days.</p>
+      </div>
+
+      <div>
+        <h2>Cookies</h2>
+        <p>We use a single session cookie to keep you logged in. We don't use third-party tracking cookies or analytics cookies. No consent banner required — because there's nothing to consent to.</p>
+      </div>
+
+      <div>
+        <h2>Contact</h2>
+        <p>Questions about this policy? Email <a href="mailto:privacy@wombie.com">privacy@wombie.com</a>.</p>
+      </div>
+
+    </.oat_document>
+
+    <%!-- FOOTER --%>
+    <.oat_footer>
+      <:links>
+        <.oat_footer_link href="/dev/marketing/home">Home</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/about">About</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/how-it-works">How It Works</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/privacy">Privacy</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/terms">Terms</.oat_footer_link>
+      </:links>
+      <:fineprint>
+        © 2025 Wombie
+      </:fineprint>
+    </.oat_footer>
+
+  </body>
+</html>

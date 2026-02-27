@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>Pricing — Wombie</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+    <style>
+      :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
+      .font-familjen { font-variation-settings: "wdth" 112.5; }
+      .testimonial-hanging > p:first-child::before {
+        content: '\201C';
+        position: absolute;
+        display: inline;
+        transform: translateX(-100%);
+      }
+      .testimonial-hanging > p:last-child::after {
+        content: '\201D';
+        display: inline;
+      }
+    </style>
+  </head>
+  <body class="bg-oat-100 text-oat-950 antialiased">
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         NAVBAR
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_navbar>
+      <:links>
+        <.oat_nav_link href="/dev/marketing/why">Why Wombie</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/how-it-works">How It Works</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/about">About</.oat_nav_link>
+      </:links>
+      <:actions>
+        <.oat_soft_button href="/sign-in">Log in</.oat_soft_button>
+        <.oat_button href="/invite-only">Get Started</.oat_button>
+      </:actions>
+    </.oat_navbar>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         PRICING HERO
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.pricing_hero
+      headline="Simple, honest pricing."
+      subheadline="Wombie is free for everyone. Always. We will never charge you to discover events, RSVP, or connect with friends."
+    >
+      <:plans>
+        <%!-- Free plan --%>
+        <.oat_plan name="Free" price="$0" period="forever">
+          <:subheadline>
+            For anyone who wants to find events and show up
+          </:subheadline>
+          <:features>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              Browse all events in your city
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              RSVP and invite friends
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              Create private events for your group
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              Privacy controls for every event
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              Calendar export
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              No ads, ever
+            </li>
+          </:features>
+          <:cta>
+            <.oat_soft_button href="/invite-only" class="w-full justify-center" size="lg">
+              Get started free
+            </.oat_soft_button>
+          </:cta>
+        </.oat_plan>
+
+        <%!-- Pro plan (coming soon) --%>
+        <.oat_plan name="Pro" price="Coming soon" period="" badge="Coming soon" class="opacity-75">
+          <:subheadline>
+            For organisers and community builders
+          </:subheadline>
+          <:features>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              Everything in Free
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              Organiser tools and analytics
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              Community group management
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 h-[1lh] w-4 shrink-0 text-oat-950/50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+              </svg>
+              Priority listing for your events
+            </li>
+          </:features>
+          <:cta>
+            <.oat_soft_button href="/invite-only" class="w-full justify-center" size="lg">
+              Join the waitlist
+            </.oat_soft_button>
+          </:cta>
+        </.oat_plan>
+      </:plans>
+      <:footer>
+        We will never charge you to discover events, RSVP with friends, or show up to your city.
+      </:footer>
+    </.pricing_hero>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         TESTIMONIAL — Two column with photo
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.testimonial_two_column_large_photo name="Sarah K." byline="Software developer, Warsaw">
+      <:quote>
+        <p>
+          I used to scroll for an hour looking for something to do. Now I check Wombie and I'm out the door in ten minutes. I've been to more things in the last month than I had in the whole year before.
+        </p>
+      </:quote>
+      <:photo>
+        <div class="h-full w-full" style="background: linear-gradient(135deg, #DDDBD0 0%, #B4B3A3 40%, #8C8B78 100%);">
+          <div class="flex h-full w-full items-end justify-start p-6"
+               style="background: radial-gradient(ellipse at 30% 60%, rgba(90,80,60,0.15) 0%, transparent 70%);">
+            <div class="flex flex-col gap-1">
+              <div class="h-1 w-12 rounded-full bg-white/30"></div>
+              <div class="h-1 w-8 rounded-full bg-white/20"></div>
+            </div>
+          </div>
+        </div>
+      </:photo>
+    </.testimonial_two_column_large_photo>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         FAQs
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.faqs_accordion headline="Pricing questions">
+      <.oat_faq id="faq-pricing-1" question="Is Wombie really free?">
+        <:answer>
+          <p>Yes. Discovering events, RSVPing, inviting friends, and creating events are all free. We have no plans to change this. We measure success by events attended per user — not by extracting money from you.</p>
+        </:answer>
+      </.oat_faq>
+      <.oat_faq id="faq-pricing-2" question="What will Pro include when it launches?">
+        <:answer>
+          <p>Pro is designed for organisers and community builders — people who run recurring events, manage groups, or want deeper analytics on attendance. Everything a regular user needs will always be free.</p>
+        </:answer>
+      </.oat_faq>
+      <.oat_faq id="faq-pricing-3" question="Will you sell my data or show me ads?">
+        <:answer>
+          <p>No. Your data is never sold. We don't show ads. Our business model is Pro subscriptions for organisers — not selling your attention or personal information.</p>
+        </:answer>
+      </.oat_faq>
+      <.oat_faq id="faq-pricing-4" question="Can I organise events as a free user?">
+        <:answer>
+          <p>Yes. Any free user can create and share events, set privacy controls, and invite friends. Pro adds advanced tools for people who organise regularly at scale.</p>
+        </:answer>
+      </.oat_faq>
+    </.faqs_accordion>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         CTA — Final call to action
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.cta_simple_centered>
+      <:headline>
+        Start for free. Stay for the events.
+      </:headline>
+      <:subheadline>
+        Join thousands of people who stopped scrolling and started showing up.
+      </:subheadline>
+      <:cta>
+        <div class="flex flex-wrap items-center justify-center gap-4">
+          <.oat_button href="/invite-only" size="lg">Get started free</.oat_button>
+        </div>
+      </:cta>
+    </.cta_simple_centered>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         FOOTER
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_footer>
+      <:links>
+        <.oat_footer_link href="/dev/marketing/why">Why Wombie</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/how-it-works">How It Works</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/about">About</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/pricing">Pricing</.oat_footer_link>
+        <.oat_footer_link href="#">Privacy</.oat_footer_link>
+        <.oat_footer_link href="#">Terms</.oat_footer_link>
+      </:links>
+      <:fineprint>
+        © 2025 Wombie
+      </:fineprint>
+    </.oat_footer>
+
+  </body>
+</html>

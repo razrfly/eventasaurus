@@ -28,6 +28,12 @@ defmodule EventasaurusWeb.Router do
       get "/why", MarketingController, :why_wombie
       get "/why-not", MarketingController, :why_not
       get "/oatmeal", MarketingController, :oatmeal_demo
+      get "/home", MarketingController, :homepage
+      get "/about", MarketingController, :about
+      get "/how-it-works", MarketingController, :how_it_works
+      get "/pricing", MarketingController, :pricing
+      get "/privacy", MarketingController, :privacy_policy
+      get "/terms", MarketingController, :terms
     end
 
     # Admin LiveView routes (dev - no auth, mirrors production paths)

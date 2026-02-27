@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>How It Works — Wombie</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+    <style>
+      :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
+      .font-familjen { font-variation-settings: "wdth" 112.5; }
+      .testimonial-hanging > p:first-child::before {
+        content: '\201C';
+        position: absolute;
+        display: inline;
+        transform: translateX(-100%);
+      }
+      .testimonial-hanging > p:last-child::after {
+        content: '\201D';
+        display: inline;
+      }
+    </style>
+  </head>
+  <body class="bg-oat-100 text-oat-950 antialiased">
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         NAVBAR
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_navbar>
+      <:links>
+        <.oat_nav_link href="/dev/marketing/why">Why Wombie</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/how-it-works">How It Works</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/about">About</.oat_nav_link>
+      </:links>
+      <:actions>
+        <.oat_soft_button href="/sign-in">Log in</.oat_soft_button>
+        <.oat_button href="/invite-only">Get Started</.oat_button>
+      </:actions>
+    </.oat_navbar>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         HERO — Simple centered
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.hero_simple_centered eyebrow="How Wombie works">
+      <:headline>
+        Three steps. Zero friction.
+      </:headline>
+      <:subheadline>
+        No algorithm to game. No feed to scroll. Just events, people, and showing up.
+      </:subheadline>
+    </.hero_simple_centered>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         STEPS — Stacked alternating features
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.features_stacked_alternating
+      eyebrow="The flow"
+    >
+      <:features>
+
+        <%!-- Step 1: Discover events --%>
+        <.oat_alternating_feature>
+          <:headline>Discover events near you</:headline>
+          <:subheadline>
+            Browse curated local events — concerts, film nights, pub quizzes, gallery openings — updated daily. No sponsored posts. No noise.
+          </:subheadline>
+          <:demo>
+            <%!-- Event list mockup --%>
+            <div class="flex h-full min-h-[280px] flex-col gap-3 bg-oat-200/50 p-6">
+              <p class="text-xs font-semibold uppercase tracking-wider text-oat-500">This week · Warsaw</p>
+              <div class="flex flex-col gap-2">
+                <div class="flex items-start gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.05]">
+                  <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-oat-950/[0.05] text-lg">🎷</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-2">
+                      <h5 class="text-sm font-semibold text-oat-950 truncate">Blue Note Sessions</h5>
+                      <span class="shrink-0 rounded-full bg-oat-950/[0.06] px-2 py-0.5 text-xs text-oat-600">Jazz</span>
+                    </div>
+                    <p class="mt-0.5 text-xs text-oat-500">Fri 7 Mar · Praga Koneser · 8pm</p>
+                  </div>
+                </div>
+                <div class="flex items-start gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.05]">
+                  <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-oat-950/[0.05] text-lg">🎬</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-2">
+                      <h5 class="text-sm font-semibold text-oat-950 truncate">Tuesday Film Night</h5>
+                      <span class="shrink-0 rounded-full bg-oat-950/[0.06] px-2 py-0.5 text-xs text-oat-600">Cinema</span>
+                    </div>
+                    <p class="mt-0.5 text-xs text-oat-500">Tue 11 Mar · Kinoteka · 7:30pm</p>
+                  </div>
+                </div>
+                <div class="flex items-start gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.05]">
+                  <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-oat-950/[0.05] text-lg">🎨</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-2">
+                      <h5 class="text-sm font-semibold text-oat-950 truncate">Rynek Gallery Opening</h5>
+                      <span class="shrink-0 rounded-full bg-oat-950/[0.06] px-2 py-0.5 text-xs text-oat-600">Art</span>
+                    </div>
+                    <p class="mt-0.5 text-xs text-oat-500">Sat 15 Mar · Stare Miasto · 6pm</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </:demo>
+        </.oat_alternating_feature>
+
+        <%!-- Step 2: Invite your people --%>
+        <.oat_alternating_feature>
+          <:headline>Invite your people</:headline>
+          <:subheadline>
+            Every event starts private. You decide who sees it — close friends, your extended circle, or everyone. No accidental public posts.
+          </:subheadline>
+          <:demo>
+            <%!-- Privacy selector mockup --%>
+            <div class="flex h-full min-h-[280px] flex-col justify-center gap-5 bg-oat-200/50 p-6">
+              <p class="text-sm font-semibold text-oat-950">Who can see this event?</p>
+              <div class="flex flex-col gap-2">
+                <label class="flex cursor-pointer items-center gap-3 rounded-lg bg-oat-50 p-3.5 ring-2 ring-oat-950/20">
+                  <div class="flex h-5 w-5 items-center justify-center rounded-full bg-oat-950">
+                    <div class="h-2 w-2 rounded-full bg-white"></div>
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold text-oat-950">Close friends</p>
+                    <p class="text-xs text-oat-500">Your inner circle only</p>
+                  </div>
+                </label>
+                <label class="flex cursor-pointer items-center gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.06]">
+                  <div class="flex h-5 w-5 items-center justify-center rounded-full border border-oat-950/20 bg-transparent"></div>
+                  <div>
+                    <p class="text-sm font-medium text-oat-950">Extended circle</p>
+                    <p class="text-xs text-oat-500">Friends of friends</p>
+                  </div>
+                </label>
+                <label class="flex cursor-pointer items-center gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.06]">
+                  <div class="flex h-5 w-5 items-center justify-center rounded-full border border-oat-950/20 bg-transparent"></div>
+                  <div>
+                    <p class="text-sm font-medium text-oat-950">Community</p>
+                    <p class="text-xs text-oat-500">Anyone in your city</p>
+                  </div>
+                </label>
+                <label class="flex cursor-pointer items-center gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.06]">
+                  <div class="flex h-5 w-5 items-center justify-center rounded-full border border-oat-950/20 bg-transparent"></div>
+                  <div>
+                    <p class="text-sm font-medium text-oat-950">Public</p>
+                    <p class="text-xs text-oat-500">Listed on Wombie</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </:demo>
+        </.oat_alternating_feature>
+
+        <%!-- Step 3: Show up --%>
+        <.oat_alternating_feature>
+          <:headline>Show up. That's it.</:headline>
+          <:subheadline>
+            No algorithms. No performance. Just RSVP and go. We measure success by events attended per month — not time spent in the app.
+          </:subheadline>
+          <:demo>
+            <%!-- RSVP confirmation mockup --%>
+            <div class="flex h-full min-h-[280px] flex-col items-center justify-center gap-5 bg-oat-200/50 p-8 text-center">
+              <div class="flex h-16 w-16 items-center justify-center rounded-full bg-oat-950/[0.06] text-3xl">✓</div>
+              <div class="flex flex-col gap-1">
+                <p class="font-familjen text-xl font-medium text-oat-950">You're going!</p>
+                <p class="text-sm font-semibold text-oat-700">Tuesday Film Night</p>
+                <p class="text-sm text-oat-500">7:30pm · Kinoteka, Warsaw</p>
+              </div>
+              <div class="flex flex-col gap-2 w-full max-w-[200px]">
+                <div class="rounded-lg bg-oat-50 px-4 py-2.5 text-sm text-oat-700 ring-1 ring-oat-950/[0.06]">
+                  📅 Add to calendar
+                </div>
+                <div class="rounded-lg bg-oat-50 px-4 py-2.5 text-sm text-oat-700 ring-1 ring-oat-950/[0.06]">
+                  💬 Message the group
+                </div>
+              </div>
+            </div>
+          </:demo>
+        </.oat_alternating_feature>
+
+      </:features>
+    </.features_stacked_alternating>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         PRIVACY EXPLAINER — Three column features
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.features_three_column
+      eyebrow="Privacy by default"
+      headline="Your social graph is yours."
+    >
+      <:features>
+        <.oat_feature icon="🔒" headline="Private by default">
+          Every event you create starts private. Nothing goes public unless you choose it.
+        </.oat_feature>
+        <.oat_feature icon="👁️" headline="You control who sees what">
+          Share with close friends, extended circle, or your whole city. The choice is always yours.
+        </.oat_feature>
+        <.oat_feature icon="🚫" headline="We don't sell data">
+          Your connections, interests, and attendance are never sold to advertisers. Full stop.
+        </.oat_feature>
+      </:features>
+    </.features_three_column>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         FAQs
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.faqs_accordion headline="Common questions">
+      <.oat_faq id="faq-hiw-1" question="What kinds of events are on Wombie?">
+        <:answer>
+          <p>Concerts, film screenings, pub quizzes, gallery openings, comedy nights, community dinners, and more. We curate events from local sources and update daily — no stale listings, no sponsored filler.</p>
+        </:answer>
+      </.oat_faq>
+      <.oat_faq id="faq-hiw-2" question="How is this different from Facebook Events?">
+        <:answer>
+          <p>Facebook Events optimises for engagement — you see events from people and pages you follow, alongside ads. Wombie is designed around attendance. We surface things worth going to, not things that keep you scrolling. Your social graph is private and never sold.</p>
+        </:answer>
+      </.oat_faq>
+      <.oat_faq id="faq-hiw-3" question="Can I add my own events?">
+        <:answer>
+          <p>Yes. Any user can create and share events — for your friend group, your community, or the general public. Private events are never shown to strangers unless you explicitly make them public.</p>
+        </:answer>
+      </.oat_faq>
+      <.oat_faq id="faq-hiw-4" question="What cities are you in?">
+        <:answer>
+          <p>We're currently active in Warsaw, Paris, and Krakow, with London and Berlin coming soon. Events are updated daily in each city from local sources.</p>
+        </:answer>
+      </.oat_faq>
+      <.oat_faq id="faq-hiw-5" question="Is it free?">
+        <:answer>
+          <p>Yes. Wombie is free for everyone. We will never charge you to discover events, RSVP, or connect with friends. See our <a href="/dev/marketing/pricing" class="underline underline-offset-2">pricing page</a> for details.</p>
+        </:answer>
+      </.oat_faq>
+    </.faqs_accordion>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         CTA — Final call to action
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.cta_simple_centered>
+      <:headline>
+        Ready to find something to do this week?
+      </:headline>
+      <:subheadline>
+        Join thousands of people who stopped scrolling and started showing up.
+      </:subheadline>
+      <:cta>
+        <div class="flex flex-wrap items-center justify-center gap-4">
+          <.oat_button href="/invite-only" size="lg">Get started free</.oat_button>
+        </div>
+      </:cta>
+    </.cta_simple_centered>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         FOOTER
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_footer>
+      <:links>
+        <.oat_footer_link href="/dev/marketing/why">Why Wombie</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/how-it-works">How It Works</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/about">About</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/pricing">Pricing</.oat_footer_link>
+        <.oat_footer_link href="#">Privacy</.oat_footer_link>
+        <.oat_footer_link href="#">Terms</.oat_footer_link>
+      </:links>
+      <:fineprint>
+        © 2025 Wombie
+      </:fineprint>
+    </.oat_footer>
+
+  </body>
+</html>

@@ -420,6 +420,7 @@ defmodule EventasaurusApp.ReleaseTasks do
       # Apply — reset movies and trigger sweep
       EventasaurusApp.ReleaseTasks.cinegraph_backfill(true)
   """
+  @spec cinegraph_backfill(boolean()) :: :ok | {:error, term()}
   def cinegraph_backfill(apply \\ false) do
     start_app()
 
@@ -468,18 +469,20 @@ defmodule EventasaurusApp.ReleaseTasks do
 
       IO.puts("Reset #{count} movies (cleared cinegraph_synced_at).")
 
-      {:ok, _job} =
-        %{sweep: true}
-        |> CinegraphSyncWorker.new()
-        |> Oban.insert()
+      case %{sweep: true} |> CinegraphSyncWorker.new() |> Oban.insert() do
+        {:ok, _job} ->
+          IO.puts("Enqueued Cinegraph sweep job.")
+          IO.puts("Run cinegraph_backfill() again after the sweep completes to verify results.")
+          :ok
 
-      IO.puts("Enqueued Cinegraph sweep job.")
-      IO.puts("Run cinegraph_backfill() again after the sweep completes to verify results.")
+        {:error, reason} ->
+          Logger.warning("cinegraph_backfill: failed to enqueue sweep: #{inspect(reason)}")
+          {:error, reason}
+      end
     else
       IO.puts("Run cinegraph_backfill(true) to reset the #{stamped_not_found} stamped movies and trigger a sweep.")
+      :ok
     end
-
-    :ok
   end
 
   defp start_app do
