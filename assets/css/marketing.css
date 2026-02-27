@@ -2,8 +2,8 @@
 /* Scoped under .marketing-page to avoid affecting existing pages */
 
 .marketing-page {
-  --m-font-display: 'Familjen Grotesk', sans-serif;
-  --m-font-body: 'Familjen Grotesk', sans-serif;
+  --m-font-display: 'Instrument Sans', sans-serif;
+  --m-font-body: 'Instrument Sans', sans-serif;
 
   /* Spacing scale */
   --m-section-padding: 5rem;
@@ -18,7 +18,8 @@
 .marketing-page h1,
 .marketing-page h2,
 .marketing-page h3,
-.marketing-page h4 {
+.marketing-page h4,
+.marketing-page .font-familjen {
   font-family: var(--m-font-display);
 }
 
@@ -82,10 +83,30 @@
   text-decoration-thickness: 2px;
 }
 
-/* Concentric circles animation */
-.privacy-circles circle {
-  transition: opacity 0.4s ease, transform 0.4s ease;
+/* Animated privacy circles */
+.privacy-circles svg circle {
+  transform-box: fill-box;
+  transform-origin: center;
 }
+@keyframes ring-appear {
+  from { opacity: 0; transform: scale(0.82); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.privacy-circles .ring-open     { animation: ring-appear 0.6s ease-out 0.6s both; }
+.privacy-circles .ring-extended { animation: ring-appear 0.6s ease-out 0.4s both; }
+.privacy-circles .ring-friends  { animation: ring-appear 0.6s ease-out 0.2s both; }
+.privacy-circles .ring-private  { animation: ring-appear 0.6s ease-out 0.0s both; }
+/* Active ring: full opacity; inactive: dimmed */
+.privacy-circles.has-selection [data-ring] { opacity: 0.4; transition: opacity 0.25s ease; }
+.privacy-circles.has-selection [data-ring].ring-active { opacity: 1; }
+
+/* Hero animated contrast: grey social UI → warm Wombie card */
+.hero-contrast { position: relative; overflow: hidden; }
+.hero-contrast-panel { transition: opacity 0.9s ease; }
+.hero-contrast-before { opacity: 1; }
+.hero-contrast-after  { position: absolute; inset: 0; opacity: 0; }
+.scroll-reveal.is-visible .hero-contrast-before { opacity: 0; }
+.scroll-reveal.is-visible .hero-contrast-after  { opacity: 1; }
 
 /* Horizontal scroll for mobile story cards */
 .story-scroll {

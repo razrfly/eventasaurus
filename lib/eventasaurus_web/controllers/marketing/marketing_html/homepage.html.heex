@@ -351,6 +351,7 @@
     <%!-- ═══════════════════════════════════════════════════════════════════
          STATS — With graph
          ═══════════════════════════════════════════════════════════════════ --%>
+    <div id="why">
     <.stats_with_graph
       eyebrow="Built on real attendance"
       headline="The platform that gets people off their phones."
@@ -365,6 +366,7 @@
         text="average events attended per user since joining vs. before."
       />
     </.stats_with_graph>
+    </div>
 
     <%!-- ═══════════════════════════════════════════════════════════════════
          CTA — Final call to action
@@ -392,11 +394,11 @@
         <.oat_footer_link href="/dev/marketing/why">Why Wombie</.oat_footer_link>
         <.oat_footer_link href="#how">How It Works</.oat_footer_link>
         <.oat_footer_link href="#about">About</.oat_footer_link>
-        <.oat_footer_link href="#">Privacy</.oat_footer_link>
-        <.oat_footer_link href="#">Terms</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/privacy">Privacy</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/terms">Terms</.oat_footer_link>
       </:links>
       <:fineprint>
-        © 2025 Wombie
+        © <%= Date.utc_today().year %> Wombie
       </:fineprint>
     </.oat_footer>
 

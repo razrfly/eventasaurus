@@ -392,7 +392,7 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
 
   defp serialize_cinegraph_ratings(nil), do: nil
 
-  defp serialize_cinegraph_ratings(ratings) do
+  defp serialize_cinegraph_ratings(ratings) when is_map(ratings) do
     %{
       imdb: ratings["imdb"],
       rotten_tomatoes: ratings["rottenTomatoes"],
@@ -401,9 +401,11 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
     }
   end
 
+  defp serialize_cinegraph_ratings(_), do: %{imdb: nil, rotten_tomatoes: nil, metacritic: nil, tmdb: nil}
+
   defp serialize_cinegraph_awards(nil), do: nil
 
-  defp serialize_cinegraph_awards(awards) do
+  defp serialize_cinegraph_awards(awards) when is_map(awards) do
     %{
       oscar_wins: awards["oscarWins"],
       total_wins: awards["totalWins"],
@@ -411,6 +413,8 @@ defmodule EventasaurusWeb.Api.V1.Mobile.MovieController do
       summary: awards["summary"]
     }
   end
+
+  defp serialize_cinegraph_awards(_), do: %{oscar_wins: nil, total_wins: nil, total_nominations: nil, summary: nil}
 
   defp cinegraph_or_tmdb_cast(movie) do
     case Movie.cinegraph_cast(movie) do

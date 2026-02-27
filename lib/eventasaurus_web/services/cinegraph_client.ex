@@ -13,9 +13,9 @@ defmodule EventasaurusWeb.Services.CinegraphClient do
 
   require Logger
 
-  @graphql_query_template """
-  {
-    movie(tmdbId: TMDB_ID_PLACEHOLDER) {
+  @graphql_query """
+  query GetMovie($tmdbId: Int!) {
+    movie(tmdbId: $tmdbId) {
       title
       slug
       ratings {
@@ -77,9 +77,7 @@ defmodule EventasaurusWeb.Services.CinegraphClient do
         {"Authorization", "Bearer #{api_key}"}
       ]
 
-      query = String.replace(@graphql_query_template, "TMDB_ID_PLACEHOLDER", to_string(tmdb_id))
-
-      body = Jason.encode!(%{query: query})
+      body = Jason.encode!(%{query: @graphql_query, variables: %{tmdbId: tmdb_id}})
 
       options = [recv_timeout: 15_000, timeout: 15_000]
 

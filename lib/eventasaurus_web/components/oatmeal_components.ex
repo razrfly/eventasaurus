@@ -889,6 +889,9 @@ defmodule EventasaurusWeb.OatmealComponents do
 
   @spec stats_with_graph(map()) :: Phoenix.LiveView.Rendered.t()
   def stats_with_graph(assigns) do
+    clip_id = "stats-graph-clip-#{System.unique_integer([:positive])}"
+    assigns = assign(assigns, :clip_id, clip_id)
+
     ~H"""
     <.oat_section eyebrow={@eyebrow} headline={@headline} subheadline={@subheadline} class={@class}>
       <div class="grid grid-cols-1 gap-10 lg:grid-cols-2">
@@ -900,7 +903,7 @@ defmodule EventasaurusWeb.OatmealComponents do
         <div class="relative overflow-hidden rounded-lg bg-oat-950/[0.025] p-6 text-oat-950">
           <svg viewBox="0 0 400 220" class="w-full" aria-hidden="true">
             <defs>
-              <clipPath id="stats-graph-clip">
+              <clipPath id={@clip_id}>
                 <rect width="400" height="220" />
               </clipPath>
             </defs>
@@ -916,7 +919,7 @@ defmodule EventasaurusWeb.OatmealComponents do
               d="M 0 175 C 30 172, 55 162, 80 152 C 115 138, 135 128, 160 112 C 190 94, 210 82, 240 64 C 270 46, 295 30, 320 20 C 348 10, 378 8, 400 7 L 400 190 L 0 190 Z"
               fill="currentColor"
               fill-opacity="0.06"
-              clip-path="url(#stats-graph-clip)"
+              clip-path={"url(##{@clip_id})"}
             />
             <%!-- Bezier curve line --%>
             <path
@@ -925,7 +928,7 @@ defmodule EventasaurusWeb.OatmealComponents do
               stroke="currentColor"
               stroke-width="2"
               stroke-opacity="0.45"
-              clip-path="url(#stats-graph-clip)"
+              clip-path={"url(##{@clip_id})"}
             />
             <%!-- Data point dots --%>
             <circle cx="80" cy="152" r="4" fill="currentColor" fill-opacity="0.6" />

@@ -78,15 +78,19 @@ defmodule EventasaurusWeb.GenericMovieLive do
           # Cinegraph director is injected if available
           rich_data = build_rich_data_from_movie(movie)
 
-          # Use Cinegraph cast if available and non-empty, fall back to TMDB
+          # Use Cinegraph cast/crew if available; fall back to TMDB per field
           cinegraph_cast = Movie.cinegraph_cast(movie) |> CinegraphNormalizer.normalize_cinegraph_cast()
           cinegraph_crew = Movie.cinegraph_crew(movie) |> CinegraphNormalizer.normalize_cinegraph_crew()
 
           {cast, crew} =
-            if cinegraph_cast != [] or cinegraph_crew != [] do
+            if cinegraph_cast != [] and cinegraph_crew != [] do
               {cinegraph_cast, cinegraph_crew}
             else
-              fetch_cast_and_crew(movie.tmdb_id)
+              {fetched_cast, fetched_crew} = fetch_cast_and_crew(movie.tmdb_id)
+              {
+                if(cinegraph_cast != [], do: cinegraph_cast, else: fetched_cast),
+                if(cinegraph_crew != [], do: cinegraph_crew, else: fetched_crew)
+              }
             end
 
           # Enrich movie with TMDB metadata for JSON-LD generation

@@ -47,6 +47,7 @@ module.exports = {
         'knewave': ['Knewave', 'cursive'],
         'orbitron': ['Orbitron', 'monospace'],
         'familjen': ['"Familjen Grotesk"', 'sans-serif'],
+        'instrument': ['"Instrument Sans"', 'sans-serif'],
       }
     },
   },
