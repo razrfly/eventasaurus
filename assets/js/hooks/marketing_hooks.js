@@ -51,8 +51,19 @@ const MobileNav = {
     const menu   = this.el.querySelector("[data-mobile-menu]");
     const close  = this.el.querySelector("[data-mobile-close]");
     if (!toggle || !menu) return;
-    const open   = () => { menu.classList.remove("hidden"); document.body.style.overflow = "hidden"; };
-    const close_ = () => { menu.classList.add("hidden");   document.body.style.overflow = ""; };
+    const open   = () => {
+      menu.classList.remove("hidden");
+      menu.setAttribute("aria-hidden", "false");
+      toggle.setAttribute("aria-expanded", "true");
+      document.body.style.overflow = "hidden";
+    };
+    const close_ = () => {
+      menu.classList.add("hidden");
+      menu.setAttribute("aria-hidden", "true");
+      toggle.setAttribute("aria-expanded", "false");
+      document.body.style.overflow = "";
+      toggle.focus();
+    };
     toggle.addEventListener("click", open);
     if (close) close.addEventListener("click", close_);
   },

@@ -17,8 +17,13 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorker do
       |> EventasaurusDiscovery.Workers.CinegraphSyncWorker.new()
       |> Oban.insert()
 
-      # Full sweep
+      # Full sweep (stale/missing only)
       %{sweep: true}
+      |> EventasaurusDiscovery.Workers.CinegraphSyncWorker.new()
+      |> Oban.insert()
+
+      # Force re-sync all movies (e.g. after scoring changes)
+      %{sweep: true, force: true}
       |> EventasaurusDiscovery.Workers.CinegraphSyncWorker.new()
       |> Oban.insert()
 
@@ -41,17 +46,27 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorker do
 
   @spec perform(Oban.Job.t()) :: {:ok, term()} | {:error, term()}
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"sweep" => true}}) do
-    Logger.info("CinegraphSyncWorker: starting weekly sweep")
+  def perform(%Oban.Job{args: %{"sweep" => true} = args}) do
+    force = Map.get(args, "force", false)
+
+    if force do
+      Logger.info("CinegraphSyncWorker: starting forced full sweep (ignoring sync timestamps)")
+    else
+      Logger.info("CinegraphSyncWorker: starting weekly sweep")
+    end
 
     cutoff = DateTime.add(DateTime.utc_now(), -@sync_interval_days * 24 * 3600, :second)
 
     movies_needing_sync =
       from(m in Movie,
-        where: is_nil(m.cinegraph_synced_at) or m.cinegraph_synced_at < ^cutoff,
         where: not is_nil(m.tmdb_id),
         select: m.id
       )
+      |> then(fn query ->
+        if force,
+          do: query,
+          else: where(query, [m], is_nil(m.cinegraph_synced_at) or m.cinegraph_synced_at < ^cutoff)
+      end)
       |> Repo.all()
 
     Logger.info("CinegraphSyncWorker: #{length(movies_needing_sync)} movies need sync")

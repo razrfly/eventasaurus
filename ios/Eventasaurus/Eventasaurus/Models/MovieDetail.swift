@@ -33,22 +33,10 @@ struct CastMember: Codable, Identifiable {
     let character: String?
     let order: Int?
     let profileUrl: String?
-    private let uuid: String
 
-    var id: String { "\(order ?? 0)_\(name)_\(profileUrl ?? uuid)" }
-
-    enum CodingKeys: String, CodingKey {
-        case name, character, order, profileUrl
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decode(String.self, forKey: .name)
-        character = try container.decodeIfPresent(String.self, forKey: .character)
-        order = try container.decodeIfPresent(Int.self, forKey: .order)
-        profileUrl = try container.decodeIfPresent(String.self, forKey: .profileUrl)
-        uuid = UUID().uuidString
-    }
+    // Deterministic ID derived from decoded fields so SwiftUI can correctly
+    // diff cast member lists across re-renders without spurious view updates.
+    var id: String { "\(order ?? 0)_\(name)_\(character ?? "")_\(profileUrl ?? "")" }
 }
 
 struct VenueScreenings: Codable, Identifiable {

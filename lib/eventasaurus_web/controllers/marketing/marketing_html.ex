@@ -9,7 +9,10 @@ defmodule EventasaurusWeb.MarketingHTML do
   defp next_friday_label do
     today = Date.utc_today()
     day_of_week = Date.day_of_week(today)
-    days_ahead = if day_of_week < 5, do: 5 - day_of_week, else: 12 - day_of_week
+    days_ahead = case day_of_week do
+      n when n < 5 -> 5 - n
+      n -> 12 - n
+    end
     next_friday = Date.add(today, days_ahead)
     "#{Calendar.strftime(next_friday, "%a")} #{next_friday.day} #{Calendar.strftime(next_friday, "%b")}"
   end
