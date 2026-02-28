@@ -445,7 +445,7 @@ config :eventasaurus, :unsplash,
 # Used by CinegraphClient to fetch rich movie data (ratings, cast, awards, canonical lists)
 # Data is cached in movies.cinegraph_data — synced weekly by CinegraphSyncWorker
 config :eventasaurus, :cinegraph,
-  base_url: System.get_env("CINEGRAPH_BASE_URL") || "http://cinegraph.org",
+  base_url: System.get_env("CINEGRAPH_BASE_URL") || "https://cinegraph.org",
   api_key: System.get_env("CINEGRAPH_API_KEY") || ""
 
 # Configure Mapbox for static maps
