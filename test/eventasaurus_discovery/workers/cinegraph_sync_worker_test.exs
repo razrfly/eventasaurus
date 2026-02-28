@@ -179,6 +179,20 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorkerTest do
       assert {:ok, %{enqueued: 1}} = perform(%{"sweep" => true})
     end
 
+    test "reports missing_ratings for movies with a slug but no rating scores" do
+      movie = create_movie()
+
+      movie
+      |> Movie.cinegraph_changeset(%{
+        cinegraph_data: %{"slug" => "test-slug-#{movie.id}", "ratings" => %{}},
+        cinegraph_synced_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+      |> Repo.update!()
+
+      assert {:ok, %{missing_ratings: count}} = perform(%{"sweep" => true})
+      assert count >= 1
+    end
+
     test "force: true re-enqueues all movies regardless of cinegraph_synced_at" do
       movie1 = create_movie()
       movie2 = create_movie()
