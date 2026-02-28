@@ -1,9 +1,11 @@
-defmodule CinegraphTestPlug do
+defmodule Eventasaurus.CinegraphTestPlug do
   @moduledoc false
   import Plug.Conn
 
+  @spec init(any()) :: any()
   def init(opts), do: opts
 
+  @spec call(Plug.Conn.t(), any()) :: Plug.Conn.t()
   def call(conn, _opts) do
     {status, body} = Agent.get(:cinegraph_test_response, & &1)
 
@@ -23,10 +25,10 @@ defmodule EventasaurusWeb.Services.CinegraphClientTest do
 
   setup_all do
     {:ok, _} = Agent.start_link(fn -> {200, ""} end, name: :cinegraph_test_response)
-    {:ok, _} = Plug.Cowboy.http(CinegraphTestPlug, [], port: @port)
+    {:ok, _} = Plug.Cowboy.http(Eventasaurus.CinegraphTestPlug, [], port: @port)
 
     on_exit(fn ->
-      Plug.Cowboy.shutdown(CinegraphTestPlug.HTTP)
+      Plug.Cowboy.shutdown(Eventasaurus.CinegraphTestPlug.HTTP)
       Agent.stop(:cinegraph_test_response)
     end)
 

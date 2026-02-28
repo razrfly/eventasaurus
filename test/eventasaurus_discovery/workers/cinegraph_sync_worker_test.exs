@@ -1,9 +1,11 @@
-defmodule CinegraphWorkerTestPlug do
+defmodule Eventasaurus.CinegraphWorkerTestPlug do
   @moduledoc false
   import Plug.Conn
 
+  @spec init(any()) :: any()
   def init(opts), do: opts
 
+  @spec call(Plug.Conn.t(), any()) :: Plug.Conn.t()
   def call(conn, _opts) do
     {status, body} = Agent.get(:cinegraph_worker_test_response, & &1)
 
@@ -24,10 +26,10 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorkerTest do
 
   setup_all do
     {:ok, _} = Agent.start_link(fn -> {200, ""} end, name: :cinegraph_worker_test_response)
-    {:ok, _} = Plug.Cowboy.http(CinegraphWorkerTestPlug, [], port: @port)
+    {:ok, _} = Plug.Cowboy.http(Eventasaurus.CinegraphWorkerTestPlug, [], port: @port)
 
     on_exit(fn ->
-      Plug.Cowboy.shutdown(CinegraphWorkerTestPlug.HTTP)
+      Plug.Cowboy.shutdown(Eventasaurus.CinegraphWorkerTestPlug.HTTP)
       Agent.stop(:cinegraph_worker_test_response)
     end)
 
@@ -174,6 +176,26 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorkerTest do
       # With exactly 2 movies in the sandbox — 1 recently synced, 1 not —
       # the sweep should enqueue only 1 job.
       assert {:ok, %{enqueued: 1}} = perform(%{"sweep" => true})
+    end
+
+    test "force: true re-enqueues all movies regardless of cinegraph_synced_at" do
+      movie1 = create_movie()
+      movie2 = create_movie()
+
+      # Mark both as recently synced
+      for movie <- [movie1, movie2] do
+        movie
+        |> Movie.cinegraph_changeset(%{
+          cinegraph_synced_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        })
+        |> Repo.update!()
+      end
+
+      # Normal sweep skips both
+      assert {:ok, %{enqueued: 0}} = perform(%{"sweep" => true})
+
+      # Force sweep picks them both up
+      assert {:ok, %{enqueued: 2}} = perform(%{"sweep" => true, "force" => true})
     end
   end
 end

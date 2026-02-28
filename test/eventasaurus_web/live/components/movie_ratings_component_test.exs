@@ -17,7 +17,7 @@ defmodule EventasaurusWeb.Live.Components.MovieRatingsComponentTest do
       assert html == ""
     end
 
-    test "renders nothing when cinegraph_data is nil and tmdb_rating is nil" do
+    test "renders nothing when cinegraph_data is empty and tmdb_rating is nil" do
       html = render(%{cinegraph_data: %{}, tmdb_rating: nil})
       assert html == ""
     end

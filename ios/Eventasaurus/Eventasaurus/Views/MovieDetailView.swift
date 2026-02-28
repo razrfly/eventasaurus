@@ -293,7 +293,6 @@ struct MovieDetailView: View {
                         .foregroundStyle(color)
                         .clipShape(Capsule())
                 }
-                Spacer()
             }
             }
         } else if let rating = movie.voteAverage {
