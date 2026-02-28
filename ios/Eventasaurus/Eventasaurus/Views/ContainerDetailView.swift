@@ -163,6 +163,7 @@ struct ContainerDetailView: View {
                 .padding(.horizontal, DS.Spacing.xl)
             }
         }
+        .ignoresSafeArea(edges: .top)
     }
 
     private static let isoDateFormatter: DateFormatter = {

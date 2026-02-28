@@ -110,6 +110,7 @@ struct MovieDetailView: View {
                 .padding(.horizontal, DS.Spacing.xl)
             }
         }
+        .ignoresSafeArea(edges: .top)
     }
 
     private func venueCard(_ venueGroup: VenueScreenings) -> some View {

@@ -142,6 +142,7 @@ struct VenueDetailView: View {
                 .padding(.horizontal, DS.Spacing.xl)
             }
         }
+        .ignoresSafeArea(edges: .top)
     }
 
     private func loadVenue() async {

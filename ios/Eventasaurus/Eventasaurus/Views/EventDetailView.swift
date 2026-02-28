@@ -214,6 +214,7 @@ struct EventDetailView: View {
                 .padding(.horizontal, DS.Spacing.xl)
             }
         }
+        .ignoresSafeArea(edges: .top)
         .safeAreaInset(edge: .bottom) {
             if event.isInternalEvent && isOrganizer {
                 // Organiser — show Manage banner instead of RSVP bar

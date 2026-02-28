@@ -67,6 +67,7 @@ struct CinegraphDetailView: View {
                 .padding(.horizontal, DS.Spacing.xl)
             }
         }
+        .ignoresSafeArea(edges: .top)
         .fullBleedNavigation()
     }
 

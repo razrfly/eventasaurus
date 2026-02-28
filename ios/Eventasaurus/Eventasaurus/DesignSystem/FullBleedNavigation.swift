@@ -12,10 +12,8 @@ private struct FullBleedNavigation<Trailing: View>: ViewModifier {
     @ViewBuilder let trailing: () -> Trailing
 
     func body(content: Content) -> some View {
-        ZStack {
-            content
-
-            VStack {
+        content
+            .overlay(alignment: .top) {
                 HStack {
                     Button {
                         dismiss()
@@ -35,12 +33,8 @@ private struct FullBleedNavigation<Trailing: View>: ViewModifier {
                     trailing()
                 }
                 .padding(.horizontal, DS.Spacing.xl)
-                .padding(.top, DS.Spacing.sm)
-
-                Spacer()
             }
-        }
-        .toolbar(.hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
     }
 }
 
