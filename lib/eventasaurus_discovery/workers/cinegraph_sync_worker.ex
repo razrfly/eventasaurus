@@ -82,7 +82,24 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorker do
       Oban.insert_all(jobs)
     end)
 
-    {:ok, %{enqueued: length(movies_needing_sync)}}
+    missing_ratings_count =
+      from(m in Movie,
+        where: not is_nil(m.cinegraph_synced_at),
+        where: not is_nil(fragment("?->>'slug'", m.cinegraph_data)),
+        where: is_nil(fragment("?->'ratings'->>'imdb'", m.cinegraph_data)),
+        where: is_nil(fragment("?->'ratings'->>'rottenTomatoes'", m.cinegraph_data)),
+        where: is_nil(fragment("?->'ratings'->>'metacritic'", m.cinegraph_data)),
+        select: count(m.id)
+      )
+      |> Repo.one()
+
+    if missing_ratings_count > 0 do
+      Logger.warning(
+        "CinegraphSyncWorker: #{missing_ratings_count} movies have a Cinegraph slug but no ratings — Cinegraph data gap"
+      )
+    end
+
+    {:ok, %{enqueued: length(movies_needing_sync), missing_ratings: missing_ratings_count}}
   end
 
   @impl Oban.Worker
@@ -105,10 +122,12 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorker do
   defp sync_movie(movie) do
     case CinegraphClient.get_movie(movie.tmdb_id) do
       {:ok, data} ->
+        versioned_data = Map.put(data, "_v", 1)
+
         result =
           movie
           |> Movie.cinegraph_changeset(%{
-            cinegraph_data: data,
+            cinegraph_data: versioned_data,
             cinegraph_synced_at: DateTime.utc_now() |> DateTime.truncate(:second)
           })
           |> Repo.update()

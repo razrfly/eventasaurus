@@ -96,6 +96,7 @@ defmodule EventasaurusDiscovery.Workers.CinegraphSyncWorkerTest do
       updated = Repo.get!(Movie, movie.id)
       assert updated.cinegraph_synced_at != nil
       assert updated.cinegraph_data != nil
+      assert updated.cinegraph_data["_v"] == 1
       assert get_in(updated.cinegraph_data, ["ratings", "tmdb"]) == 7.2
       assert get_in(updated.cinegraph_data, ["awards", "oscarWins"]) == 2
     end
