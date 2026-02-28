@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>Why Wombie — v2</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+    <style>
+      :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
+      .font-familjen { font-family: "Instrument Serif", serif; }
+      .testimonial-hanging > p:first-child::before {
+        content: '\201C';
+        position: absolute;
+        display: inline;
+        transform: translateX(-100%);
+      }
+      .testimonial-hanging > p:last-child::after {
+        content: '\201D';
+        display: inline;
+      }
+    </style>
+  </head>
+  <body class="bg-oat-100 text-oat-950 antialiased">
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         NAVBAR
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_navbar>
+      <:links>
+        <.oat_nav_link href="/dev/marketing/why-v2">Why Wombie</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/how-it-works">How It Works</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/about">About</.oat_nav_link>
+      </:links>
+      <:actions>
+        <.oat_soft_button href="/sign-in">Log in</.oat_soft_button>
+        <.oat_button href="/invite-only">Get Started</.oat_button>
+      </:actions>
+    </.oat_navbar>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         HERO — Centered, thesis-forward
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.hero_simple_centered eyebrow="Why Wombie">
+      <:headline>
+        Social media connected everyone. It didn't connect anyone.
+      </:headline>
+      <:subheadline>
+        Wombie is built on a simple belief: the best moments happen in person. Not on feeds. Not in DMs. In the room, with people you know.
+      </:subheadline>
+      <:cta>
+        <.oat_button href="/invite-only" size="lg">Join the waitlist</.oat_button>
+      </:cta>
+    </.hero_simple_centered>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         THE DISCONNECT — 4-card grid
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_section eyebrow="The Disconnect" headline="800 followers, no one to call.">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-xl bg-oat-950/[0.025] p-6">
+          <div class="mb-3 text-2xl">📱</div>
+          <h3 class="font-familjen mb-2 text-base font-semibold text-oat-950">The Scroll</h3>
+          <p class="text-sm/7 text-oat-700">You open Instagram. 200 stories. None of them are inviting you anywhere tonight.</p>
+        </div>
+        <div class="rounded-xl bg-oat-950/[0.025] p-6">
+          <div class="mb-3 text-2xl">👻</div>
+          <h3 class="font-familjen mb-2 text-base font-semibold text-oat-950">The Ghost Group Chat</h3>
+          <p class="text-sm/7 text-oat-700">"Anyone want to do something this weekend?" Last message: 3 weeks ago. Seen by 12.</p>
+        </div>
+        <div class="rounded-xl bg-oat-950/[0.025] p-6">
+          <div class="mb-3 text-2xl">🎭</div>
+          <h3 class="font-familjen mb-2 text-base font-semibold text-oat-950">The Performance</h3>
+          <p class="text-sm/7 text-oat-700">You post about the concert you went to. 47 likes. You went alone.</p>
+        </div>
+        <div class="rounded-xl bg-oat-950/[0.025] p-6">
+          <div class="mb-3 text-2xl">🗓️</div>
+          <h3 class="font-familjen mb-2 text-base font-semibold text-oat-950">The Blank Calendar</h3>
+          <p class="text-sm/7 text-oat-700">Friday evening. Nothing planned. Not because you don't want to go out — because organizing is exhausting.</p>
+        </div>
+      </div>
+    </.oat_section>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         THE DIAGNOSIS — NEW: why it happened (insert after Disconnect)
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.features_three_column
+      eyebrow="Why It Happened"
+      headline="This wasn't an accident. It was the business model."
+    >
+      <:features>
+        <.oat_feature icon="🪤" headline="The Facsimile">
+          Tech gave you something lifelike enough that you stopped seeking the real thing. Discord instead of friends. Reels instead of experience. Swiping instead of romance.
+        </.oat_feature>
+        <.oat_feature icon="🔥" headline="The Rage Economy">
+          Conflict drives 6× more engagement than joy. Platforms optimised for the thing that kept you scrolling. Rage was more profitable than belonging.
+        </.oat_feature>
+        <.oat_feature icon="🏦" headline="The Adversary's Scale">
+          The deepest-pocketed entities in human history have one mission. It runs directly counter to your having a real life.
+        </.oat_feature>
+      </:features>
+    </.features_three_column>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         OUR PRINCIPLES — What we will never build (6 anti-patterns)
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.features_three_column
+      eyebrow="Our Principles"
+      headline="What we will never build."
+    >
+      <:features>
+        <.oat_feature icon="🔔" headline="Push notification spam">
+          We won't nag you to "check out what your friends are doing". You'll look when you want to.
+        </.oat_feature>
+        <.oat_feature icon="📊" headline="Follower counts">
+          No public metrics. No popularity contests. Your worth isn't a number.
+        </.oat_feature>
+        <.oat_feature icon="🎯" headline="Algorithmic feeds">
+          No engagement-optimized timeline. You see what your friends share, chronologically.
+        </.oat_feature>
+        <.oat_feature icon="📣" headline="Viral sharing mechanics">
+          No "share to 5 friends to unlock". Growth through genuine word-of-mouth only.
+        </.oat_feature>
+        <.oat_feature icon="💰" headline="Sponsored events in your feed">
+          Your social circle is not ad inventory. Period.
+        </.oat_feature>
+        <.oat_feature icon="👁️" headline="Read receipts on events">
+          No one needs to know you saw the invite and didn't respond yet. Take your time.
+        </.oat_feature>
+      </:features>
+    </.features_three_column>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         NORTH STAR METRIC — Stats three column
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.stats_three_column>
+      <:heading>We measure success differently.</:heading>
+      <:description>
+        Not daily active users. Not time spent in app. Not content created. One metric only: did you actually go somewhere, with someone?
+      </:description>
+      <.oat_stat stat="0 feeds" text="No algorithmic timeline, ever. You see what your friends share." />
+      <.oat_stat stat="2.1×" text="events attended per user per month. The only number we track." />
+      <.oat_stat stat="Privacy first" text="Every event starts private. You choose who sees it." />
+    </.stats_three_column>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         HOW IT WORKS — 3 alternating feature steps
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.features_stacked_alternating
+      eyebrow="How It Works"
+      headline="Three steps. That's it."
+    >
+      <:features>
+
+        <%!-- Step 1: Discover --%>
+        <.oat_alternating_feature>
+          <:headline>Discover what's happening near you.</:headline>
+          <:subheadline>
+            Browse curated local events — concerts, film nights, pub quizzes, gallery openings — updated daily. No sponsored posts. No noise. Just real things worth going to.
+          </:subheadline>
+          <:demo>
+            <div class="flex h-full min-h-[280px] flex-col gap-3 bg-oat-200/50 p-6">
+              <p class="text-xs font-semibold uppercase tracking-wider text-oat-500">This week · Warsaw</p>
+              <div class="flex flex-col gap-2">
+                <div class="flex items-start gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.05]">
+                  <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-oat-950/[0.05] text-lg">🎷</div>
+                  <div class="min-w-0 flex-1">
+                    <h5 class="truncate text-sm font-semibold text-oat-950">Blue Note Sessions</h5>
+                    <p class="mt-0.5 text-xs text-oat-500">Fri 7 Mar · Praga Koneser · 8pm</p>
+                  </div>
+                </div>
+                <div class="flex items-start gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.05]">
+                  <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-oat-950/[0.05] text-lg">🎬</div>
+                  <div class="min-w-0 flex-1">
+                    <h5 class="truncate text-sm font-semibold text-oat-950">Tuesday Film Night</h5>
+                    <p class="mt-0.5 text-xs text-oat-500">Tue 11 Mar · Kinoteka · 7:30pm</p>
+                  </div>
+                </div>
+                <div class="flex items-start gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.05]">
+                  <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-oat-950/[0.05] text-lg">🎨</div>
+                  <div class="min-w-0 flex-1">
+                    <h5 class="truncate text-sm font-semibold text-oat-950">Rynek Gallery Opening</h5>
+                    <p class="mt-0.5 text-xs text-oat-500">Sat 15 Mar · Stare Miasto · 6pm</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </:demo>
+        </.oat_alternating_feature>
+
+        <%!-- Step 2: Invite --%>
+        <.oat_alternating_feature>
+          <:headline>Invite your people. Keep it to your circles.</:headline>
+          <:subheadline>
+            Every event starts private. Share with close friends, extended circle, or open it up. You decide. No accidental public posts. No FOMO-inducing stories.
+          </:subheadline>
+          <:demo>
+            <div class="flex h-full min-h-[280px] flex-col justify-center gap-5 bg-oat-200/50 p-6">
+              <p class="text-sm font-semibold text-oat-950">Who can see this event?</p>
+              <div class="flex flex-col gap-2">
+                <label class="flex cursor-pointer items-center gap-3 rounded-lg bg-oat-50 p-3.5 ring-2 ring-oat-950/20">
+                  <div class="flex h-5 w-5 items-center justify-center rounded-full bg-oat-950">
+                    <div class="h-2 w-2 rounded-full bg-white"></div>
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold text-oat-950">Close friends</p>
+                    <p class="text-xs text-oat-500">Your inner circle only</p>
+                  </div>
+                </label>
+                <label class="flex cursor-pointer items-center gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.06]">
+                  <div class="flex h-5 w-5 items-center justify-center rounded-full border border-oat-950/20 bg-transparent"></div>
+                  <div>
+                    <p class="text-sm font-medium text-oat-950">Extended circle</p>
+                    <p class="text-xs text-oat-500">Friends of friends</p>
+                  </div>
+                </label>
+                <label class="flex cursor-pointer items-center gap-3 rounded-lg bg-oat-50 p-3.5 ring-1 ring-oat-950/[0.06]">
+                  <div class="flex h-5 w-5 items-center justify-center rounded-full border border-oat-950/20 bg-transparent"></div>
+                  <div>
+                    <p class="text-sm font-medium text-oat-950">Community</p>
+                    <p class="text-xs text-oat-500">Anyone in your city</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </:demo>
+        </.oat_alternating_feature>
+
+        <%!-- Step 3: Show Up --%>
+        <.oat_alternating_feature>
+          <:headline>Show up. That's the whole thing.</:headline>
+          <:subheadline>
+            No algorithms. No performance metrics. Close the app, open the door. We measure success by events attended per month — not time spent scrolling.
+          </:subheadline>
+          <:demo>
+            <div class="flex h-full min-h-[280px] flex-col items-center justify-center gap-5 bg-oat-200/50 p-8 text-center">
+              <div class="flex h-16 w-16 items-center justify-center rounded-full bg-oat-950/[0.06] text-3xl">✓</div>
+              <div class="flex flex-col gap-1">
+                <p class="font-familjen text-xl font-medium text-oat-950">You're going!</p>
+                <p class="text-sm font-semibold text-oat-700">Tuesday Film Night</p>
+                <p class="text-sm text-oat-500">7:30pm · Kinoteka, Warsaw</p>
+              </div>
+              <div class="flex w-full max-w-[200px] flex-col gap-2">
+                <div class="rounded-lg bg-oat-50 px-4 py-2.5 text-sm text-oat-700 ring-1 ring-oat-950/[0.06]">
+                  📅 Add to calendar
+                </div>
+                <div class="rounded-lg bg-oat-50 px-4 py-2.5 text-sm text-oat-700 ring-1 ring-oat-950/[0.06]">
+                  💬 Message the group
+                </div>
+              </div>
+            </div>
+          </:demo>
+        </.oat_alternating_feature>
+
+      </:features>
+    </.features_stacked_alternating>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         TESTIMONIAL — Large quote
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.testimonial_large_quote name="Sarah K." byline="Software developer, Warsaw">
+      <:quote>I used to scroll for an hour looking for something to do. Now I check Wombie and I'm out the door in ten minutes. I've been to more things in the last month than I had in the whole year before.</:quote>
+    </.testimonial_large_quote>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         CTA — Final call to action
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.cta_simple_centered>
+      <:headline>
+        You never have to be alone on a Friday night again.
+      </:headline>
+      <:subheadline>
+        Wombie isn't another social network. It's the tool that gets you off the couch and into the same room as the people you care about.
+      </:subheadline>
+      <:cta>
+        <div class="flex flex-wrap items-center justify-center gap-4">
+          <.oat_button href="/invite-only" size="lg">Join the waitlist</.oat_button>
+          <.oat_soft_button href="/dev/marketing/manifesto" size="lg">Read the manifesto →</.oat_soft_button>
+        </div>
+      </:cta>
+    </.cta_simple_centered>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         FOOTER
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_footer>
+      <:links>
+        <.oat_footer_link href="/dev/marketing/why-v2">Why Wombie</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/how-it-works">How It Works</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/about">About</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/manifesto">Manifesto</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/privacy">Privacy</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/terms">Terms</.oat_footer_link>
+      </:links>
+      <:fineprint>
+        © <%= Date.utc_today().year %> Wombie
+      </:fineprint>
+    </.oat_footer>
+
+  </body>
+</html>

@@ -45,4 +45,17 @@ const PrivacyCircles = {
   },
 };
 
-export default { ScrollReveal, PrivacyCircles };
+const MobileNav = {
+  mounted() {
+    const toggle = this.el.querySelector("[data-mobile-toggle]");
+    const menu   = this.el.querySelector("[data-mobile-menu]");
+    const close  = this.el.querySelector("[data-mobile-close]");
+    if (!toggle || !menu) return;
+    const open   = () => { menu.classList.remove("hidden"); document.body.style.overflow = "hidden"; };
+    const close_ = () => { menu.classList.add("hidden");   document.body.style.overflow = ""; };
+    toggle.addEventListener("click", open);
+    if (close) close.addEventListener("click", close_);
+  },
+};
+
+export default { ScrollReveal, PrivacyCircles, MobileNav };

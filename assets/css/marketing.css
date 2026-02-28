@@ -1,9 +1,14 @@
 /* Marketing page design tokens and scoped styles */
 /* Scoped under .marketing-page to avoid affecting existing pages */
 
+:root {
+  --scroll-padding-top: 5.25rem;
+  scroll-padding-top: var(--scroll-padding-top);
+}
+
 .marketing-page {
-  --m-font-display: 'Instrument Sans', sans-serif;
-  --m-font-body: 'Instrument Sans', sans-serif;
+  --m-font-display: 'Instrument Serif', serif;
+  --m-font-body: 'Inter', system-ui, sans-serif;
 
   /* Spacing scale */
   --m-section-padding: 5rem;
@@ -15,11 +20,10 @@
 }
 
 /* Heading font override within marketing pages */
+/* Only large display headings (h1, h2) use Instrument Serif */
+/* h3, h4, and card titles stay in Inter for readability at small sizes */
 .marketing-page h1,
-.marketing-page h2,
-.marketing-page h3,
-.marketing-page h4,
-.marketing-page .font-familjen {
+.marketing-page h2 {
   font-family: var(--m-font-display);
 }
 
@@ -116,4 +120,50 @@
 
 .story-scroll > * {
   scroll-snap-align: start;
+}
+
+/* Wallpaper gradient panels for feature cards */
+.wallpaper {
+  position: relative;
+  overflow: hidden;
+}
+.wallpaper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.3;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='250' height='250'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='turbulence' baseFrequency='1.4' numOctaves='1' seed='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.wallpaper-green  { background: linear-gradient(to bottom, #9ca88f, #596352); }
+.wallpaper-purple { background: linear-gradient(to bottom, #7b627d, #8f6976); }
+.wallpaper-blue   { background: linear-gradient(to bottom, #637c86, #778599); }
+.wallpaper-brown  { background: linear-gradient(to bottom, #8d7359, #765959); }
+
+/* FAQ accordion — native details/summary styled to match Oatmeal */
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 0;
+  text-align: left;
+  font-size: 1rem;
+  line-height: 1.75rem;
+  color: #1a1917;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-icon-plus  { display: inline-block; }
+.faq-icon-minus { display: none; }
+.faq-item[open] .faq-icon-plus  { display: none; }
+.faq-item[open] .faq-icon-minus { display: inline-block; }
+.faq-body {
+  padding-bottom: 1rem;
+  padding-right: 3rem;
+  font-size: 0.875rem;
+  line-height: 1.75rem;
+  color: #6f6e5f;
 }

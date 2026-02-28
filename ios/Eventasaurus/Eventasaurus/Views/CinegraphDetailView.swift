@@ -217,8 +217,10 @@ struct CinegraphDetailView: View {
     @ViewBuilder
     private func cinegraphFooterLink(_ movie: MovieInfo) -> some View {
         let url: URL? = {
-            if let slug = movie.cinegraph?.cinegraphSlug, !slug.isEmpty {
-                return URL(string: "https://cinegraph.org/movies/\(slug)")
+            if let slug = movie.cinegraph?.cinegraphSlug,
+               !slug.isEmpty,
+               let encoded = slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+                return URL(string: "https://cinegraph.org/movies/\(encoded)")
             }
             return movie.tmdbId.flatMap { URL(string: "https://cinegraph.org/movies/tmdb/\($0)") }
         }()

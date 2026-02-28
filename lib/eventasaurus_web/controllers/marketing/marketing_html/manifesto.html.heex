@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>A Manifesto — Wombie</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+    <style>
+      :root { --scroll-padding-top: 5.25rem; scroll-padding-top: var(--scroll-padding-top); }
+      /* Use Instrument Serif for all display/heading elements (font-familjen utility) */
+      .font-familjen { font-family: "Instrument Serif", serif; }
+      .testimonial-hanging > p:first-child::before {
+        content: '\201C';
+        position: absolute;
+        display: inline;
+        transform: translateX(-100%);
+      }
+      .testimonial-hanging > p:last-child::after {
+        content: '\201D';
+        display: inline;
+      }
+    </style>
+  </head>
+  <body class="bg-oat-100 text-oat-950 antialiased">
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         NAVBAR
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_navbar>
+      <:links>
+        <.oat_nav_link href="/dev/marketing/manifesto">Manifesto</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/why-v2">Why Wombie</.oat_nav_link>
+        <.oat_nav_link href="/dev/marketing/how-it-works">How It Works</.oat_nav_link>
+      </:links>
+      <:actions>
+        <.oat_soft_button href="/sign-in">Log in</.oat_soft_button>
+        <.oat_button href="/invite-only">Get Started</.oat_button>
+      </:actions>
+    </.oat_navbar>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         HERO — Centered
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.hero_simple_centered eyebrow="A Manifesto">
+      <:headline>
+        They didn't fail to connect us. They succeeded at something else entirely.
+      </:headline>
+      <:subheadline>
+        The most profitable thing big tech could do was make being alone feel like enough. Here's how they did it — and what exists instead.
+      </:subheadline>
+      <:cta>
+        <.oat_soft_button href="#adversary">Read on ↓</.oat_soft_button>
+      </:cta>
+    </.hero_simple_centered>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         STATS — The Adversary's Scale
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <div id="adversary">
+      <.stats_three_column>
+        <:heading>The deepest-pocketed entities in human history have one mission.</:heading>
+        <:description>It runs directly counter to your having a real life.</:description>
+        <.oat_stat stat="2+ hours" text="spent on social media per day, per person" />
+        <.oat_stat stat="5 companies" text="represent 40% of the S&P 500" />
+        <.oat_stat stat="More connected. More alone." text="the outcome was not an accident" />
+      </.stats_three_column>
+    </div>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         FEATURES — The Rage Economy (single feature, no image)
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.features_stacked_alternating
+      eyebrow="The Mechanism"
+      headline="Rage sells better than connection."
+    >
+      <:features>
+        <.oat_alternating_feature>
+          <:headline>They didn't just want your attention. They wanted your outrage.</:headline>
+          <:subheadline>
+            Conflict drives 6× more engagement than joy. Platforms optimised for the thing that kept you scrolling. Rage was more profitable than belonging. So they built for rage.
+          </:subheadline>
+          <:demo>
+            <div class="flex h-full min-h-[200px] flex-col items-center justify-center gap-4 bg-oat-200/50 p-10 text-center">
+              <p class="font-familjen text-6xl font-medium tracking-tight text-oat-950/20">6×</p>
+              <p class="text-sm text-oat-600/60">more engaging than connection</p>
+            </div>
+          </:demo>
+        </.oat_alternating_feature>
+      </:features>
+    </.features_stacked_alternating>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         FEATURES THREE COLUMN — The Facsimile
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.features_three_column
+      eyebrow="The Substitute"
+      headline="They gave you something lifelike enough that you stopped looking for the real thing."
+    >
+      <:features>
+        <.oat_feature icon="🗣️" headline="Discord instead of friendship">
+          A server full of people who know your username. The social hierarchy of real friendship, minus the risk.
+        </.oat_feature>
+        <.oat_feature icon="📈" headline="Crypto instead of ambition">
+          The dopamine of a win, the narrative of a journey. All of the drive, none of the colleagues.
+        </.oat_feature>
+        <.oat_feature icon="🎬" headline="Reels instead of experience">
+          The visual memory of being somewhere. Easier than going, and optimised to feel like enough.
+        </.oat_feature>
+        <.oat_feature icon="👆" headline="Swiping instead of romance">
+          The shopping interface replaced the encounter. It profits from you never finding what you're looking for.
+        </.oat_feature>
+      </:features>
+    </.features_three_column>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         SECTION — Friction as a Feature (custom 2-col layout)
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_section eyebrow="What Was Stripped Out" headline="The discomfort was the point.">
+      <div class="grid grid-cols-1 gap-10 lg:grid-cols-2">
+        <div>
+          <p class="mb-4 text-xs font-semibold uppercase tracking-widest text-oat-500">What tech removed:</p>
+          <ul class="flex flex-col gap-3 text-base/7 text-oat-700">
+            <li class="flex items-start gap-3">
+              <span class="mt-0.5 text-oat-300">—</span>
+              <span>The fear of rejection</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="mt-0.5 text-oat-300">—</span>
+              <span>The awkwardness of first meetings</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="mt-0.5 text-oat-300">—</span>
+              <span>The discipline of showing up</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="mt-0.5 text-oat-300">—</span>
+              <span>The vulnerability of being seen</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="mt-0.5 text-oat-300">—</span>
+              <span>The resilience of trying again</span>
+            </li>
+          </ul>
+        </div>
+        <div class="flex flex-col justify-center rounded-xl bg-oat-950/[0.025] p-8">
+          <p class="font-familjen text-xl/8 font-medium tracking-tight text-oat-950 mb-4">
+            These aren't bugs. They're how bonds form.
+          </p>
+          <p class="text-base/7 text-oat-700">
+            Wombie doesn't remove friction. It gives it somewhere to go.
+          </p>
+        </div>
+      </div>
+    </.oat_section>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         TESTIMONIAL — Pull quote pivot to hope
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.testimonial_large_quote name="Wombie" byline="Built as the antidote.">
+      <:quote>Your loneliness is someone else's business model. But your real life doesn't have to be.</:quote>
+    </.testimonial_large_quote>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         CTA — Final call to action
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.cta_simple_centered>
+      <:headline>
+        Your real life is waiting. Come find it.
+      </:headline>
+      <:subheadline>
+        Wombie helps you find things worth going to and people worth going with.
+      </:subheadline>
+      <:cta>
+        <.oat_button href="/invite-only" size="lg">Join the waitlist</.oat_button>
+      </:cta>
+    </.cta_simple_centered>
+
+    <%!-- ═══════════════════════════════════════════════════════════════════
+         FOOTER
+         ═══════════════════════════════════════════════════════════════════ --%>
+    <.oat_footer>
+      <:links>
+        <.oat_footer_link href="/dev/marketing/manifesto">Manifesto</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/why-v2">Why Wombie</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/home-v2">Home</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/privacy">Privacy</.oat_footer_link>
+        <.oat_footer_link href="/dev/marketing/terms">Terms</.oat_footer_link>
+      </:links>
+      <:fineprint>
+        © <%= Date.utc_today().year %> Wombie
+      </:fineprint>
+    </.oat_footer>
+
+  </body>
+</html>
