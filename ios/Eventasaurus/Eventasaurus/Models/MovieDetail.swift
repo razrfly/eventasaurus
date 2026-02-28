@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 struct MovieDetailResponse: Codable {
@@ -34,9 +35,14 @@ struct CastMember: Codable, Identifiable {
     let order: Int?
     let profileUrl: String?
 
-    // Deterministic ID derived from decoded fields so SwiftUI can correctly
-    // diff cast member lists across re-renders without spurious view updates.
-    var id: String { "\(order ?? 0)_\(name)_\(character ?? "")_\(profileUrl ?? "")" }
+    // Collision-resistant ID: SHA256 of a labeled payload covering all fields.
+    // Using explicit labels + "|" separators prevents ambiguity when values
+    // themselves contain the separator character.
+    var id: String {
+        let payload = "order=\(order ?? -1)|name=\(name)|character=\(character ?? "")|profileUrl=\(profileUrl ?? "")"
+        let digest = SHA256.hash(data: Data(payload.utf8))
+        return Data(digest).base64EncodedString()
+    }
 }
 
 struct VenueScreenings: Codable, Identifiable {
