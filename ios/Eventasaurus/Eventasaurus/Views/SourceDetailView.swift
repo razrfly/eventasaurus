@@ -85,6 +85,7 @@ struct SourceDetailView: View {
                 }
             }
         }
+        .ignoresSafeArea(edges: .top)
         .safeAreaInset(edge: .bottom) {
             if let websiteUrl = data.source.websiteUrl, let url = URL(string: websiteUrl) {
                 GlassActionBar {

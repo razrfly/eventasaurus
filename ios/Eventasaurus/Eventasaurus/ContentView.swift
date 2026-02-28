@@ -69,26 +69,18 @@ struct ContentView: View {
     }
 
     private var mainTabView: some View {
-        VStack(spacing: 0) {
-            #if DEBUG
-            if AppConfig.useProductionServer {
-                productionBanner
-            }
-            #endif
+        TabView(selection: $selectedTab) {
+            MyEventsView(upcomingCount: $upcomingEventCount)
+                .tag(AppTab.home)
+                .toolbar(.hidden, for: .tabBar)
 
-            TabView(selection: $selectedTab) {
-                MyEventsView(upcomingCount: $upcomingEventCount)
-                    .tag(AppTab.home)
-                    .toolbar(.hidden, for: .tabBar)
+            DiscoverView()
+                .tag(AppTab.discover)
+                .toolbar(.hidden, for: .tabBar)
 
-                DiscoverView()
-                    .tag(AppTab.discover)
-                    .toolbar(.hidden, for: .tabBar)
-
-                ChatView()
-                    .tag(AppTab.chat)
-                    .toolbar(.hidden, for: .tabBar)
-            }
+            ChatView()
+                .tag(AppTab.chat)
+                .toolbar(.hidden, for: .tabBar)
         }
         .safeAreaInset(edge: .bottom) {
             GlassTabBar(selectedTab: $selectedTab, eventCount: upcomingEventCount)
@@ -96,6 +88,13 @@ struct ContentView: View {
                 .padding(.bottom, DS.Spacing.lg)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tabBarHeight = $0 }
         }
+        #if DEBUG
+        .overlay(alignment: .top) {
+            if AppConfig.useProductionServer {
+                productionBanner
+            }
+        }
+        #endif
         .environment(\.tabBarSafeAreaInset, tabBarHeight)
     }
 
