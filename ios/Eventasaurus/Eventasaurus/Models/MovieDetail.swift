@@ -35,12 +35,19 @@ struct CastMember: Codable, Identifiable {
     let order: Int?
     let profileUrl: String?
 
-    // Collision-resistant ID: SHA256 of a labeled payload covering all fields.
-    // Using explicit labels + "|" separators prevents ambiguity when values
-    // themselves contain the separator character.
+    // Collision-resistant ID: SHA256 of a JSON-encoded payload covering all fields.
+    // JSONEncoder preserves nil (→ null) vs empty string (""), and escapes any
+    // special characters in values, so the encoding is injective and unambiguous.
     var id: String {
-        let payload = "order=\(order ?? -1)|name=\(name)|character=\(character ?? "")|profileUrl=\(profileUrl ?? "")"
-        let digest = SHA256.hash(data: Data(payload.utf8))
+        struct Payload: Encodable {
+            let order: Int?
+            let name: String
+            let character: String?
+            let profileUrl: String?
+        }
+        let payload = Payload(order: order, name: name, character: character, profileUrl: profileUrl)
+        let data = (try? JSONEncoder().encode(payload)) ?? Data(name.utf8)
+        let digest = SHA256.hash(data: data)
         return Data(digest).base64EncodedString()
     }
 }
